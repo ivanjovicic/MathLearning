@@ -1,0 +1,16 @@
+@page "/access-denied"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@layout LoginLayout
+@using MudBlazor
+
+<MudContainer MaxWidth="MaxWidth.Small">
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudText Typo="Typo.h4" Color="Color.Error">Access Denied</MudText>
+        <MudText Typo="Typo.body1" Class="mt-4">
+            You do not have permission to access this resource.
+        </MudText>
+        <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
+            Go to Dashboard
+        </MudButton>
+    </MudPaper>
+</MudContainer>

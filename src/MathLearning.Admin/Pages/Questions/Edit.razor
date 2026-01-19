@@ -1,0 +1,407 @@
+﻿@page "/questions/{Id:int}/edit"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using MathLearning.Admin.Data
+@using MathLearning.Domain.Entities
+
+@inject AdminDbContext Db
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ILogger<Edit> Logger
+
+<PageTitle>Izmeni Pitanje - MathLearning Admin</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-2">
+    <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
+    Izmeni Pitanje
+</MudText>
+<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+    Uredite pitanje i odgovore
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_question == null)
+{
+    <MudAlert Severity="Severity.Error">Pitanje nije pronadjeno!</MudAlert>
+    <MudButton Href="/questions" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
+        Nazad na listu
+    </MudButton>
+}
+else
+{
+    <MudPaper Class="pa-6" Elevation="4">
+        <MudGrid>
+            <MudItem xs="12">
+                <div class="form-group">
+                    <label for="questionText" class="form-label">Tekst Pitanja *</label>
+                    <textarea id="questionText"
+                              class="form-textarea"
+                              rows="3"
+                              @bind="Text"
+                              @bind:event="oninput"></textarea>
+                </div>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <div class="form-group">
+                    <label for="category" class="form-label">Kategorija *</label>
+                    <select id="category" 
+                            class="form-select"
+                            @bind="CategoryId">
+                        @foreach (var c in Categories)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </div>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <div class="form-group">
+                    <label class="form-label">Tezina Pitanja</label>
+                    <div class="star-rating">
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                            var rating = i;
+                            <button type="button" 
+                                    @onclick="@(() => SetDifficulty(rating))" 
+                                    class="star-btn @(Difficulty >= rating ? "active" : "")">
+                                @if (Difficulty >= rating) { <span>★</span> } else { <span>☆</span> }
+                            </button>
+                        }
+                    </div>
+                    <span class="helper-text">Izabrana tezina: @Difficulty / 5</span>
+                </div>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-4" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.List" Class="mr-2" Size="Size.Small" />
+                    Opcije Odgovora
+                </MudText>
+                <p class="helper-text mb-4">Oznacite tacan odgovor klikom na dugme pored opcije</p>
+            </MudItem>
+
+            @for (int i = 0; i < Options.Count; i++)
+            {
+                var index = i;
+                <MudItem xs="12">
+                    <div class="option-row">
+                        <span class="option-number">@(index + 1).</span>
+                        <input type="text" 
+                               class="form-input flex-grow"
+                               placeholder="Unesite opciju @(index + 1)"
+                               @bind="Options[index].Text"
+                               @bind:event="oninput" />
+                        <button type="button" 
+                                @onclick="@(() => SetCorrectAnswer(index))" 
+                                class="correct-btn @(Options[index].IsCorrect ? "active" : "")">
+                            @if (Options[index].IsCorrect) 
+                            { 
+                                <span>Tacno</span> 
+                            } 
+                            else 
+                            { 
+                                <span>Oznaci</span> 
+                            }
+                        </button>
+                    </div>
+                </MudItem>
+            }
+
+            <MudItem xs="12">
+                <MudDivider Class="my-4" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <div class="d-flex gap-2">
+                    <MudButton OnClick="Save"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               Disabled="@IsSaving">
+                        @if (IsSaving)
+                        {
+                            <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                            <span>Cuvanje...</span>
+                        }
+                        else
+                        {
+                            <span>Sacuvaj Izmene</span>
+                        }
+                    </MudButton>
+
+                    <MudButton Href="/questions"
+                               Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.ArrowBack">
+                        Nazad
+                    </MudButton>
+                </div>
+
+                @if (!string.IsNullOrEmpty(ErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-3">@ErrorMessage</MudAlert>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+
+<style>
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #424242;
+    }
+
+    .form-input, .form-textarea, .form-select {
+        width: 100%;
+        padding: 14px;
+        font-size: 16px;
+        font-family: inherit;
+        border: 1px solid #bdbdbd;
+        border-radius: 4px;
+        box-sizing: border-box;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+        outline: none;
+        border-color: #594ae2;
+        border-width: 2px;
+        box-shadow: 0 0 0 3px rgba(89, 74, 226, 0.1);
+    }
+
+    .form-textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .form-select {
+        appearance: auto;
+        background-color: white;
+    }
+
+    .helper-text {
+        font-size: 12px;
+        color: #757575;
+    }
+
+    .star-rating {
+        display: flex;
+        gap: 4px;
+    }
+
+    .star-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 36px;
+        color: #ccc;
+        padding: 4px;
+        transition: all 0.2s;
+        line-height: 1;
+    }
+
+    .star-btn:hover {
+        transform: scale(1.2);
+        color: #FFA726;
+    }
+
+    .star-btn.active {
+        color: #FFA726;
+    }
+
+    .option-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .option-number {
+        font-weight: 500;
+        font-size: 16px;
+        min-width: 24px;
+    }
+
+    .flex-grow {
+        flex-grow: 1;
+    }
+
+    .correct-btn {
+        padding: 10px 16px;
+        border: 2px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        min-width: 100px;
+    }
+
+    .correct-btn:hover {
+        border-color: #4CAF50;
+        color: #4CAF50;
+    }
+
+    .correct-btn.active {
+        border-color: #4CAF50;
+        background-color: #4CAF50;
+        color: white;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Question? _question;
+    public string Text { get; set; } = "";
+    public int CategoryId { get; set; }
+    public int Difficulty { get; set; } = 1;
+    public string? ErrorMessage { get; set; }
+    public bool IsSaving { get; set; } = false;
+    private bool _loading { get; set; } = true;
+
+    public List<Category> Categories = new();
+    public List<QuestionOptionDto> Options = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("Questions/Edit page initializing for Id={Id}...", Id);
+        
+        Categories = await Db.Categories.OrderBy(c => c.Name).ToListAsync();
+
+        _question = await Db.Questions
+            .Include(q => q.Options)
+            .FirstOrDefaultAsync(q => q.Id == Id);
+
+        if (_question != null)
+        {
+            Text = _question.Text;
+            CategoryId = _question.CategoryId;
+            Difficulty = _question.Difficulty;
+
+            Options = _question.Options
+                .Select(o => new QuestionOptionDto 
+                { 
+                    Id = o.Id,
+                    Text = o.Text, 
+                    IsCorrect = o.IsCorrect 
+                })
+                .ToList();
+
+            // Ensure we have 4 options
+            while (Options.Count < 4)
+            {
+                Options.Add(new QuestionOptionDto());
+            }
+        }
+        
+        _loading = false;
+    }
+
+    private void SetDifficulty(int value)
+    {
+        Difficulty = value;
+        Logger.LogInformation("Difficulty set to: {Difficulty}", Difficulty);
+        StateHasChanged();
+    }
+
+    private void SetCorrectAnswer(int index)
+    {
+        // Unmark all options first
+        for (int i = 0; i < Options.Count; i++)
+        {
+            Options[i].IsCorrect = (i == index);
+        }
+        Logger.LogInformation("Correct answer set to option: {Index}", index);
+        StateHasChanged();
+    }
+
+    async Task Save()
+    {
+        ErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(Text))
+        {
+            ErrorMessage = "Tekst pitanja je obavezan";
+            return;
+        }
+
+        if (CategoryId == 0)
+        {
+            ErrorMessage = "Izaberite kategoriju";
+            return;
+        }
+
+        if (Options.Any(o => string.IsNullOrWhiteSpace(o.Text)))
+        {
+            ErrorMessage = "Sve opcije moraju biti popunjene";
+            return;
+        }
+
+        if (!Options.Any(o => o.IsCorrect))
+        {
+            ErrorMessage = "Morate oznaciti tacan odgovor";
+            return;
+        }
+
+        if (_question == null) return;
+
+        IsSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // Update question properties using domain methods
+            _question.SetText(Text.Trim());
+            _question.SetDifficulty(Difficulty);
+            _question.SetCategory(CategoryId);
+
+            // Update options
+            var newOptions = Options.Select(o =>
+                new QuestionOption(o.Text.Trim(), o.IsCorrect)
+            ).ToList();
+            
+            _question.ReplaceOptions(newOptions);
+
+            await Db.SaveChangesAsync();
+
+            Logger.LogInformation("Question updated successfully with Difficulty={Difficulty}", Difficulty);
+            Snackbar.Add("Pitanje je uspesno izmenjeno!", Severity.Success);
+            Nav.NavigateTo("/questions");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error updating question");
+            ErrorMessage = $"Greska: {ex.Message}";
+            IsSaving = false;
+        }
+    }
+
+    public class QuestionOptionDto
+    {
+        public int Id { get; set; }
+        public string Text { get; set; } = "";
+        public bool IsCorrect { get; set; }
+    }
+}

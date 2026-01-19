@@ -1,0 +1,132 @@
+﻿@page "/"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<Index> Logger
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard - MathLearning Admin</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <MudText Typo="Typo.h3" Class="mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.Dashboard" Class="mr-2" />
+            Dashboard
+        </MudText>
+        <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+            Dobrodosli na MathLearning Admin Panel
+        </MudText>
+
+        <MudAlert Severity="Severity.Info" Class="mb-4" Variant="Variant.Filled">
+            Ulogovani ste kao: <strong>@context.User.Identity?.Name</strong>
+        </MudAlert>
+
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="4" Class="pa-4">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center mb-4">
+                            <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Color="Color.Primary" />
+                        </div>
+                        <MudText Typo="Typo.h6">Upravljanje Kategorijama</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                            Dodajte, menjajte ili brisite kategorije pitanja
+                        </MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Href="/categories" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Primary" 
+                                   FullWidth="true">
+                            Otvori
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="4" Class="pa-4">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center mb-4">
+                            <MudIcon Icon="@Icons.Material.Filled.Quiz" Size="Size.Large" Color="Color.Secondary" />
+                        </div>
+                        <MudText Typo="Typo.h6">Upravljanje Pitanjima</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                            Pregledajte i upravljajte svim pitanjima
+                        </MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Href="/questions" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Secondary" 
+                                   FullWidth="true">
+                            Otvori
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="4" Class="pa-4">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center mb-4">
+                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Large" Color="Color.Success" />
+                        </div>
+                        <MudText Typo="Typo.h6">Dodaj Novo Pitanje</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                            Kreirajte novo pitanje sa opcijama
+                        </MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Href="/questions/new" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Success" 
+                                   FullWidth="true">
+                            Kreiraj
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </Authorized>
+    <NotAuthorized>
+        <MudAlert Severity="Severity.Warning" Class="mt-4">
+            Niste autorizovani. Preusmeravanje na login...
+        </MudAlert>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string authState = "Loading...";
+    private string userName = "Unknown";
+    private bool isAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("Index page initializing...");
+        
+        try
+        {
+            var authStateResult = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authStateResult.User;
+            
+            isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+            userName = user.Identity?.Name ?? "Anonymous";
+            authState = isAuthenticated ? "Authenticated" : "Not Authenticated";
+            
+            Logger.LogInformation("Index - User: {UserName}, Authenticated: {IsAuth}", userName, isAuthenticated);
+
+            if (!isAuthenticated)
+            {
+                Logger.LogWarning("User not authenticated, redirecting to login-page");
+                Nav.NavigateTo("/login-page", forceLoad: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error getting auth state in Index");
+            authState = $"Error: {ex.Message}";
+        }
+    }
+}

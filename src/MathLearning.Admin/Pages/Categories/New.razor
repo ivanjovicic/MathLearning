@@ -1,0 +1,138 @@
+﻿@page "/categories/new"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using MathLearning.Admin.Data
+@using MathLearning.Domain.Entities
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@inject AdminDbContext Db
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Nova Kategorija - MathLearning Admin</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-2">
+    <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />
+    Dodaj Novu Kategoriju
+</MudText>
+<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+    Kreirajte novu kategoriju za pitanja
+</MudText>
+
+<MudPaper Class="pa-6" Elevation="4" MaxWidth="600px">
+    <div class="form-group">
+        <label for="categoryName" class="form-label">Naziv Kategorije *</label>
+        <input type="text" 
+               id="categoryName"
+               class="form-input @(!string.IsNullOrEmpty(ErrorMessage) ? "error" : "")"
+               @bind="CategoryName"
+               @bind:event="oninput" />
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <span class="error-text">@ErrorMessage</span>
+        }
+    </div>
+
+    <div class="mt-6 d-flex gap-2">
+        <MudButton OnClick="Save"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Save"
+                   Disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Cuvanje...</span>
+            }
+            else
+            {
+                <span>Sacuvaj</span>
+            }
+        </MudButton>
+
+        <MudButton Href="/categories"
+                   Variant="Variant.Outlined"
+                   Color="Color.Default"
+                   StartIcon="@Icons.Material.Filled.ArrowBack">
+            Nazad
+        </MudButton>
+    </div>
+</MudPaper>
+
+<style>
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #424242;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 16px 14px;
+        font-size: 16px;
+        font-family: inherit;
+        border: 1px solid #bdbdbd;
+        border-radius: 4px;
+        box-sizing: border-box;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #594ae2;
+        border-width: 2px;
+        padding: 15px 13px;
+        box-shadow: 0 0 0 3px rgba(89, 74, 226, 0.1);
+    }
+
+    .form-input.error {
+        border-color: #f44336;
+    }
+
+    .error-text {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        color: #f44336;
+    }
+</style>
+
+@code {
+    private string CategoryName { get; set; } = "";
+    private string? ErrorMessage { get; set; }
+    private bool IsSaving { get; set; } = false;
+
+    private async Task Save()
+    {
+        ErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(CategoryName))
+        {
+            ErrorMessage = "Naziv kategorije je obavezan";
+            return;
+        }
+
+        IsSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var category = new Category(CategoryName.Trim());
+            Db.Categories.Add(category);
+            await Db.SaveChangesAsync();
+
+            Snackbar.Add($"Kategorija '{CategoryName}' je uspesno dodata!", Severity.Success);
+            Nav.NavigateTo("/categories");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Greska: {ex.Message}";
+            IsSaving = false;
+        }
+    }
+}

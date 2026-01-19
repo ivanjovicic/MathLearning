@@ -1,0 +1,140 @@
+﻿@page "/login"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@layout LoginLayout
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@attribute [AllowAnonymous]
+@inject SignInManager<IdentityUser> SignInManager
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ILogger<Login> Logger
+
+<PageTitle>Login - MathLearning Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small">
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudText Typo="Typo.h4" Class="mb-4">Prijava</MudText>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@ErrorMessage</MudAlert>
+        }
+
+        <MudTextField @bind-Value="Username" 
+                      Label="Korisničko ime" 
+                      Variant="Variant.Outlined"
+                      Class="mb-3"
+                      Required="true"
+                      OnKeyUp="HandleKeyPress" />
+
+        <MudTextField @bind-Value="Password" 
+                      Label="Lozinka" 
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Class="mb-4"
+                      Required="true"
+                      OnKeyUp="HandleKeyPress" />
+
+        <MudButton OnClick="LoginUser" 
+                   Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   FullWidth="true"
+                   Size="Size.Large"
+                   Disabled="@isLoggingIn">
+            @if (isLoggingIn)
+            {
+                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Prijavljivanje...</span>
+            }
+            else
+            {
+                <span>Prijavi se</span>
+            }
+        </MudButton>
+        
+        <MudText Typo="Typo.caption" Class="mt-4" Align="Align.Center" Color="Color.Secondary">
+            Podrazumevano: admin / UcimMatu!123
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    string Username = "";
+    string Password = "";
+    string? ErrorMessage;
+    bool isLoggingIn = false;
+
+    protected override void OnInitialized()
+    {
+        Logger.LogInformation("Login page initialized. ReturnUrl: {ReturnUrl}", ReturnUrl);
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoginUser();
+        }
+    }
+
+    async Task LoginUser()
+    {
+        if (isLoggingIn)
+        {
+            Logger.LogWarning("Login already in progress, ignoring duplicate call");
+            return;
+        }
+        
+        Logger.LogInformation("Login attempt started for user: {Username}", Username);
+        isLoggingIn = true;
+        ErrorMessage = null;
+        StateHasChanged();
+        
+        try
+        {
+            Logger.LogInformation("Calling SignInManager.PasswordSignInAsync");
+            var result = await SignInManager.PasswordSignInAsync(
+                Username, Password, isPersistent: true, lockoutOnFailure: false);
+
+            Logger.LogInformation("SignIn result: Succeeded={Succeeded}", result.Succeeded);
+
+            if (result.Succeeded)
+            {
+                var redirectUrl = string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl;
+                Logger.LogInformation("Login successful, redirecting to: {RedirectUrl}", redirectUrl);
+                
+                try
+                {
+                    // Try JavaScript redirect first
+                    await JS.InvokeVoidAsync("eval", $"window.location.href = '{redirectUrl}'");
+                    Logger.LogInformation("JavaScript redirect executed successfully");
+                }
+                catch (Exception jsEx)
+                {
+                    Logger.LogError(jsEx, "JavaScript redirect failed");
+                    ErrorMessage = $"Greška pri preusmeravanju: {jsEx.Message}";
+                    isLoggingIn = false;
+                }
+            }
+            else
+            {
+                Logger.LogWarning("Login failed for user: {Username}", Username);
+                ErrorMessage = "Neispravno korisničko ime ili lozinka";
+                isLoggingIn = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Login error for user: {Username}", Username);
+            ErrorMessage = $"Greška: {ex.Message}";
+            isLoggingIn = false;
+        }
+    }
+}

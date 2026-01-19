@@ -1,0 +1,32 @@
+﻿@page "/logout"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject NavigationManager Nav
+@inject ILogger<Logout> Logger
+
+<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+    <div style="text-align: center;">
+        <h3>Odjava u toku...</h3>
+        <p>Molimo sacekajte...</p>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("Logging out user...");
+        
+        try
+        {
+            await SignInManager.SignOutAsync();
+            Logger.LogInformation("User signed out successfully");
+            Nav.NavigateTo("/login-page", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during logout");
+            Nav.NavigateTo("/login-page", forceLoad: true);
+        }
+    }
+}

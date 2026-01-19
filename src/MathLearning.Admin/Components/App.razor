@@ -1,0 +1,48 @@
+﻿@using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <HeadOutlet @rendermode="@RenderMode.InteractiveServer" />
+</head>
+<body>
+    <MudThemeProvider />
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    
+    <CascadingAuthenticationState>
+        <Router AppAssembly="@typeof(App).Assembly">
+            <Found Context="routeData">
+                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MathLearning.Admin.Shared.MainLayout)" />
+            </Found>
+            <NotFound>
+                <PageTitle>Not found</PageTitle>
+                <LayoutView Layout="@typeof(MathLearning.Admin.Shared.MainLayout)">
+                    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+                        <MudPaper Class="pa-8" Elevation="2">
+                            <MudText Typo="Typo.h4" Color="Color.Error">Stranica nije pronađena</MudText>
+                            <MudText Typo="Typo.body1" Class="mt-4">Žao nam je, ne postoji ništa na ovoj adresi.</MudText>
+                            <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
+                                Nazad na početnu
+                            </MudButton>
+                        </MudPaper>
+                    </MudContainer>
+                </LayoutView>
+            </NotFound>
+        </Router>
+    </CascadingAuthenticationState>
+    
+    <script src="_framework/blazor.web.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+</body>
+</html>
+
+@code {
+}

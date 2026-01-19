@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MathLearning.Admin/MathLearning.Admin.csproj" />
+    <Project Path="src/MathLearning.Api/MathLearning.Api.csproj" />
+    <Project Path="src/MathLearning.Application/MathLearning.Application.csproj" />
+    <Project Path="src/MathLearning.Domain/MathLearning.Domain.csproj" />
+    <Project Path="src/MathLearning.Infrastructure/MathLearning.Infrastructure.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,117 @@
+﻿@page "/questions"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using MathLearning.Admin.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using QuestionEntity = MathLearning.Domain.Entities.Question
+@inject AdminDbContext Db
+@inject ISnackbar Snackbar
+
+<PageTitle>Pitanja - MathLearning Admin</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-2">
+    <MudIcon Icon="@Icons.Material.Filled.Quiz" Class="mr-2" />
+    Pitanja
+</MudText>
+<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+    Upravljajte pitanjima i odgovorima
+</MudText>
+
+<MudPaper Elevation="4" Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h6">Lista Pitanja</MudText>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   Href="/questions/new"
+                   StartIcon="@Icons.Material.Filled.Add">
+            Dodaj Pitanje
+        </MudButton>
+    </div>
+
+    <MudTable Items="_questions" 
+              Hover="true" 
+              Loading="@_loading" 
+              Dense="true"
+              Elevation="0">
+        <HeaderContent>
+            <MudTh>ID</MudTh>
+            <MudTh>Tekst</MudTh>
+            <MudTh>Kategorija</MudTh>
+            <MudTh>Tezina</MudTh>
+            <MudTh Style="text-align: right; width: 120px;">Akcije</MudTh>
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="ID">@context.Id</MudTd>
+            <MudTd DataLabel="Tekst">
+                <MudText Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    @context.Text
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Kategorija">
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                    @context.Category?.Name
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Tezina">
+                <MudRating ReadOnly="true" SelectedValue="@context.Difficulty" MaxValue="5" Size="Size.Small" />
+            </MudTd>
+            <MudTd DataLabel="Akcije" Style="text-align: right;">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                               Color="Color.Primary" 
+                               Size="Size.Small"
+                               Href="@($"/questions/{context.Id}/edit")"
+                               Title="Izmeni pitanje" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                               Color="Color.Error" 
+                               Size="Size.Small"
+                               OnClick="() => DeleteQuestion(context)"
+                               Title="Obrisi pitanje" />
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Info">
+                Nema pitanja. Kliknite "Dodaj Pitanje" da kreirate prvo.
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<QuestionEntity> _questions = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQuestions();
+    }
+
+    private async Task LoadQuestions()
+    {
+        _loading = true;
+        _questions = await Db.Questions
+            .Include(q => q.Category)
+            .OrderBy(q => q.Id)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private async Task DeleteQuestion(QuestionEntity question)
+    {
+        try
+        {
+            Db.Questions.Remove(question);
+            await Db.SaveChangesAsync();
+            _questions.Remove(question);
+            
+            Snackbar.Add("Pitanje je obrisano", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Greska pri brisanju: {ex.Message}", Severity.Error);
+        }
+    }
+}

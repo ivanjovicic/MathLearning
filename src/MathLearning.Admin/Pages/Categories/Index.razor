@@ -1,0 +1,103 @@
+﻿@page "/categories"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using MathLearning.Admin.Data
+@using MathLearning.Domain.Entities
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@inject AdminDbContext Db
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Kategorije - MathLearning Admin</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-2">
+    <MudIcon Icon="@Icons.Material.Filled.Category" Class="mr-2" />
+    Kategorije
+</MudText>
+<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+    Upravljajte kategorijama pitanja
+</MudText>
+
+<MudPaper Elevation="4" Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h6">Lista Kategorija</MudText>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   Href="/categories/new"
+                   StartIcon="@Icons.Material.Filled.Add">
+            Dodaj Kategoriju
+        </MudButton>
+    </div>
+
+    <MudTable Items="_categories" 
+              Hover="true" 
+              Loading="@_loading"
+              Elevation="0"
+              Dense="true">
+        <HeaderContent>
+            <MudTh>Naziv</MudTh>
+            <MudTh Style="text-align: right; width: 200px;">Akcije</MudTh>
+        </HeaderContent>
+
+        <RowTemplate Context="category">
+            <MudTd DataLabel="Naziv">
+                <MudText Typo="Typo.body1">@category.Name</MudText>
+            </MudTd>
+            <MudTd DataLabel="Akcije" Style="text-align: right;">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               Href="@($"/categories/{category.Id}/edit")"
+                               Title="Izmeni kategoriju" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                               Color="Color.Error"
+                               Size="Size.Small"
+                               OnClick="() => DeleteCategory(category)"
+                               Title="Obrisi kategoriju" />
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Info">
+                Nema kategorija. Kliknite "Dodaj Kategoriju" da kreirate prvu.
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<Category> _categories = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        _loading = true;
+        _categories = await Db.Categories
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private async Task DeleteCategory(Category category)
+    {
+        try
+        {
+            Db.Categories.Remove(category);
+            await Db.SaveChangesAsync();
+            _categories.Remove(category);
+            
+            Snackbar.Add($"Kategorija '{category.Name}' je obrisana", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Greska pri brisanju: {ex.Message}", Severity.Error);
+        }
+    }
+}

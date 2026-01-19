@@ -1,0 +1,35 @@
+@page "/test-auth"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h1>Test Auth Page</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <p style="color: green;">? AUTHENTICATED as: @context.User.Identity?.Name</p>
+    </Authorized>
+    <NotAuthorized>
+        <p style="color: red;">? NOT AUTHENTICATED</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+<hr />
+
+<h3>Raw Auth State:</h3>
+<p>User: @userName</p>
+<p>IsAuthenticated: @isAuthenticated</p>
+
+@code {
+    private string userName = "Loading...";
+    private bool isAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        
+        isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
+        userName = user?.Identity?.Name ?? "Anonymous";
+    }
+}

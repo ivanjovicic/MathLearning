@@ -1,0 +1,46 @@
+﻿@using Microsoft.AspNetCore.Components
+@inject NavigationManager Nav
+@inject ILogger<RedirectToLogin> Logger
+
+<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+    <div style="text-align: center;">
+        <h3>Redirecting to login...</h3>
+        <p>Please wait...</p>
+    </div>
+</div>
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var currentUri = Nav.Uri;
+            var returnUrl = Nav.ToBaseRelativePath(currentUri);
+            
+            Logger.LogInformation("RedirectToLogin triggered. Current URI: {CurrentUri}, ReturnUrl: {ReturnUrl}", currentUri, returnUrl);
+            
+            // Prevent navigation if already on login page
+            if (returnUrl.StartsWith("login", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.LogInformation("Already on login page, skipping redirect");
+                return;
+            }
+            
+            var loginUrl = string.IsNullOrEmpty(returnUrl) || returnUrl == "/" 
+                ? "/login-page" 
+                : $"/login-page?returnUrl={Uri.EscapeDataString("/" + returnUrl)}";
+            
+            Logger.LogInformation("Navigating to: {LoginUrl}", loginUrl);
+            
+            try
+            {
+                Nav.NavigateTo(loginUrl);
+                Logger.LogInformation("Navigation completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Navigation failed in RedirectToLogin");
+            }
+        }
+    }
+}
