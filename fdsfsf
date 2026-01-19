@@ -1,0 +1,12 @@
+[1mdiff --cc README.md[m
+[1mindex 05d4048,2a1f572..0000000[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@@ -1,2 -1,1 +1,6 @@@[m
+[31m -# MathLearning[m
+[32m++<<<<<<< HEAD[m
+[32m +# MathLearning[m
+[32m +App for math learning [m
+[32m++=======[m
+[32m++# MathLearning[m
+[32m++>>>>>>> abc9781 (Add .gitattributes, .gitignore, and README.md.)[m
