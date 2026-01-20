@@ -67,7 +67,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found");
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 
@@ -81,11 +81,11 @@ app.MapRazorComponents<App>()
 app.MapRazorPages();
 
 // Seed admin after app is configured
-_ = Task.Run(async () =>
-{
-    await Task.Delay(1000); // Give app time to start
-    await SeedAdminAsync(app);
-});
+//_ = Task.Run(async () =>
+//{
+//    await Task.Delay(1000); // Give app time to start
+//    await SeedAdminAsync(app);
+//});
 
 app.Run();
 
