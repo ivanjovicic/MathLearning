@@ -23,6 +23,8 @@ builder.Services.AddIdentityCore<IdentityUser>(options =>
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+var isProduction = builder.Environment.IsProduction();
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
@@ -34,13 +36,13 @@ builder.Services.AddAuthentication(options =>
     options.LoginPath = "/login-page";
     options.LogoutPath = "/logout";
     options.AccessDeniedPath = "/access-denied";
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = isProduction ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
 builder.Services.AddAntiforgery(options =>
 {
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = isProduction ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 
