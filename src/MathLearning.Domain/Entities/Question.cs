@@ -8,10 +8,14 @@ namespace MathLearning.Domain.Entities
     {
         public int Id { get; private set; }
         public string Text { get; private set; } = "";
+        public string Type { get; private set; } = "multiple_choice";
+        public string? CorrectAnswer { get; private set; }
         public string? Explanation { get; private set; }
         public int Difficulty { get; private set; } = 1;
         public int CategoryId { get; private set; }
+        public int SubtopicId { get; private set; }
         public Category? Category { get; private set; }
+        public Subtopic? Subtopic { get; private set; }
 
         public List<QuestionOption> Options { get; private set; } = new();
 
@@ -34,6 +38,18 @@ namespace MathLearning.Domain.Entities
             Touch();
         }
 
+        public void SetType(string type)
+        {
+            Type = string.IsNullOrWhiteSpace(type) ? "multiple_choice" : type;
+            Touch();
+        }
+
+        public void SetCorrectAnswer(string? correctAnswer)
+        {
+            CorrectAnswer = correctAnswer;
+            Touch();
+        }
+
         public void SetDifficulty(int difficulty)
         {
             if (difficulty < 1 || difficulty > 5) throw new ArgumentOutOfRangeException(nameof(difficulty), "Difficulty must be 1..5");
@@ -50,6 +66,12 @@ namespace MathLearning.Domain.Entities
         public void SetCategory(int categoryId)
         {
             CategoryId = categoryId;
+            Touch();
+        }
+
+        public void SetSubtopic(int subtopicId)
+        {
+            SubtopicId = subtopicId;
             Touch();
         }
 
