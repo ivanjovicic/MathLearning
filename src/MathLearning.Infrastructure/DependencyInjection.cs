@@ -1,8 +1,7 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using MathLearning.Infrastructure.Persistance;
 
 namespace MathLearning.Infrastructure
 {
@@ -10,15 +9,27 @@ namespace MathLearning.Infrastructure
     {
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
         {
-            //var cs = config.GetConnectionString("Default");
+            return services;
+        }
 
-            //services.AddDbContext<AppDbContext>(opt =>
-            //    opt.UseNpgsql(cs));
+        public static IServiceCollection AddApiDatabase(this IServiceCollection services, IConfiguration config)
+        {
+            var connectionString = config.GetConnectionString("Default");
 
-            //services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+            services.AddDbContext<ApiDbContext>(opt =>
+                opt.UseNpgsql(connectionString));
 
             return services;
         }
 
+        public static IServiceCollection AddAppDatabase(this IServiceCollection services, IConfiguration config)
+        {
+            var connectionString = config.GetConnectionString("Default");
+
+            services.AddDbContext<AppDbContext>(opt =>
+                opt.UseNpgsql(connectionString));
+
+            return services;
+        }
     }
 }

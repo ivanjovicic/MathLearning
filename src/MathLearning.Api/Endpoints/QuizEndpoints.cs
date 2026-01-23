@@ -16,7 +16,7 @@ public static class QuizEndpoints
         // 🎬 START QUIZ
         group.MapPost("/start", async (
             StartQuizRequest request,
-            AppDbContext db,
+            ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
@@ -50,7 +50,7 @@ public static class QuizEndpoints
         // 📝 NEXT QUESTION (adaptive learning)
         group.MapPost("/next-question", async (
             NextQuestionRequest request,
-            AppDbContext db,
+            ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
@@ -96,7 +96,7 @@ public static class QuizEndpoints
         // ✍️ SUBMIT ANSWER
         group.MapPost("/answer", async (
             SubmitAnswerRequest request,
-            AppDbContext db,
+            ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
@@ -158,5 +158,158 @@ public static class QuizEndpoints
                 isCorrect ? null : question.Explanation
             ));
         });
+
+        // 📤 OFFLINE BATCH SUBMIT (Improved - Idempotent + Server Validation)
+        group.MapPost("/offline-submit", async (
+            OfflineBatchSubmitRequest request,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            if (request.Answers == null || !request.Answers.Any())
+                return Results.BadRequest("No answers to import");
+
+            // Proveri ili kreiraj quiz session
+            Guid sessionId;
+            if (!Guid.TryParse(request.SessionId, out sessionId))
+            {
+                sessionId = Guid.NewGuid();
+            }
+
+            var session = await db.QuizSessions
+                .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+
+            if (session == null)
+            {
+                session = new QuizSession
+                {
+                    Id = sessionId,
+                    UserId = userId,
+                    StartedAt = request.Answers.Min(a => a.AnsweredAt)
+                };
+                db.QuizSessions.Add(session);
+            }
+
+            int importedCount = 0;
+            
+            // Batch učitaj sva pitanja odjednom (optimizacija)
+            var questionIds = request.Answers.Select(a => a.QuestionId).Distinct().ToList();
+            var questions = await db.Questions
+                .Include(q => q.Options)
+                .Where(q => questionIds.Contains(q.Id))
+                .ToDictionaryAsync(q => q.Id);
+
+            // Batch učitaj postojeće statistike
+            var existingStats = await db.UserQuestionStats
+                .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
+                .ToDictionaryAsync(s => s.QuestionId);
+
+            foreach (var answer in request.Answers)
+            {
+                // 🔒 IDEMPOTENCY CHECK - Proveri da li već postoji identičan answer
+                bool exists = await db.UserAnswers
+                    .AnyAsync(x =>
+                        x.UserId == userId &&
+                        x.QuestionId == answer.QuestionId &&
+                        x.AnsweredAt == answer.AnsweredAt);
+
+                if (exists)
+                    continue;
+
+                if (!questions.TryGetValue(answer.QuestionId, out var question))
+                    continue;
+
+                // 🔐 SERVER-SIDE VALIDATION - Ne veruj IsCorrectOffline od klijenta
+                bool isCorrectServer = question.Type == "multiple_choice"
+                    ? question.Options.Any(o => o.IsCorrect && o.Text == answer.Answer)
+                    : question.CorrectAnswer != null && 
+                      question.CorrectAnswer.Trim().Equals(answer.Answer.Trim(), 
+                          StringComparison.OrdinalIgnoreCase);
+
+                // Dodaj odgovor sa server-validiranom tačnošću
+                db.UserAnswers.Add(new UserAnswer
+                {
+                    UserId = userId,
+                    QuestionId = answer.QuestionId,
+                    QuizSessionId = sessionId,
+                    Answer = answer.Answer,
+                    IsCorrect = isCorrectServer, // ⚠️ Koristimo server validaciju, ne klijentovu
+                    TimeSpentSeconds = answer.TimeSpent,
+                    AnsweredAt = answer.AnsweredAt
+                });
+
+                // Ažuriraj statistiku
+                if (!existingStats.TryGetValue(answer.QuestionId, out var stat))
+                {
+                    stat = new UserQuestionStat
+                    {
+                        UserId = userId,
+                        QuestionId = answer.QuestionId,
+                        Attempts = 0,
+                        CorrectAttempts = 0
+                    };
+                    db.UserQuestionStats.Add(stat);
+                    existingStats[answer.QuestionId] = stat;
+                }
+
+                stat.Attempts++;
+                if (isCorrectServer)
+                    stat.CorrectAttempts++;
+
+                if (stat.LastAttemptAt == null || answer.AnsweredAt > stat.LastAttemptAt)
+                    stat.LastAttemptAt = answer.AnsweredAt;
+
+                importedCount++;
+            }
+
+            await db.SaveChangesAsync();
+
+            // Izračunaj fresh XP, Level i Streak
+            var overview = await CalculateUserOverview(db, userId);
+
+            return Results.Ok(new OfflineBatchSubmitResponse(
+                importedCount,
+                overview.Xp,
+                overview.Level,
+                overview.Streak
+            ));
+        });
+    }
+
+    // 📊 Helper za računanje XP, Level i Streak
+    private static async Task<(int Xp, int Level, int Streak)> CalculateUserOverview(
+        ApiDbContext db, 
+        int userId)
+    {
+        // XP i Level
+        var stats = await db.UserQuestionStats
+            .Where(s => s.UserId == userId)
+            .ToListAsync();
+
+        int totalCorrect = stats.Sum(s => s.CorrectAttempts);
+        int xp = totalCorrect * 10;
+        int level = 1 + (xp / 100);
+
+        // Streak
+        var answerDays = await db.UserAnswers
+            .Where(a => a.UserId == userId)
+            .Select(a => a.AnsweredAt.Date)
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToListAsync();
+
+        int streak = 0;
+        DateTime today = DateTime.UtcNow.Date;
+
+        foreach (var day in answerDays)
+        {
+            if (day == today || day == today.AddDays(-streak))
+                streak++;
+            else
+                break;
+        }
+
+        return (xp, level, streak);
     }
 }

@@ -14,6 +14,12 @@ namespace MathLearning.Domain.Entities
         public int Difficulty { get; private set; } = 1;
         public int CategoryId { get; private set; }
         public int SubtopicId { get; private set; }
+        
+        // 💡 Hints
+        public string? HintFormula { get; private set; }
+        public string? HintClue { get; private set; }
+        public int HintDifficulty { get; private set; } = 1;
+        
         public Category? Category { get; private set; }
         public Subtopic? Subtopic { get; private set; }
 
@@ -78,6 +84,27 @@ namespace MathLearning.Domain.Entities
         public void ReplaceOptions(IEnumerable<QuestionOption> options)
         {
             Options = options.ToList();
+            Touch();
+        }
+
+        // 💡 Hint Methods
+        public void SetHintFormula(string? hintFormula)
+        {
+            HintFormula = hintFormula;
+            Touch();
+        }
+
+        public void SetHintClue(string? hintClue)
+        {
+            HintClue = hintClue;
+            Touch();
+        }
+
+        public void SetHintDifficulty(int hintDifficulty)
+        {
+            if (hintDifficulty < 1 || hintDifficulty > 3) 
+                throw new ArgumentOutOfRangeException(nameof(hintDifficulty), "Hint difficulty must be 1..3");
+            HintDifficulty = hintDifficulty;
             Touch();
         }
 

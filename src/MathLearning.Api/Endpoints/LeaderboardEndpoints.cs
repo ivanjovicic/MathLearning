@@ -1,11 +1,9 @@
-﻿namespace MathLearning.Api.Endpoints
-{
-    using global::MathLearning.Application.DTOs.Progress;
-    using global::MathLearning.Infrastructure.Persistance;
-    using MathLearning.Application.DTOs.Progress;
-    using MathLearning.Infrastructure.Persistance;
-    using Microsoft.EntityFrameworkCore;
+﻿using MathLearning.Application.DTOs.Progress;
+using MathLearning.Infrastructure.Persistance;
+using Microsoft.EntityFrameworkCore;
 
+namespace MathLearning.Api.Endpoints
+{
     public static class LeaderboardEndpoints
     {
         public static void MapLeaderboardEndpoints(this IEndpointRouteBuilder app)
@@ -16,7 +14,7 @@
 
             // GLOBAL: all-time ili weekly
             group.MapGet("/global", async (
-                AppDbContext db,
+                ApiDbContext db,
                 HttpContext ctx,
                 string range = "allTime",   // allTime | weekly
                 int limit = 50
@@ -117,7 +115,7 @@
 
             // FRIENDS leaderboard
             group.MapGet("/friends", async (
-                AppDbContext db,
+                ApiDbContext db,
                 HttpContext ctx,
                 string range = "weekly", // weekly | allTime
                 int limit = 50
@@ -229,7 +227,7 @@
         }
 
         // 🔥 helper – streak za SVE korisnike (optimizovana verzija)
-        private static async Task<Dictionary<int, int>> CalculateStreaksForUsers(AppDbContext db)
+        private static async Task<Dictionary<int, int>> CalculateStreaksForUsers(ApiDbContext db)
         {
             // sve dane po useru
             var data = await db.UserAnswers

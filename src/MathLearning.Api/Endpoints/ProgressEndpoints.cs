@@ -14,7 +14,7 @@ public static class ProgressEndpoints
 
         // 📊 OVERVIEW
         group.MapGet("/overview", async (
-            AppDbContext db,
+            ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
@@ -41,7 +41,7 @@ public static class ProgressEndpoints
 
         // ⚠️ WEAK AREAS
         group.MapGet("/weak-areas", async (
-            AppDbContext db,
+            ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
@@ -72,7 +72,7 @@ public static class ProgressEndpoints
 
         // 📚 TOPIC PROGRESS
         group.MapGet("/topics", async (
-            AppDbContext db,
+            ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
@@ -104,7 +104,7 @@ public static class ProgressEndpoints
 
     // 🔥 STREAK LOGIKA
     private static async Task<int> CalculateDailyStreak(
-        AppDbContext db,
+        ApiDbContext db,
         int userId)
     {
         var days = await db.UserAnswers

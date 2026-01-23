@@ -1,25 +1,30 @@
-# -------- BUILD STAGE --------
+# --- Build stage ---
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Kopiraj sve fajlove u kontejner
-COPY . .
+# Copy only project files first (faster caching)
+COPY src/MathLearning.Api/*.csproj src/MathLearning.Api/
+COPY src/MathLearning.Application/*.csproj src/MathLearning.Application/
+COPY src/MathLearning.Domain/*.csproj src/MathLearning.Domain/
+COPY src/MathLearning.Infrastructure/*.csproj src/MathLearning.Infrastructure/
 
-# Restore samo admin projekt
-RUN dotnet restore ./src/MathLearning.Admin/MathLearning.Admin.csproj
+# DO NOT include Admin — it should not be built or restored
+# COPY src/MathLearning.Admin/*.csproj src/MathLearning.Admin/  <-- leave this commented
 
-# Publish
-RUN dotnet publish ./src/MathLearning.Admin/MathLearning.Admin.csproj -c Release -o /app/publish
+# Restore dependencies for API project (restores others automatically)
+RUN dotnet restore src/MathLearning.Api/MathLearning.Api.csproj
 
+# Copy all source code
+COPY src/ src/
 
-# -------- RUNTIME STAGE --------
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+# Publish API project only
+RUN dotnet publish src/MathLearning.Api/MathLearning.Api.csproj -c Release -o /app/publish
+
+# --- Runtime stage ---
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 
-# Kopiraj publish-ovane fajlove
 COPY --from=build /app/publish .
 
-# Render koristi PORT varijablu
-ENV ASPNETCORE_URLS=http://0.0.0.0:${PORT}
-
-ENTRYPOINT ["dotnet", "MathLearning.Admin.dll"]
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "MathLearning.Api.dll"]
