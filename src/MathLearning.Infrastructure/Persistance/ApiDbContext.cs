@@ -214,6 +214,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Username).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.DisplayName).HasMaxLength(256);
             entity.Property(e => e.Coins).HasDefaultValue(100);
             entity.Property(e => e.Level).HasDefaultValue(1);
             entity.Property(e => e.Xp).HasDefaultValue(0);
@@ -226,6 +227,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => e.Username)
                   .IsUnique()
                   .HasDatabaseName("UX_UserProfiles_Username");
+            entity.HasIndex(e => e.DisplayName)
+                  .HasDatabaseName("IX_UserProfiles_DisplayName");
         });
 
         builder.Entity<ApplicationLog>(entity =>

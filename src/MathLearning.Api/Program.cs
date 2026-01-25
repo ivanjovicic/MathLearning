@@ -127,6 +127,9 @@ try
     // Map Auth endpoints (no auth required)
     app.MapAuthEndpoints();
 
+    // Map User endpoints
+    app.MapUserEndpoints();
+
     // Map Quiz endpoints
     app.MapQuizEndpoints();
 

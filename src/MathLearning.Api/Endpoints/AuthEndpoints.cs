@@ -19,6 +19,148 @@ public static class AuthEndpoints
                        .AllowAnonymous()
                        .WithTags("Authentication");
 
+        // 📱 MOBILE REGISTRATION (Public)
+        group.MapPost("/mobile/register", async (
+            MobileRegisterRequest request,
+            UserManager<IdentityUser> userManager,
+            ApiDbContext db,
+            IConfiguration config,
+            HttpContext ctx) =>
+        {
+            try
+            {
+                // Validate input
+                if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
+                {
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: "Username must be at least 3 characters long"
+                    ), statusCode: 400);
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+                {
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: "Valid email address is required"
+                    ), statusCode: 400);
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+                {
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: "Password must be at least 6 characters long"
+                    ), statusCode: 400);
+                }
+
+                // Check if username already exists
+                var existingUser = await userManager.FindByNameAsync(request.Username);
+                if (existingUser != null)
+                {
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: "Username already taken"
+                    ), statusCode: 409);
+                }
+
+                // Check if email already exists
+                var existingEmail = await userManager.FindByEmailAsync(request.Email);
+                if (existingEmail != null)
+                {
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: "Email already registered"
+                    ), statusCode: 409);
+                }
+
+                // Create Identity user
+                var user = new IdentityUser
+                {
+                    UserName = request.Username,
+                    Email = request.Email,
+                    EmailConfirmed = false // TODO: Add email confirmation flow
+                };
+
+                var result = await userManager.CreateAsync(user, request.Password);
+
+                if (!result.Succeeded)
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: errors
+                    ), statusCode: 400);
+                }
+
+                // Parse userId
+                int userId;
+                if (!int.TryParse(user.Id, out userId))
+                {
+                    userId = Math.Abs(user.Id.GetHashCode());
+                }
+
+                // Create UserProfile
+                var profile = new UserProfile
+                {
+                    UserId = userId,
+                    Username = request.Username,
+                    DisplayName = request.DisplayName ?? request.Username,
+                    Coins = 100, // Welcome bonus
+                    Level = 1,
+                    Xp = 0,
+                    Streak = 0,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                db.UserProfiles.Add(profile);
+                await db.SaveChangesAsync();
+
+                // Generate tokens
+                var accessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
+
+                var device = ctx.Request.Headers.UserAgent.ToString();
+                var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
+                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
+
+                db.RefreshTokens.Add(refreshToken);
+                await db.SaveChangesAsync();
+
+                return Results.Ok(new MobileRegisterResponse(
+                    Success: true,
+                    Message: "Registration successful",
+                    Tokens: new TokenResponse(
+                        AccessToken: accessToken,
+                        RefreshToken: refreshToken.Token,
+                        ExpiresIn: 1800,
+                        UserId: userId,
+                        Username: request.Username
+                    ),
+                    Profile: new UserProfileDto(
+                        UserId: userId,
+                        Username: profile.Username,
+                        DisplayName: profile.DisplayName,
+                        Coins: profile.Coins,
+                        Level: profile.Level,
+                        Xp: profile.Xp,
+                        Streak: profile.Streak,
+                        CreatedAt: profile.CreatedAt
+                    )
+                ));
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(new MobileRegisterResponse(
+                    Success: false,
+                    Message: "Registration failed. Please try again."
+                ), statusCode: 500);
+            }
+        })
+        .WithName("MobileRegister")
+        .WithDescription("Register new mobile user");
+
         // 🔐 LOGIN (sa Refresh Token)
         group.MapPost("/login", async (
             LoginRequest request,
@@ -187,7 +329,7 @@ public static class AuthEndpoints
         .RequireAuthorization()
         .WithName("RevokeAllTokens");
 
-        // REGISTER (with refresh token)
+        // REGISTER (Admin - existing)
         group.MapPost("/register", async (
             RegisterRequest request,
             UserManager<IdentityUser> userManager,
