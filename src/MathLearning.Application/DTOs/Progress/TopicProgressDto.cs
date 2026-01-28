@@ -2,6 +2,7 @@
 
 public record TopicProgressDto(
     int TopicId,
-    string TopicName,
-    double Accuracy
+    string Name,
+    double Accuracy,
+    bool Unlocked
 );

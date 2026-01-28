@@ -79,26 +79,48 @@ public static class ProgressEndpoints
 
             var topics = await (
                 from q in db.Questions
-                join s in db.UserQuestionStats
-                    .Where(x => x.UserId == userId)
-                    on q.Id equals s.QuestionId
-                join sub in db.Subtopics
-                    on q.SubtopicId equals sub.Id
-                join t in db.Topics
-                    on sub.TopicId equals t.Id
-                group s by new { t.Id, t.Name } into g
-                select new TopicProgressDto(
-                    g.Key.Id,
-                    g.Key.Name,
-                    Math.Round(
-                        (double)g.Sum(x => x.CorrectAttempts) /
-                        Math.Max(g.Sum(x => x.Attempts), 1) * 100,
-                        2
-                    )
-                )
-            ).ToListAsync();
+                join s in db.UserQuestionStats.Where(x => x.UserId == userId)
+                    on q.Id equals s.QuestionId into stats
+                from stat in stats.DefaultIfEmpty()
+                join sub in db.Subtopics on q.SubtopicId equals sub.Id
+                join t in db.Topics on sub.TopicId equals t.Id
+                group stat by new { t.Id, t.Name } into g
+                select new
+                {
+                    TopicId = g.Key.Id,
+                    Name = g.Key.Name,
+                    Accuracy = g.Sum(x => x == null ? 0 : x.CorrectAttempts) * 100.0 /
+                               Math.Max(g.Sum(x => x == null ? 0 : x.Attempts), 1)
+                }
+            ).OrderBy(x => x.TopicId).ToListAsync();
 
-            return Results.Ok(topics);
+            var result = new List<TopicProgressDto>();
+
+            for (int i = 0; i < topics.Count; i++)
+            {
+                bool unlocked;
+
+                if (i == 0)
+                {
+                    // Prva lekcija je uvek otključana
+                    unlocked = true;
+                }
+                else
+                {
+                    double prevAccuracy = topics[i - 1].Accuracy;
+
+                    unlocked = prevAccuracy >= 60.0;
+                }
+
+                result.Add(new TopicProgressDto(
+                    topics[i].TopicId,
+                    topics[i].Name,
+                    Math.Round(topics[i].Accuracy, 2),
+                    unlocked
+                ));
+            }
+
+            return Results.Ok(result);
         });
     }
 
