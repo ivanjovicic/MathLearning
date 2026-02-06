@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260205231338_AddQuestionStats")]
+    partial class AddQuestionStats
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -401,33 +404,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_UserAnswers_NoDuplicate");
 
                     b.ToTable("UserAnswers");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.UserDailyStat", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Completed")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateOnly>("Day")
-                        .HasColumnType("date");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("IX_UserDailyStats_UserId");
-
-                    b.HasIndex("UserId", "Day")
-                        .IsUnique()
-                        .HasDatabaseName("UX_UserDailyStats_User_Day");
-
-                    b.ToTable("user_daily_stats", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserFriend", b =>

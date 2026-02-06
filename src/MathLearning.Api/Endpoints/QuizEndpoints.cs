@@ -1,4 +1,5 @@
 ﻿using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
@@ -274,6 +275,101 @@ public static class QuizEndpoints
                 overview.Level,
                 overview.Streak
             ));
+        });
+
+        // 📚 SRS UPDATE
+        group.MapPost("/srs/update", async (
+            SrsUpdateDto dto,
+            ISrsService srs,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            var result = await srs.UpdateAsync(userId, dto);
+
+            return Results.Ok(new
+            {
+                questionId = result.QuestionId,
+                nextReview = result.NextReview,
+                streak = result.SuccessStreak,
+                ease = result.Ease
+            });
+        });
+
+        // 📅 SRS DAILY
+        group.MapGet("/srs/daily", async (
+            ApiDbContext db,
+            HttpContext ctx,
+            int limit = 20) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            var questions = await db.QuestionStats
+                .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
+                .OrderBy(x => x.Ease)
+                .Take(limit)
+                .Select(x => x.Question)
+                .ToListAsync();
+
+            return Results.Ok(questions);
+        });
+
+        // 🔀 SRS MIXED (due + random)
+        group.MapGet("/srs/mixed", async (
+            ApiDbContext db,
+            HttpContext ctx,
+            int count = 15) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            var dueStats = await db.QuestionStats
+                .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
+                .OrderBy(x => x.Ease)
+                .Take(count)
+                .ToListAsync();
+
+            var dueIds = dueStats.Select(x => x.QuestionId).ToList();
+
+            var srsQuestions = await db.Questions
+                .Include(q => q.Options)
+                .Where(q => dueIds.Contains(q.Id))
+                .ToListAsync();
+
+            int needed = count - srsQuestions.Count;
+
+            List<Question> randomQuestions = new();
+
+            if (needed > 0)
+            {
+                randomQuestions = await db.Questions
+                    .Include(q => q.Options)
+                    .Where(x => !dueIds.Contains(x.Id))
+                    .OrderBy(x => Guid.NewGuid())
+                    .Take(needed)
+                    .ToListAsync();
+            }
+
+            return Results.Ok(new
+            {
+                srs = srsQuestions,
+                random = randomQuestions
+            });
+        });
+
+        // 🔥 SRS STREAK
+        group.MapGet("/srs/streak", async (
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            var profile = await db.UserProfiles
+                .FirstOrDefaultAsync(p => p.UserId == userId);
+
+            return Results.Ok(new
+            {
+                streak = profile?.Streak ?? 0
+            });
         });
     }
 

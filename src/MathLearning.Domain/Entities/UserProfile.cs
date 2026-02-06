@@ -6,6 +6,7 @@ public class UserProfile
     public int UserId { get; set; } // Maps to AspNetUsers Id (hash)
     public string Username { get; set; } = string.Empty;
     public string? DisplayName { get; set; } // Optional display name
+    public string? AvatarUrl { get; set; }
     
     // 💰 Coin System
     public int Coins { get; set; } = 100; // Start with 100 coins

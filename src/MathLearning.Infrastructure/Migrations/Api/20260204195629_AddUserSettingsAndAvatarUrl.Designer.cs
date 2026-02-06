@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260204195629_AddUserSettingsAndAvatarUrl")]
+    partial class AddUserSettingsAndAvatarUrl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -184,50 +187,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasIndex("QuestionId");
 
                     b.ToTable("Options");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStat", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("Ease")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("double precision")
-                        .HasDefaultValue(1.3);
-
-                    b.Property<DateTime?>("LastAnswered")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("NextReview")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW() AT TIME ZONE 'UTC'");
-
-                    b.Property<int>("QuestionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SuccessStreak")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("QuestionId");
-
-                    b.HasIndex("UserId", "NextReview")
-                        .HasDatabaseName("IX_QuestionStats_User_NextReview");
-
-                    b.HasIndex("UserId", "QuestionId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_QuestionStats_User_Question");
-
-                    b.ToTable("question_stats", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuizSession", b =>
@@ -401,33 +360,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_UserAnswers_NoDuplicate");
 
                     b.ToTable("UserAnswers");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.UserDailyStat", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Completed")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateOnly>("Day")
-                        .HasColumnType("date");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("IX_UserDailyStats_UserId");
-
-                    b.HasIndex("UserId", "Day")
-                        .IsUnique()
-                        .HasDatabaseName("UX_UserDailyStats_User_Day");
-
-                    b.ToTable("user_daily_stats", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserFriend", b =>
@@ -859,17 +791,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .WithMany("Options")
                         .HasForeignKey("QuestionId")
                         .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStat", b =>
-                {
-                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
-                        .WithMany()
-                        .HasForeignKey("QuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Question");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Subtopic", b =>

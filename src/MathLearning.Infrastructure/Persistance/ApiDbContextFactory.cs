@@ -9,24 +9,32 @@ public class ApiDbContextFactory : IDesignTimeDbContextFactory<ApiDbContext>
 {
     public ApiDbContext CreateDbContext(string[] args)
     {
-        var assemblyLocation = Assembly.GetExecutingAssembly().Location;
-        var directory = Path.GetDirectoryName(assemblyLocation)!;
+        var envConn = Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+                      ?? Environment.GetEnvironmentVariable("EFDATABASE")
+                      ?? Environment.GetEnvironmentVariable("DATABASE_URL");
 
-        // Pokušaj da nađe appsettings.json u različitim lokacijama
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(directory)
-            .AddJsonFile(Path.Combine(directory, "appsettings.json"), optional: true)
-            .AddJsonFile(Path.Combine(directory, "..", "MathLearning.Api", "appsettings.json"), optional: true)
-            .AddJsonFile("appsettings.json", optional: true)
-            .AddEnvironmentVariables()
-            .Build();
+        string connectionString;
 
-        var connectionString = configuration.GetConnectionString("Default");
-        
-        if (string.IsNullOrEmpty(connectionString))
+        if (!string.IsNullOrWhiteSpace(envConn))
         {
-            // Fallback za design-time - koristi default connection string
-            connectionString = "Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning";
+            connectionString = envConn;
+        }
+        else
+        {
+            var assemblyLocation = Assembly.GetExecutingAssembly().Location;
+            var directory = Path.GetDirectoryName(assemblyLocation)!;
+
+            // Pokušaj da nađe appsettings.json u različitim lokacijama
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(directory)
+                .AddJsonFile(Path.Combine(directory, "appsettings.json"), optional: true)
+                .AddJsonFile(Path.Combine(directory, "..", "MathLearning.Api", "appsettings.json"), optional: true)
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            connectionString = configuration.GetConnectionString("Default")
+                ?? "Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_dev;";
         }
 
         var builder = new DbContextOptionsBuilder<ApiDbContext>();

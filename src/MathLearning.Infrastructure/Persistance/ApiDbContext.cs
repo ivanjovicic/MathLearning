@@ -24,6 +24,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserHint> UserHints => Set<UserHint>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<ApplicationLog> ApplicationLogs => Set<ApplicationLog>();
+    public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
+    public DbSet<UserDailyStat> UserDailyStats => Set<UserDailyStat>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -215,6 +218,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Username).IsRequired().HasMaxLength(256);
             entity.Property(e => e.DisplayName).HasMaxLength(256);
+            entity.Property(e => e.AvatarUrl).HasMaxLength(500);
             entity.Property(e => e.Coins).HasDefaultValue(100);
             entity.Property(e => e.Level).HasDefaultValue(1);
             entity.Property(e => e.Xp).HasDefaultValue(0);
@@ -247,6 +251,56 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_ApplicationLogs_Level");
             entity.HasIndex(e => new { e.Level, e.Timestamp })
                   .HasDatabaseName("IX_ApplicationLogs_Level_Timestamp");
+        });
+
+        builder.Entity<UserSettings>(entity =>
+        {
+            entity.ToTable("user_settings");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Language).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Theme).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.DailyNotificationTime).HasMaxLength(5);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => e.UserId)
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserSettings_UserId");
+        });
+
+        builder.Entity<QuestionStat>(entity =>
+        {
+            entity.ToTable("question_stats");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Ease).HasDefaultValue(1.3);
+            entity.Property(e => e.SuccessStreak).HasDefaultValue(0);
+            entity.Property(e => e.NextReview).HasDefaultValueSql("NOW() AT TIME ZONE 'UTC'");
+
+            entity.HasIndex(e => new { e.UserId, e.QuestionId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_QuestionStats_User_Question");
+
+            entity.HasIndex(e => new { e.UserId, e.NextReview })
+                  .HasDatabaseName("IX_QuestionStats_User_NextReview");
+
+            entity.HasOne(e => e.Question)
+                  .WithMany()
+                  .HasForeignKey(e => e.QuestionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<UserDailyStat>(entity =>
+        {
+            entity.ToTable("user_daily_stats");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Day).HasColumnType("date");
+
+            entity.HasIndex(e => new { e.UserId, e.Day })
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserDailyStats_User_Day");
+
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("IX_UserDailyStats_UserId");
         });
     }
 }

@@ -1,6 +1,8 @@
 ﻿using MathLearning.Api.Endpoints;
 using MathLearning.Api.Services;
+using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -54,6 +56,9 @@ try
     // 🔧 Add Background Services
     builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
 
+    // ✅ SRS service
+    builder.Services.AddScoped<ISrsService, SrsService>();
+
     // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
     var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
@@ -106,8 +111,25 @@ try
         };
     });
 
-    // Seed default admin user
-    await SeedAdminUser(app);
+    // Seed default admin user (only in Development or when explicitly enabled)
+    try
+    {
+        var seedAdmin = app.Environment.IsDevelopment() ||
+                        string.Equals(Environment.GetEnvironmentVariable("SEED_ADMIN"), "true", StringComparison.OrdinalIgnoreCase);
+
+        if (seedAdmin)
+        {
+            await SeedAdminUser(app);
+        }
+        else
+        {
+            Log.Information("Skipping admin seeding (not in Development and SEED_ADMIN not set)");
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Admin seeding failed, continuing without seeding.");
+    }
 
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
