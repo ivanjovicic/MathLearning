@@ -27,6 +27,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
     public DbSet<UserDailyStat> UserDailyStats => Set<UserDailyStat>();
+    public DbSet<BugReport> BugReports => Set<BugReport>();
+    public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
+    public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -48,6 +51,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasMany(e => e.Options)
                   .WithOne()
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Translations)
+                  .WithOne(t => t.Question)
+                  .HasForeignKey(t => t.QuestionId)
+                  .OnDelete(DeleteBehavior.Cascade);
             
             // 💡 Hint properties
             entity.Property(e => e.HintFormula).HasColumnType("TEXT").IsRequired(false);
@@ -67,6 +74,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
+            entity.HasMany(e => e.Translations)
+                  .WithOne(t => t.Option)
+                  .HasForeignKey(t => t.OptionId)
+                  .OnDelete(DeleteBehavior.Cascade);
             
             // 🚀 Performance index za filtering correct answers
             entity.HasIndex(e => e.IsCorrect)
@@ -301,6 +312,66 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasIndex(e => e.UserId)
                   .HasDatabaseName("IX_UserDailyStats_UserId");
+        });
+
+        builder.Entity<BugReport>(entity =>
+        {
+            entity.ToTable("bug_reports");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UserId).IsRequired();
+            entity.Property(e => e.UsernameSnapshot).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Screen).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Description).IsRequired().HasMaxLength(2000);
+            entity.Property(e => e.StepsToReproduce).HasMaxLength(2000);
+            entity.Property(e => e.Severity).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Platform).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Locale).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.AppVersion).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.ScreenshotUrl).HasMaxLength(500);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Assignee).HasMaxLength(256);
+
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("IX_BugReports_UserId");
+            entity.HasIndex(e => e.CreatedAt)
+                  .HasDatabaseName("IX_BugReports_CreatedAt");
+            entity.HasIndex(e => e.Status)
+                  .HasDatabaseName("IX_BugReports_Status");
+            entity.HasIndex(e => e.Severity)
+                  .HasDatabaseName("IX_BugReports_Severity");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt })
+                  .HasDatabaseName("IX_BugReports_Status_CreatedAt");
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt })
+                  .HasDatabaseName("IX_BugReports_User_CreatedAt");
+        });
+
+        builder.Entity<QuestionTranslation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Lang).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.Explanation).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.HintFormula).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.HintClue).HasColumnType("TEXT").IsRequired(false);
+
+            entity.HasIndex(e => new { e.QuestionId, e.Lang })
+                  .IsUnique()
+                  .HasDatabaseName("UX_QuestionTranslations_Question_Lang");
+
+            entity.HasIndex(e => e.Lang)
+                  .HasDatabaseName("IX_QuestionTranslations_Lang");
+        });
+
+        builder.Entity<OptionTranslation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Lang).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Text).IsRequired();
+
+            entity.HasIndex(e => new { e.OptionId, e.Lang })
+                  .IsUnique()
+                  .HasDatabaseName("UX_OptionTranslations_Option_Lang");
         });
     }
 }

@@ -1,0 +1,233 @@
+﻿@page "/bugs"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using MathLearning.Domain.Entities
+
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ILogger<BugsList> Logger
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Bug Reports - MathLearning Admin</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-2">
+    <MudIcon Icon="@Icons.Material.Filled.BugReport" Class="mr-2" />
+    Bug Reports
+</MudText>
+<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+    Manage user-reported issues
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudGrid>
+        <MudItem xs="12" md="3">
+            <MudSelect @bind-Value="SelectedStatus" Label="Status Filter" Variant="Variant.Outlined" Clearable>
+                <MudSelectItem Value="@("")">All</MudSelectItem>
+                <MudSelectItem Value="@("open")">Open</MudSelectItem>
+                <MudSelectItem Value="@("in_progress")">In Progress</MudSelectItem>
+                <MudSelectItem Value="@("fixed")">Fixed</MudSelectItem>
+                <MudSelectItem Value="@("closed")">Closed</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudSelect @bind-Value="SelectedSeverity" Label="Severity Filter" Variant="Variant.Outlined" Clearable>
+                <MudSelectItem Value="@("")">All</MudSelectItem>
+                <MudSelectItem Value="@("low")">Low</MudSelectItem>
+                <MudSelectItem Value="@("medium")">Medium</MudSelectItem>
+                <MudSelectItem Value="@("high")">High</MudSelectItem>
+                <MudSelectItem Value="@("critical")">Critical</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="2">
+            <MudButton OnClick="LoadBugs" Variant="Variant.Filled" Color="Color.Primary" FullWidth>
+                <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
+                Filter
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (Bugs.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">No bug reports found.</MudAlert>
+}
+else
+{
+    <MudTable Items="@Bugs" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>ID</MudTh>
+            <MudTh>User</MudTh>
+            <MudTh>Screen</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Severity</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="ID">
+                <MudTooltip Text="@context.Id.ToString()">
+                    <span>@context.Id.ToString().Substring(0, 8)</span>
+                </MudTooltip>
+            </MudTd>
+            <MudTd DataLabel="User">@context.UsernameSnapshot</MudTd>
+            <MudTd DataLabel="Screen">@context.Screen</MudTd>
+            <MudTd DataLabel="Description">
+                <MudTooltip Text="@context.Description">
+                    <span>@(context.Description.Length > 50 ? context.Description.Substring(0, 50) + "..." : context.Description)</span>
+                </MudTooltip>
+            </MudTd>
+            <MudTd DataLabel="Severity">
+                <MudText Typo="Typo.body2">
+                    <MudChip T="string" Size="Size.Small" Color="@GetSeverityColor(context.Severity)" Text="@context.Severity" />
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudText Typo="Typo.body2">
+                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Text="@context.Status" />
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Created">@context.CreatedAt.ToString("yyyy-MM-dd HH:mm")</MudTd>
+            <MudTd DataLabel="Actions">
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                    <MudButton OnClick="@(() => ViewDetails(context))" StartIcon="@Icons.Material.Filled.Visibility">View</MudButton>
+                    <MudButton OnClick="@(() => OpenStatusDialog(context))" StartIcon="@Icons.Material.Filled.Edit">Status</MudButton>
+                </MudButtonGroup>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] {10, 20, 50}" />
+        </PagerContent>
+    </MudTable>
+
+    <MudPaper Class="pa-4 mt-4" Elevation="1">
+        <MudText Typo="Typo.body2">
+            Showing @Bugs.Count of @TotalCount bugs (Page @CurrentPage)
+        </MudText>
+        <MudPagination Count="@((TotalCount + PageSize - 1) / PageSize)" Selected="@CurrentPage" SelectedChanged="OnPageChanged" />
+    </MudPaper>
+}
+
+@code {
+    private List<BugReportDto> Bugs = new();
+    private bool _loading = true;
+    private string SelectedStatus = "";
+    private string SelectedSeverity = "";
+    private int CurrentPage = 1;
+    private int PageSize = 20;
+    private int TotalCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBugs();
+    }
+
+    private async Task LoadBugs()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri("https://localhost:7001"); // Adjust based on your API URL
+
+            var queryParams = new List<string>
+            {
+                $"page={CurrentPage}",
+                $"pageSize={PageSize}"
+            };
+
+            if (!string.IsNullOrWhiteSpace(SelectedStatus))
+                queryParams.Add($"status={SelectedStatus}");
+
+            if (!string.IsNullOrWhiteSpace(SelectedSeverity))
+                queryParams.Add($"severity={SelectedSeverity}");
+
+            var response = await client.GetFromJsonAsync<BugReportsResponse>($"/api/bugs?{string.Join("&", queryParams)}");
+
+            if (response != null)
+            {
+                Bugs = response.Bugs;
+                TotalCount = response.TotalCount;
+                CurrentPage = response.Page;
+                PageSize = response.PageSize;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading bugs");
+            Snackbar.Add("Failed to load bug reports", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        CurrentPage = page;
+        await LoadBugs();
+    }
+
+    private void ViewDetails(BugReportDto bug)
+    {
+        Nav.NavigateTo($"/bugs/{bug.Id}");
+    }
+
+    private async Task OpenStatusDialog(BugReportDto bug)
+    {
+        // TODO: Implement status update dialog
+        Snackbar.Add("Status update dialog coming soon", Severity.Info);
+    }
+
+    private Color GetSeverityColor(string severity) => severity switch
+    {
+        "critical" => Color.Error,
+        "high" => Color.Warning,
+        "medium" => Color.Info,
+        "low" => Color.Default,
+        _ => Color.Default
+    };
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "open" => Color.Error,
+        "in_progress" => Color.Info,
+        "fixed" => Color.Success,
+        "closed" => Color.Default,
+        _ => Color.Default
+    };
+
+    // DTOs
+    public record BugReportDto(
+        Guid Id,
+        DateTime CreatedAt,
+        int UserId,
+        string UsernameSnapshot,
+        string Screen,
+        string Description,
+        string? StepsToReproduce,
+        string Severity,
+        string Platform,
+        string Locale,
+        string AppVersion,
+        string? ScreenshotUrl,
+        string Status,
+        DateTime? ResolvedAt,
+        string? Assignee
+    );
+
+    public record BugReportsResponse(
+        List<BugReportDto> Bugs,
+        int TotalCount,
+        int Page,
+        int PageSize
+    );
+}

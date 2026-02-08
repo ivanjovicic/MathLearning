@@ -34,7 +34,7 @@ public class ApiDbContextFactory : IDesignTimeDbContextFactory<ApiDbContext>
                 .Build();
 
             connectionString = configuration.GetConnectionString("Default")
-                ?? "Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_dev;";
+                ?? "Host=localhost;Port=5433;Username=postgres;Password=postgres;Database=mathlearning;";
         }
 
         var builder = new DbContextOptionsBuilder<ApiDbContext>();

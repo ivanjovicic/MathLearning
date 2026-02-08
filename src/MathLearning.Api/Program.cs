@@ -6,6 +6,7 @@ using MathLearning.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
@@ -59,6 +60,10 @@ try
     // ✅ SRS service
     builder.Services.AddScoped<ISrsService, SrsService>();
 
+    // ✅ Bug reporting services
+    builder.Services.AddScoped<IBugReportService, BugReportService>();
+    builder.Services.AddScoped<IScreenshotStorageService, LocalScreenshotStorageService>();
+
     // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
     var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
@@ -110,6 +115,29 @@ try
             diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent);
         };
     });
+
+    // 🗄️ Auto-migrate and seed database on startup (skip during EF design-time tools)
+    if (!EF.IsDesignTime)
+    {
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            try
+            {
+                Log.Information("🗄️ Applying database migrations...");
+                await db.Database.MigrateAsync();
+                Log.Information("✅ Database migrations applied successfully");
+
+                Log.Information("🌱 Seeding database...");
+                await DbSeeder.SeedAsync(db);
+                Log.Information("✅ Database seeding complete");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "⚠️ Database migration/seed failed. Continuing without it (DB may not be available yet).");
+            }
+        }
+    }
 
     // Seed default admin user (only in Development or when explicitly enabled)
     try
@@ -172,6 +200,18 @@ try
 
     // Map Logging endpoints
     app.MapLoggingEndpoints();
+
+    // Map Bug endpoints
+    app.MapBugEndpoints();
+
+    // Serve uploaded avatars
+    var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
+    Directory.CreateDirectory(uploadsPath);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uploadsPath),
+        RequestPath = "/uploads"
+    });
 
     app.MapGet("/", () => Results.Ok("MathLearning API is running"));
 

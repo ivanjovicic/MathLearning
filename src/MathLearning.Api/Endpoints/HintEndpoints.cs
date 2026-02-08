@@ -1,4 +1,5 @@
 ﻿using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.Helpers;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
@@ -26,12 +27,16 @@ public static class HintEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
-            var question = await db.Questions.FindAsync(id);
+            var question = await db.Questions
+                .Include(q => q.Translations)
+                .FirstOrDefaultAsync(q => q.Id == id);
             if (question == null)
                 return Results.NotFound(new { error = "Question not found" });
 
-            if (string.IsNullOrEmpty(question.HintFormula))
+            var formula = TranslationHelper.GetHintFormula(question, lang);
+            if (string.IsNullOrEmpty(formula))
                 return Results.Ok(new { formula = (string?)null, available = false });
 
             // Check if already used
@@ -43,7 +48,7 @@ public static class HintEndpoints
                 // Free if already used
                 return Results.Ok(new
                 {
-                    formula = question.HintFormula,
+                    formula = formula,
                     available = true,
                     alreadyUsed = true,
                     cost = 0
@@ -80,7 +85,7 @@ public static class HintEndpoints
 
             return Results.Ok(new
             {
-                formula = question.HintFormula,
+                formula = formula,
                 available = true,
                 cost = FORMULA_COST,
                 remainingCoins = profile.Coins
@@ -95,12 +100,16 @@ public static class HintEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
-            var question = await db.Questions.FindAsync(id);
+            var question = await db.Questions
+                .Include(q => q.Translations)
+                .FirstOrDefaultAsync(q => q.Id == id);
             if (question == null)
                 return Results.NotFound(new { error = "Question not found" });
 
-            if (string.IsNullOrEmpty(question.HintClue))
+            var clue = TranslationHelper.GetHintClue(question, lang);
+            if (string.IsNullOrEmpty(clue))
                 return Results.Ok(new { clue = (string?)null, available = false });
 
             // Check if already used
@@ -111,7 +120,7 @@ public static class HintEndpoints
             {
                 return Results.Ok(new
                 {
-                    clue = question.HintClue,
+                    clue,
                     available = true,
                     alreadyUsed = true,
                     cost = 0
@@ -148,7 +157,7 @@ public static class HintEndpoints
 
             return Results.Ok(new
             {
-                clue = question.HintClue,
+                clue,
                 available = true,
                 cost = CLUE_COST,
                 remainingCoins = profile.Coins
@@ -163,9 +172,10 @@ public static class HintEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
-                .Include(q => q.Options)
+                .Include(q => q.Options).ThenInclude(o => o.Translations)
                 .FirstOrDefaultAsync(q => q.Id == id);
 
             if (question == null)
@@ -199,7 +209,6 @@ public static class HintEndpoints
             }
 
             // Eliminate one wrong option
-            var correctOption = question.Options.FirstOrDefault(o => o.IsCorrect);
             var wrongOptions = question.Options.Where(o => !o.IsCorrect).ToList();
 
             if (wrongOptions.Count == 0)
@@ -207,7 +216,10 @@ public static class HintEndpoints
 
             // Random eliminate one wrong option
             var toEliminate = wrongOptions.OrderBy(_ => Guid.NewGuid()).First();
-            var remainingOptions = question.Options.Where(o => o.Id != toEliminate.Id).Select(o => o.Text).ToList();
+            var remainingOptions = question.Options
+                .Where(o => o.Id != toEliminate.Id)
+                .Select(o => TranslationHelper.GetOptionText(o, lang))
+                .ToList();
 
             // Deduct coins
             profile.Coins -= ELIMINATE_COST;
@@ -228,7 +240,7 @@ public static class HintEndpoints
             return Results.Ok(new
             {
                 remainingOptions,
-                eliminatedOption = toEliminate.Text,
+                eliminatedOption = TranslationHelper.GetOptionText(toEliminate, lang),
                 cost = ELIMINATE_COST,
                 remainingCoins = profile.Coins
             });
@@ -242,12 +254,16 @@ public static class HintEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
-            var question = await db.Questions.FindAsync(id);
+            var question = await db.Questions
+                .Include(q => q.Translations)
+                .FirstOrDefaultAsync(q => q.Id == id);
             if (question == null)
                 return Results.NotFound(new { error = "Question not found" });
 
-            if (string.IsNullOrEmpty(question.Explanation))
+            var explanation = TranslationHelper.GetExplanation(question, lang);
+            if (string.IsNullOrEmpty(explanation))
                 return Results.Ok(new { solution = (string?)null, available = false });
 
             // Check if already used
@@ -258,7 +274,7 @@ public static class HintEndpoints
             {
                 return Results.Ok(new
                 {
-                    solution = question.Explanation,
+                    solution = explanation,
                     available = true,
                     alreadyUsed = true,
                     cost = 0
@@ -295,7 +311,7 @@ public static class HintEndpoints
 
             return Results.Ok(new
             {
-                solution = question.Explanation,
+                solution = explanation,
                 available = true,
                 cost = SOLUTION_COST,
                 remainingCoins = profile.Coins
@@ -464,5 +480,14 @@ public static class HintEndpoints
             });
         })
         .WithName("GetQuestionHintsSummary");
+    }
+
+    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, int userId)
+    {
+        var settings = await db.UserSettings
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+
+        var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
+        return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);
     }
 }

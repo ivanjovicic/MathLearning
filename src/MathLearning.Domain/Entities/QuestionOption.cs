@@ -9,6 +9,7 @@ namespace MathLearning.Domain.Entities
         public int Id { get; private set; }
         public string Text { get; private set; } = "";
         public bool IsCorrect { get; private set; }
+        public List<OptionTranslation> Translations { get; private set; } = new();
 
         private QuestionOption() { }
 

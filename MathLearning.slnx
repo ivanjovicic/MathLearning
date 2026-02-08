@@ -5,5 +5,9 @@
     <Project Path="src/MathLearning.Application/MathLearning.Application.csproj" />
     <Project Path="src/MathLearning.Domain/MathLearning.Domain.csproj" />
     <Project Path="src/MathLearning.Infrastructure/MathLearning.Infrastructure.csproj" />
+    <Project Path="src/MathLearning.TranslationJob/MathLearning.TranslationJob.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MathLearning.Tests/MathLearning.Tests.csproj" />
   </Folder>
 </Solution>

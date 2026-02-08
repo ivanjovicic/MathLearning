@@ -24,6 +24,7 @@ namespace MathLearning.Domain.Entities
         public Subtopic? Subtopic { get; private set; }
 
         public List<QuestionOption> Options { get; private set; } = new();
+        public List<QuestionTranslation> Translations { get; private set; } = new();
 
         public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;

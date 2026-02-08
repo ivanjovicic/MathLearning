@@ -1,4 +1,5 @@
 ﻿using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -35,17 +36,33 @@ public static class QuizEndpoints
                 .Where(q => q.SubtopicId == request.SubtopicId)
                 .OrderBy(q => Guid.NewGuid())
                 .Take(request.QuestionCount)
-                .Select(q => new QuestionDto(
+                .Include(q => q.Options)
+                .Include(q => q.Translations)
+                .ToListAsync();
+
+            // Helper to map question with translation
+            var mapQuestion = (Question q) =>
+            {
+                var translation = q.Translations.FirstOrDefault(t => t.Lang == "sr") ?? q.Translations.FirstOrDefault();
+                var text = translation?.Text ?? q.Text;
+                var explanation = translation?.Explanation ?? q.Explanation;
+
+                return new QuestionDto(
                     q.Id,
                     q.Type,
-                    q.Text,
-                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList()
-                ))
-                .ToListAsync();
+                    text,
+                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList(),
+                    q.Difficulty,
+                    translation?.HintLight,
+                    translation?.HintMedium,
+                    translation?.HintFull,
+                    explanation
+                );
+            };
 
             await db.SaveChangesAsync();
 
-            return Results.Ok(new QuizResponse(quiz.Id, questions));
+            return Results.Ok(new QuizResponse(quiz.Id, questions.Select(mapQuestion).ToList()));
         });
 
         // 📝 NEXT QUESTION (adaptive learning)
@@ -84,13 +101,23 @@ public static class QuizEndpoints
 
             var qEntity = question.Question;
 
+            // For now, return default language (sr) or first available
+            var translation = qEntity.Translations.FirstOrDefault(t => t.Lang == "sr") ?? qEntity.Translations.FirstOrDefault();
+            var text = translation?.Text ?? qEntity.Text;
+            var explanation = translation?.Explanation ?? qEntity.Explanation;
+
             return Results.Ok(new NextQuestionResponse(
                 qEntity.Id,
                 qEntity.Type,
-                qEntity.Text,
+                text,
                 qEntity.Options
                     .Select(o => new OptionDto(o.Id, o.Text))
-                    .ToList()
+                    .ToList(),
+                qEntity.Difficulty,
+                translation?.HintLight,
+                translation?.HintMedium,
+                translation?.HintFull,
+                explanation
             ));
         });
 
@@ -101,9 +128,11 @@ public static class QuizEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
                 .Include(q => q.Options)
+                .Include(q => q.Translations)
                 .FirstOrDefaultAsync(q => q.Id == request.QuestionId);
 
             if (question == null)
@@ -156,7 +185,7 @@ public static class QuizEndpoints
 
             return Results.Ok(new SubmitAnswerResponse(
                 isCorrect,
-                isCorrect ? null : question.Explanation
+                isCorrect ? null : TranslationHelper.GetExplanation(question, lang)
             ));
         });
 
@@ -309,9 +338,31 @@ public static class QuizEndpoints
                 .OrderBy(x => x.Ease)
                 .Take(limit)
                 .Select(x => x.Question)
+                .Include(q => q.Options)
+                .Include(q => q.Translations)
                 .ToListAsync();
 
-            return Results.Ok(questions);
+            // For now, return default language (sr) or first available
+            var result = questions.Select(q =>
+            {
+                var translation = q.Translations.FirstOrDefault(t => t.Lang == "sr") ?? q.Translations.FirstOrDefault();
+                var text = translation?.Text ?? q.Text;
+                var explanation = translation?.Explanation ?? q.Explanation;
+
+                return new QuestionDto(
+                    q.Id,
+                    q.Type,
+                    text,
+                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList(),
+                    q.Difficulty,
+                    translation?.HintLight,
+                    translation?.HintMedium,
+                    translation?.HintFull,
+                    explanation
+                );
+            }).ToList();
+
+            return Results.Ok(result);
         });
 
         // 🔀 SRS MIXED (due + random)
@@ -332,6 +383,7 @@ public static class QuizEndpoints
 
             var srsQuestions = await db.Questions
                 .Include(q => q.Options)
+                .Include(q => q.Translations)
                 .Where(q => dueIds.Contains(q.Id))
                 .ToListAsync();
 
@@ -343,16 +395,37 @@ public static class QuizEndpoints
             {
                 randomQuestions = await db.Questions
                     .Include(q => q.Options)
+                    .Include(q => q.Translations)
                     .Where(x => !dueIds.Contains(x.Id))
                     .OrderBy(x => Guid.NewGuid())
                     .Take(needed)
                     .ToListAsync();
             }
 
+            // Helper to map question with translation
+            var mapQuestion = (Question q) =>
+            {
+                var translation = q.Translations.FirstOrDefault(t => t.Lang == "sr") ?? q.Translations.FirstOrDefault();
+                var text = translation?.Text ?? q.Text;
+                var explanation = translation?.Explanation ?? q.Explanation;
+
+                return new QuestionDto(
+                    q.Id,
+                    q.Type,
+                    text,
+                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList(),
+                    q.Difficulty,
+                    translation?.HintLight,
+                    translation?.HintMedium,
+                    translation?.HintFull,
+                    explanation
+                );
+            };
+
             return Results.Ok(new
             {
-                srs = srsQuestions,
-                random = randomQuestions
+                srs = srsQuestions.Select(mapQuestion),
+                random = randomQuestions.Select(mapQuestion)
             });
         });
 
@@ -407,5 +480,15 @@ public static class QuizEndpoints
         }
 
         return (xp, level, streak);
+    }
+
+    // 🌍 Helper za resolving user language
+    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, int userId)
+    {
+        var settings = await db.UserSettings
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+
+        var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
+        return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);
     }
 }
