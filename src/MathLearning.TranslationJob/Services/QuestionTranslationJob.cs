@@ -1,5 +1,6 @@
 ﻿using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.TranslationJob.Services;
 
@@ -195,19 +196,19 @@ public class QuestionTranslationJob
                 // Translate missing hint fields
                 if (tr.HintLight == null && !string.IsNullOrWhiteSpace(baseTranslation.HintLight))
                 {
-                    tr.HintLight = await _translator.TranslateTextAsync(baseTranslation.HintLight, baseLang, targetLang);
+                    tr.SetHintLight(await _translator.TranslateTextAsync(baseTranslation.HintLight, baseLang, targetLang));
                     Console.WriteLine($"✓ Translated HintLight for Q={tr.QuestionId}");
                 }
 
                 if (tr.HintMedium == null && !string.IsNullOrWhiteSpace(baseTranslation.HintMedium))
                 {
-                    tr.HintMedium = await _translator.TranslateTextAsync(baseTranslation.HintMedium, baseLang, targetLang);
+                    tr.SetHintMedium(await _translator.TranslateTextAsync(baseTranslation.HintMedium, baseLang, targetLang));
                     Console.WriteLine($"✓ Translated HintMedium for Q={tr.QuestionId}");
                 }
 
                 if (tr.HintFull == null && !string.IsNullOrWhiteSpace(baseTranslation.HintFull))
                 {
-                    tr.HintFull = await _translator.TranslateTextAsync(baseTranslation.HintFull, baseLang, targetLang);
+                    tr.SetHintFull(await _translator.TranslateTextAsync(baseTranslation.HintFull, baseLang, targetLang));
                     Console.WriteLine($"✓ Translated HintFull for Q={tr.QuestionId}");
                 }
 

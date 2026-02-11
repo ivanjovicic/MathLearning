@@ -349,6 +349,72 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("question_stats", (string)null);
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStep", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Highlight")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Hint")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StepIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId", "StepIndex")
+                        .HasDatabaseName("IX_QuestionSteps_Question_Index");
+
+                    b.ToTable("QuestionSteps");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStepTranslation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Hint")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Lang")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int>("QuestionStepId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionStepId", "Lang")
+                        .IsUnique()
+                        .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
+
+                    b.ToTable("QuestionStepTranslations");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionTranslation", b =>
                 {
                     b.Property<int>("Id")
@@ -1052,6 +1118,28 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Question");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStep", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany("Steps")
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStepTranslation", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionStep", "QuestionStep")
+                        .WithMany("Translations")
+                        .HasForeignKey("QuestionStepId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuestionStep");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionTranslation", b =>
                 {
                     b.HasOne("MathLearning.Domain.Entities.Question", "Question")
@@ -1170,10 +1258,17 @@ namespace MathLearning.Infrastructure.Migrations.Api
                 {
                     b.Navigation("Options");
 
+                    b.Navigation("Steps");
+
                     b.Navigation("Translations");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionOption", b =>
+                {
+                    b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStep", b =>
                 {
                     b.Navigation("Translations");
                 });

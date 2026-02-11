@@ -29,6 +29,7 @@ public static class QuestionEndpoints
             var query = db.Questions
                 .Include(q => q.Options).ThenInclude(o => o.Translations)
                 .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .AsQueryable();
 
             if (subtopicId.HasValue)
@@ -50,7 +51,8 @@ public static class QuestionEndpoints
                 TranslationHelper.GetHintLight(q, resolvedLang),
                 TranslationHelper.GetHintMedium(q, resolvedLang),
                 TranslationHelper.GetHintFull(q, resolvedLang),
-                TranslationHelper.GetExplanation(q, resolvedLang)
+                TranslationHelper.GetExplanation(q, resolvedLang),
+                StepEngine.GetSteps(q, resolvedLang)
             )).ToList();
 
             return Results.Ok(questionDtos);
@@ -71,6 +73,7 @@ public static class QuestionEndpoints
             var question = await db.Questions
                 .Include(q => q.Options).ThenInclude(o => o.Translations)
                 .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .FirstOrDefaultAsync(q => q.Id == id);
 
             if (question == null)
@@ -85,7 +88,8 @@ public static class QuestionEndpoints
                 TranslationHelper.GetHintLight(question, resolvedLang),
                 TranslationHelper.GetHintMedium(question, resolvedLang),
                 TranslationHelper.GetHintFull(question, resolvedLang),
-                TranslationHelper.GetExplanation(question, resolvedLang)
+                TranslationHelper.GetExplanation(question, resolvedLang),
+                StepEngine.GetSteps(question, resolvedLang)
             );
 
             return Results.Ok(dto);

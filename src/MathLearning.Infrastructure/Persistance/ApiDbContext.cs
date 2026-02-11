@@ -30,6 +30,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
+    public DbSet<QuestionStep> QuestionSteps => Set<QuestionStep>();
+    public DbSet<QuestionStepTranslation> QuestionStepTranslations => Set<QuestionStepTranslation>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -54,6 +56,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasMany(e => e.Translations)
                   .WithOne(t => t.Question)
                   .HasForeignKey(t => t.QuestionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Steps)
+                  .WithOne(s => s.Question)
+                  .HasForeignKey(s => s.QuestionId)
                   .OnDelete(DeleteBehavior.Cascade);
             
             // 💡 Hint properties
@@ -372,6 +378,35 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.OptionId, e.Lang })
                   .IsUnique()
                   .HasDatabaseName("UX_OptionTranslations_Option_Lang");
+        });
+
+        builder.Entity<QuestionStep>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.Hint).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.Highlight).HasDefaultValue(false);
+            entity.Property(e => e.StepIndex).IsRequired();
+
+            entity.HasMany(e => e.Translations)
+                  .WithOne(t => t.QuestionStep)
+                  .HasForeignKey(t => t.QuestionStepId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.QuestionId, e.StepIndex })
+                  .HasDatabaseName("IX_QuestionSteps_Question_Index");
+        });
+
+        builder.Entity<QuestionStepTranslation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Lang).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.Hint).HasColumnType("TEXT").IsRequired(false);
+
+            entity.HasIndex(e => new { e.QuestionStepId, e.Lang })
+                  .IsUnique()
+                  .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
         });
     }
 }

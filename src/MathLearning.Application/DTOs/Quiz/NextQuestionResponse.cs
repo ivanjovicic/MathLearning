@@ -9,5 +9,6 @@ public record NextQuestionResponse(
     string? HintLight,
     string? HintMedium,
     string? HintFull,
-    string? Explanation
+    string? Explanation,
+    List<StepExplanationDto>? Steps
 );

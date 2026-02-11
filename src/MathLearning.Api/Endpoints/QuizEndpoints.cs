@@ -22,6 +22,7 @@ public static class QuizEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
             var quiz = new QuizSession
             {
@@ -36,33 +37,16 @@ public static class QuizEndpoints
                 .Where(q => q.SubtopicId == request.SubtopicId)
                 .OrderBy(q => Guid.NewGuid())
                 .Take(request.QuestionCount)
-                .Include(q => q.Options)
+                .Include(q => q.Options).ThenInclude(o => o.Translations)
                 .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .ToListAsync();
 
-            // Helper to map question with translation
-            var mapQuestion = (Question q) =>
-            {
-                var translation = q.Translations.FirstOrDefault(t => t.Lang == "sr") ?? q.Translations.FirstOrDefault();
-                var text = translation?.Text ?? q.Text;
-                var explanation = translation?.Explanation ?? q.Explanation;
-
-                return new QuestionDto(
-                    q.Id,
-                    q.Type,
-                    text,
-                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList(),
-                    q.Difficulty,
-                    translation?.HintLight,
-                    translation?.HintMedium,
-                    translation?.HintFull,
-                    explanation
-                );
-            };
+            var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
 
             await db.SaveChangesAsync();
 
-            return Results.Ok(new QuizResponse(quiz.Id, questions.Select(mapQuestion).ToList()));
+            return Results.Ok(new QuizResponse(quiz.Id, questionDtos));
         });
 
         // 📝 NEXT QUESTION (adaptive learning)
@@ -72,52 +56,44 @@ public static class QuizEndpoints
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await (
                 from q in db.Questions
+                    .Include(q => q.Options).ThenInclude(o => o.Translations)
+                    .Include(q => q.Translations)
+                    .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 join s in db.UserQuestionStats
                     .Where(x => x.UserId == userId)
                     on q.Id equals s.QuestionId into stats
                 from stat in stats.DefaultIfEmpty()
                 where q.SubtopicId == request.SubtopicId
                 orderby
-                    // 1️⃣ pitanja koja korisnik najviše greši
                     (stat == null ? 1 : 
                      (double)stat.CorrectAttempts / Math.Max(stat.Attempts, 1)) ascending,
-
-                    // 2️⃣ lakša pitanja prva
                     q.Difficulty ascending,
-
-                    // 3️⃣ pitanja koja dugo nije video
                     stat.LastAttemptAt ascending
-                select new
-                {
-                    Question = q
-                }
+                select q
             ).FirstOrDefaultAsync();
 
             if (question == null)
                 return Results.NotFound("No questions available");
 
-            var qEntity = question.Question;
-
-            // For now, return default language (sr) or first available
-            var translation = qEntity.Translations.FirstOrDefault(t => t.Lang == "sr") ?? qEntity.Translations.FirstOrDefault();
-            var text = translation?.Text ?? qEntity.Text;
-            var explanation = translation?.Explanation ?? qEntity.Explanation;
+            var steps = StepEngine.GetSteps(question, lang);
 
             return Results.Ok(new NextQuestionResponse(
-                qEntity.Id,
-                qEntity.Type,
-                text,
-                qEntity.Options
-                    .Select(o => new OptionDto(o.Id, o.Text))
+                question.Id,
+                question.Type,
+                TranslationHelper.GetText(question, lang),
+                question.Options
+                    .Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, lang)))
                     .ToList(),
-                qEntity.Difficulty,
-                translation?.HintLight,
-                translation?.HintMedium,
-                translation?.HintFull,
-                explanation
+                question.Difficulty,
+                TranslationHelper.GetHintLight(question, lang),
+                TranslationHelper.GetHintMedium(question, lang),
+                TranslationHelper.GetHintFull(question, lang),
+                TranslationHelper.GetExplanation(question, lang),
+                steps
             ));
         });
 
@@ -133,6 +109,7 @@ public static class QuizEndpoints
             var question = await db.Questions
                 .Include(q => q.Options)
                 .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .FirstOrDefaultAsync(q => q.Id == request.QuestionId);
 
             if (question == null)
@@ -157,7 +134,6 @@ public static class QuizEndpoints
                 AnsweredAt = DateTime.UtcNow
             });
 
-            // Update user question statistics
             var stat = await db.UserQuestionStats
                 .FirstOrDefaultAsync(s =>
                     s.UserId == userId &&
@@ -183,9 +159,13 @@ public static class QuizEndpoints
 
             await db.SaveChangesAsync();
 
+            // Return steps only on incorrect answer
+            var steps = isCorrect ? null : StepEngine.GetSteps(question, lang);
+
             return Results.Ok(new SubmitAnswerResponse(
                 isCorrect,
-                isCorrect ? null : TranslationHelper.GetExplanation(question, lang)
+                isCorrect ? null : TranslationHelper.GetExplanation(question, lang),
+                steps
             ));
         });
 
@@ -332,37 +312,19 @@ public static class QuizEndpoints
             int limit = 20) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
             var questions = await db.QuestionStats
                 .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
                 .OrderBy(x => x.Ease)
                 .Take(limit)
                 .Select(x => x.Question)
-                .Include(q => q.Options)
+                .Include(q => q.Options).ThenInclude(o => o.Translations)
                 .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .ToListAsync();
 
-            // For now, return default language (sr) or first available
-            var result = questions.Select(q =>
-            {
-                var translation = q.Translations.FirstOrDefault(t => t.Lang == "sr") ?? q.Translations.FirstOrDefault();
-                var text = translation?.Text ?? q.Text;
-                var explanation = translation?.Explanation ?? q.Explanation;
-
-                return new QuestionDto(
-                    q.Id,
-                    q.Type,
-                    text,
-                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList(),
-                    q.Difficulty,
-                    translation?.HintLight,
-                    translation?.HintMedium,
-                    translation?.HintFull,
-                    explanation
-                );
-            }).ToList();
-
-            return Results.Ok(result);
+            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang)).ToList());
         });
 
         // 🔀 SRS MIXED (due + random)
@@ -372,6 +334,7 @@ public static class QuizEndpoints
             int count = 15) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
 
             var dueStats = await db.QuestionStats
                 .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
@@ -382,8 +345,9 @@ public static class QuizEndpoints
             var dueIds = dueStats.Select(x => x.QuestionId).ToList();
 
             var srsQuestions = await db.Questions
-                .Include(q => q.Options)
+                .Include(q => q.Options).ThenInclude(o => o.Translations)
                 .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .Where(q => dueIds.Contains(q.Id))
                 .ToListAsync();
 
@@ -394,38 +358,19 @@ public static class QuizEndpoints
             if (needed > 0)
             {
                 randomQuestions = await db.Questions
-                    .Include(q => q.Options)
+                    .Include(q => q.Options).ThenInclude(o => o.Translations)
                     .Include(q => q.Translations)
+                    .Include(q => q.Steps).ThenInclude(s => s.Translations)
                     .Where(x => !dueIds.Contains(x.Id))
                     .OrderBy(x => Guid.NewGuid())
                     .Take(needed)
                     .ToListAsync();
             }
 
-            // Helper to map question with translation
-            var mapQuestion = (Question q) =>
-            {
-                var translation = q.Translations.FirstOrDefault(t => t.Lang == "sr") ?? q.Translations.FirstOrDefault();
-                var text = translation?.Text ?? q.Text;
-                var explanation = translation?.Explanation ?? q.Explanation;
-
-                return new QuestionDto(
-                    q.Id,
-                    q.Type,
-                    text,
-                    q.Options.Select(o => new OptionDto(o.Id, o.Text)).ToList(),
-                    q.Difficulty,
-                    translation?.HintLight,
-                    translation?.HintMedium,
-                    translation?.HintFull,
-                    explanation
-                );
-            };
-
             return Results.Ok(new
             {
-                srs = srsQuestions.Select(mapQuestion),
-                random = randomQuestions.Select(mapQuestion)
+                srs = srsQuestions.Select(q => MapQuestionDto(q, lang)),
+                random = randomQuestions.Select(q => MapQuestionDto(q, lang))
             });
         });
 
@@ -444,6 +389,23 @@ public static class QuizEndpoints
                 streak = profile?.Streak ?? 0
             });
         });
+    }
+
+    // 🗺️ Shared helper to map Question entity → QuestionDto with translation + steps
+    private static QuestionDto MapQuestionDto(Question q, string lang)
+    {
+        return new QuestionDto(
+            q.Id,
+            q.Type,
+            TranslationHelper.GetText(q, lang),
+            q.Options.Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, lang))).ToList(),
+            q.Difficulty,
+            TranslationHelper.GetHintLight(q, lang),
+            TranslationHelper.GetHintMedium(q, lang),
+            TranslationHelper.GetHintFull(q, lang),
+            TranslationHelper.GetExplanation(q, lang),
+            StepEngine.GetSteps(q, lang)
+        );
     }
 
     // 📊 Helper za računanje XP, Level i Streak

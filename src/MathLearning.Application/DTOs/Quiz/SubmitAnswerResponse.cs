@@ -2,5 +2,6 @@
 
 public record SubmitAnswerResponse(
     bool IsCorrect,
-    string? Explanation
+    string? Explanation,
+    List<StepExplanationDto>? Steps = null
 );
