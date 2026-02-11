@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
+using MathLearning.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -82,16 +83,67 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
+// Auto-migrate and seed database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+    try
+    {
+        Console.WriteLine("Applying database migrations...");
+        await db.Database.MigrateAsync();
+        Console.WriteLine("Database migrations applied successfully");
+
+        Console.WriteLine("Seeding database...");
+        await SeedAdminAsync(app);
+        Console.WriteLine("Database seeding complete");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Database migration/seed failed: {ex.Message}");
+    }
+}
+
 app.MapRazorComponents<App>()   
     .AddInteractiveServerRenderMode();
 app.MapRazorPages();
 
-// Seed admin after app is configured
-//_ = Task.Run(async () =>
-//{
-//    await Task.Delay(1000); // Give app time to start
-//    await SeedAdminAsync(app);
-//});
-
 app.Run();
+
+async Task SeedAdminAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+
+    // Seed domain data first
+    await DbSeeder.SeedAsync(db);
+
+    // Create admin role if not exists
+    if (!await roleManager.RoleExistsAsync("Admin"))
+    {
+        await roleManager.CreateAsync(new IdentityRole("Admin"));
+    }
+
+    // Create admin user
+    var adminUser = await userManager.FindByNameAsync("admin");
+    if (adminUser == null)
+    {
+        adminUser = new IdentityUser { Id = "1", UserName = "admin", Email = "admin@mathlearning.com" };
+        var result = await userManager.CreateAsync(adminUser, "UcimMatu!123");
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(adminUser, "Admin");
+            Console.WriteLine("✓ Admin user created successfully!");
+        }
+        else
+        {
+            Console.WriteLine("Failed to create admin user: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+    }
+    else
+    {
+        Console.WriteLine("✓ Admin user already exists.");
+    }
+}
 

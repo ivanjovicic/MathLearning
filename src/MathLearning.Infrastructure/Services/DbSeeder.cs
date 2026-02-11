@@ -6,14 +6,14 @@ namespace MathLearning.Infrastructure.Services;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(ApiDbContext db)
+    public static async Task SeedAsync(DbContext db)
     {
         bool changed = false;
 
         // ── Categories ───────────────────────────────
-        if (!await db.Categories.AnyAsync())
+        if (!await db.Set<Category>().AnyAsync())
         {
-            db.Categories.AddRange(
+            db.Set<Category>().AddRange(
                 new Category("Algebra"),
                 new Category("Geometrija"),
                 new Category("Aritmetika")
@@ -23,15 +23,15 @@ public static class DbSeeder
         }
 
         // ── Topics & Subtopics ───────────────────────
-        if (!await db.Topics.AnyAsync())
+        if (!await db.Set<Topic>().AnyAsync())
         {
             var t1 = new Topic("Osnove Algebre", "Jednačine, nejednačine i izrazi");
             var t2 = new Topic("Osnove Geometrije", "Osnovni geometrijski pojmovi");
             var t3 = new Topic("Sabiranje i Oduzimanje", "Osnovne aritmetičke operacije");
-            db.Topics.AddRange(t1, t2, t3);
+            db.Set<Topic>().AddRange(t1, t2, t3);
             await db.SaveChangesAsync();
 
-            db.Subtopics.AddRange(
+            db.Set<Subtopic>().AddRange(
                 new Subtopic("Jednačine", t1.Id),
                 new Subtopic("Nejednačine", t1.Id),
                 new Subtopic("Trouglovi", t2.Id),
@@ -42,12 +42,12 @@ public static class DbSeeder
         }
 
         // ── Questions ────────────────────────────────
-        if (!await db.Questions.AnyAsync())
+        if (!await db.Set<Question>().AnyAsync())
         {
-            var algebra = await db.Categories.FirstAsync(c => c.Name == "Algebra");
-            var aritmetika = await db.Categories.FirstAsync(c => c.Name == "Aritmetika");
-            var subtopicJednacine = await db.Subtopics.FirstAsync(s => s.Name == "Jednačine");
-            var subtopicSabiranje = await db.Subtopics.FirstAsync(s => s.Name == "Sabiranje do 100");
+            var algebra = await db.Set<Category>().FirstAsync(c => c.Name == "Algebra");
+            var aritmetika = await db.Set<Category>().FirstAsync(c => c.Name == "Aritmetika");
+            var subtopicJednacine = await db.Set<Subtopic>().FirstAsync(s => s.Name == "Jednačine");
+            var subtopicSabiranje = await db.Set<Subtopic>().FirstAsync(s => s.Name == "Sabiranje do 100");
 
             var questions = new List<Question>();
 
@@ -123,12 +123,12 @@ public static class DbSeeder
             });
             questions.Add(q8);
 
-            db.Questions.AddRange(questions);
+            db.Set<Question>().AddRange(questions);
             await db.SaveChangesAsync();
             changed = true;
 
             // ── English translations ─────────────────
-            var allQuestions = await db.Questions.ToListAsync();
+            var allQuestions = await db.Set<Question>().ToListAsync();
 
             var englishTranslations = new Dictionary<string, (string Text, string? Explanation, string? HintFormula, string? HintClue)>
             {
@@ -146,7 +146,7 @@ public static class DbSeeder
             {
                 if (englishTranslations.TryGetValue(q.Text, out var en))
                 {
-                    db.QuestionTranslations.Add(new QuestionTranslation(
+                    db.Set<QuestionTranslation>().Add(new QuestionTranslation(
                         q.Id, "en", en.Text, en.Explanation, en.HintFormula, en.HintClue));
                 }
             }
@@ -155,9 +155,9 @@ public static class DbSeeder
         }
 
         // ── Demo user profiles ───────────────────────
-        if (!await db.UserProfiles.AnyAsync())
+        if (!await db.Set<UserProfile>().AnyAsync())
         {
-            db.UserProfiles.AddRange(
+            db.Set<UserProfile>().AddRange(
                 new UserProfile
                 {
                     UserId = 1,

@@ -15,6 +15,10 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<QuestionOption> Options => Set<QuestionOption>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Topic> Topics => Set<Topic>();
+    public DbSet<Subtopic> Subtopics => Set<Subtopic>();
+    public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -167,19 +167,24 @@ public static class AuthEndpoints
             UserManager<IdentityUser> userManager,
             ApiDbContext db,
             IConfiguration config,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            ILogger<Program> logger) =>
         {
             try
             {
+                logger.LogInformation($"Login attempt for username: {request.Username}");
+                
                 var user = await userManager.FindByNameAsync(request.Username);
                 if (user == null)
                 {
+                    logger.LogWarning($"Login failed - user not found: {request.Username}");
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
                 var isPasswordValid = await userManager.CheckPasswordAsync(user, request.Password);
                 if (!isPasswordValid)
                 {
+                    logger.LogWarning($"Login failed - invalid password for user: {request.Username}");
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
@@ -189,6 +194,8 @@ public static class AuthEndpoints
                 {
                     userId = Math.Abs(user.Id.GetHashCode());
                 }
+
+                logger.LogInformation($"User authenticated successfully: {request.Username}, UserId: {userId}");
 
                 // Generate Access Token (short-lived: 30 min)
                 var accessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
@@ -201,6 +208,8 @@ public static class AuthEndpoints
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
 
+                logger.LogInformation($"Login successful for user: {request.Username}");
+
                 return Results.Ok(new TokenResponse(
                     AccessToken: accessToken,
                     RefreshToken: refreshToken.Token,
@@ -211,6 +220,7 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
+                logger.LogError(ex, $"Login error for username: {request.Username}");
                 return Results.Json(new { error = ex.Message }, statusCode: 500);
             }
         }).WithName("Login");

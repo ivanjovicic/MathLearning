@@ -117,11 +117,16 @@
             
             Logger.LogInformation("Index - User: {UserName}, Authenticated: {IsAuth}", userName, isAuthenticated);
 
-            if (!isAuthenticated)
+            if (!user.Identity.IsAuthenticated)
             {
                 Logger.LogWarning("User not authenticated, redirecting to login-page");
-                Nav.NavigateTo("/login-page", forceLoad: false);
+                // Delay da Blazor završi prerender ciklus
+                await Task.Yield();
+                Nav.NavigateTo("/login-page", forceLoad: true);
+                return;
             }
+
+            // Auth OK - continue
         }
         catch (Exception ex)
         {

@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MathLearning.Application\MathLearning.Application.csproj" />
+    <ProjectReference Include="..\MathLearning.Infrastructure\MathLearning.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

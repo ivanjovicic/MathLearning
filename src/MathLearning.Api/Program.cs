@@ -128,6 +128,30 @@ try
                 await db.Database.MigrateAsync();
                 Log.Information("✅ Database migrations applied successfully");
 
+                // 🔧 Manual fix for RefreshToken column length (if migration didn't apply)
+                try
+                {
+                    await db.Database.ExecuteSqlRawAsync(@"
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name = 'RefreshTokens' 
+                                AND column_name = 'Token' 
+                                AND character_maximum_length = 64
+                            ) THEN
+                                ALTER TABLE ""RefreshTokens"" ALTER COLUMN ""Token"" TYPE character varying(128);
+                                RAISE NOTICE 'RefreshToken column extended to 128 characters';
+                            END IF;
+                        END $$;
+                    ");
+                    Log.Information("✅ RefreshToken column length verified");
+                }
+                catch (Exception fixEx)
+                {
+                    Log.Warning(fixEx, "⚠️ Could not verify/fix RefreshToken column length");
+                }
+
                 Log.Information("🌱 Seeding database...");
                 await DbSeeder.SeedAsync(db);
                 Log.Information("✅ Database seeding complete");
@@ -142,17 +166,7 @@ try
     // Seed default admin user (only in Development or when explicitly enabled)
     try
     {
-        var seedAdmin = app.Environment.IsDevelopment() ||
-                        string.Equals(Environment.GetEnvironmentVariable("SEED_ADMIN"), "true", StringComparison.OrdinalIgnoreCase);
-
-        if (seedAdmin)
-        {
-            await SeedAdminUser(app);
-        }
-        else
-        {
-            Log.Information("Skipping admin seeding (not in Development and SEED_ADMIN not set)");
-        }
+        await SeedAdminUser(app);
     }
     catch (Exception ex)
     {
@@ -164,9 +178,15 @@ try
     {
         app.UseSwagger();
         app.UseSwaggerUI();
+        
+        // Don't force HTTPS redirect in Development to avoid CORS issues
+        Log.Information("🔓 HTTPS redirection disabled in Development mode");
     }
-
-    app.UseHttpsRedirection();
+    else
+    {
+        // Only use HTTPS redirection in Production
+        app.UseHttpsRedirection();
+    }
 
     // Enable CORS
     app.UseCors();
@@ -233,7 +253,9 @@ static async Task SeedAdminUser(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+    var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
     
+    // 👤 Seed Admin User
     var adminUsername = "admin";
     var existingAdmin = await userManager.FindByNameAsync(adminUsername);
     
@@ -242,23 +264,174 @@ static async Task SeedAdminUser(WebApplication app)
         var admin = new IdentityUser
         {
             UserName = adminUsername,
-            Email = "admin@mathlearning.com"
+            Email = "admin@mathlearning.com",
+            EmailConfirmed = true
         };
         
         var result = await userManager.CreateAsync(admin, "UcimMatu!123");
         
         if (result.Succeeded)
         {
-            Console.WriteLine("✓ Admin user created successfully!");
+            Log.Information("✓ Admin user created successfully!");
+            
+            // Create UserProfile for admin
+            int adminUserId = int.TryParse(admin.Id, out var id) ? id : Math.Abs(admin.Id.GetHashCode());
+            
+            if (!await db.UserProfiles.AnyAsync(p => p.UserId == adminUserId))
+            {
+                var adminProfile = new MathLearning.Domain.Entities.UserProfile
+                {
+                    UserId = adminUserId,
+                    Username = adminUsername,
+                    DisplayName = "Admin",
+                    Coins = 500,
+                    Level = 5,
+                    Xp = 420,
+                    Streak = 7,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                db.UserProfiles.Add(adminProfile);
+                await db.SaveChangesAsync();
+                Log.Information("✓ Admin user profile created!");
+            }
         }
         else
         {
-            Console.WriteLine($"✗ Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            Log.Warning($"✗ Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
         }
     }
     else
     {
-        Console.WriteLine("✓ Admin user already exists.");
+        Log.Information("✓ Admin user already exists.");
+    }
+    
+    // 📱 Seed Test Users for Mobile App
+    // 
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 🔑 TEST USERS (for mobile app login)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 
+    // Username: test     | Password: Test123!
+    // Username: demo     | Password: Demo123!
+    // Username: ivan     | Password: Ivan123!
+    // 
+    // ═══════════════════════════════════════════════════════════════════════════════
+    
+    var testUsers = new[]
+    {
+        new { Username = "test", Email = "test@mathlearning.com", Password = "Test123!", DisplayName = "Test User", Coins = 100, Level = 1, Xp = 0, Streak = 0 },
+        new { Username = "demo", Email = "demo@mathlearning.com", Password = "Demo123!", DisplayName = "Demo User", Coins = 150, Level = 2, Xp = 50, Streak = 3 },
+        new { Username = "ivan", Email = "ivan@mathlearning.com", Password = "Ivan123!", DisplayName = "Ivan", Coins = 300, Level = 3, Xp = 200, Streak = 5 }
+    };
+    
+    foreach (var testUser in testUsers)
+    {
+        var existingUser = await userManager.FindByNameAsync(testUser.Username);
+        
+        if (existingUser == null)
+        {
+            var user = new IdentityUser
+            {
+                UserName = testUser.Username,
+                Email = testUser.Email,
+                EmailConfirmed = true
+            };
+            
+            var result = await userManager.CreateAsync(user, testUser.Password);
+            
+            if (result.Succeeded)
+            {
+                Log.Information($"✓ Test user '{testUser.Username}' created successfully!");
+                
+                // Create UserProfile
+                int userId = int.TryParse(user.Id, out var id) ? id : Math.Abs(user.Id.GetHashCode());
+                
+                // Check by Username (unique constraint) instead of UserId
+                if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
+                {
+                    var userProfile = new MathLearning.Domain.Entities.UserProfile
+                    {
+                        UserId = userId,
+                        Username = testUser.Username,
+                        DisplayName = testUser.DisplayName,
+                        Coins = testUser.Coins,
+                        Level = testUser.Level,
+                        Xp = testUser.Xp,
+                        Streak = testUser.Streak,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    db.UserProfiles.Add(userProfile);
+                    await db.SaveChangesAsync();
+                    Log.Information($"✓ User profile for '{testUser.Username}' created!");
+                }
+                else
+                {
+                    Log.Information($"✓ User profile for '{testUser.Username}' already exists.");
+                }
+            }
+            else
+            {
+                Log.Warning($"✗ Failed to create test user '{testUser.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+        }
+        else
+        {
+            Log.Information($"✓ Test user '{testUser.Username}' already exists.");
+            
+            // Ensure UserProfile exists even if IdentityUser was created before
+            if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
+            {
+                int userId = int.TryParse(existingUser.Id, out var id) ? id : Math.Abs(existingUser.Id.GetHashCode());
+                
+                var userProfile = new MathLearning.Domain.Entities.UserProfile
+                {
+                    UserId = userId,
+                    Username = testUser.Username,
+                    DisplayName = testUser.DisplayName,
+                    Coins = testUser.Coins,
+                    Level = testUser.Level,
+                    Xp = testUser.Xp,
+                    Streak = testUser.Streak,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                db.UserProfiles.Add(userProfile);
+                await db.SaveChangesAsync();
+                Log.Information($"✓ User profile for existing user '{testUser.Username}' created!");
+            }
+        }
+    }
+    
+    // 🔗 Create IdentityUser for existing UserProfiles (from DbSeeder) that don't have Identity accounts
+    var existingProfiles = await db.UserProfiles.ToListAsync();
+    
+    foreach (var profile in existingProfiles)
+    {
+        var identityUser = await userManager.FindByNameAsync(profile.Username);
+        
+        if (identityUser == null)
+        {
+            // Create IdentityUser for this profile
+            var newIdentityUser = new IdentityUser
+            {
+                UserName = profile.Username,
+                Email = $"{profile.Username}@mathlearning.com",
+                EmailConfirmed = true
+            };
+            
+            var result = await userManager.CreateAsync(newIdentityUser, "Default123!");
+            
+            if (result.Succeeded)
+            {
+                Log.Information($"✓ Identity account created for existing profile '{profile.Username}' (Password: Default123!)");
+            }
+            else
+            {
+                Log.Warning($"✗ Failed to create Identity account for '{profile.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+        }
     }
 }
 
