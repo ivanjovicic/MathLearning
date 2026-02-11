@@ -114,3 +114,4 @@ public static class BugEndpoints
         .WithDescription("Update bug report status and assignee");
     }
 }
+ 
