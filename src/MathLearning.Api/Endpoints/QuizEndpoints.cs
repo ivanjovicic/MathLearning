@@ -4,6 +4,7 @@ using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -33,20 +34,59 @@ public static class QuizEndpoints
 
             db.QuizSessions.Add(quiz);
 
-            var questions = await db.Questions
+            var questionIds = await db.Questions
                 .Where(q => q.SubtopicId == request.SubtopicId)
                 .OrderBy(q => Guid.NewGuid())
                 .Take(request.QuestionCount)
-                .Include(q => q.Options).ThenInclude(o => o.Translations)
-                .Include(q => q.Translations)
-                .Include(q => q.Steps).ThenInclude(s => s.Translations)
+                .Select(q => q.Id)
                 .ToListAsync();
+            var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
 
             var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
 
             await db.SaveChangesAsync();
 
             return Results.Ok(new QuizResponse(quiz.Id, questionDtos));
+        });
+
+        // 📦 LEGACY MOBILE QUESTIONS ENDPOINT
+        group.MapGet("/questions", async (
+            ApiDbContext db,
+            HttpContext ctx,
+            string? topic,
+            int? subtopicId,
+            int count = 10) =>
+        {
+            var topicId = ParseTopicIdFromTopic(topic ?? string.Empty);
+            return await BuildLegacyQuestionsResponse(
+                db,
+                ctx,
+                count,
+                subtopicId is > 0 ? subtopicId : null,
+                topicId);
+        });
+
+        group.MapPost("/questions", async (
+            JsonElement payload,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int count = 10;
+            if (TryGetInt(payload, "count", out var countValue) && countValue > 0)
+                count = countValue;
+
+            int? subtopicId = null;
+            int? topicId = null;
+            if (TryGetInt(payload, "subtopicId", out var parsedSubtopic) && parsedSubtopic > 0)
+            {
+                subtopicId = parsedSubtopic;
+            }
+            else if (TryGetString(payload, "topic", out var topicRaw))
+            {
+                topicId = ParseTopicIdFromTopic(topicRaw!);
+            }
+
+            return await BuildLegacyQuestionsResponse(db, ctx, count, subtopicId, topicId);
         });
 
         // 📝 NEXT QUESTION (adaptive learning)
@@ -99,18 +139,25 @@ public static class QuizEndpoints
 
         // ✍️ SUBMIT ANSWER
         group.MapPost("/answer", async (
-            SubmitAnswerRequest request,
+            JsonElement request,
             ApiDbContext db,
             HttpContext ctx) =>
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
             string lang = await ResolveUserLang(db, ctx, userId);
 
+            if (!TryGetInt(request, "questionId", out var questionId) || questionId <= 0)
+                return Results.BadRequest("QuestionId is required");
+            if (!TryGetAnswer(request, out var answerText) || string.IsNullOrWhiteSpace(answerText))
+                return Results.BadRequest("Answer is required");
+            if (!TryGetInt(request, "timeSpentSeconds", out var timeSpentSeconds))
+                timeSpentSeconds = 0;
+
             var question = await db.Questions
                 .Include(q => q.Options)
                 .Include(q => q.Translations)
                 .Include(q => q.Steps).ThenInclude(s => s.Translations)
-                .FirstOrDefaultAsync(q => q.Id == request.QuestionId);
+                .FirstOrDefaultAsync(q => q.Id == questionId);
 
             if (question == null)
                 return Results.NotFound("Question not found");
@@ -118,19 +165,39 @@ public static class QuizEndpoints
             bool isCorrect =
                 question.Type == "multiple_choice"
                     ? question.Options.Any(o =>
-                        o.IsCorrect && o.Text == request.Answer)
+                        o.IsCorrect && (
+                            o.Text == answerText ||
+                            (int.TryParse(answerText, out var selectedOptionId) && o.Id == selectedOptionId)))
                     : question.CorrectAnswer != null && question.CorrectAnswer.Trim()
-                        .Equals(request.Answer.Trim(),
+                        .Equals(answerText.Trim(),
                             StringComparison.OrdinalIgnoreCase);
+
+            Guid quizSessionId;
+            string? quizIdRaw = null;
+            if (TryGetString(request, "quizId", out var legacyQuizId))
+                quizIdRaw = legacyQuizId;
+            else if (TryGetString(request, "sessionId", out var sessionId))
+                quizIdRaw = sessionId;
+
+            if (!Guid.TryParse(quizIdRaw, out quizSessionId))
+            {
+                quizSessionId = Guid.NewGuid();
+                db.QuizSessions.Add(new QuizSession
+                {
+                    Id = quizSessionId,
+                    UserId = userId,
+                    StartedAt = DateTime.UtcNow
+                });
+            }
 
             db.UserAnswers.Add(new UserAnswer
             {
                 UserId = userId,
                 QuestionId = question.Id,
-                QuizSessionId = request.QuizId,
-                Answer = request.Answer,
+                QuizSessionId = quizSessionId,
+                Answer = answerText,
                 IsCorrect = isCorrect,
-                TimeSpentSeconds = request.TimeSpentSeconds,
+                TimeSpentSeconds = timeSpentSeconds,
                 AnsweredAt = DateTime.UtcNow
             });
 
@@ -232,7 +299,9 @@ public static class QuizEndpoints
 
                 // 🔐 SERVER-SIDE VALIDATION - Ne veruj IsCorrectOffline od klijenta
                 bool isCorrectServer = question.Type == "multiple_choice"
-                    ? question.Options.Any(o => o.IsCorrect && o.Text == answer.Answer)
+                    ? question.Options.Any(o => o.IsCorrect && (
+                        o.Text == answer.Answer ||
+                        (int.TryParse(answer.Answer, out var selectedOptionId) && o.Id == selectedOptionId)))
                     : question.CorrectAnswer != null && 
                       question.CorrectAnswer.Trim().Equals(answer.Answer.Trim(), 
                           StringComparison.OrdinalIgnoreCase);
@@ -286,6 +355,130 @@ public static class QuizEndpoints
             ));
         });
 
+        // 📤 Legacy alias used by mobile app
+        group.MapPost("/batch-submit", async (
+            JsonElement payload,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            var sessionGuid = Guid.NewGuid();
+            var answers = new List<OfflineAnswerDto>();
+
+            if (payload.TryGetProperty("answers", out var answersNode) &&
+                answersNode.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in answersNode.EnumerateArray())
+                {
+                    if (!TryGetInt(item, "questionId", out var questionId) || questionId <= 0)
+                        continue;
+                    if (!TryGetAnswer(item, out var answerText) || string.IsNullOrWhiteSpace(answerText))
+                        continue;
+
+                    if (!TryGetInt(item, "timeSpent", out var timeSpent))
+                        TryGetInt(item, "timeSpentSeconds", out timeSpent);
+                    TryGetBool(item, "isCorrectOffline", out var isCorrectOffline);
+
+                    DateTime answeredAt = DateTime.UtcNow;
+                    if (TryGetString(item, "answeredAt", out var answeredAtText) &&
+                        DateTime.TryParse(answeredAtText, out var parsedAnsweredAt))
+                    {
+                        answeredAt = parsedAnsweredAt;
+                    }
+
+                    answers.Add(new OfflineAnswerDto(
+                        questionId,
+                        answerText!,
+                        isCorrectOffline,
+                        timeSpent,
+                        answeredAt));
+                }
+            }
+
+            if (answers.Count == 0)
+                return Results.BadRequest("No answers to import");
+
+            var session = new QuizSession
+            {
+                Id = sessionGuid,
+                UserId = userId,
+                StartedAt = answers.Min(a => a.AnsweredAt)
+            };
+            db.QuizSessions.Add(session);
+
+            int importedCount = 0;
+            var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
+            var questions = await db.Questions
+                .Include(q => q.Options)
+                .Where(q => questionIds.Contains(q.Id))
+                .ToDictionaryAsync(q => q.Id);
+            var existingStats = await db.UserQuestionStats
+                .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
+                .ToDictionaryAsync(s => s.QuestionId);
+
+            foreach (var answer in answers)
+            {
+                bool exists = await db.UserAnswers.AnyAsync(x =>
+                    x.UserId == userId &&
+                    x.QuestionId == answer.QuestionId &&
+                    x.AnsweredAt == answer.AnsweredAt);
+                if (exists)
+                    continue;
+
+                if (!questions.TryGetValue(answer.QuestionId, out var questionForAnswer))
+                    continue;
+
+                bool isCorrectServer = questionForAnswer.Type == "multiple_choice"
+                    ? questionForAnswer.Options.Any(o => o.IsCorrect && (
+                        o.Text == answer.Answer ||
+                        (int.TryParse(answer.Answer, out var selectedOptionId) && o.Id == selectedOptionId)))
+                    : questionForAnswer.CorrectAnswer != null &&
+                      questionForAnswer.CorrectAnswer.Trim().Equals(answer.Answer.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                db.UserAnswers.Add(new UserAnswer
+                {
+                    UserId = userId,
+                    QuestionId = answer.QuestionId,
+                    QuizSessionId = sessionGuid,
+                    Answer = answer.Answer,
+                    IsCorrect = isCorrectServer,
+                    TimeSpentSeconds = answer.TimeSpent,
+                    AnsweredAt = answer.AnsweredAt
+                });
+
+                if (!existingStats.TryGetValue(answer.QuestionId, out var stat))
+                {
+                    stat = new UserQuestionStat
+                    {
+                        UserId = userId,
+                        QuestionId = answer.QuestionId,
+                        Attempts = 0,
+                        CorrectAttempts = 0
+                    };
+                    db.UserQuestionStats.Add(stat);
+                    existingStats[answer.QuestionId] = stat;
+                }
+
+                stat.Attempts++;
+                if (isCorrectServer)
+                    stat.CorrectAttempts++;
+                if (stat.LastAttemptAt == null || answer.AnsweredAt > stat.LastAttemptAt)
+                    stat.LastAttemptAt = answer.AnsweredAt;
+
+                importedCount++;
+            }
+
+            await db.SaveChangesAsync();
+            var overview = await CalculateUserOverview(db, userId);
+
+            return Results.Ok(new OfflineBatchSubmitResponse(
+                importedCount,
+                overview.Xp,
+                overview.Level,
+                overview.Streak
+            ));
+        });
+
         // 📚 SRS UPDATE
         group.MapPost("/srs/update", async (
             SrsUpdateDto dto,
@@ -314,15 +507,34 @@ public static class QuizEndpoints
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
             string lang = await ResolveUserLang(db, ctx, userId);
 
-            var questions = await db.QuestionStats
+            var dueQuestionIds = await db.QuestionStats
                 .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
                 .OrderBy(x => x.Ease)
+                .ThenBy(x => x.QuestionId)
                 .Take(limit)
-                .Select(x => x.Question)
-                .Include(q => q.Options).ThenInclude(o => o.Translations)
-                .Include(q => q.Translations)
-                .Include(q => q.Steps).ThenInclude(s => s.Translations)
+                .Select(x => x.QuestionId)
                 .ToListAsync();
+            var questions = await LoadQuestionsWithDetailsByIds(db, dueQuestionIds);
+
+            // Legacy/mobile UX fallback:
+            // if user has at least one due SRS item, pad the session with random questions
+            // so quiz flow doesn't stop after a single card.
+            int targetCount = Math.Min(limit, 10);
+            if (questions.Count > 0 && questions.Count < targetCount)
+            {
+                var dueIds = questions.Select(q => q.Id).ToList();
+                int needed = targetCount - questions.Count;
+
+                var randomFillIds = await db.Questions
+                    .Where(q => !dueIds.Contains(q.Id))
+                    .OrderBy(q => Guid.NewGuid())
+                    .Take(needed)
+                    .Select(q => q.Id)
+                    .ToListAsync();
+                var randomFill = await LoadQuestionsWithDetailsByIds(db, randomFillIds);
+
+                questions.AddRange(randomFill);
+            }
 
             return Results.Ok(questions.Select(q => MapQuestionDto(q, lang)).ToList());
         });
@@ -344,12 +556,7 @@ public static class QuizEndpoints
 
             var dueIds = dueStats.Select(x => x.QuestionId).ToList();
 
-            var srsQuestions = await db.Questions
-                .Include(q => q.Options).ThenInclude(o => o.Translations)
-                .Include(q => q.Translations)
-                .Include(q => q.Steps).ThenInclude(s => s.Translations)
-                .Where(q => dueIds.Contains(q.Id))
-                .ToListAsync();
+            var srsQuestions = await LoadQuestionsWithDetailsByIds(db, dueIds);
 
             int needed = count - srsQuestions.Count;
 
@@ -357,14 +564,13 @@ public static class QuizEndpoints
 
             if (needed > 0)
             {
-                randomQuestions = await db.Questions
-                    .Include(q => q.Options).ThenInclude(o => o.Translations)
-                    .Include(q => q.Translations)
-                    .Include(q => q.Steps).ThenInclude(s => s.Translations)
+                var randomQuestionIds = await db.Questions
                     .Where(x => !dueIds.Contains(x.Id))
                     .OrderBy(x => Guid.NewGuid())
                     .Take(needed)
+                    .Select(x => x.Id)
                     .ToListAsync();
+                randomQuestions = await LoadQuestionsWithDetailsByIds(db, randomQuestionIds);
             }
 
             return Results.Ok(new
@@ -399,6 +605,7 @@ public static class QuizEndpoints
             q.Type,
             TranslationHelper.GetText(q, lang),
             q.Options.Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, lang))).ToList(),
+            q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
             q.Difficulty,
             TranslationHelper.GetHintLight(q, lang),
             TranslationHelper.GetHintMedium(q, lang),
@@ -406,6 +613,90 @@ public static class QuizEndpoints
             TranslationHelper.GetExplanation(q, lang),
             StepEngine.GetSteps(q, lang)
         );
+    }
+
+    private static async Task<IResult> BuildLegacyQuestionsResponse(
+        ApiDbContext db,
+        HttpContext ctx,
+        int count,
+        int? subtopicId,
+        int? topicId)
+    {
+        int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+        string lang = await ResolveUserLang(db, ctx, userId);
+
+        IQueryable<Question> query = db.Questions.AsQueryable();
+
+        if (subtopicId.HasValue)
+        {
+            query = query.Where(q => q.SubtopicId == subtopicId.Value);
+        }
+        else if (topicId.HasValue)
+        {
+            query = query.Where(q => q.Subtopic != null && q.Subtopic.TopicId == topicId.Value);
+        }
+
+        var questionIds = await query
+            .OrderBy(q => Guid.NewGuid())
+            .Take(Math.Max(1, count))
+            .Select(q => q.Id)
+            .ToListAsync();
+        var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
+
+        var quizSession = new QuizSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            StartedAt = DateTime.UtcNow
+        };
+        db.QuizSessions.Add(quizSession);
+        await db.SaveChangesAsync();
+
+        var mapped = questions.Select(q => new
+        {
+            id = q.Id,
+            text = TranslationHelper.GetText(q, lang),
+            type = q.Type,
+            options = q.Options
+                .Select(o => new { id = o.Id, text = TranslationHelper.GetOptionText(o, lang) })
+                .ToList(),
+            correctAnswerId = q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
+            subtopicId = q.SubtopicId,
+            hintLight = TranslationHelper.GetHintLight(q, lang),
+            hintMedium = TranslationHelper.GetHintMedium(q, lang),
+            hintFull = TranslationHelper.GetHintFull(q, lang),
+            explanation = TranslationHelper.GetExplanation(q, lang)
+        });
+
+        return Results.Ok(new
+        {
+            quizId = quizSession.Id,
+            questions = mapped
+        });
+    }
+
+    // Load full question graph in a deterministic order by pre-selected IDs.
+    // This avoids empty collection navigations when random ordering + Take is used.
+    private static async Task<List<Question>> LoadQuestionsWithDetailsByIds(ApiDbContext db, IReadOnlyList<int> orderedQuestionIds)
+    {
+        if (orderedQuestionIds.Count == 0)
+            return new List<Question>();
+
+        var questions = await db.Questions
+            .Where(q => orderedQuestionIds.Contains(q.Id))
+            .Include(q => q.Options).ThenInclude(o => o.Translations)
+            .Include(q => q.Translations)
+            .Include(q => q.Steps).ThenInclude(s => s.Translations)
+            .AsSingleQuery()
+            .ToListAsync();
+
+        var orderMap = orderedQuestionIds
+            .Select((id, index) => new { id, index })
+            .ToDictionary(x => x.id, x => x.index);
+
+        return questions
+            .OrderBy(q => orderMap.TryGetValue(q.Id, out var index) ? index : int.MaxValue)
+            .ToList();
     }
 
     // 📊 Helper za računanje XP, Level i Streak
@@ -452,5 +743,114 @@ public static class QuizEndpoints
 
         var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
         return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);
+    }
+
+    private static int? ParseTopicIdFromTopic(string topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+            return null;
+
+        var parts = topic.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            return null;
+
+        if (int.TryParse(parts[^1], out var parsed) && parsed > 0)
+            return parsed;
+
+        return null;
+    }
+
+    private static bool TryGetInt(JsonElement json, string property, out int value)
+    {
+        value = 0;
+        if (!json.TryGetProperty(property, out var p))
+            return false;
+
+        if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out value))
+            return true;
+
+        if (p.ValueKind == JsonValueKind.String && int.TryParse(p.GetString(), out var parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetBool(JsonElement json, string property, out bool value)
+    {
+        value = false;
+        if (!json.TryGetProperty(property, out var p))
+            return false;
+
+        if (p.ValueKind == JsonValueKind.True || p.ValueKind == JsonValueKind.False)
+        {
+            value = p.GetBoolean();
+            return true;
+        }
+
+        if (p.ValueKind == JsonValueKind.String && bool.TryParse(p.GetString(), out var parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetString(JsonElement json, string property, out string? value)
+    {
+        value = null;
+        if (!json.TryGetProperty(property, out var p))
+            return false;
+        if (p.ValueKind != JsonValueKind.String)
+            return false;
+
+        value = p.GetString();
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static bool TryGetAnswer(JsonElement json, out string? value)
+    {
+        value = null;
+
+        // Preferred modern key.
+        if (json.TryGetProperty("answer", out var answerNode))
+        {
+            if (answerNode.ValueKind == JsonValueKind.String)
+            {
+                value = answerNode.GetString();
+                return !string.IsNullOrWhiteSpace(value);
+            }
+
+            if (answerNode.ValueKind == JsonValueKind.Number)
+            {
+                if (answerNode.TryGetInt32(out var answerId) && answerId > 0)
+                {
+                    value = answerId.ToString();
+                    return true;
+                }
+
+                var raw = answerNode.GetRawText();
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    value = raw.Trim();
+                    return true;
+                }
+            }
+        }
+
+        // Legacy client keys.
+        foreach (var key in new[] { "selectedOptionId", "answerId", "selectedAnswerId", "optionId" })
+        {
+            if (TryGetInt(json, key, out var id) && id > 0)
+            {
+                value = id.ToString();
+                return true;
+            }
+        }
+
+        return false;
     }
 }
