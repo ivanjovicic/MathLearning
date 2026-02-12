@@ -605,7 +605,6 @@ public static class QuizEndpoints
             q.Type,
             TranslationHelper.GetText(q, lang),
             q.Options.Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, lang))).ToList(),
-            q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
             q.Difficulty,
             TranslationHelper.GetHintLight(q, lang),
             TranslationHelper.GetHintMedium(q, lang),

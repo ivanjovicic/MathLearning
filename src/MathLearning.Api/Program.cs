@@ -254,6 +254,27 @@ static async Task SeedAdminUser(WebApplication app)
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
     var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+    static async Task EnsurePasswordAsync(UserManager<IdentityUser> userManager, IdentityUser user, string password)
+    {
+        if (await userManager.HasPasswordAsync(user))
+        {
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+            var resetResult = await userManager.ResetPasswordAsync(user, resetToken, password);
+            if (!resetResult.Succeeded)
+            {
+                Log.Warning($"✗ Failed to reset password for '{user.UserName}': {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
+            }
+        }
+        else
+        {
+            var addResult = await userManager.AddPasswordAsync(user, password);
+            if (!addResult.Succeeded)
+            {
+                Log.Warning($"✗ Failed to add password for '{user.UserName}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+            }
+        }
+    }
     
     // 👤 Seed Admin User
     var adminUsername = "admin";
@@ -379,7 +400,8 @@ static async Task SeedAdminUser(WebApplication app)
         else
         {
             Log.Information($"✓ Test user '{testUser.Username}' already exists.");
-            
+            await EnsurePasswordAsync(userManager, existingUser, testUser.Password);
+             
             // Ensure UserProfile exists even if IdentityUser was created before
             if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
             {

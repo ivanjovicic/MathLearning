@@ -154,6 +154,142 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
+        // ── LaTeX test questions (idempotent) ─────────
+        var algebraCategory = await db.Set<Category>().FirstOrDefaultAsync(c => c.Name == "Algebra");
+        var equationsSubtopic = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Jednačine");
+
+        if (algebraCategory != null && equationsSubtopic != null)
+        {
+            var latexQuestionSeeds = new[]
+            {
+                new
+                {
+                    Text = "LaTeX test: Izračunaj derivaciju funkcije $f(x)=x^3-2x$ za $x=2$.",
+                    Explanation = "Derivacija je $f'(x)=3x^2-2$, pa je $f'(2)=3\\cdot 4-2=10$.",
+                    HintFormula = "Koristi pravilo: $(x^n)' = n x^{n-1}$ i $(ax)'=a$.",
+                    HintClue = "Prvo izračunaj $f'(x)$, pa zatim uvrsti $x=2$.",
+                    Difficulty = 2,
+                    Options = new List<QuestionOption>
+                    {
+                        new("10", true), new("8", false), new("12", false), new("6", false)
+                    }
+                },
+                new
+                {
+                    Text = "LaTeX test: Izračunaj određeni integral $\\int_0^1 (2x+1)\\,dx$.",
+                    Explanation = "Primitivna funkcija je $x^2+x$, pa je $\\left[x^2+x\\right]_0^1=(1+1)-0=2$.",
+                    HintFormula = "Koristi: $\\int (2x+1)\\,dx = x^2 + x + C$.",
+                    HintClue = "Nađi primitivnu funkciju i izračunaj $F(1)-F(0)$.",
+                    Difficulty = 3,
+                    Options = new List<QuestionOption>
+                    {
+                        new("2", true), new("1", false), new("3", false), new("4", false)
+                    }
+                },
+                new
+                {
+                    Text = "LaTeX test: Ako su $f(x)=2x+3$ i $g(x)=x^2$, izračunaj $(f\\circ g)(2)$.",
+                    Explanation = "Prvo $g(2)=4$, zatim $f(4)=2\\cdot 4+3=11$.",
+                    HintFormula = "$(f\\circ g)(x)=f(g(x))$.",
+                    HintClue = "Prvo izračunaj unutrašnju funkciju $g(2)$, pa rezultat ubaci u $f$.",
+                    Difficulty = 2,
+                    Options = new List<QuestionOption>
+                    {
+                        new("11", true), new("7", false), new("9", false), new("13", false)
+                    }
+                }
+            };
+
+            var existingTexts = await db.Set<Question>()
+                .Select(q => q.Text)
+                .ToListAsync();
+
+            var latexQuestionsToInsert = new List<Question>();
+
+            foreach (var seed in latexQuestionSeeds)
+            {
+                if (existingTexts.Contains(seed.Text))
+                    continue;
+
+                var q = new Question(seed.Text, seed.Difficulty, algebraCategory.Id, seed.Explanation);
+                q.SetSubtopic(equationsSubtopic.Id);
+                q.SetHintFormula(seed.HintFormula);
+                q.SetHintClue(seed.HintClue);
+                q.ReplaceOptions(seed.Options);
+                latexQuestionsToInsert.Add(q);
+            }
+
+            if (latexQuestionsToInsert.Count > 0)
+            {
+                db.Set<Question>().AddRange(latexQuestionsToInsert);
+                await db.SaveChangesAsync();
+                changed = true;
+            }
+
+            var latexTranslations = new Dictionary<string, (string Text, string Explanation, string HintLight, string HintMedium, string HintFull)>
+            {
+                ["LaTeX test: Izračunaj derivaciju funkcije $f(x)=x^3-2x$ za $x=2$."] =
+                    ("LaTeX test: Compute the derivative of $f(x)=x^3-2x$ at $x=2$.",
+                     "The derivative is $f'(x)=3x^2-2$, so $f'(2)=3\\cdot 4-2=10$.",
+                     "Use $(x^n)' = n x^{n-1}$ and $(ax)'=a$.",
+                     "First compute $f'(x)$, then substitute $x=2$.",
+                     "Step 1: $f'(x)=3x^2-2$. Step 2: $f'(2)=3\\cdot 4-2=10$."),
+
+                ["LaTeX test: Izračunaj određeni integral $\\int_0^1 (2x+1)\\,dx$."] =
+                    ("LaTeX test: Compute the definite integral $\\int_0^1 (2x+1)\\,dx$.",
+                     "An antiderivative is $x^2+x$, so $\\left[x^2+x\\right]_0^1=(1+1)-0=2$.",
+                     "Use $\\int (2x+1)\\,dx = x^2 + x + C$.",
+                     "Find an antiderivative and evaluate $F(1)-F(0)$.",
+                     "Step 1: $F(x)=x^2+x$. Step 2: $F(1)=2$, $F(0)=0$. Step 3: result is $2$."),
+
+                ["LaTeX test: Ako su $f(x)=2x+3$ i $g(x)=x^2$, izračunaj $(f\\circ g)(2)$."] =
+                    ("LaTeX test: If $f(x)=2x+3$ and $g(x)=x^2$, compute $(f\\circ g)(2)$.",
+                     "First $g(2)=4$, then $f(4)=2\\cdot 4+3=11$.",
+                     "Use $(f\\circ g)(x)=f(g(x))$.",
+                     "Compute the inner function first: $g(2)$.",
+                     "Step 1: $g(2)=4$. Step 2: $f(4)=2\\cdot 4+3=11$.")
+            };
+
+            var latexTexts = latexTranslations.Keys.ToList();
+            var latexQuestions = await db.Set<Question>()
+                .Where(q => latexTexts.Contains(q.Text))
+                .ToListAsync();
+
+            var existingEnglishTranslationIds = (await db.Set<QuestionTranslation>()
+                .Where(t => t.Lang == "en")
+                .Select(t => t.QuestionId)
+                .ToListAsync())
+                .ToHashSet();
+
+            var translationsToInsert = new List<QuestionTranslation>();
+
+            foreach (var q in latexQuestions)
+            {
+                if (!latexTranslations.TryGetValue(q.Text, out var translation))
+                    continue;
+                if (existingEnglishTranslationIds.Contains(q.Id))
+                    continue;
+
+                translationsToInsert.Add(new QuestionTranslation(
+                    q.Id,
+                    "en",
+                    translation.Text,
+                    translation.Explanation,
+                    translation.HintLight,
+                    translation.HintMedium,
+                    translation.HintLight,
+                    translation.HintMedium,
+                    translation.HintFull));
+            }
+
+            if (translationsToInsert.Count > 0)
+            {
+                db.Set<QuestionTranslation>().AddRange(translationsToInsert);
+                await db.SaveChangesAsync();
+                changed = true;
+            }
+        }
+
         // ── Demo user profiles ───────────────────────
         if (!await db.Set<UserProfile>().AnyAsync())
         {

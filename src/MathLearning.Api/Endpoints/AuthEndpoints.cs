@@ -162,13 +162,13 @@ public static class AuthEndpoints
         .WithDescription("Register new mobile user");
 
         // 🔐 LOGIN (sa Refresh Token)
-        group.MapPost("/login", async (
+        static async Task<IResult> LoginHandler(
             LoginRequest request,
             UserManager<IdentityUser> userManager,
             ApiDbContext db,
             IConfiguration config,
             HttpContext ctx,
-            ILogger<Program> logger) =>
+            ILogger<Program> logger)
         {
             try
             {
@@ -223,7 +223,13 @@ public static class AuthEndpoints
                 logger.LogError(ex, $"Login error for username: {request.Username}");
                 return Results.Json(new { error = ex.Message }, statusCode: 500);
             }
-        }).WithName("Login");
+        }
+
+        group.MapPost("/login", LoginHandler).WithName("Login");
+        app.MapPost("/api/auth/login", LoginHandler)
+           .AllowAnonymous()
+           .WithTags("Authentication")
+           .WithName("LoginApiAlias");
 
         // 🔄 REFRESH TOKEN
         group.MapPost("/refresh", async (
