@@ -38,7 +38,9 @@ public class ApiDbContextFactory : IDesignTimeDbContextFactory<ApiDbContext>
         }
 
         var builder = new DbContextOptionsBuilder<ApiDbContext>();
-        builder.UseNpgsql(connectionString);
+        builder.UseNpgsql(
+            connectionString,
+            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
         return new ApiDbContext(builder.Options);
     }

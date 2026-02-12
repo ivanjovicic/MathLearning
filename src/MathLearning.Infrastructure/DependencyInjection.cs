@@ -17,7 +17,9 @@ namespace MathLearning.Infrastructure
             var connectionString = config.GetConnectionString("Default");
 
             services.AddDbContext<ApiDbContext>(opt =>
-                opt.UseNpgsql(connectionString));
+                opt.UseNpgsql(
+                    connectionString,
+                    npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
             return services;
         }

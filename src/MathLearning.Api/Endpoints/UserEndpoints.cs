@@ -14,10 +14,68 @@ public static class UserEndpoints
         var group = app.MapGroup("/api/users")
                        .RequireAuthorization()
                        .WithTags("Users");
+        var legacyGroup = app.MapGroup("/api/user")
+                             .RequireAuthorization()
+                             .WithTags("Users");
 
         var settingsGroup = app.MapGroup("/users")
                               .RequireAuthorization()
                               .WithTags("UserSettings");
+
+        // Legacy mobile endpoint: GET /api/user/coins
+        legacyGroup.MapGet("/coins", async (
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null)
+            {
+                return Results.Ok(new
+                {
+                    coins = 0,
+                    totalEarned = 0,
+                    totalSpent = 0,
+                    level = 1,
+                    xp = 0,
+                    streak = 0
+                });
+            }
+
+            return Results.Ok(new
+            {
+                coins = profile.Coins,
+                totalEarned = profile.TotalCoinsEarned,
+                totalSpent = profile.TotalCoinsSpent,
+                level = profile.Level,
+                xp = profile.Xp,
+                streak = profile.Streak
+            });
+        });
+
+        // Legacy mobile endpoint: GET /api/user/daily-hints
+        legacyGroup.MapGet("/daily-hints", async (
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            var today = DateTime.UtcNow.Date;
+
+            var usedToday = await db.UserHints
+                .Where(h => h.UserId == userId && h.UsedAt.Date == today)
+                .CountAsync();
+
+            const int dailyLimit = 10;
+            var remaining = Math.Max(0, dailyLimit - usedToday);
+
+            return Results.Ok(new
+            {
+                usedToday,
+                dailyLimit,
+                remaining
+            });
+        });
 
         // 👤 GET PROFILE
         group.MapGet("/profile", async (

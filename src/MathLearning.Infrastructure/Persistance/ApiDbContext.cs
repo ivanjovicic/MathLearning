@@ -32,6 +32,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
     public DbSet<QuestionStep> QuestionSteps => Set<QuestionStep>();
     public DbSet<QuestionStepTranslation> QuestionStepTranslations => Set<QuestionStepTranslation>();
+    public DbSet<UserAnswerAudit> UserAnswerAudits => Set<UserAnswerAudit>();
+    public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

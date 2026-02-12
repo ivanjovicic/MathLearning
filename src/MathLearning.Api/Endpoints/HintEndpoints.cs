@@ -19,6 +19,81 @@ public static class HintEndpoints
         var group = app.MapGroup("/api/hints")
                        .RequireAuthorization()
                        .WithTags("Hints");
+        var legacyGroup = app.MapGroup("/api/questions")
+                             .RequireAuthorization()
+                             .WithTags("Hints");
+
+        // Legacy mobile endpoints (no coin spending side-effects)
+        legacyGroup.MapGet("/{id:int}/hint/formula", async (
+            int id,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
+
+            var question = await db.Questions
+                .Include(q => q.Translations)
+                .FirstOrDefaultAsync(q => q.Id == id);
+            if (question == null)
+                return Results.NotFound(new { error = "Question not found" });
+
+            return Results.Ok(new { formula = TranslationHelper.GetHintFormula(question, lang) });
+        });
+
+        legacyGroup.MapGet("/{id:int}/hint/clue", async (
+            int id,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
+
+            var question = await db.Questions
+                .Include(q => q.Translations)
+                .FirstOrDefaultAsync(q => q.Id == id);
+            if (question == null)
+                return Results.NotFound(new { error = "Question not found" });
+
+            return Results.Ok(new { clue = TranslationHelper.GetHintClue(question, lang) });
+        });
+
+        legacyGroup.MapPost("/{id:int}/hint/eliminate", async (
+            int id,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string lang = await ResolveUserLang(db, ctx, userId);
+
+            var question = await db.Questions
+                .Include(q => q.Options).ThenInclude(o => o.Translations)
+                .FirstOrDefaultAsync(q => q.Id == id);
+
+            if (question == null)
+                return Results.NotFound(new { error = "Question not found" });
+
+            var wrong = question.Options.Where(o => !o.IsCorrect).ToList();
+            if (wrong.Count == 0)
+                return Results.BadRequest(new { error = "No wrong options to eliminate" });
+
+            var toEliminate = wrong.OrderBy(_ => Guid.NewGuid()).First();
+            var remainingOptionIds = question.Options
+                .Where(o => o.Id != toEliminate.Id)
+                .Select(o => o.Id.ToString())
+                .ToList();
+            var remainingOptionTexts = question.Options
+                .Where(o => o.Id != toEliminate.Id)
+                .Select(o => TranslationHelper.GetOptionText(o, lang))
+                .ToList();
+
+            return Results.Ok(new
+            {
+                remainingOptions = remainingOptionIds,
+                remainingOptionTexts,
+                eliminatedOption = TranslationHelper.GetOptionText(toEliminate, lang)
+            });
+        });
 
         // 💡 GET FORMULA HINT
         group.MapGet("/questions/{id}/formula", async (

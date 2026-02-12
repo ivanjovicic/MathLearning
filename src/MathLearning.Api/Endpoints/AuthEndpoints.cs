@@ -252,7 +252,7 @@ public static class AuthEndpoints
                 }
 
                 // Get user
-                var user = await userManager.FindByIdAsync(refreshToken!.UserId.ToString());
+                var user = await ResolveIdentityUserByAppUserId(userManager, db, refreshToken!.UserId);
                 if (user == null)
                 {
                     return Results.Json(new { error = "User not found" }, statusCode: 404);
@@ -446,5 +446,34 @@ public static class AuthEndpoints
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static async Task<IdentityUser?> ResolveIdentityUserByAppUserId(
+        UserManager<IdentityUser> userManager,
+        ApiDbContext db,
+        int appUserId)
+    {
+        // 1) Direct match for numeric Identity IDs (e.g. admin seeded as "1")
+        var direct = await userManager.FindByIdAsync(appUserId.ToString());
+        if (direct != null)
+            return direct;
+
+        // 2) Stable mapping through UserProfile (works across app restarts)
+        var profile = await db.UserProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == appUserId);
+        if (profile?.Username != null)
+        {
+            var byUsername = await userManager.FindByNameAsync(profile.Username);
+            if (byUsername != null)
+                return byUsername;
+        }
+
+        // 3) Last-chance legacy fallback (same-process hash mapping only)
+        var users = await userManager.Users.ToListAsync();
+        return users.FirstOrDefault(u =>
+            int.TryParse(u.Id, out var numericId)
+                ? numericId == appUserId
+                : Math.Abs(u.Id.GetHashCode()) == appUserId);
     }
 }

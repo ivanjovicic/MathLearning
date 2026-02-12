@@ -34,7 +34,9 @@ class Program
             {
                 // Database
                 services.AddDbContext<ApiDbContext>(options =>
-                    options.UseNpgsql("Host=localhost;Port=5433;Username=postgres;Password=postgres;Database=mathlearning;"));
+                    options.UseNpgsql(
+                        "Host=localhost;Port=5433;Username=postgres;Password=postgres;Database=mathlearning;",
+                        npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
                 // HTTP client for translation APIs
                 services.AddHttpClient();

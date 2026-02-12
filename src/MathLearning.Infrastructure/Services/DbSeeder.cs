@@ -35,7 +35,8 @@ public static class DbSeeder
                 new Subtopic("Jednačine", t1.Id),
                 new Subtopic("Nejednačine", t1.Id),
                 new Subtopic("Trouglovi", t2.Id),
-                new Subtopic("Sabiranje do 100", t3.Id)
+                new Subtopic("Sabiranje do 100", t3.Id),
+                new Subtopic("Množenje i Deljenje", t3.Id)
             );
             await db.SaveChangesAsync();
             changed = true;
@@ -45,9 +46,20 @@ public static class DbSeeder
         if (!await db.Set<Question>().AnyAsync())
         {
             var algebra = await db.Set<Category>().FirstAsync(c => c.Name == "Algebra");
+            var geometrija = await db.Set<Category>().FirstAsync(c => c.Name == "Geometrija");
             var aritmetika = await db.Set<Category>().FirstAsync(c => c.Name == "Aritmetika");
             var subtopicJednacine = await db.Set<Subtopic>().FirstAsync(s => s.Name == "Jednačine");
+            var subtopicNejednacine = await db.Set<Subtopic>().FirstAsync(s => s.Name == "Nejednačine");
+            var subtopicTrouglovi = await db.Set<Subtopic>().FirstAsync(s => s.Name == "Trouglovi");
             var subtopicSabiranje = await db.Set<Subtopic>().FirstAsync(s => s.Name == "Sabiranje do 100");
+            var subtopicMnozenjeDeljenje = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Množenje i Deljenje");
+            if (subtopicMnozenjeDeljenje == null)
+            {
+                var topicAritmetika = await db.Set<Topic>().FirstAsync(t => t.Name == "Sabiranje i Oduzimanje");
+                subtopicMnozenjeDeljenje = new Subtopic("Množenje i Deljenje", topicAritmetika.Id);
+                db.Set<Subtopic>().Add(subtopicMnozenjeDeljenje);
+                await db.SaveChangesAsync();
+            }
 
             var questions = new List<Question>();
 
@@ -123,6 +135,63 @@ public static class DbSeeder
             });
             questions.Add(q8);
 
+            var q9 = new Question("Reši nejednačinu: x + 3 > 10", 2, algebra.Id, "x > 7");
+            q9.SetSubtopic(subtopicNejednacine.Id);
+            q9.SetHintFormula("x > 10 - 3");
+            q9.SetHintClue("Izoluj x oduzimanjem 3 sa obe strane");
+            q9.ReplaceOptions(new List<QuestionOption>
+            {
+                new("x > 7", true), new("x < 7", false), new("x = 7", false), new("x >= 7", false)
+            });
+            questions.Add(q9);
+
+            var q10 = new Question("Reši nejednačinu: 2x ≤ 14", 3, algebra.Id, "x ≤ 7");
+            q10.SetSubtopic(subtopicNejednacine.Id);
+            q10.SetHintFormula("x ≤ 14 / 2");
+            q10.SetHintClue("Podeli obe strane sa 2");
+            q10.ReplaceOptions(new List<QuestionOption>
+            {
+                new("x ≤ 7", true), new("x ≥ 7", false), new("x < 7", false), new("x = 7", false)
+            });
+            questions.Add(q10);
+
+            // Geometrija questions
+            var q11 = new Question("Koliki je obim trougla sa stranicama 3, 4 i 5?", 1, geometrija.Id, "Obim je zbir svih stranica: 3 + 4 + 5 = 12");
+            q11.SetSubtopic(subtopicTrouglovi.Id);
+            q11.ReplaceOptions(new List<QuestionOption>
+            {
+                new("12", true), new("11", false), new("10", false), new("13", false)
+            });
+            questions.Add(q11);
+
+            var q12 = new Question("Kolika je površina trougla sa osnovicom 10 i visinom 6?", 2, geometrija.Id, "P = (a × h) / 2 = (10 × 6) / 2 = 30");
+            q12.SetSubtopic(subtopicTrouglovi.Id);
+            q12.SetHintFormula("P = (a × h) / 2");
+            q12.SetHintClue("Pomnoži osnovicu i visinu, pa podeli sa 2");
+            q12.ReplaceOptions(new List<QuestionOption>
+            {
+                new("30", true), new("60", false), new("16", false), new("20", false)
+            });
+            questions.Add(q12);
+
+            var q13 = new Question("Koliko je 84 ÷ 7?", 1, aritmetika.Id, "84 ÷ 7 = 12");
+            q13.SetSubtopic(subtopicMnozenjeDeljenje.Id);
+            q13.ReplaceOptions(new List<QuestionOption>
+            {
+                new("12", true), new("11", false), new("13", false), new("14", false)
+            });
+            questions.Add(q13);
+
+            var q14 = new Question("Koliko je 36 ÷ 4 + 5?", 2, aritmetika.Id, "Prvo 36 ÷ 4 = 9, zatim 9 + 5 = 14");
+            q14.SetSubtopic(subtopicMnozenjeDeljenje.Id);
+            q14.SetHintFormula("36 ÷ 4 = 9");
+            q14.SetHintClue("Poštuj redosled računskih operacija");
+            q14.ReplaceOptions(new List<QuestionOption>
+            {
+                new("14", true), new("16", false), new("9", false), new("13", false)
+            });
+            questions.Add(q14);
+
             db.Set<Question>().AddRange(questions);
             await db.SaveChangesAsync();
             changed = true;
@@ -140,6 +209,12 @@ public static class DbSeeder
                 ["Koliko je 48 + 35?"] = ("What is 48 + 35?", "48 + 35 = 83", null, null),
                 ["Koliko je 99 - 47?"] = ("What is 99 - 47?", "99 - 47 = 52", null, null),
                 ["Koliko je 9 × 6?"] = ("What is 9 × 6?", "9 × 6 = 54", null, null),
+                ["Reši nejednačinu: x + 3 > 10"] = ("Solve the inequality: x + 3 > 10", "x > 7", "x > 10 - 3", "Isolate x by subtracting 3 from both sides"),
+                ["Reši nejednačinu: 2x ≤ 14"] = ("Solve the inequality: 2x ≤ 14", "x ≤ 7", "x ≤ 14 / 2", "Divide both sides by 2"),
+                ["Koliki je obim trougla sa stranicama 3, 4 i 5?"] = ("What is the perimeter of a triangle with sides 3, 4, and 5?", "Perimeter is the sum of all sides: 3 + 4 + 5 = 12", null, null),
+                ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = ("What is the area of a triangle with base 10 and height 6?", "A = (b × h) / 2 = (10 × 6) / 2 = 30", "A = (b × h) / 2", "Multiply base and height, then divide by 2"),
+                ["Koliko je 84 ÷ 7?"] = ("What is 84 ÷ 7?", "84 ÷ 7 = 12", null, null),
+                ["Koliko je 36 ÷ 4 + 5?"] = ("What is 36 ÷ 4 + 5?", "First 36 ÷ 4 = 9, then 9 + 5 = 14", "36 ÷ 4 = 9", "Follow operation precedence"),
             };
 
             foreach (var q in allQuestions)
@@ -152,13 +227,346 @@ public static class DbSeeder
             }
 
             await db.SaveChangesAsync();
+
+            // ── Stored step-by-step examples (with English translations) ──
+            var stepDefinitions = new Dictionary<string, List<(string SrText, string? SrHint, bool Highlight, string EnText, string? EnHint)>>
+            {
+                ["Reši nejednačinu: x + 3 > 10"] = new()
+                {
+                    ("Početna nejednačina: x + 3 > 10", null, false, "Start with the inequality: x + 3 > 10", null),
+                    ("Oduzmi 3 sa obe strane: x + 3 - 3 > 10 - 3", "Ista operacija ide na obe strane", false, "Subtract 3 from both sides: x + 3 - 3 > 10 - 3", "Apply the same operation to both sides"),
+                    ("Dobijamo: x > 7", null, true, "We get: x > 7", null),
+                },
+                ["Koliki je obim trougla sa stranicama 3, 4 i 5?"] = new()
+                {
+                    ("Formula za obim trougla je O = a + b + c", null, false, "Triangle perimeter formula is P = a + b + c", null),
+                    ("Uvrsti stranice: O = 3 + 4 + 5", null, false, "Substitute side lengths: P = 3 + 4 + 5", null),
+                    ("Izračunaj zbir: O = 12", null, true, "Calculate the sum: P = 12", null),
+                },
+                ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = new()
+                {
+                    ("Formula za površinu trougla je P = (a × h) / 2", null, false, "Triangle area formula is A = (b × h) / 2", null),
+                    ("Uvrsti vrednosti: P = (10 × 6) / 2", null, false, "Substitute values: A = (10 × 6) / 2", null),
+                    ("Izračunaj: P = 60 / 2 = 30", null, true, "Compute: A = 60 / 2 = 30", null),
+                },
+                ["Koliko je 36 ÷ 4 + 5?"] = new()
+                {
+                    ("Prvo radi deljenje: 36 ÷ 4 = 9", "Deljenje ima prioritet nad sabiranjem", false, "Do division first: 36 ÷ 4 = 9", "Division has higher precedence than addition"),
+                    ("Zatim saberi: 9 + 5 = 14", null, false, "Then add: 9 + 5 = 14", null),
+                    ("Konačan rezultat je 14", null, true, "Final result is 14", null),
+                },
+            };
+
+            var stepsToTranslate = new List<(QuestionStep Step, string EnText, string? EnHint)>();
+            foreach (var q in allQuestions)
+            {
+                if (!stepDefinitions.TryGetValue(q.Text, out var steps))
+                    continue;
+
+                for (int i = 0; i < steps.Count; i++)
+                {
+                    var step = new QuestionStep(q.Id, i + 1, steps[i].SrText, steps[i].SrHint, steps[i].Highlight);
+                    db.Set<QuestionStep>().Add(step);
+                    stepsToTranslate.Add((step, steps[i].EnText, steps[i].EnHint));
+                }
+            }
+
+            if (stepsToTranslate.Count > 0)
+            {
+                await db.SaveChangesAsync();
+
+                var stepTranslationsToAdd = stepsToTranslate
+                    .Select(x => new QuestionStepTranslation(
+                        x.Step.Id,
+                        "en",
+                        x.EnText,
+                        x.EnHint))
+                    .ToList();
+
+                db.Set<QuestionStepTranslation>().AddRange(stepTranslationsToAdd);
+                await db.SaveChangesAsync();
+            }
         }
 
-        // ── LaTeX test questions (idempotent) ─────────
-        var algebraCategory = await db.Set<Category>().FirstOrDefaultAsync(c => c.Name == "Algebra");
-        var equationsSubtopic = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Jednačine");
+        // ── Ensure additional examples for existing databases (idempotent) ──
+        var algebraCategory = await db.Set<Category>().FirstAsync(c => c.Name == "Algebra");
+        var geometrijaCategory = await db.Set<Category>().FirstAsync(c => c.Name == "Geometrija");
+        var aritmetikaCategory = await db.Set<Category>().FirstAsync(c => c.Name == "Aritmetika");
 
-        if (algebraCategory != null && equationsSubtopic != null)
+        var topicAritmetikaExisting = await db.Set<Topic>().FirstAsync(t => t.Name == "Sabiranje i Oduzimanje");
+
+        var subtopicNejednacineExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Nejednačine");
+        if (subtopicNejednacineExisting == null)
+        {
+            subtopicNejednacineExisting = new Subtopic("Nejednačine", (await db.Set<Topic>().FirstAsync(t => t.Name == "Osnove Algebre")).Id);
+            db.Set<Subtopic>().Add(subtopicNejednacineExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
+
+        var subtopicTrougloviExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Trouglovi");
+        if (subtopicTrougloviExisting == null)
+        {
+            subtopicTrougloviExisting = new Subtopic("Trouglovi", (await db.Set<Topic>().FirstAsync(t => t.Name == "Osnove Geometrije")).Id);
+            db.Set<Subtopic>().Add(subtopicTrougloviExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
+
+        var subtopicMnozenjeDeljenjeExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Množenje i Deljenje");
+        if (subtopicMnozenjeDeljenjeExisting == null)
+        {
+            subtopicMnozenjeDeljenjeExisting = new Subtopic("Množenje i Deljenje", topicAritmetikaExisting.Id);
+            db.Set<Subtopic>().Add(subtopicMnozenjeDeljenjeExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
+
+        var ensureQuestionDefinitions = new List<(
+            string Text,
+            int Difficulty,
+            int CategoryId,
+            int SubtopicId,
+            string? Explanation,
+            string? HintFormula,
+            string? HintClue,
+            List<(string OptionText, bool IsCorrect)> Options)>
+        {
+            (
+                "Reši nejednačinu: x + 3 > 10",
+                2,
+                algebraCategory.Id,
+                subtopicNejednacineExisting.Id,
+                "x > 7",
+                "x > 10 - 3",
+                "Izoluj x oduzimanjem 3 sa obe strane",
+                new() { ("x > 7", true), ("x < 7", false), ("x = 7", false), ("x >= 7", false) }
+            ),
+            (
+                "Reši nejednačinu: 2x ≤ 14",
+                3,
+                algebraCategory.Id,
+                subtopicNejednacineExisting.Id,
+                "x ≤ 7",
+                "x ≤ 14 / 2",
+                "Podeli obe strane sa 2",
+                new() { ("x ≤ 7", true), ("x ≥ 7", false), ("x < 7", false), ("x = 7", false) }
+            ),
+            (
+                "Koliki je obim trougla sa stranicama 3, 4 i 5?",
+                1,
+                geometrijaCategory.Id,
+                subtopicTrougloviExisting.Id,
+                "Obim je zbir svih stranica: 3 + 4 + 5 = 12",
+                null,
+                null,
+                new() { ("12", true), ("11", false), ("10", false), ("13", false) }
+            ),
+            (
+                "Kolika je površina trougla sa osnovicom 10 i visinom 6?",
+                2,
+                geometrijaCategory.Id,
+                subtopicTrougloviExisting.Id,
+                "P = (a × h) / 2 = (10 × 6) / 2 = 30",
+                "P = (a × h) / 2",
+                "Pomnoži osnovicu i visinu, pa podeli sa 2",
+                new() { ("30", true), ("60", false), ("16", false), ("20", false) }
+            ),
+            (
+                "Koliko je 84 ÷ 7?",
+                1,
+                aritmetikaCategory.Id,
+                subtopicMnozenjeDeljenjeExisting.Id,
+                "84 ÷ 7 = 12",
+                null,
+                null,
+                new() { ("12", true), ("11", false), ("13", false), ("14", false) }
+            ),
+            (
+                "Koliko je 36 ÷ 4 + 5?",
+                2,
+                aritmetikaCategory.Id,
+                subtopicMnozenjeDeljenjeExisting.Id,
+                "Prvo 36 ÷ 4 = 9, zatim 9 + 5 = 14",
+                "36 ÷ 4 = 9",
+                "Poštuj redosled računskih operacija",
+                new() { ("14", true), ("16", false), ("9", false), ("13", false) }
+            )
+        };
+
+        foreach (var qd in ensureQuestionDefinitions)
+        {
+            var existing = await db.Set<Question>()
+                .Include(q => q.Options)
+                .FirstOrDefaultAsync(q => q.Text == qd.Text);
+            if (existing != null)
+                continue;
+
+            var q = new Question(qd.Text, qd.Difficulty, qd.CategoryId, qd.Explanation);
+            q.SetSubtopic(qd.SubtopicId);
+            q.SetHintFormula(qd.HintFormula);
+            q.SetHintClue(qd.HintClue);
+            q.ReplaceOptions(qd.Options.Select(o => new QuestionOption(o.OptionText, o.IsCorrect)));
+
+            db.Set<Question>().Add(q);
+            changed = true;
+        }
+
+        await db.SaveChangesAsync();
+
+        // Repair existing known questions that may have been created without options.
+        // Some older mobile/admin flows could leave questions with empty option sets.
+        var canonicalOptionsByText = new Dictionary<string, List<(string OptionText, bool IsCorrect)>>
+        {
+            ["Koliko je 2 + 2?"] = new() { ("4", true), ("3", false), ("5", false), ("6", false) },
+            ["Reši: x + 5 = 12"] = new() { ("7", true), ("6", false), ("8", false), ("5", false) },
+            ["Reši: 2x = 10"] = new() { ("5", true), ("4", false), ("6", false), ("10", false) },
+            ["Reši: 3x - 1 = 8"] = new() { ("3", true), ("2", false), ("4", false), ("1", false) },
+            ["Koliko je 15 + 27?"] = new() { ("42", true), ("41", false), ("43", false), ("52", false) },
+            ["Koliko je 48 + 35?"] = new() { ("83", true), ("73", false), ("84", false), ("82", false) },
+            ["Koliko je 99 - 47?"] = new() { ("52", true), ("42", false), ("62", false), ("53", false) },
+            ["Koliko je 9 × 6?"] = new() { ("54", true), ("45", false), ("56", false), ("48", false) },
+            ["Reši nejednačinu: x + 3 > 10"] = new() { ("x > 7", true), ("x < 7", false), ("x = 7", false), ("x >= 7", false) },
+            ["Reši nejednačinu: 2x ≤ 14"] = new() { ("x ≤ 7", true), ("x ≥ 7", false), ("x < 7", false), ("x = 7", false) },
+            ["Koliki je obim trougla sa stranicama 3, 4 i 5?"] = new() { ("12", true), ("11", false), ("10", false), ("13", false) },
+            ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = new() { ("30", true), ("60", false), ("16", false), ("20", false) },
+            ["Koliko je 84 ÷ 7?"] = new() { ("12", true), ("11", false), ("13", false), ("14", false) },
+            ["Koliko je 36 ÷ 4 + 5?"] = new() { ("14", true), ("16", false), ("9", false), ("13", false) },
+        };
+
+        var maybeBrokenQuestions = await db.Set<Question>()
+            .Include(q => q.Options)
+            .Where(q => canonicalOptionsByText.Keys.Contains(q.Text))
+            .ToListAsync();
+
+        foreach (var question in maybeBrokenQuestions)
+        {
+            if (question.Options.Count > 0)
+                continue;
+            if (!canonicalOptionsByText.TryGetValue(question.Text, out var canonicalOptions))
+                continue;
+
+            foreach (var opt in canonicalOptions)
+            {
+                question.Options.Add(new QuestionOption(opt.OptionText, opt.IsCorrect));
+            }
+            changed = true;
+        }
+
+        await db.SaveChangesAsync();
+
+        var ensureEnglishTranslations = new Dictionary<string, (string Text, string? Explanation, string? HintFormula, string? HintClue)>
+        {
+            ["Reši nejednačinu: x + 3 > 10"] = ("Solve the inequality: x + 3 > 10", "x > 7", "x > 10 - 3", "Isolate x by subtracting 3 from both sides"),
+            ["Reši nejednačinu: 2x ≤ 14"] = ("Solve the inequality: 2x ≤ 14", "x ≤ 7", "x ≤ 14 / 2", "Divide both sides by 2"),
+            ["Koliki je obim trougla sa stranicama 3, 4 i 5?"] = ("What is the perimeter of a triangle with sides 3, 4, and 5?", "Perimeter is the sum of all sides: 3 + 4 + 5 = 12", null, null),
+            ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = ("What is the area of a triangle with base 10 and height 6?", "A = (b × h) / 2 = (10 × 6) / 2 = 30", "A = (b × h) / 2", "Multiply base and height, then divide by 2"),
+            ["Koliko je 84 ÷ 7?"] = ("What is 84 ÷ 7?", "84 ÷ 7 = 12", null, null),
+            ["Koliko je 36 ÷ 4 + 5?"] = ("What is 36 ÷ 4 + 5?", "First 36 ÷ 4 = 9, then 9 + 5 = 14", "36 ÷ 4 = 9", "Follow operation precedence"),
+        };
+
+        var ensureQuestions = await db.Set<Question>()
+            .Where(q => ensureEnglishTranslations.Keys.Contains(q.Text))
+            .ToListAsync();
+
+        foreach (var q in ensureQuestions)
+        {
+            if (!ensureEnglishTranslations.TryGetValue(q.Text, out var en))
+                continue;
+
+            bool hasEn = await db.Set<QuestionTranslation>()
+                .AnyAsync(t => t.QuestionId == q.Id && t.Lang == "en");
+            if (hasEn)
+                continue;
+
+            db.Set<QuestionTranslation>().Add(new QuestionTranslation(
+                q.Id, "en", en.Text, en.Explanation, en.HintFormula, en.HintClue));
+            changed = true;
+        }
+
+        await db.SaveChangesAsync();
+
+        var ensureStepDefinitions = new Dictionary<string, List<(string SrText, string? SrHint, bool Highlight, string EnText, string? EnHint)>>
+        {
+            ["Reši nejednačinu: x + 3 > 10"] = new()
+            {
+                ("Početna nejednačina: x + 3 > 10", null, false, "Start with the inequality: x + 3 > 10", null),
+                ("Oduzmi 3 sa obe strane: x + 3 - 3 > 10 - 3", "Ista operacija ide na obe strane", false, "Subtract 3 from both sides: x + 3 - 3 > 10 - 3", "Apply the same operation to both sides"),
+                ("Dobijamo: x > 7", null, true, "We get: x > 7", null),
+            },
+            ["Koliki je obim trougla sa stranicama 3, 4 i 5?"] = new()
+            {
+                ("Formula za obim trougla je O = a + b + c", null, false, "Triangle perimeter formula is P = a + b + c", null),
+                ("Uvrsti stranice: O = 3 + 4 + 5", null, false, "Substitute side lengths: P = 3 + 4 + 5", null),
+                ("Izračunaj zbir: O = 12", null, true, "Calculate the sum: P = 12", null),
+            },
+            ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = new()
+            {
+                ("Formula za površinu trougla je P = (a × h) / 2", null, false, "Triangle area formula is A = (b × h) / 2", null),
+                ("Uvrsti vrednosti: P = (10 × 6) / 2", null, false, "Substitute values: A = (10 × 6) / 2", null),
+                ("Izračunaj: P = 60 / 2 = 30", null, true, "Compute: A = 60 / 2 = 30", null),
+            },
+            ["Koliko je 36 ÷ 4 + 5?"] = new()
+            {
+                ("Prvo radi deljenje: 36 ÷ 4 = 9", "Deljenje ima prioritet nad sabiranjem", false, "Do division first: 36 ÷ 4 = 9", "Division has higher precedence than addition"),
+                ("Zatim saberi: 9 + 5 = 14", null, false, "Then add: 9 + 5 = 14", null),
+                ("Konačan rezultat je 14", null, true, "Final result is 14", null),
+            },
+        };
+
+        foreach (var q in ensureQuestions)
+        {
+            if (!ensureStepDefinitions.TryGetValue(q.Text, out var steps))
+                continue;
+
+            var existingSteps = await db.Set<QuestionStep>()
+                .Where(s => s.QuestionId == q.Id)
+                .OrderBy(s => s.StepIndex)
+                .ToListAsync();
+
+            if (existingSteps.Count == 0)
+            {
+                for (int i = 0; i < steps.Count; i++)
+                {
+                    db.Set<QuestionStep>().Add(new QuestionStep(
+                        q.Id,
+                        i + 1,
+                        steps[i].SrText,
+                        steps[i].SrHint,
+                        steps[i].Highlight));
+                }
+                changed = true;
+                await db.SaveChangesAsync();
+
+                existingSteps = await db.Set<QuestionStep>()
+                    .Where(s => s.QuestionId == q.Id)
+                    .OrderBy(s => s.StepIndex)
+                    .ToListAsync();
+            }
+
+            for (int i = 0; i < existingSteps.Count && i < steps.Count; i++)
+            {
+                bool hasEn = await db.Set<QuestionStepTranslation>()
+                    .AnyAsync(t => t.QuestionStepId == existingSteps[i].Id && t.Lang == "en");
+                if (hasEn)
+                    continue;
+
+                db.Set<QuestionStepTranslation>().Add(new QuestionStepTranslation(
+                    existingSteps[i].Id,
+                    "en",
+                    steps[i].EnText,
+                    steps[i].EnHint));
+                changed = true;
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+        // ── LaTeX test questions (idempotent) ─────────
+        var latexAlgebraCategory = await db.Set<Category>().FirstOrDefaultAsync(c => c.Name == "Algebra");
+        var latexEquationsSubtopic = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Jednačine");
+
+        if (latexAlgebraCategory != null && latexEquationsSubtopic != null)
         {
             var latexQuestionSeeds = new[]
             {
@@ -211,8 +619,8 @@ public static class DbSeeder
                 if (existingTexts.Contains(seed.Text))
                     continue;
 
-                var q = new Question(seed.Text, seed.Difficulty, algebraCategory.Id, seed.Explanation);
-                q.SetSubtopic(equationsSubtopic.Id);
+                var q = new Question(seed.Text, seed.Difficulty, latexAlgebraCategory.Id, seed.Explanation);
+                q.SetSubtopic(latexEquationsSubtopic.Id);
                 q.SetHintFormula(seed.HintFormula);
                 q.SetHintClue(seed.HintClue);
                 q.ReplaceOptions(seed.Options);

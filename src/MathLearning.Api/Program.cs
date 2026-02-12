@@ -40,7 +40,9 @@ try
 
     // Add ApiDbContext (kombinuje Identity i sve entitete)
     builder.Services.AddDbContext<ApiDbContext>(options =>
-        options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+        options.UseNpgsql(
+            builder.Configuration.GetConnectionString("Default"),
+            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
     // Add Identity (for User management)
     builder.Services.AddIdentityCore<IdentityUser>(options =>

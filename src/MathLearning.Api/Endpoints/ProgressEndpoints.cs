@@ -1,6 +1,7 @@
 ﻿using MathLearning.Application.DTOs.Progress;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -122,6 +123,48 @@ public static class ProgressEndpoints
 
             return Results.Ok(result);
         });
+
+        // 🔄 SYNC (legacy mobile endpoint)
+        group.MapPost("/sync", async (
+            JsonElement payload,
+            ApiDbContext db,
+            HttpContext ctx) =>
+        {
+            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+
+            bool completed = false;
+            var day = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            if (TryGetBool(payload, "completed", out var completedValue))
+                completed = completedValue;
+            if (TryGetString(payload, "day", out var dayText) && DateOnly.TryParse(dayText, out var parsedDay))
+                day = parsedDay;
+
+            var stat = await db.UserDailyStats
+                .FirstOrDefaultAsync(x => x.UserId == userId && x.Day == day);
+
+            if (stat == null)
+            {
+                db.UserDailyStats.Add(new Domain.Entities.UserDailyStat
+                {
+                    UserId = userId,
+                    Day = day,
+                    Completed = completed
+                });
+            }
+            else if (completed)
+            {
+                stat.Completed = true;
+            }
+
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new
+            {
+                success = true,
+                syncedAt = DateTime.UtcNow
+            });
+        });
     }
 
     // 🔥 STREAK LOGIKA
@@ -148,5 +191,38 @@ public static class ProgressEndpoints
         }
 
         return streak;
+    }
+
+    private static bool TryGetBool(JsonElement json, string property, out bool value)
+    {
+        value = false;
+        if (!json.TryGetProperty(property, out var p))
+            return false;
+
+        if (p.ValueKind == JsonValueKind.True || p.ValueKind == JsonValueKind.False)
+        {
+            value = p.GetBoolean();
+            return true;
+        }
+
+        if (p.ValueKind == JsonValueKind.String && bool.TryParse(p.GetString(), out var parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetString(JsonElement json, string property, out string? value)
+    {
+        value = null;
+        if (!json.TryGetProperty(property, out var p))
+            return false;
+        if (p.ValueKind != JsonValueKind.String)
+            return false;
+
+        value = p.GetString();
+        return !string.IsNullOrWhiteSpace(value);
     }
 }

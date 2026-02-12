@@ -5,6 +5,7 @@ public record QuestionDto(
     string Type,
     string Text,
     List<OptionDto>? Options,
+    int CorrectAnswerId,
     int Difficulty,
     string? HintLight,
     string? HintMedium,
