@@ -293,12 +293,23 @@ public static class DbSeeder
         var geometrijaCategory = await db.Set<Category>().FirstAsync(c => c.Name == "Geometrija");
         var aritmetikaCategory = await db.Set<Category>().FirstAsync(c => c.Name == "Aritmetika");
 
+        var topicAlgebraExisting = await db.Set<Topic>().FirstAsync(t => t.Name == "Osnove Algebre");
+        var topicGeometrijaExisting = await db.Set<Topic>().FirstAsync(t => t.Name == "Osnove Geometrije");
         var topicAritmetikaExisting = await db.Set<Topic>().FirstAsync(t => t.Name == "Sabiranje i Oduzimanje");
+
+        var subtopicJednacineExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Jednačine");
+        if (subtopicJednacineExisting == null)
+        {
+            subtopicJednacineExisting = new Subtopic("Jednačine", topicAlgebraExisting.Id);
+            db.Set<Subtopic>().Add(subtopicJednacineExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
 
         var subtopicNejednacineExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Nejednačine");
         if (subtopicNejednacineExisting == null)
         {
-            subtopicNejednacineExisting = new Subtopic("Nejednačine", (await db.Set<Topic>().FirstAsync(t => t.Name == "Osnove Algebre")).Id);
+            subtopicNejednacineExisting = new Subtopic("Nejednačine", topicAlgebraExisting.Id);
             db.Set<Subtopic>().Add(subtopicNejednacineExisting);
             await db.SaveChangesAsync();
             changed = true;
@@ -307,7 +318,7 @@ public static class DbSeeder
         var subtopicTrougloviExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Trouglovi");
         if (subtopicTrougloviExisting == null)
         {
-            subtopicTrougloviExisting = new Subtopic("Trouglovi", (await db.Set<Topic>().FirstAsync(t => t.Name == "Osnove Geometrije")).Id);
+            subtopicTrougloviExisting = new Subtopic("Trouglovi", topicGeometrijaExisting.Id);
             db.Set<Subtopic>().Add(subtopicTrougloviExisting);
             await db.SaveChangesAsync();
             changed = true;
@@ -318,6 +329,33 @@ public static class DbSeeder
         {
             subtopicMnozenjeDeljenjeExisting = new Subtopic("Množenje i Deljenje", topicAritmetikaExisting.Id);
             db.Set<Subtopic>().Add(subtopicMnozenjeDeljenjeExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
+
+        var subtopicRazlomciExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Razlomci");
+        if (subtopicRazlomciExisting == null)
+        {
+            subtopicRazlomciExisting = new Subtopic("Razlomci", topicAritmetikaExisting.Id);
+            db.Set<Subtopic>().Add(subtopicRazlomciExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
+
+        var subtopicProcentiExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Procenti");
+        if (subtopicProcentiExisting == null)
+        {
+            subtopicProcentiExisting = new Subtopic("Procenti", topicAritmetikaExisting.Id);
+            db.Set<Subtopic>().Add(subtopicProcentiExisting);
+            await db.SaveChangesAsync();
+            changed = true;
+        }
+
+        var subtopicKrugExisting = await db.Set<Subtopic>().FirstOrDefaultAsync(s => s.Name == "Krug");
+        if (subtopicKrugExisting == null)
+        {
+            subtopicKrugExisting = new Subtopic("Krug", topicGeometrijaExisting.Id);
+            db.Set<Subtopic>().Add(subtopicKrugExisting);
             await db.SaveChangesAsync();
             changed = true;
         }
@@ -391,6 +429,86 @@ public static class DbSeeder
                 "36 ÷ 4 = 9",
                 "Poštuj redosled računskih operacija",
                 new() { ("14", true), ("16", false), ("9", false), ("13", false) }
+            ),
+            (
+                "Izračunaj: $\\frac{3}{4} + \\frac{1}{8}$",
+                2,
+                aritmetikaCategory.Id,
+                subtopicRazlomciExisting.Id,
+                "Prebaci na zajednički imenilac: 3/4 = 6/8, pa 6/8 + 1/8 = 7/8.",
+                "\\frac{a}{b}+\\frac{c}{d}=\\frac{ad+bc}{bd}",
+                "Nađi zajednički imenilac (8).",
+                new() { ("7/8", true), ("1/2", false), ("5/8", false), ("1", false) }
+            ),
+            (
+                "Izračunaj: $2^3 \\cdot 2^2$",
+                2,
+                algebraCategory.Id,
+                subtopicJednacineExisting.Id,
+                "Kod istih osnova saberi stepene: 2^{3+2} = 2^5 = 32.",
+                "a^m \\cdot a^n = a^{m+n}",
+                "Kada je baza ista, sabiraš eksponente.",
+                new() { ("32", true), ("16", false), ("64", false), ("10", false) }
+            ),
+            (
+                "Izračunaj: $\\sqrt{49} + \\sqrt{16}$",
+                1,
+                algebraCategory.Id,
+                subtopicJednacineExisting.Id,
+                "\\sqrt{49} = 7 i \\sqrt{16} = 4, pa je zbir 11.",
+                "\\sqrt{a^2}=a,\\ a\\ge 0",
+                "Računaj svaki koren posebno.",
+                new() { ("11", true), ("9", false), ("12", false), ("13", false) }
+            ),
+            (
+                "Reši: $|x - 3| = 5$",
+                3,
+                algebraCategory.Id,
+                subtopicJednacineExisting.Id,
+                "Dva slučaja: x - 3 = 5 ili x - 3 = -5, pa su rešenja x = 8 ili x = -2.",
+                "|u| = k \\Rightarrow u = k \\text{ ili } u = -k",
+                "Razdvoji apsolutnu vrednost na dva slučaja.",
+                new() { ("x = 8 ili x = -2", true), ("x = 2 ili x = -8", false), ("x = 8", false), ("x = -2", false) }
+            ),
+            (
+                "Reši sistem: $x + y = 7$, $x - y = 1$",
+                3,
+                algebraCategory.Id,
+                subtopicJednacineExisting.Id,
+                "Sabiranjem dobijamo 2x = 8, odakle je x = 4. Uvrštavanjem: y = 3.",
+                "(x+y) + (x-y) = 7 + 1",
+                "Saberi jednačine da eliminišeš y.",
+                new() { ("x = 4, y = 3", true), ("x = 3, y = 4", false), ("x = 4, y = 1", false), ("x = 8, y = -1", false) }
+            ),
+            (
+                "Koliko je 15% od 200?",
+                1,
+                aritmetikaCategory.Id,
+                subtopicProcentiExisting.Id,
+                "15% od 200 je 0.15 × 200 = 30.",
+                "p\\% \\text{ od } N = \\frac{p}{100} \\cdot N",
+                "Pretvori procenat u decimalni broj ili razlomak.",
+                new() { ("30", true), ("20", false), ("25", false), ("35", false) }
+            ),
+            (
+                "Kolika je površina kruga poluprečnika 3?",
+                2,
+                geometrijaCategory.Id,
+                subtopicKrugExisting.Id,
+                "P = \\pi r^2 = \\pi \\cdot 3^2 = 9\\pi.",
+                "P = \\pi r^2",
+                "Prvo kvadriraj poluprečnik, pa pomnoži sa \\pi.",
+                new() { ("9π", true), ("6π", false), ("12π", false), ("18π", false) }
+            ),
+            (
+                "Reši: $\\frac{x}{3} = 4$",
+                2,
+                algebraCategory.Id,
+                subtopicJednacineExisting.Id,
+                "Pomnoži obe strane sa 3: x = 12.",
+                "\\frac{x}{3}=4 \\Rightarrow x=4\\cdot 3",
+                "Oslobodi se imenitelja množenjem sa 3.",
+                new() { ("12", true), ("9", false), ("7", false), ("1", false) }
             )
         };
 
@@ -432,6 +550,14 @@ public static class DbSeeder
             ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = new() { ("30", true), ("60", false), ("16", false), ("20", false) },
             ["Koliko je 84 ÷ 7?"] = new() { ("12", true), ("11", false), ("13", false), ("14", false) },
             ["Koliko je 36 ÷ 4 + 5?"] = new() { ("14", true), ("16", false), ("9", false), ("13", false) },
+            ["Izračunaj: $\\frac{3}{4} + \\frac{1}{8}$"] = new() { ("7/8", true), ("1/2", false), ("5/8", false), ("1", false) },
+            ["Izračunaj: $2^3 \\cdot 2^2$"] = new() { ("32", true), ("16", false), ("64", false), ("10", false) },
+            ["Izračunaj: $\\sqrt{49} + \\sqrt{16}$"] = new() { ("11", true), ("9", false), ("12", false), ("13", false) },
+            ["Reši: $|x - 3| = 5$"] = new() { ("x = 8 ili x = -2", true), ("x = 2 ili x = -8", false), ("x = 8", false), ("x = -2", false) },
+            ["Reši sistem: $x + y = 7$, $x - y = 1$"] = new() { ("x = 4, y = 3", true), ("x = 3, y = 4", false), ("x = 4, y = 1", false), ("x = 8, y = -1", false) },
+            ["Koliko je 15% od 200?"] = new() { ("30", true), ("20", false), ("25", false), ("35", false) },
+            ["Kolika je površina kruga poluprečnika 3?"] = new() { ("9π", true), ("6π", false), ("12π", false), ("18π", false) },
+            ["Reši: $\\frac{x}{3} = 4$"] = new() { ("12", true), ("9", false), ("7", false), ("1", false) },
         };
 
         var maybeBrokenQuestions = await db.Set<Question>()
@@ -463,6 +589,14 @@ public static class DbSeeder
             ["Kolika je površina trougla sa osnovicom 10 i visinom 6?"] = ("What is the area of a triangle with base 10 and height 6?", "A = (b × h) / 2 = (10 × 6) / 2 = 30", "A = (b × h) / 2", "Multiply base and height, then divide by 2"),
             ["Koliko je 84 ÷ 7?"] = ("What is 84 ÷ 7?", "84 ÷ 7 = 12", null, null),
             ["Koliko je 36 ÷ 4 + 5?"] = ("What is 36 ÷ 4 + 5?", "First 36 ÷ 4 = 9, then 9 + 5 = 14", "36 ÷ 4 = 9", "Follow operation precedence"),
+            ["Izračunaj: $\\frac{3}{4} + \\frac{1}{8}$"] = ("Compute: $\\frac{3}{4} + \\frac{1}{8}$", "Use a common denominator: 3/4 = 6/8, so 6/8 + 1/8 = 7/8.", "\\frac{a}{b}+\\frac{c}{d}=\\frac{ad+bc}{bd}", "Use 8 as the common denominator."),
+            ["Izračunaj: $2^3 \\cdot 2^2$"] = ("Compute: $2^3 \\cdot 2^2$", "With equal bases add exponents: 2^{3+2} = 2^5 = 32.", "a^m \\cdot a^n = a^{m+n}", "Same base means add exponents."),
+            ["Izračunaj: $\\sqrt{49} + \\sqrt{16}$"] = ("Compute: $\\sqrt{49} + \\sqrt{16}$", "\\sqrt{49} = 7 and \\sqrt{16} = 4, total is 11.", "\\sqrt{a^2}=a,\\ a\\ge 0", "Evaluate each square root separately."),
+            ["Reši: $|x - 3| = 5$"] = ("Solve: $|x - 3| = 5$", "Two cases: x - 3 = 5 or x - 3 = -5, so x = 8 or x = -2.", "|u| = k \\Rightarrow u = k \\text{ or } u = -k", "Split the absolute value into two cases."),
+            ["Reši sistem: $x + y = 7$, $x - y = 1$"] = ("Solve the system: $x + y = 7$, $x - y = 1$", "Add equations to get 2x = 8, hence x = 4; then y = 3.", "(x+y)+(x-y)=7+1", "Add the equations to eliminate y."),
+            ["Koliko je 15% od 200?"] = ("What is 15% of 200?", "15% of 200 is 0.15 × 200 = 30.", "p\\% \\text{ of } N = \\frac{p}{100} \\cdot N", "Convert percentage to decimal or fraction."),
+            ["Kolika je površina kruga poluprečnika 3?"] = ("What is the area of a circle with radius 3?", "A = \\pi r^2 = \\pi · 3^2 = 9\\pi.", "A = \\pi r^2", "Square the radius first, then multiply by \\pi."),
+            ["Reši: $\\frac{x}{3} = 4$"] = ("Solve: $\\frac{x}{3} = 4$", "Multiply both sides by 3 to get x = 12.", "\\frac{x}{3}=4 \\Rightarrow x=4\\cdot 3", "Clear the denominator by multiplying by 3."),
         };
 
         var ensureQuestions = await db.Set<Question>()
@@ -511,6 +645,56 @@ public static class DbSeeder
                 ("Prvo radi deljenje: 36 ÷ 4 = 9", "Deljenje ima prioritet nad sabiranjem", false, "Do division first: 36 ÷ 4 = 9", "Division has higher precedence than addition"),
                 ("Zatim saberi: 9 + 5 = 14", null, false, "Then add: 9 + 5 = 14", null),
                 ("Konačan rezultat je 14", null, true, "Final result is 14", null),
+            },
+            ["Izračunaj: $\\frac{3}{4} + \\frac{1}{8}$"] = new()
+            {
+                ("Nađi zajednički imenilac: 3/4 pretvori u 6/8", "Množi brojilac i imenilac sa 2", false, "Find a common denominator: convert 3/4 to 6/8", "Multiply numerator and denominator by 2"),
+                ("Saberi razlomke: 6/8 + 1/8 = 7/8", null, false, "Add fractions: 6/8 + 1/8 = 7/8", null),
+                ("Konačno rešenje je 7/8", null, true, "Final answer is 7/8", null),
+            },
+            ["Izračunaj: $2^3 \\cdot 2^2$"] = new()
+            {
+                ("Primeni pravilo: 2^3 × 2^2 = 2^(3+2)", "Kod istih osnova sabiraju se stepeni", false, "Apply the rule: 2^3 × 2^2 = 2^(3+2)", "With equal bases, add exponents"),
+                ("Dobijamo 2^5", null, false, "We get 2^5", null),
+                ("2^5 = 32", null, true, "2^5 = 32", null),
+            },
+            ["Izračunaj: $\\sqrt{49} + \\sqrt{16}$"] = new()
+            {
+                ("Izračunaj korene: √49 = 7 i √16 = 4", null, false, "Evaluate roots: √49 = 7 and √16 = 4", null),
+                ("Saberi rezultate: 7 + 4", null, false, "Add the results: 7 + 4", null),
+                ("Konačno: 11", null, true, "Final: 11", null),
+            },
+            ["Reši: $|x - 3| = 5$"] = new()
+            {
+                ("Apsolutna vrednost daje dva slučaja: x - 3 = 5 ili x - 3 = -5", "|u| = k znači u = k ili u = -k", false, "Absolute value gives two cases: x - 3 = 5 or x - 3 = -5", "|u| = k means u = k or u = -k"),
+                ("Prvi slučaj: x - 3 = 5 ⇒ x = 8", null, false, "First case: x - 3 = 5 ⇒ x = 8", null),
+                ("Drugi slučaj: x - 3 = -5 ⇒ x = -2", null, false, "Second case: x - 3 = -5 ⇒ x = -2", null),
+                ("Rešenja su x = 8 ili x = -2", null, true, "Solutions are x = 8 or x = -2", null),
+            },
+            ["Reši sistem: $x + y = 7$, $x - y = 1$"] = new()
+            {
+                ("Saberi jednačine: (x + y) + (x - y) = 7 + 1", "y se poništava", false, "Add equations: (x + y) + (x - y) = 7 + 1", "y gets eliminated"),
+                ("Dobijamo 2x = 8, pa je x = 4", null, false, "We get 2x = 8, so x = 4", null),
+                ("Uvrsti u prvu jednačinu: 4 + y = 7", null, false, "Substitute into first equation: 4 + y = 7", null),
+                ("Dobijamo y = 3, rešenje je (x, y) = (4, 3)", null, true, "We get y = 3, solution is (x, y) = (4, 3)", null),
+            },
+            ["Koliko je 15% od 200?"] = new()
+            {
+                ("Pretvori procenat: 15% = 15/100 = 0.15", null, false, "Convert percentage: 15% = 15/100 = 0.15", null),
+                ("Izračunaj: 0.15 × 200", null, false, "Compute: 0.15 × 200", null),
+                ("Konačno: 30", null, true, "Final: 30", null),
+            },
+            ["Kolika je površina kruga poluprečnika 3?"] = new()
+            {
+                ("Formula za površinu kruga: P = πr²", null, false, "Circle area formula: A = πr²", null),
+                ("Uvrsti r = 3: P = π × 3² = 9π", null, false, "Substitute r = 3: A = π × 3² = 9π", null),
+                ("Konačan rezultat: 9π", null, true, "Final result: 9π", null),
+            },
+            ["Reši: $\\frac{x}{3} = 4$"] = new()
+            {
+                ("Početno: x/3 = 4", null, false, "Start: x/3 = 4", null),
+                ("Pomnoži obe strane sa 3", "Uklanjaš imenilac 3", false, "Multiply both sides by 3", "This clears denominator 3"),
+                ("Dobijamo x = 12", null, true, "We get x = 12", null),
             },
         };
 
