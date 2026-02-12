@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      Prevent stray build output (e.g. artifacts/obj/**/*.cs) from being picked up by SDK default globs
+      and causing duplicate assembly attribute errors.
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/artifacts/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
+

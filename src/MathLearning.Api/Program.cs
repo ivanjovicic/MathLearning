@@ -10,6 +10,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
+using System.Data.Common;
 using System.Text;
 
 // 📝 Configure Serilog EARLY (before builder)
@@ -38,10 +39,20 @@ try
     // 📝 Use Serilog for logging
     builder.Host.UseSerilog();
 
+    var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
+    if (string.IsNullOrWhiteSpace(defaultConnectionString))
+    {
+        Log.Warning("⚠️ ConnectionStrings:Default is not configured.");
+    }
+    else
+    {
+        Log.Information("🗄️ DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
+    }
+
     // Add ApiDbContext (kombinuje Identity i sve entitete)
     builder.Services.AddDbContext<ApiDbContext>(options =>
         options.UseNpgsql(
-            builder.Configuration.GetConnectionString("Default"),
+            defaultConnectionString,
             npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
     // Add Identity (for User management)
@@ -96,7 +107,8 @@ try
         {
             policy.AllowAnyOrigin()
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
         });
     });
 
@@ -456,6 +468,46 @@ static async Task SeedAdminUser(WebApplication app)
                 Log.Warning($"✗ Failed to create Identity account for '{profile.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
             }
         }
+    }
+}
+
+static string DescribeDbConnection(string connectionString)
+{
+    try
+    {
+        var csb = new DbConnectionStringBuilder
+        {
+            ConnectionString = connectionString
+        };
+
+        static string Get(DbConnectionStringBuilder builder, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (builder.TryGetValue(key, out var value) && value is not null)
+                {
+                    var text = value.ToString();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        return text;
+                }
+            }
+
+            return "<n/a>";
+        }
+
+        var host = Get(csb, "Host", "Server", "Data Source");
+        var port = Get(csb, "Port");
+        var database = Get(csb, "Database", "Initial Catalog");
+        var user = Get(csb, "Username", "User ID", "UserId", "UID");
+        var sslMode = Get(csb, "SSL Mode", "Ssl Mode");
+        var channelBinding = Get(csb, "Channel Binding");
+        var pooling = Get(csb, "Pooling");
+
+        return $"Host={host};Port={port};Database={database};User={user};SSL Mode={sslMode};Channel Binding={channelBinding};Pooling={pooling}";
+    }
+    catch
+    {
+        return "<unparseable connection string>";
     }
 }
 

@@ -29,7 +29,9 @@ public static class UserEndpoints
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
 
-            var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            var profile = await db.UserProfiles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UserId == userId);
             if (profile == null)
             {
                 return Results.Ok(new
@@ -61,9 +63,11 @@ public static class UserEndpoints
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
             var today = DateTime.UtcNow.Date;
+            var tomorrow = today.AddDays(1);
 
             var usedToday = await db.UserHints
-                .Where(h => h.UserId == userId && h.UsedAt.Date == today)
+                .AsNoTracking()
+                .Where(h => h.UserId == userId && h.UsedAt >= today && h.UsedAt < tomorrow)
                 .CountAsync();
 
             const int dailyLimit = 10;

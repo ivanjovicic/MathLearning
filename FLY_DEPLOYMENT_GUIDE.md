@@ -49,7 +49,7 @@ fly deploy
 
 ```bash
 # Set connection string secret
-fly secrets set ConnectionStrings__Default="Host=ep-wispy-smoke-ag4qtxhe-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Username=neondb_owner;Password=npg_WB4rnl2CQamX;Database=neondb;SSL Mode=Require;Trust Server Certificate=true;"
+fly secrets set ConnectionStrings__Default="Host=ep-wispy-smoke-ag4qtxhe-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Username=neondb_owner;Password=<NEON_PASSWORD>;Database=neondb;SSL Mode=Require;Trust Server Certificate=true;"
 ```
 
 ### 2. ✅ Set JWT Settings

@@ -45,15 +45,23 @@ public static class QuestionEndpoints
             var questionDtos = questions.Select(q => new QuestionDto(
                 q.Id,
                 q.Type,
-                TranslationHelper.GetText(q, resolvedLang),
-                q.Options.Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, resolvedLang))).ToList(),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, resolvedLang)) ?? string.Empty,
+                q.Options.Select(o => new OptionDto(
+                    o.Id,
+                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, resolvedLang)) ?? string.Empty))
+                    .ToList(),
                 q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
                 q.Difficulty,
-                TranslationHelper.GetHintLight(q, resolvedLang),
-                TranslationHelper.GetHintMedium(q, resolvedLang),
-                TranslationHelper.GetHintFull(q, resolvedLang),
-                TranslationHelper.GetExplanation(q, resolvedLang),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, resolvedLang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, resolvedLang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, resolvedLang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, resolvedLang)),
                 StepEngine.GetSteps(q, resolvedLang)
+                    .Select(s => new StepExplanationDto(
+                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Text) ?? s.Text,
+                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Hint),
+                        s.Highlight))
+                    .ToList()
             )).ToList();
 
             return Results.Ok(questionDtos);
@@ -83,15 +91,23 @@ public static class QuestionEndpoints
             var dto = new QuestionDto(
                 question.Id,
                 question.Type,
-                TranslationHelper.GetText(question, resolvedLang),
-                question.Options.Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, resolvedLang))).ToList(),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, resolvedLang)) ?? string.Empty,
+                question.Options.Select(o => new OptionDto(
+                    o.Id,
+                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, resolvedLang)) ?? string.Empty))
+                    .ToList(),
                 question.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
                 question.Difficulty,
-                TranslationHelper.GetHintLight(question, resolvedLang),
-                TranslationHelper.GetHintMedium(question, resolvedLang),
-                TranslationHelper.GetHintFull(question, resolvedLang),
-                TranslationHelper.GetExplanation(question, resolvedLang),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(question, resolvedLang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, resolvedLang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, resolvedLang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, resolvedLang)),
                 StepEngine.GetSteps(question, resolvedLang)
+                    .Select(s => new StepExplanationDto(
+                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Text) ?? s.Text,
+                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Hint),
+                        s.Highlight))
+                    .ToList()
             );
 
             return Results.Ok(dto);

@@ -5,7 +5,16 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        var connectionString = "Host=ep-wispy-smoke-ag4qtxhe-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Username=neondb_owner;Password=npg_WB4rnl2CQamX;Database=neondb;SSL Mode=Require;Trust Server Certificate=true;";
+        var connectionString =
+            Environment.GetEnvironmentVariable("CONNECTION_STRING")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__Default");
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            Console.Error.WriteLine("✗ Missing connection string. Set CONNECTION_STRING (or ConnectionStrings__Default) environment variable.");
+            Environment.Exit(2);
+            return;
+        }
         
         var checkIndexesQuery = @"
             SELECT 

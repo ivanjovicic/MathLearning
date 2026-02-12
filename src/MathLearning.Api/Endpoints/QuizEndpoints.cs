@@ -99,7 +99,7 @@ public static class QuizEndpoints
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await (
-                from q in db.Questions
+                from q in db.Questions.AsNoTracking()
                     .Include(q => q.Options).ThenInclude(o => o.Translations)
                     .Include(q => q.Translations)
                     .Include(q => q.Steps).ThenInclude(s => s.Translations)
@@ -119,20 +119,24 @@ public static class QuizEndpoints
             if (question == null)
                 return Results.NotFound("No questions available");
 
-            var steps = StepEngine.GetSteps(question, lang);
+            var steps = NormalizeStepsForResponse(StepEngine.GetSteps(question, lang));
+            var questionText = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, lang)) ?? string.Empty;
+            var options = question.Options
+                .Select(o => new OptionDto(
+                    o.Id,
+                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty))
+                .ToList();
 
             return Results.Ok(new NextQuestionResponse(
                 question.Id,
                 question.Type,
-                TranslationHelper.GetText(question, lang),
-                question.Options
-                    .Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, lang)))
-                    .ToList(),
+                questionText,
+                options,
                 question.Difficulty,
-                TranslationHelper.GetHintLight(question, lang),
-                TranslationHelper.GetHintMedium(question, lang),
-                TranslationHelper.GetHintFull(question, lang),
-                TranslationHelper.GetExplanation(question, lang),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(question, lang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, lang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, lang)),
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, lang)),
                 steps
             ));
         });
@@ -154,20 +158,21 @@ public static class QuizEndpoints
                 timeSpentSeconds = 0;
 
             var question = await db.Questions
+                .AsNoTracking()
                 .Include(q => q.Options)
-                .Include(q => q.Translations)
-                .Include(q => q.Steps).ThenInclude(s => s.Translations)
                 .FirstOrDefaultAsync(q => q.Id == questionId);
 
             if (question == null)
                 return Results.NotFound("Question not found");
+
+            int.TryParse(answerText, out var selectedOptionId);
 
             bool isCorrect =
                 question.Type == "multiple_choice"
                     ? question.Options.Any(o =>
                         o.IsCorrect && (
                             o.Text == answerText ||
-                            (int.TryParse(answerText, out var selectedOptionId) && o.Id == selectedOptionId)))
+                            (selectedOptionId > 0 && o.Id == selectedOptionId)))
                     : question.CorrectAnswer != null && question.CorrectAnswer.Trim()
                         .Equals(answerText.Trim(),
                             StringComparison.OrdinalIgnoreCase);
@@ -193,7 +198,7 @@ public static class QuizEndpoints
             db.UserAnswers.Add(new UserAnswer
             {
                 UserId = userId,
-                QuestionId = question.Id,
+                QuestionId = questionId,
                 QuizSessionId = quizSessionId,
                 Answer = answerText,
                 IsCorrect = isCorrect,
@@ -204,14 +209,14 @@ public static class QuizEndpoints
             var stat = await db.UserQuestionStats
                 .FirstOrDefaultAsync(s =>
                     s.UserId == userId &&
-                    s.QuestionId == question.Id);
+                    s.QuestionId == questionId);
 
             if (stat == null)
             {
                 stat = new UserQuestionStat
                 {
                     UserId = userId,
-                    QuestionId = question.Id,
+                    QuestionId = questionId,
                     Attempts = 0,
                     CorrectAttempts = 0
                 };
@@ -226,12 +231,28 @@ public static class QuizEndpoints
 
             await db.SaveChangesAsync();
 
-            // Return steps only on incorrect answer
-            var steps = isCorrect ? null : StepEngine.GetSteps(question, lang);
+            // Return explanation and steps only on incorrect answer.
+            string? explanation = null;
+            List<StepExplanationDto>? steps = null;
+            if (!isCorrect)
+            {
+                var questionForFeedback = await db.Questions
+                    .AsNoTracking()
+                    .Include(q => q.Translations)
+                    .Include(q => q.Steps).ThenInclude(s => s.Translations)
+                    .FirstOrDefaultAsync(q => q.Id == questionId);
+
+                if (questionForFeedback != null)
+                {
+                    explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
+                        TranslationHelper.GetExplanation(questionForFeedback, lang));
+                    steps = NormalizeStepsForResponse(StepEngine.GetSteps(questionForFeedback, lang));
+                }
+            }
 
             return Results.Ok(new SubmitAnswerResponse(
                 isCorrect,
-                isCorrect ? null : TranslationHelper.GetExplanation(question, lang),
+                explanation,
                 steps
             ));
         });
@@ -508,6 +529,7 @@ public static class QuizEndpoints
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var dueQuestionIds = await db.QuestionStats
+                .AsNoTracking()
                 .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
                 .OrderBy(x => x.Ease)
                 .ThenBy(x => x.QuestionId)
@@ -526,6 +548,7 @@ public static class QuizEndpoints
                 int needed = targetCount - questions.Count;
 
                 var randomFillIds = await db.Questions
+                    .AsNoTracking()
                     .Where(q => !dueIds.Contains(q.Id))
                     .OrderBy(q => Guid.NewGuid())
                     .Take(needed)
@@ -549,6 +572,7 @@ public static class QuizEndpoints
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var dueStats = await db.QuestionStats
+                .AsNoTracking()
                 .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
                 .OrderBy(x => x.Ease)
                 .Take(count)
@@ -565,6 +589,7 @@ public static class QuizEndpoints
             if (needed > 0)
             {
                 var randomQuestionIds = await db.Questions
+                    .AsNoTracking()
                     .Where(x => !dueIds.Contains(x.Id))
                     .OrderBy(x => Guid.NewGuid())
                     .Take(needed)
@@ -588,6 +613,7 @@ public static class QuizEndpoints
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
 
             var profile = await db.UserProfiles
+                .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.UserId == userId);
 
             return Results.Ok(new
@@ -600,18 +626,24 @@ public static class QuizEndpoints
     // 🗺️ Shared helper to map Question entity → QuestionDto with translation + steps
     private static QuestionDto MapQuestionDto(Question q, string lang)
     {
+        var options = q.Options
+            .Select(o => new OptionDto(
+                o.Id,
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty))
+            .ToList();
+
         return new QuestionDto(
             q.Id,
             q.Type,
-            TranslationHelper.GetText(q, lang),
-            q.Options.Select(o => new OptionDto(o.Id, TranslationHelper.GetOptionText(o, lang))).ToList(),
+            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)) ?? string.Empty,
+            options,
             q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
             q.Difficulty,
-            TranslationHelper.GetHintLight(q, lang),
-            TranslationHelper.GetHintMedium(q, lang),
-            TranslationHelper.GetHintFull(q, lang),
-            TranslationHelper.GetExplanation(q, lang),
-            StepEngine.GetSteps(q, lang)
+            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
+            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
+            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
+            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
+            NormalizeStepsForResponse(StepEngine.GetSteps(q, lang))
         );
     }
 
@@ -625,7 +657,7 @@ public static class QuizEndpoints
         int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
         string lang = await ResolveUserLang(db, ctx, userId);
 
-        IQueryable<Question> query = db.Questions.AsQueryable();
+        IQueryable<Question> query = db.Questions.AsNoTracking();
 
         if (subtopicId.HasValue)
         {
@@ -655,17 +687,21 @@ public static class QuizEndpoints
         var mapped = questions.Select(q => new
         {
             id = q.Id,
-            text = TranslationHelper.GetText(q, lang),
+            text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)),
             type = q.Type,
             options = q.Options
-                .Select(o => new { id = o.Id, text = TranslationHelper.GetOptionText(o, lang) })
+                .Select(o => new
+                {
+                    id = o.Id,
+                    text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang))
+                })
                 .ToList(),
             correctAnswerId = q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
             subtopicId = q.SubtopicId,
-            hintLight = TranslationHelper.GetHintLight(q, lang),
-            hintMedium = TranslationHelper.GetHintMedium(q, lang),
-            hintFull = TranslationHelper.GetHintFull(q, lang),
-            explanation = TranslationHelper.GetExplanation(q, lang)
+            hintLight = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
+            hintMedium = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
+            hintFull = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
+            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang))
         });
 
         return Results.Ok(new
@@ -673,6 +709,16 @@ public static class QuizEndpoints
             quizId = quizSession.Id,
             questions = mapped
         });
+    }
+
+    private static List<StepExplanationDto> NormalizeStepsForResponse(List<StepExplanationDto> steps)
+    {
+        return steps
+            .Select(step => new StepExplanationDto(
+                InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
+                InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
+                step.Highlight))
+            .ToList();
     }
 
     // Load full question graph in a deterministic order by pre-selected IDs.
@@ -687,7 +733,8 @@ public static class QuizEndpoints
             .Include(q => q.Options).ThenInclude(o => o.Translations)
             .Include(q => q.Translations)
             .Include(q => q.Steps).ThenInclude(s => s.Translations)
-            .AsSingleQuery()
+            .AsNoTracking()
+            .AsSplitQuery()
             .ToListAsync();
 
         var orderMap = orderedQuestionIds
@@ -739,6 +786,7 @@ public static class QuizEndpoints
     private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, int userId)
     {
         var settings = await db.UserSettings
+            .AsNoTracking()
             .FirstOrDefaultAsync(s => s.UserId == userId);
 
         var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();

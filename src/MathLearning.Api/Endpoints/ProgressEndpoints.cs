@@ -20,12 +20,19 @@ public static class ProgressEndpoints
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
 
-            var stats = await db.UserQuestionStats
+            var aggregate = await db.UserQuestionStats
+                .AsNoTracking()
                 .Where(s => s.UserId == userId)
-                .ToListAsync();
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    TotalAttempts = g.Sum(x => x.Attempts),
+                    TotalCorrect = g.Sum(x => x.CorrectAttempts)
+                })
+                .FirstOrDefaultAsync();
 
-            int totalAttempts = stats.Sum(s => s.Attempts);
-            int totalCorrect = stats.Sum(s => s.CorrectAttempts);
+            int totalAttempts = aggregate?.TotalAttempts ?? 0;
+            int totalCorrect = aggregate?.TotalCorrect ?? 0;
 
             double accuracy = totalAttempts == 0
                 ? 0
@@ -48,11 +55,11 @@ public static class ProgressEndpoints
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
 
             var weakAreas = await (
-                from q in db.Questions
-                join s in db.UserQuestionStats
+                from q in db.Questions.AsNoTracking()
+                join s in db.UserQuestionStats.AsNoTracking()
                     .Where(x => x.UserId == userId)
                     on q.Id equals s.QuestionId
-                join st in db.Subtopics
+                join st in db.Subtopics.AsNoTracking()
                     on q.SubtopicId equals st.Id
                 group new { s, st } by new { st.Id, st.Name } into g
                 let attempts = g.Sum(x => x.s.Attempts)
@@ -78,27 +85,42 @@ public static class ProgressEndpoints
         {
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
 
-            var topics = await (
-                from q in db.Questions
-                join s in db.UserQuestionStats.Where(x => x.UserId == userId)
-                    on q.Id equals s.QuestionId into stats
-                from stat in stats.DefaultIfEmpty()
-                join sub in db.Subtopics on q.SubtopicId equals sub.Id
-                join t in db.Topics on sub.TopicId equals t.Id
-                group stat by new { t.Id, t.Name } into g
+            var orderedTopics = await db.Topics
+                .AsNoTracking()
+                .OrderBy(t => t.Id)
+                .Select(t => new { t.Id, t.Name })
+                .ToListAsync();
+
+            var topicAggregates = await (
+                from s in db.UserQuestionStats.AsNoTracking()
+                    .Where(x => x.UserId == userId)
+                join q in db.Questions.AsNoTracking()
+                    on s.QuestionId equals q.Id
+                join sub in db.Subtopics.AsNoTracking()
+                    on q.SubtopicId equals sub.Id
+                group s by sub.TopicId into g
                 select new
                 {
-                    TopicId = g.Key.Id,
-                    Name = g.Key.Name,
-                    Accuracy = g.Sum(x => x == null ? 0 : x.CorrectAttempts) * 100.0 /
-                               Math.Max(g.Sum(x => x == null ? 0 : x.Attempts), 1)
+                    TopicId = g.Key,
+                    Attempts = g.Sum(x => x.Attempts),
+                    Correct = g.Sum(x => x.CorrectAttempts)
                 }
-            ).OrderBy(x => x.TopicId).ToListAsync();
+            ).ToListAsync();
+
+            var aggregateByTopicId = topicAggregates
+                .ToDictionary(
+                    x => x.TopicId,
+                    x => x.Attempts == 0 ? 0 : (x.Correct * 100.0 / x.Attempts));
 
             var result = new List<TopicProgressDto>();
 
-            for (int i = 0; i < topics.Count; i++)
+            for (int i = 0; i < orderedTopics.Count; i++)
             {
+                var topic = orderedTopics[i];
+                var accuracy = aggregateByTopicId.TryGetValue(topic.Id, out var value)
+                    ? value
+                    : 0;
+
                 bool unlocked;
 
                 if (i == 0)
@@ -108,15 +130,18 @@ public static class ProgressEndpoints
                 }
                 else
                 {
-                    double prevAccuracy = topics[i - 1].Accuracy;
+                    var previousTopic = orderedTopics[i - 1];
+                    double prevAccuracy = aggregateByTopicId.TryGetValue(previousTopic.Id, out var prevValue)
+                        ? prevValue
+                        : 0;
 
                     unlocked = prevAccuracy >= 60.0;
                 }
 
                 result.Add(new TopicProgressDto(
-                    topics[i].TopicId,
-                    topics[i].Name,
-                    Math.Round(topics[i].Accuracy, 2),
+                    topic.Id,
+                    topic.Name,
+                    Math.Round(accuracy, 2),
                     unlocked
                 ));
             }
@@ -173,6 +198,7 @@ public static class ProgressEndpoints
         int userId)
     {
         var days = await db.UserAnswers
+            .AsNoTracking()
             .Where(a => a.UserId == userId)
             .Select(a => a.AnsweredAt.Date)
             .Distinct()
