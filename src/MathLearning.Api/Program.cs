@@ -58,6 +58,12 @@ try
             defaultConnectionString,
             npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
+    // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(
+            defaultConnectionString,
+            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+
     // Add Identity (for User management)
     builder.Services.AddIdentityCore<IdentityUser>(options =>
     {
