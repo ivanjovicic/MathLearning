@@ -29,7 +29,7 @@ var startupEnvironment =
 var isDevelopment = string.Equals(startupEnvironment, "Development", StringComparison.OrdinalIgnoreCase);
 
 var loggerConfig = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    .MinimumLevel.Warning()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
     .Enrich.FromLogContext()
@@ -170,7 +170,12 @@ try
     builder.Services.AddScoped<ISrsService, SrsService>();
 
     // In-memory cache + lock (replaces Redis for local / single-node)
-    builder.Services.AddMemoryCache();
+    // IMPORTANT: when SizeLimit is set, every cache entry MUST set a Size or IMemoryCache will throw.
+    builder.Services.AddMemoryCache(options =>
+    {
+        // Count-based limit (we set Size=1 per entry in InMemoryCacheService).
+        options.SizeLimit = 100;
+    });
     builder.Services.AddSingleton<InMemoryCacheService>();
     builder.Services.AddSingleton<InMemoryLockService>();
 
@@ -295,7 +300,18 @@ try
     // Seed default admin user (only in Development or when explicitly enabled)
     try
     {
-        await SeedAdminUser(app);
+        var seedAdminEnabled =
+            app.Environment.IsDevelopment()
+            || app.Configuration.GetValue<bool>("SeedAdmin:Enabled");
+
+        if (seedAdminEnabled)
+        {
+            await SeedAdminUser(app);
+        }
+        else
+        {
+            Log.Warning("SeedAdmin is disabled (set `SeedAdmin__Enabled=true` to enable). Skipping admin/test user seeding.");
+        }
     }
     catch (Exception ex)
     {
@@ -441,7 +457,21 @@ static async Task SeedAdminUser(WebApplication app)
     }
     
     // 👤 Seed Admin User
-    var adminUsername = "admin";
+    var adminUsername = app.Configuration["SeedAdmin:Username"] ?? "admin";
+    var adminPassword =
+        app.Configuration["SeedAdmin:Password"]
+        ?? (app.Environment.IsDevelopment() ? "UcimMatu!123" : null);
+
+    var resetAdminPasswordOnStart =
+        app.Environment.IsDevelopment()
+        || app.Configuration.GetValue<bool>("SeedAdmin:ResetPasswordOnStart");
+
+    if (string.IsNullOrWhiteSpace(adminPassword))
+    {
+        Log.Warning("SeedAdmin enabled but `SeedAdmin__Password` not set. Skipping admin seeding.");
+        return;
+    }
+
     var existingAdmin = await userManager.FindByNameAsync(adminUsername);
     
     if (existingAdmin == null)
@@ -449,11 +479,11 @@ static async Task SeedAdminUser(WebApplication app)
         var admin = new IdentityUser
         {
             UserName = adminUsername,
-            Email = "admin@mathlearning.com",
+            Email = app.Configuration["SeedAdmin:Email"] ?? "admin@mathlearning.com",
             EmailConfirmed = true
         };
         
-        var result = await userManager.CreateAsync(admin, "UcimMatu!123");
+        var result = await userManager.CreateAsync(admin, adminPassword);
         
         if (result.Succeeded)
         {
@@ -489,6 +519,11 @@ static async Task SeedAdminUser(WebApplication app)
     else
     {
         Log.Information("✓ Admin user already exists.");
+        if (resetAdminPasswordOnStart)
+        {
+            await EnsurePasswordAsync(userManager, existingAdmin, adminPassword);
+            Log.Information("✓ Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
+        }
     }
     
     // 📱 Seed Test Users for Mobile App
@@ -503,6 +538,16 @@ static async Task SeedAdminUser(WebApplication app)
     // 
     // ═══════════════════════════════════════════════════════════════════════════════
     
+    var seedTestUsersEnabled =
+        app.Environment.IsDevelopment()
+        || app.Configuration.GetValue<bool>("SeedTestUsers:Enabled");
+
+    if (!seedTestUsersEnabled)
+    {
+        Log.Warning("SeedTestUsers is disabled (set `SeedTestUsers__Enabled=true` to enable). Skipping test user seeding.");
+        return;
+    }
+
     var testUsers = new[]
     {
         new { Username = "test", Email = "test@mathlearning.com", Password = "Test123!", DisplayName = "Test User", Coins = 100, Level = 1, Xp = 0, Streak = 0 },

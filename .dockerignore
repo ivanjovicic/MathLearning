@@ -1,0 +1,14 @@
+# Keep Docker build context small and stable.
+**
+
+# Build inputs
+!Dockerfile
+!Directory.Build.props
+!src/**
+
+# Never send build outputs
+src/**/bin/
+src/**/obj/
+**/*.user
+**/*.suo
+**/*.cache

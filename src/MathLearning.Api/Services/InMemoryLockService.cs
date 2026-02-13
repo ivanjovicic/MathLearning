@@ -4,33 +4,70 @@ namespace MathLearning.Api.Services;
 
 public class InMemoryLockService
 {
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private sealed class LockEntry
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public long ExpiresAtTicks;
+        public int HoldCount;
+    }
+
+    private readonly ConcurrentDictionary<string, LockEntry> _locks = new();
 
     public async Task<bool> TryAcquireAsync(string key, TimeSpan ttl)
     {
-        var sem = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        var acquired = await sem.WaitAsync(0);
+        var entry = _locks.GetOrAdd(key, _ => new LockEntry());
+        var acquired = await entry.Semaphore.WaitAsync(0);
         if (!acquired) return false;
 
-        _ = Task.Delay(ttl).ContinueWith(_ => ReleaseIfIdle(key));
+        Interlocked.Increment(ref entry.HoldCount);
+
+        var expiresAtTicks = DateTime.UtcNow.Add(ttl).Ticks;
+        Volatile.Write(ref entry.ExpiresAtTicks, expiresAtTicks);
+
+        _ = Task.Delay(ttl).ContinueWith(_ => CleanupIfExpiredAndIdle(key, entry, expiresAtTicks));
         return true;
     }
 
     public Task<bool> ReleaseAsync(string key)
     {
-        if (_locks.TryGetValue(key, out var sem))
+        if (_locks.TryGetValue(key, out var entry))
         {
-            try { sem.Release(); } catch { /* ignore */ }
+            var released = false;
+            try
+            {
+                entry.Semaphore.Release();
+                released = true;
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            if (released)
+            {
+                Interlocked.Decrement(ref entry.HoldCount);
+                CleanupIfExpiredAndIdle(key, entry, Volatile.Read(ref entry.ExpiresAtTicks));
+            }
             return Task.FromResult(true);
         }
         return Task.FromResult(false);
     }
 
-    private void ReleaseIfIdle(string key)
+    private void CleanupIfExpiredAndIdle(string key, LockEntry entry, long expectedExpiresAtTicks)
     {
-        if (_locks.TryGetValue(key, out var sem) && sem.CurrentCount == 0)
+        // Don't clean up if this entry was extended/reused since we scheduled this cleanup.
+        if (Volatile.Read(ref entry.ExpiresAtTicks) != expectedExpiresAtTicks)
+            return;
+
+        if (Volatile.Read(ref entry.HoldCount) > 0)
+            return;
+
+        if (DateTime.UtcNow.Ticks < expectedExpiresAtTicks)
+            return;
+
+        if (_locks.TryRemove(new KeyValuePair<string, LockEntry>(key, entry)))
         {
-            try { sem.Release(); } catch { }
+            entry.Semaphore.Dispose();
         }
     }
 }
