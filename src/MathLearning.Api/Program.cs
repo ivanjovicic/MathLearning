@@ -7,6 +7,7 @@ using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.EventBus.Handlers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -77,7 +78,8 @@ try
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
     if (string.IsNullOrWhiteSpace(defaultConnectionString))
     {
-        Log.Warning("⚠️ ConnectionStrings:Default is not configured.");
+        Log.Error("❌ ConnectionStrings:Default is not configured. Set Fly secret `ConnectionStrings__Default` (recommended) before deploying.");
+        throw new InvalidOperationException("Missing ConnectionStrings:Default. Configure ConnectionStrings__Default.");
     }
     else
     {
@@ -301,6 +303,16 @@ try
     }
 
     // Configure the HTTP request pipeline.
+    // Fly terminates TLS at the edge and forwards to the app over HTTP.
+    // Forwarded headers are required so ASP.NET Core can correctly detect scheme/host and avoid HTTPS redirect loops.
+    var forwardedHeadersOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+    };
+    forwardedHeadersOptions.KnownNetworks.Clear();
+    forwardedHeadersOptions.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedHeadersOptions);
+
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
