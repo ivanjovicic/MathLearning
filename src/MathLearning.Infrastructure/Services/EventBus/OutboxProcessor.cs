@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace MathLearning.Infrastructure.Services.EventBus;
 
@@ -68,6 +69,14 @@ public class OutboxProcessor : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "❌ Error in OutboxProcessor main loop");
+                // If the Outbox table doesn't exist, continuing to retry just spams logs.
+                // The fix is to apply migrations that create the Outbox table and restart the app.
+                if (ex is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UndefinedTable)
+                {
+                    _logger.LogWarning(pgEx, "Outbox processing disabled: missing database table. Apply migrations and restart.");
+                    return;
+                }
+
                 await Task.Delay(TimeSpan.FromSeconds(5), ct);
             }
         }
