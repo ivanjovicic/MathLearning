@@ -9,7 +9,6 @@ public class IndexMaintenanceBackgroundService : BackgroundService
 {
     private readonly ILogger<IndexMaintenanceBackgroundService> _logger;
     private readonly IConfiguration _configuration;
-    private readonly TimeSpan _interval;
 
     public IndexMaintenanceBackgroundService(
         ILogger<IndexMaintenanceBackgroundService> logger,
@@ -17,9 +16,6 @@ public class IndexMaintenanceBackgroundService : BackgroundService
     {
         _logger = logger;
         _configuration = configuration;
-        
-        // Default: run daily at 3 AM
-        _interval = TimeSpan.FromHours(24);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -39,7 +35,13 @@ public class IndexMaintenanceBackgroundService : BackgroundService
                 _logger.LogInformation("🔍 Running index maintenance...");
 
                 var connectionString = _configuration.GetConnectionString("Default");
-                var service = new IndexMaintenanceService(connectionString!);
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    _logger.LogWarning("⚠️ Index maintenance skipped: ConnectionStrings:Default is not configured.");
+                    continue;
+                }
+
+                var service = new IndexMaintenanceService(connectionString);
 
                 // Run maintenance
                 var report = await service.RebuildCorruptedIndexesAsync();
@@ -49,13 +51,15 @@ public class IndexMaintenanceBackgroundService : BackgroundService
 
                 _logger.LogInformation("✅ Index maintenance completed");
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Normal shutdown
+                break;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "❌ Index maintenance failed");
             }
-
-            // Wait for next run
-            await Task.Delay(_interval, stoppingToken);
         }
 
         _logger.LogInformation("🛑 Index Maintenance Service stopped");

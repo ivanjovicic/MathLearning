@@ -65,6 +65,15 @@ try
     // 📝 Use Serilog for logging
     builder.Host.UseSerilog();
 
+    // Fly.io / container safety: some platforms set PORT instead of ASPNETCORE_URLS.
+    // Only apply when PORT is explicitly provided so local dev keeps its default ports.
+    var portEnv = builder.Configuration["PORT"];
+    if (!string.IsNullOrWhiteSpace(portEnv) && int.TryParse(portEnv, out var port))
+    {
+        builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+        Log.Information("🌐 Binding to PORT from environment: {Port}", port);
+    }
+
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
     if (string.IsNullOrWhiteSpace(defaultConnectionString))
     {
@@ -207,6 +216,11 @@ try
     builder.Services.AddSwaggerGen();
 
     var app = builder.Build();
+
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        Log.Information("🌐 Listening on: {Urls}", string.Join(", ", app.Urls));
+    });
 
     // 🧯 Global exception handler (production-safe problem+json)
     app.UseMiddleware<MathLearning.Api.Middleware.GlobalExceptionMiddleware>();
