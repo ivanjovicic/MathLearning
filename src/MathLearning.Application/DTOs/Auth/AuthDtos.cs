@@ -14,7 +14,9 @@ public record LoginResponse(
 public record RegisterRequest(
     string Username,
     string Email,
-    string Password
+    string Password,
+    string? SchoolName = null,
+    string? FacultyName = null
 );
 
 public record RegisterResponse(

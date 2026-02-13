@@ -1,8 +1,10 @@
 ﻿using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.DTOs.Progress;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -205,6 +207,14 @@ public static class QuizEndpoints
                 TimeSpentSeconds = timeSpentSeconds,
                 AnsweredAt = DateTime.UtcNow
             });
+            var profile = await db.UserProfiles
+                .FirstOrDefaultAsync(p => p.UserId == userId);
+
+            if (profile != null)
+            {
+                profile.LastActivityDay = DateOnly.FromDateTime(DateTime.UtcNow);
+                profile.UpdatedAt = DateTime.UtcNow;
+            }
 
             var stat = await db.UserQuestionStats
                 .FirstOrDefaultAsync(s =>
@@ -363,6 +373,24 @@ public static class QuizEndpoints
                 importedCount++;
             }
 
+            
+            if (request.Answers.Count > 0)
+            {
+                var latestDay = request.Answers
+                    .Max(a => DateOnly.FromDateTime(a.AnsweredAt));
+
+                var profile = await db.UserProfiles
+                    .FirstOrDefaultAsync(p => p.UserId == userId);
+
+                if (profile != null)
+                {
+                    if (profile.LastActivityDay == null || latestDay > profile.LastActivityDay)
+                        profile.LastActivityDay = latestDay;
+
+                    profile.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
             await db.SaveChangesAsync();
 
             // Izračunaj fresh XP, Level i Streak
@@ -489,6 +517,24 @@ public static class QuizEndpoints
                 importedCount++;
             }
 
+            
+            if (answers.Count > 0)
+            {
+                var latestDay = answers
+                    .Max(a => DateOnly.FromDateTime(a.AnsweredAt));
+
+                var profile = await db.UserProfiles
+                    .FirstOrDefaultAsync(p => p.UserId == userId);
+
+                if (profile != null)
+                {
+                    if (profile.LastActivityDay == null || latestDay > profile.LastActivityDay)
+                        profile.LastActivityDay = latestDay;
+
+                    profile.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
             await db.SaveChangesAsync();
             var overview = await CalculateUserOverview(db, userId);
 
@@ -605,7 +651,6 @@ public static class QuizEndpoints
             });
         });
 
-        // 🔥 SRS STREAK
         group.MapGet("/srs/streak", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -613,12 +658,34 @@ public static class QuizEndpoints
             int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
 
             var profile = await db.UserProfiles
-                .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.UserId == userId);
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            StreakRollEventDto? streakEvent = null;
+
+            if (profile != null)
+            {
+                var roll = StreakRoller.Apply(profile, today);
+                if (roll != null)
+                {
+                    streakEvent = new StreakRollEventDto(
+                        roll.Type,
+                        roll.MissedDays,
+                        roll.FreezesUsed,
+                        roll.StreakBefore,
+                        roll.StreakAfter
+                    );
+                    await db.SaveChangesAsync();
+                }
+            }
 
             return Results.Ok(new
             {
-                streak = profile?.Streak ?? 0
+                streak = profile?.Streak ?? 0,
+                streakFreezeCount = profile?.StreakFreezeCount ?? 0,
+                lastStreakDay = profile?.LastStreakDay,
+                lastActivityDay = profile?.LastActivityDay,
+                streakEvent = streakEvent
             });
         });
     }
@@ -761,24 +828,18 @@ public static class QuizEndpoints
         int level = 1 + (xp / 100);
 
         // Streak
-        var answerDays = await db.UserAnswers
-            .Where(a => a.UserId == userId)
-            .Select(a => a.AnsweredAt.Date)
-            .Distinct()
-            .OrderByDescending(d => d)
-            .ToListAsync();
+        var profile = await db.UserProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        int streak = 0;
-        DateTime today = DateTime.UtcNow.Date;
-
-        foreach (var day in answerDays)
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (profile != null)
         {
-            if (day == today || day == today.AddDays(-streak))
-                streak++;
-            else
-                break;
+            var roll = StreakRoller.Apply(profile, today);
+            if (roll != null)
+                await db.SaveChangesAsync();
         }
 
+        int streak = profile?.Streak ?? 0;
         return (xp, level, streak);
     }
 
@@ -902,3 +963,8 @@ public static class QuizEndpoints
         return false;
     }
 }
+
+
+
+
+

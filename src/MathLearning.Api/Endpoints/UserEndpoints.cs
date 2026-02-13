@@ -104,7 +104,9 @@ public static class UserEndpoints
                 Level: profile.Level,
                 Xp: profile.Xp,
                 Streak: profile.Streak,
-                CreatedAt: profile.CreatedAt
+                CreatedAt: profile.CreatedAt,
+                SchoolName: profile.SchoolName,
+                FacultyName: profile.FacultyName
             ));
         })
         .WithName("GetUserProfile")
@@ -142,7 +144,9 @@ public static class UserEndpoints
                 Level: profile.Level,
                 Xp: profile.Xp,
                 Streak: profile.Streak,
-                CreatedAt: profile.CreatedAt
+                CreatedAt: profile.CreatedAt,
+                SchoolName: profile.SchoolName,
+                FacultyName: profile.FacultyName
             ));
         })
         .WithName("UpdateUserProfile")
@@ -190,7 +194,9 @@ public static class UserEndpoints
                     Level: profile.Level,
                     Xp: profile.Xp,
                     Streak: profile.Streak,
-                    CreatedAt: profile.CreatedAt
+                    CreatedAt: profile.CreatedAt,
+                    SchoolName: profile.SchoolName,
+                    FacultyName: profile.FacultyName
                 ),
                 stats = new
                 {

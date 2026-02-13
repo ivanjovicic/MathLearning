@@ -21,7 +21,9 @@ public record MobileRegisterRequest(
     string Username,
     string Email,
     string Password,
-    string? DisplayName = null
+    string? DisplayName = null,
+    string? SchoolName = null,
+    string? FacultyName = null
 );
 
 public record MobileRegisterResponse(
@@ -39,5 +41,7 @@ public record UserProfileDto(
     int Level,
     int Xp,
     int Streak,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? SchoolName = null,
+    string? FacultyName = null
 );

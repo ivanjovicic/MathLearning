@@ -77,23 +77,25 @@ public class SrsService : ISrsService
             .Where(x => x.UserId == userId && x.LastAnswered >= DateTime.UtcNow.Date)
             .CountAsync();
 
-        if (solvedToday >= 5 && !entry.Completed)
+        var profile = await _db.UserProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (profile != null)
         {
-            entry.Completed = true;
+            // Apply streak roll before updating today's completion.
+            StreakRoller.Apply(profile, today);
 
-            var profile = await _db.UserProfiles
-                .FirstOrDefaultAsync(p => p.UserId == userId);
-
-            if (profile != null)
+            if (solvedToday >= 5 && !entry.Completed)
             {
-                var yesterday = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-                var didYesterday = await _db.UserDailyStats
-                    .AnyAsync(x => x.UserId == userId && x.Day == yesterday && x.Completed);
+                entry.Completed = true;
 
-                if (!didYesterday)
-                    profile.Streak = 0;
+                if (profile.LastStreakDay != today)
+                {
+                    profile.Streak++;
+                    profile.LastStreakDay = today;
+                }
 
-                profile.Streak++;
+                profile.LastActivityDay = today;
                 profile.UpdatedAt = DateTime.UtcNow;
             }
         }

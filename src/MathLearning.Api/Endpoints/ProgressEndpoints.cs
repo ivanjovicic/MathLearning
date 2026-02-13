@@ -1,5 +1,6 @@
 ﻿using MathLearning.Application.DTOs.Progress;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -38,12 +39,38 @@ public static class ProgressEndpoints
                 ? 0
                 : Math.Round((double)totalCorrect / totalAttempts * 100, 2);
 
-            int streak = await CalculateDailyStreak(db, userId);
+                        var profile = await db.UserProfiles
+                .FirstOrDefaultAsync(p => p.UserId == userId);
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            StreakRollEventDto? streakEvent = null;
+
+            if (profile != null)
+            {
+                var roll = StreakRoller.Apply(profile, today);
+                if (roll != null)
+                {
+                    streakEvent = new StreakRollEventDto(
+                        roll.Type,
+                        roll.MissedDays,
+                        roll.FreezesUsed,
+                        roll.StreakBefore,
+                        roll.StreakAfter
+                    );
+                    await db.SaveChangesAsync();
+                }
+            }
+
+            int streak = profile?.Streak ?? 0;
 
             return Results.Ok(new ProgressOverviewDto(
                 totalAttempts,
                 accuracy,
-                streak
+                streak,
+                StreakFreezeCount: profile?.StreakFreezeCount ?? 0,
+                LastStreakDay: profile?.LastStreakDay,
+                LastActivityDay: profile?.LastActivityDay,
+                StreakEvent: streakEvent
             ));
         });
 
@@ -192,33 +219,6 @@ public static class ProgressEndpoints
         });
     }
 
-    // 🔥 STREAK LOGIKA
-    private static async Task<int> CalculateDailyStreak(
-        ApiDbContext db,
-        int userId)
-    {
-        var days = await db.UserAnswers
-            .AsNoTracking()
-            .Where(a => a.UserId == userId)
-            .Select(a => a.AnsweredAt.Date)
-            .Distinct()
-            .OrderByDescending(d => d)
-            .ToListAsync();
-
-        int streak = 0;
-        DateTime today = DateTime.UtcNow.Date;
-
-        foreach (var day in days)
-        {
-            if (day == today || day == today.AddDays(-streak))
-                streak++;
-            else
-                break;
-        }
-
-        return streak;
-    }
-
     private static bool TryGetBool(JsonElement json, string property, out bool value)
     {
         value = false;
@@ -252,3 +252,5 @@ public static class ProgressEndpoints
         return !string.IsNullOrWhiteSpace(value);
     }
 }
+
+

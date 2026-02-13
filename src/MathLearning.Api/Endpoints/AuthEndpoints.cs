@@ -1,4 +1,4 @@
-﻿using MathLearning.Application.DTOs.Auth;
+using MathLearning.Application.DTOs.Auth;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
@@ -191,8 +191,19 @@ public static class AuthEndpoints
                 // Parse userId
                 int userId;
                 if (!int.TryParse(user.Id, out userId))
+{
+    userId = Math.Abs(user.Id.GetHashCode());
+}
+
+                var profile = await db.UserProfiles
+                    .FirstOrDefaultAsync(p => p.UserId == userId);
+
+                if (profile != null)
                 {
-                    userId = Math.Abs(user.Id.GetHashCode());
+                    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                    var roll = StreakRoller.Apply(profile, today);
+                    if (roll != null)
+                        await db.SaveChangesAsync();
                 }
 
                 logger.LogInformation($"User authenticated successfully: {request.Username}, UserId: {userId}");

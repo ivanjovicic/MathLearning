@@ -1,8 +1,11 @@
 ﻿using MathLearning.Api.Endpoints;
 using MathLearning.Api.Services;
 using MathLearning.Application.Services;
+using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.EventBus;
+using MathLearning.Infrastructure.Services.EventBus.Handlers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -69,9 +72,24 @@ try
 
     // 🔧 Add Background Services
     builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
+    builder.Services.AddHostedService<OutboxProcessor>();
+
+    // 🎯 Domain Events & Outbox Pattern (In‑proc via OutboxProcessor)
+    // Keep OutboxProcessor hosted service; use in‑proc event bus so background worker invokes local handlers.
+    builder.Services.AddScoped<IEventBus, InProcEventBus>();
+
+    // Event handlers (unchanged)
+    builder.Services.AddScoped<IEventHandler<QuizCompleted>, QuizCompletedCoinsHandler>();
+    builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
+    builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
 
     // ✅ SRS service
     builder.Services.AddScoped<ISrsService, SrsService>();
+
+    // In-memory cache + lock (replaces Redis for local / single-node)
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<InMemoryCacheService>();
+    builder.Services.AddSingleton<InMemoryLockService>();
 
     // ✅ Bug reporting services
     builder.Services.AddScoped<IBugReportService, BugReportService>();
@@ -205,6 +223,9 @@ try
     // Enable CORS
     app.UseCors();
 
+    // Sliding-window in-memory rate-limiter (single-node)
+    app.UseMiddleware<MathLearning.Api.Middleware.InMemorySlidingWindowRateLimitMiddleware>();
+
     app.UseAuthentication();
     app.UseAuthorization();
 
@@ -222,6 +243,9 @@ try
 
     // Map Coin endpoints
     app.MapCoinEndpoints();
+
+    // Map Powerup endpoints
+    app.MapPowerupEndpoints();
 
     // Map Progress endpoints
     app.MapProgressEndpoints();

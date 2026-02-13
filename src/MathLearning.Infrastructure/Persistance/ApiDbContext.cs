@@ -242,6 +242,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.Level).HasDefaultValue(1);
             entity.Property(e => e.Xp).HasDefaultValue(0);
             entity.Property(e => e.Streak).HasDefaultValue(0);
+            entity.Property(e => e.StreakFreezeCount).HasDefaultValue(0);
+            entity.Property(e => e.LastStreakDay).HasColumnType("date");
+            entity.Property(e => e.LastActivityDay).HasColumnType("date");
             
             // 🚀 Performance indexes
             entity.HasIndex(e => e.UserId)

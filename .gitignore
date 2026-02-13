@@ -104,6 +104,7 @@ PublishOutput/
 appsettings.local.json
 *.pfx
 *.key
+.env
 
 # Test Results
 TestResults/
@@ -123,3 +124,4 @@ BenchmarkDotNet.Artifacts/
 *.temp
 *.swp
 *.cache
+.tmp*.ps1

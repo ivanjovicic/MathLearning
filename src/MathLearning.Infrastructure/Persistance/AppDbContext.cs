@@ -1,5 +1,8 @@
 ﻿using MathLearning.Domain.Entities;
+using MathLearning.Domain.Primitives;
+using MathLearning.Infrastructure.Persistance.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace MathLearning.Infrastructure.Persistance;
 
@@ -18,6 +21,36 @@ public class AppDbContext : DbContext
     public DbSet<UserAnswer> UserAnswers => Set<UserAnswer>();
     public DbSet<UserQuestionStat> UserQuestionStats => Set<UserQuestionStat>();
     public DbSet<UserFriend> UserFriends => Set<UserFriend>();
+    public DbSet<UserProgress> UserProgress => Set<UserProgress>();
+    public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
+
+    public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    {
+        // Collect domain events from all tracked entities
+        var domainEvents = ChangeTracker.Entries<Entity>()
+            .SelectMany(e => e.Entity.DomainEvents)
+            .ToList();
+
+        // Convert domain events to outbox messages (in same transaction)
+        foreach (var ev in domainEvents)
+        {
+            Outbox.Add(new OutboxMessage
+            {
+                Id = ev.Id,
+                OccurredUtc = ev.OccurredUtc,
+                Type = ev.GetType().AssemblyQualifiedName!,
+                PayloadJson = JsonSerializer.Serialize(ev, ev.GetType()),
+            });
+        }
+
+        var result = await base.SaveChangesAsync(ct);
+
+        // Clear domain events after successful commit
+        foreach (var entry in ChangeTracker.Entries<Entity>())
+            entry.Entity.ClearDomainEvents();
+
+        return result;
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -106,6 +139,28 @@ public class AppDbContext : DbContext
             // ne mogu da dodam FK ka Users tabeli iz AdminDbContext.
             // Moraćeš ručno da dodaš FK constraint u migraciji ili
             // da kreiraš User entitet u Domain projektu.
+        });
+
+        builder.Entity<UserProgress>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.Coins).IsRequired();
+            entity.Property(e => e.TotalXp).IsRequired();
+            entity.OwnsOne(e => e.Streak, streak =>
+            {
+                streak.Property(s => s.CurrentStreak).IsRequired();
+                streak.Property(s => s.LastActivityDate).IsRequired();
+                streak.Property(s => s.FreezeCount).IsRequired();
+            });
+            entity.Ignore(e => e.DomainEvents);
+        });
+
+        builder.Entity<OutboxMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type).IsRequired();
+            entity.Property(e => e.PayloadJson).IsRequired();
+            entity.HasIndex(e => new { e.ProcessedUtc, e.OccurredUtc });
         });
     }
 }
