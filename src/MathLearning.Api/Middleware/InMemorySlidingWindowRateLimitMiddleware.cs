@@ -22,6 +22,13 @@ public class InMemorySlidingWindowRateLimitMiddleware
 
     public async Task Invoke(HttpContext context)
     {
+        // Never rate-limit health checks.
+        if (context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var q = _counters.GetOrAdd(ip, _ => new ConcurrentQueue<long>());
 

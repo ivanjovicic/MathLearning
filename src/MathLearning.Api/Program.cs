@@ -11,27 +11,50 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
+using Serilog.Formatting.Json;
 using System.Data.Common;
 using System.Text;
 
 // 📝 Configure Serilog EARLY (before builder)
-Log.Logger = new LoggerConfiguration()
+var startupEnvironment =
+    Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+    ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+    ?? "Production";
+
+var isDevelopment = string.Equals(startupEnvironment, "Development", StringComparison.OrdinalIgnoreCase);
+
+var loggerConfig = new LoggerConfiguration()
     .MinimumLevel.Information()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
     .Enrich.FromLogContext()
+    .Enrich.WithEnvironmentName()
     .Enrich.WithMachineName()
-    .Enrich.WithThreadId()
-    .WriteTo.Console(
-        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
+    .Enrich.WithThreadId();
+
+if (isDevelopment)
+{
+    loggerConfig.WriteTo.Console(
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+    // Local dev convenience (Fly logs use stdout/stderr anyway)
+    loggerConfig.WriteTo.File(
         path: "logs/mathlearning-.log",
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 30,
-        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .CreateLogger();
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+}
+else
+{
+    // Fly-friendly structured logs
+    loggerConfig.WriteTo.Console(new JsonFormatter());
+}
+
+Log.Logger = loggerConfig.CreateLogger();
 
 try
 {
@@ -50,6 +73,49 @@ try
     else
     {
         Log.Information("🗄️ DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
+    }
+
+    // OpenTelemetry (minimal tracing)
+    var otelServiceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "mathlearning-api";
+    var otelServiceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService(
+            serviceName: otelServiceName,
+            serviceVersion: otelServiceVersion))
+        .WithTracing(tracerProviderBuilder =>
+        {
+            tracerProviderBuilder
+                .AddAspNetCoreInstrumentation(options =>
+                {
+                    options.RecordException = true;
+                })
+                .AddHttpClientInstrumentation()
+                .AddEntityFrameworkCoreInstrumentation();
+
+            // Optional OTLP exporter (Jaeger/Tempo/etc). If not configured, dev uses console exporter.
+            var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+                ?? builder.Configuration["OpenTelemetry:Otlp:Endpoint"];
+
+            if (builder.Environment.IsDevelopment())
+            {
+                tracerProviderBuilder.AddConsoleExporter();
+            }
+
+            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+            {
+                tracerProviderBuilder.AddOtlpExporter(options =>
+                {
+                    options.Endpoint = new Uri(otlpEndpoint);
+                });
+            }
+        });
+
+    // Health checks (Fly / uptime monitoring)
+    var healthChecks = builder.Services.AddHealthChecks();
+    if (!string.IsNullOrWhiteSpace(defaultConnectionString))
+    {
+        healthChecks.AddNpgSql(defaultConnectionString, name: "postgres");
     }
 
     // Add ApiDbContext (kombinuje Identity i sve entitete)
@@ -151,6 +217,8 @@ try
             diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
             diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
             diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent);
+            diagnosticContext.Set("ClientIP", httpContext.Connection.RemoteIpAddress?.ToString());
+            diagnosticContext.Set("XForwardedFor", httpContext.Request.Headers["X-Forwarded-For"].ToString());
         };
     });
 
@@ -234,6 +302,9 @@ try
 
     app.UseAuthentication();
     app.UseAuthorization();
+
+    // Health endpoint for Fly.io / uptime checks
+    app.MapHealthChecks("/health");
 
     // Map Auth endpoints (no auth required)
     app.MapAuthEndpoints();
