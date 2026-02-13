@@ -23,7 +23,8 @@ public class InMemorySlidingWindowRateLimitMiddleware
     public async Task Invoke(HttpContext context)
     {
         // Never rate-limit health checks.
-        if (context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+        if (context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+            || context.Request.Path.Equals("/metrics", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

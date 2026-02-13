@@ -208,6 +208,12 @@ try
 
     var app = builder.Build();
 
+    // 🧯 Global exception handler (production-safe problem+json)
+    app.UseMiddleware<MathLearning.Api.Middleware.GlobalExceptionMiddleware>();
+
+    // 🔗 Correlation ID (must be BEFORE request logging so it appears on the request completion log)
+    app.UseMiddleware<MathLearning.Api.Middleware.CorrelationIdMiddleware>();
+
     // 📝 Add Serilog request logging
     app.UseSerilogRequestLogging(options =>
     {
@@ -219,6 +225,7 @@ try
             diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent);
             diagnosticContext.Set("ClientIP", httpContext.Connection.RemoteIpAddress?.ToString());
             diagnosticContext.Set("XForwardedFor", httpContext.Request.Headers["X-Forwarded-For"].ToString());
+            diagnosticContext.Set("CorrelationId", httpContext.Response.Headers[MathLearning.Api.Middleware.CorrelationIdMiddleware.HeaderName].ToString());
         };
     });
 
@@ -305,6 +312,22 @@ try
 
     // Health endpoint for Fly.io / uptime checks
     app.MapHealthChecks("/health");
+
+    // Minimal runtime metrics (no Prometheus dependency)
+    app.MapGet("/metrics", () =>
+    {
+        var process = System.Diagnostics.Process.GetCurrentProcess();
+        var uptime = DateTime.UtcNow - process.StartTime.ToUniversalTime();
+
+        return Results.Json(new
+        {
+            uptimeSeconds = (long)uptime.TotalSeconds,
+            memoryMb = process.WorkingSet64 / 1024 / 1024,
+            gcTotalMemoryMb = GC.GetTotalMemory(forceFullCollection: false) / 1024 / 1024,
+            threadCount = process.Threads.Count,
+            timestampUtc = DateTime.UtcNow,
+        });
+    });
 
     // Map Auth endpoints (no auth required)
     app.MapAuthEndpoints();
