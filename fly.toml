@@ -6,6 +6,11 @@ primary_region = "ams"
 
 [env]
   ASPNETCORE_URLS = "http://+:8080"
+  # Keep managed heap under control to reduce the chance of the Fly VM being OOM-killed.
+  # Prefer Percent unless you are sure about the machine memory size.
+  DOTNET_GCHeapHardLimitPercent = "70"
+  # Hints the GC to be more aggressive about memory returning.
+  DOTNET_GCConserveMemory = "1"
 
 [[services]]
   internal_port = 8080

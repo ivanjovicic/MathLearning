@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using MathLearning.Infrastructure.Persistance.Models;
 
 namespace MathLearning.Infrastructure.Persistance;
 
@@ -36,6 +37,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
     public DbSet<School> Schools => Set<School>();
     public DbSet<Faculty> Faculties => Set<Faculty>();
+
+    // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
+    public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -443,6 +447,15 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.QuestionStepId, e.Lang })
                   .IsUnique()
                   .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
+        });
+
+        builder.Entity<OutboxMessage>(entity =>
+        {
+            entity.ToTable("Outbox");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type).IsRequired();
+            entity.Property(e => e.PayloadJson).IsRequired();
+            entity.HasIndex(e => new { e.ProcessedUtc, e.OccurredUtc });
         });
 
         builder.Entity<School>(entity =>

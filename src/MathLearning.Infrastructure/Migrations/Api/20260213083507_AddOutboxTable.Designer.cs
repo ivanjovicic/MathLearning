@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260213083507_AddOutboxTable")]
+    partial class AddOutboxTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,9 +133,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("UsernameSnapshot")
                         .IsRequired()
@@ -181,42 +183,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_Categories_Name");
 
                     b.ToTable("Categories");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.Faculty", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Country")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("University")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_Faculties_Name");
-
-                    b.ToTable("Faculties");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.OptionTranslation", b =>
@@ -369,9 +335,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -512,9 +477,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -555,9 +519,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -572,38 +535,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("IX_RefreshTokens_User_Expires");
 
                     b.ToTable("RefreshTokens");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.School", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Country")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_Schools_Name");
-
-                    b.ToTable("Schools");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Subtopic", b =>
@@ -684,9 +615,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("TimeSpentSeconds")
                         .HasColumnType("integer");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -735,9 +665,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -756,9 +685,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateOnly>("Day")
                         .HasColumnType("date");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -774,11 +702,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserFriend", b =>
                 {
-                    b.Property<string>("UserId")
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
-                    b.Property<string>("FriendId")
-                        .HasColumnType("text");
+                    b.Property<int>("FriendId")
+                        .HasColumnType("integer");
 
                     b.HasKey("UserId", "FriendId");
 
@@ -807,9 +735,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("UsedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -829,8 +756,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserProfile", b =>
                 {
-                    b.Property<string>("UserId")
-                        .HasColumnType("text");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AvatarUrl")
                         .HasMaxLength(500)
@@ -844,17 +774,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("DailyXp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.Property<string>("DisplayName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<int?>("FacultyId")
-                        .HasColumnType("integer");
                     b.Property<string>("FacultyName")
                         .HasColumnType("text");
 
@@ -864,25 +787,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateOnly?>("LastStreakDay")
                         .HasColumnType("date");
 
-                    b.Property<DateTime?>("LastXpResetDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("LeaderboardOptIn")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
                     b.Property<int>("Level")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
-                    b.Property<int>("MonthlyXp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<int?>("SchoolId")
-                        .HasColumnType("integer");
                     b.Property<string>("SchoolName")
                         .HasColumnType("text");
 
@@ -905,47 +814,31 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
-
-                    b.Property<int>("WeeklyXp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
 
                     b.Property<int>("Xp")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
-                    b.HasKey("UserId");
+                    b.HasKey("Id");
 
                     b.HasIndex("DisplayName")
                         .HasDatabaseName("IX_UserProfiles_DisplayName");
 
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserProfiles_UserId");
+
                     b.HasIndex("Username")
                         .IsUnique()
                         .HasDatabaseName("UX_UserProfiles_Username");
-
-                    b.HasIndex("FacultyId", "LeaderboardOptIn")
-                        .HasDatabaseName("IX_UserProfiles_Faculty_Leaderboard");
-
-                    b.HasIndex("LeaderboardOptIn", "DailyXp")
-                        .HasDatabaseName("IX_UserProfiles_Leaderboard_DailyXp");
-
-                    b.HasIndex("LeaderboardOptIn", "MonthlyXp")
-                        .HasDatabaseName("IX_UserProfiles_Leaderboard_MonthlyXp");
-
-                    b.HasIndex("LeaderboardOptIn", "WeeklyXp")
-                        .HasDatabaseName("IX_UserProfiles_Leaderboard_WeeklyXp");
-
-                    b.HasIndex("LeaderboardOptIn", "Xp")
-                        .HasDatabaseName("IX_UserProfiles_Leaderboard_TotalXp");
-
-                    b.HasIndex("SchoolId", "LeaderboardOptIn")
-                        .HasDatabaseName("IX_UserProfiles_School_Leaderboard");
 
                     b.ToTable("UserProfiles");
                 });
@@ -964,9 +857,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -975,8 +867,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserQuestionStat", b =>
                 {
-                    b.Property<string>("UserId")
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
@@ -1040,9 +932,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("VibrationEnabled")
                         .HasColumnType("boolean");
@@ -1406,15 +1297,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .IsRequired();
 
                     b.Navigation("Question");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.UserProfile", b =>
-                {
-                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
-                        .WithOne()
-                        .HasForeignKey("MathLearning.Domain.Entities.UserProfile", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserQuestionStat", b =>
