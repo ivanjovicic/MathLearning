@@ -5,7 +5,7 @@ namespace MathLearning.Domain.Entities;
 
 public class UserProgress : Entity
 {
-    public int UserId { get; private set; }
+    public string UserId { get; private set; } = string.Empty;
     public int Coins { get; private set; }
     public int TotalXp { get; private set; }
 
@@ -13,7 +13,7 @@ public class UserProgress : Entity
 
     private UserProgress() { }
 
-    public UserProgress(int userId)
+    public UserProgress(string userId)
     {
         UserId = userId;
         Streak = new UserStreak(userId);

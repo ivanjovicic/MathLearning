@@ -882,38 +882,8 @@ public static class DbSeeder
             }
         }
 
-        // ── Demo user profiles ───────────────────────
-        if (!await db.Set<UserProfile>().AnyAsync())
-        {
-            db.Set<UserProfile>().AddRange(
-                new UserProfile
-                {
-                    UserId = 1,
-                    Username = "admin",
-                    DisplayName = "Admin",
-                    Coins = 500,
-                    Level = 5,
-                    Xp = 420,
-                    Streak = 7,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                },
-                new UserProfile
-                {
-                    UserId = 2,
-                    Username = "demo",
-                    DisplayName = "Demo User",
-                    Coins = 100,
-                    Level = 1,
-                    Xp = 0,
-                    Streak = 0,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                }
-            );
-            await db.SaveChangesAsync();
-            changed = true;
-        }
+        // UserProfiles are 1:1 with Identity users (AspNetUsers) and should be created via UserManager
+        // (e.g. during app startup backfill), not by this data seeder.
 
         if (changed)
         {

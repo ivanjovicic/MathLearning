@@ -1,7 +1,7 @@
 namespace MathLearning.Domain.Events;
 
 public sealed record QuizCompleted(
-    int UserId,
+    string UserId,
     int TopicId,
     int Correct,
     int Total,

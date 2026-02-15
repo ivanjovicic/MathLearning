@@ -34,7 +34,7 @@ public class OfflineBatchSubmitTests
 
         var session = new QuizSession
         {
-            Id = Guid.NewGuid(), UserId = 1, StartedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = "1", StartedAt = DateTime.UtcNow
         };
         db.QuizSessions.Add(session);
 
@@ -43,7 +43,7 @@ public class OfflineBatchSubmitTests
         // First insert
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = 1, QuestionId = 1, QuizSessionId = session.Id,
+            UserId = "1", QuestionId = 1, QuizSessionId = session.Id,
             Answer = "2", IsCorrect = true, TimeSpentSeconds = 5,
             AnsweredAt = answeredAt
         });
@@ -52,14 +52,14 @@ public class OfflineBatchSubmitTests
         // Check if duplicate exists (idempotency check)
         bool exists = await db.UserAnswers
             .AnyAsync(x =>
-                x.UserId == 1 &&
+                x.UserId == "1" &&
                 x.QuestionId == 1 &&
                 x.AnsweredAt == answeredAt);
 
         Assert.True(exists);
 
         // Should NOT add again
-        var countBefore = await db.UserAnswers.CountAsync(x => x.UserId == 1 && x.QuestionId == 1);
+        var countBefore = await db.UserAnswers.CountAsync(x => x.UserId == "1" && x.QuestionId == 1);
         Assert.Equal(1, countBefore);
     }
 
@@ -70,14 +70,14 @@ public class OfflineBatchSubmitTests
 
         var session = new QuizSession
         {
-            Id = Guid.NewGuid(), UserId = 1, StartedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = "1", StartedAt = DateTime.UtcNow
         };
         db.QuizSessions.Add(session);
 
         // Simulate batch import — 3 correct, 2 wrong for question 1
         var stat = new UserQuestionStat
         {
-            UserId = 1, QuestionId = 1, Attempts = 0, CorrectAttempts = 0
+            UserId = "1", QuestionId = 1, Attempts = 0, CorrectAttempts = 0
         };
         db.UserQuestionStats.Add(stat);
 
@@ -92,7 +92,7 @@ public class OfflineBatchSubmitTests
         await db.SaveChangesAsync();
 
         var result = await db.UserQuestionStats
-            .FirstAsync(s => s.UserId == 1 && s.QuestionId == 1);
+            .FirstAsync(s => s.UserId == "1" && s.QuestionId == 1);
 
         Assert.Equal(5, result.Attempts);
         Assert.Equal(3, result.CorrectAttempts);

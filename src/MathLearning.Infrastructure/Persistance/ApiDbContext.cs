@@ -34,6 +34,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<QuestionStepTranslation> QuestionStepTranslations => Set<QuestionStepTranslation>();
     public DbSet<UserAnswerAudit> UserAnswerAudits => Set<UserAnswerAudit>();
     public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
+    public DbSet<School> Schools => Set<School>();
+    public DbSet<Faculty> Faculties => Set<Faculty>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -234,7 +236,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
         builder.Entity<UserProfile>(entity =>
         {
-            entity.HasKey(e => e.Id);
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired();
             entity.Property(e => e.Username).IsRequired().HasMaxLength(256);
             entity.Property(e => e.DisplayName).HasMaxLength(256);
             entity.Property(e => e.AvatarUrl).HasMaxLength(500);
@@ -246,15 +249,43 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.LastStreakDay).HasColumnType("date");
             entity.Property(e => e.LastActivityDay).HasColumnType("date");
             
+            // 📈 Time-based XP tracking
+            entity.Property(e => e.DailyXp).HasDefaultValue(0);
+            entity.Property(e => e.WeeklyXp).HasDefaultValue(0);
+            entity.Property(e => e.MonthlyXp).HasDefaultValue(0);
+            entity.Property(e => e.LastXpResetDate).HasColumnType("timestamp with time zone");
+            
+            // 🏆 Leaderboard settings
+            entity.Property(e => e.LeaderboardOptIn).HasDefaultValue(true);
+            entity.Property(e => e.SchoolId).IsRequired(false);
+            entity.Property(e => e.FacultyId).IsRequired(false);
+
+            // 1:1 to Identity user (AspNetUsers). UserProfile.UserId is both PK and FK.
+            entity.HasOne<IdentityUser>()
+                  .WithOne()
+                  .HasForeignKey<UserProfile>(p => p.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+             
             // 🚀 Performance indexes
-            entity.HasIndex(e => e.UserId)
-                  .IsUnique()
-                  .HasDatabaseName("UX_UserProfiles_UserId");
             entity.HasIndex(e => e.Username)
                   .IsUnique()
                   .HasDatabaseName("UX_UserProfiles_Username");
             entity.HasIndex(e => e.DisplayName)
                   .HasDatabaseName("IX_UserProfiles_DisplayName");
+            
+            // 🏆 Leaderboard performance indexes
+            entity.HasIndex(e => new { e.LeaderboardOptIn, e.Xp })
+                  .HasDatabaseName("IX_UserProfiles_Leaderboard_TotalXp");
+            entity.HasIndex(e => new { e.LeaderboardOptIn, e.WeeklyXp })
+                  .HasDatabaseName("IX_UserProfiles_Leaderboard_WeeklyXp");
+            entity.HasIndex(e => new { e.LeaderboardOptIn, e.MonthlyXp })
+                  .HasDatabaseName("IX_UserProfiles_Leaderboard_MonthlyXp");
+            entity.HasIndex(e => new { e.LeaderboardOptIn, e.DailyXp })
+                  .HasDatabaseName("IX_UserProfiles_Leaderboard_DailyXp");
+            entity.HasIndex(e => new { e.SchoolId, e.LeaderboardOptIn })
+                  .HasDatabaseName("IX_UserProfiles_School_Leaderboard");
+            entity.HasIndex(e => new { e.FacultyId, e.LeaderboardOptIn })
+                  .HasDatabaseName("IX_UserProfiles_Faculty_Leaderboard");
         });
 
         builder.Entity<ApplicationLog>(entity =>
@@ -412,6 +443,29 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.QuestionStepId, e.Lang })
                   .IsUnique()
                   .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
+        });
+
+        builder.Entity<School>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.City).HasMaxLength(100);
+            entity.Property(e => e.Country).HasMaxLength(100);
+
+            entity.HasIndex(e => e.Name)
+                  .HasDatabaseName("IX_Schools_Name");
+        });
+
+        builder.Entity<Faculty>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.University).HasMaxLength(200);
+            entity.Property(e => e.City).HasMaxLength(100);
+            entity.Property(e => e.Country).HasMaxLength(100);
+
+            entity.HasIndex(e => e.Name)
+                  .HasDatabaseName("IX_Faculties_Name");
         });
     }
 }

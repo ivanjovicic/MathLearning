@@ -1,7 +1,7 @@
 namespace MathLearning.Domain.Events;
 
 public sealed record StreakProtectedByFreeze(
-    int UserId,
+    string UserId,
     DateOnly MissedDate,
     int FreezeRemaining
 ) : DomainEventBase;

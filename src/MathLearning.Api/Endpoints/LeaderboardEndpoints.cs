@@ -1,4 +1,6 @@
 ﻿using MathLearning.Application.DTOs.Progress;
+using MathLearning.Application.DTOs.Leaderboard;
+using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +14,42 @@ namespace MathLearning.Api.Endpoints
                            .RequireAuthorization()
                            .WithTags("Leaderboard");
 
-            // GLOBAL: all-time ili weekly
+            // 🏆 Enhanced leaderboard with cursor-based pagination
+            group.MapGet("", async (
+                LeaderboardService leaderboardService,
+                HttpContext ctx,
+                string scope = "global",     // global | school | faculty | friends
+                string period = "all_time",  // all_time | week | month | day
+                int limit = 50,
+                string? cursor = null,       // Base64 cursor for pagination
+                bool includeMe = true        // Include current user's position
+            ) =>
+            {
+                string userId = ctx.User.FindFirst("userId")!.Value;
+                var result = await leaderboardService.GetLeaderboardAsync(
+                    userId, scope, period, limit, cursor, includeMe);
+                return Results.Ok(result);
+            })
+            .WithName("GetLeaderboard")
+            .WithSummary("Get leaderboard with cursor-based pagination, badges, and percentile");
+
+            // 🏫 School vs School aggregate leaderboard
+            group.MapGet("/schools", async (
+                LeaderboardService leaderboardService,
+                HttpContext ctx,
+                string period = "week",   // all_time | week | month | day
+                int limit = 50,
+                string? cursor = null
+            ) =>
+            {
+                string userId = ctx.User.FindFirst("userId")!.Value;
+                var result = await leaderboardService.GetSchoolLeaderboardAsync(userId, period, limit, cursor);
+                return Results.Ok(result);
+            })
+            .WithName("GetSchoolLeaderboard")
+            .WithSummary("Get school vs school aggregate leaderboard");
+
+            // LEGACY: GLOBAL leaderboard (all-time or weekly) - kept for backward compatibility
             group.MapGet("/global", async (
                 ApiDbContext db,
                 HttpContext ctx,
@@ -20,7 +57,7 @@ namespace MathLearning.Api.Endpoints
                 int limit = 50
             ) =>
             {
-                int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+                string userId = ctx.User.FindFirst("userId")!.Value;
 
                 // Profile lookup for real display names
                 var profileDict = (await db.UserProfiles
@@ -88,9 +125,11 @@ namespace MathLearning.Api.Endpoints
                     .ToList();
 
                 return Results.Ok(ranked);
-            });
+            })
+            .WithName("GetGlobalLeaderboard")
+            .WithSummary("Get global leaderboard (legacy endpoint)");
 
-            // FRIENDS leaderboard
+            // LEGACY: FRIENDS leaderboard - kept for backward compatibility
             group.MapGet("/friends", async (
                 ApiDbContext db,
                 HttpContext ctx,
@@ -98,7 +137,7 @@ namespace MathLearning.Api.Endpoints
                 int limit = 50
             ) =>
             {
-                int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+                string userId = ctx.User.FindFirst("userId")!.Value;
 
                 var friendIds = await db.UserFriends
                     .Where(f => f.UserId == userId)
@@ -178,7 +217,9 @@ namespace MathLearning.Api.Endpoints
                     .ToList();
 
                 return Results.Ok(ranked);
-            });
+            })
+            .WithName("GetFriendsLeaderboard")
+            .WithSummary("Get friends leaderboard (legacy endpoint)");
         }
     }
 }

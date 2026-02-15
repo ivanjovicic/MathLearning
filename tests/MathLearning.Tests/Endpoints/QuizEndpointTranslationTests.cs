@@ -26,7 +26,7 @@ public class QuizEndpointTranslationTests
         // Add question stat to make it due
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             NextReview = DateTime.UtcNow.AddDays(-1),
             Ease = 1.3
@@ -38,7 +38,7 @@ public class QuizEndpointTranslationTests
         // Instead, test the data layer logic
 
         var dueStats = await db.QuestionStats
-            .Where(x => x.UserId == 1 && x.NextReview <= DateTime.UtcNow)
+            .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
             .OrderBy(x => x.Ease)
             .Take(15)
             .ToListAsync();
@@ -72,7 +72,7 @@ public class QuizEndpointTranslationTests
         // Add question stat but no translation
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             NextReview = DateTime.UtcNow.AddDays(-1),
             Ease = 1.3
@@ -81,7 +81,7 @@ public class QuizEndpointTranslationTests
         await db.SaveChangesAsync();
 
         var dueStats = await db.QuestionStats
-            .Where(x => x.UserId == 1 && x.NextReview <= DateTime.UtcNow)
+            .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
             .OrderBy(x => x.Ease)
             .Take(15)
             .ToListAsync();

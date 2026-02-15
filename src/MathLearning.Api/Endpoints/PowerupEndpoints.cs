@@ -19,7 +19,7 @@ public static class PowerupEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);

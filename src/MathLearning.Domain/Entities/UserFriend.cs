@@ -2,8 +2,8 @@
 
 public class UserFriend
 {
-    public int UserId { get; set; }
-    public int FriendId { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string FriendId { get; set; } = string.Empty;
 
     // Navigation properties (opciono za sada, jer nemaš User entitet)
     // public User? User { get; set; }

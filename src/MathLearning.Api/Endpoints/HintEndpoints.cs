@@ -29,7 +29,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -46,7 +46,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -63,7 +63,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -101,7 +101,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -174,7 +174,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -246,7 +246,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -328,7 +328,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await db.Questions
@@ -399,7 +399,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
             if (profile == null)
@@ -427,7 +427,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var hints = await db.UserHints
                 .Where(h => h.UserId == userId)
@@ -471,7 +471,7 @@ public static class HintEndpoints
             HttpContext ctx,
             int limit = 50) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var hints = await db.UserHints
                 .Include(h => h.Question)
@@ -499,7 +499,7 @@ public static class HintEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var question = await db.Questions
                 .Include(q => q.Options)
@@ -557,7 +557,7 @@ public static class HintEndpoints
         .WithName("GetQuestionHintsSummary");
     }
 
-    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, int userId)
+    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
     {
         var settings = await db.UserSettings
             .FirstOrDefaultAsync(s => s.UserId == userId);

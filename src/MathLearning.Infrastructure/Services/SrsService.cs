@@ -16,7 +16,7 @@ public class SrsService : ISrsService
         _db = db;
     }
 
-    public async Task<QuestionStat> UpdateAsync(int userId, SrsUpdateDto dto)
+    public async Task<QuestionStat> UpdateAsync(string userId, SrsUpdateDto dto)
     {
         var stat = await _db.QuestionStats
             .FirstOrDefaultAsync(x => x.UserId == userId && x.QuestionId == dto.QuestionId);
@@ -55,7 +55,7 @@ public class SrsService : ISrsService
         return stat;
     }
 
-    private async Task UpdateDailyStreakAsync(int userId)
+    private async Task UpdateDailyStreakAsync(string userId)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 

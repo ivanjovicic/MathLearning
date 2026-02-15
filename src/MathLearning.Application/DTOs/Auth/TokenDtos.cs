@@ -8,7 +8,7 @@ public record TokenResponse(
     string AccessToken,
     string RefreshToken,
     int ExpiresIn,
-    int UserId,
+    string UserId,
     string Username
 );
 
@@ -34,7 +34,7 @@ public record MobileRegisterResponse(
 );
 
 public record UserProfileDto(
-    int UserId,
+    string UserId,
     string Username,
     string? DisplayName,
     int Coins,

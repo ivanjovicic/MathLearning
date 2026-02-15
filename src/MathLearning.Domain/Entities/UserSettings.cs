@@ -3,7 +3,7 @@
 public class UserSettings
 {
     public int Id { get; set; }
-    public int UserId { get; set; }
+    public string UserId { get; set; } = string.Empty;
 
     public string Language { get; set; } = "sr";
     public string Theme { get; set; } = "light";

@@ -72,7 +72,7 @@ try
 
     // 🔧 Add Background Services
     builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
-    builder.Services.AddHostedService<OutboxProcessor>();
+    builder.Services.AddHostedService<XpResetBackgroundService>();
 
     // 🎯 Domain Events & Outbox Pattern (In‑proc via OutboxProcessor)
     // Keep OutboxProcessor hosted service; use in‑proc event bus so background worker invokes local handlers.
@@ -94,6 +94,12 @@ try
     // ✅ Bug reporting services
     builder.Services.AddScoped<IBugReportService, BugReportService>();
     builder.Services.AddScoped<IScreenshotStorageService, LocalScreenshotStorageService>();
+
+    // 🏆 Leaderboard service
+    builder.Services.AddScoped<LeaderboardService>();
+
+    // 📈 XP tracking service
+    builder.Services.AddScoped<XpTrackingService>();
 
     // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -277,6 +283,10 @@ try
     
     app.Run();
 }
+catch (Microsoft.Extensions.Hosting.HostAbortedException)
+{
+    // Expected when EF Core tooling uses the startup project to build the host and then aborts it.
+}
 catch (Exception ex)
 {
     Log.Fatal(ex, "❌ Application terminated unexpectedly");
@@ -333,9 +343,9 @@ static async Task SeedAdminUser(WebApplication app)
         {
             Log.Information("✓ Admin user created successfully!");
             
-            // Create UserProfile for admin
-            int adminUserId = int.TryParse(admin.Id, out var id) ? id : Math.Abs(admin.Id.GetHashCode());
-            
+            // Create UserProfile for admin (UserId matches Identity key)
+            string adminUserId = admin.Id;
+             
             if (!await db.UserProfiles.AnyAsync(p => p.UserId == adminUserId))
             {
                 var adminProfile = new MathLearning.Domain.Entities.UserProfile
@@ -403,15 +413,15 @@ static async Task SeedAdminUser(WebApplication app)
             {
                 Log.Information($"✓ Test user '{testUser.Username}' created successfully!");
                 
-                // Create UserProfile
-                int userId = int.TryParse(user.Id, out var id) ? id : Math.Abs(user.Id.GetHashCode());
-                
-                // Check by Username (unique constraint) instead of UserId
-                if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
-                {
-                    var userProfile = new MathLearning.Domain.Entities.UserProfile
-                    {
-                        UserId = userId,
+                 // Create UserProfile
+                 string userId = user.Id;
+                 
+                 // Check by Username (unique constraint) instead of UserId
+                 if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
+                 {
+                     var userProfile = new MathLearning.Domain.Entities.UserProfile
+                     {
+                         UserId = userId,
                         Username = testUser.Username,
                         DisplayName = testUser.DisplayName,
                         Coins = testUser.Coins,
@@ -439,12 +449,12 @@ static async Task SeedAdminUser(WebApplication app)
         {
             Log.Information($"✓ Test user '{testUser.Username}' already exists.");
             await EnsurePasswordAsync(userManager, existingUser, testUser.Password);
-             
+              
             // Ensure UserProfile exists even if IdentityUser was created before
             if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
             {
-                int userId = int.TryParse(existingUser.Id, out var id) ? id : Math.Abs(existingUser.Id.GetHashCode());
-                
+                string userId = existingUser.Id;
+                 
                 var userProfile = new MathLearning.Domain.Entities.UserProfile
                 {
                     UserId = userId,
@@ -463,36 +473,28 @@ static async Task SeedAdminUser(WebApplication app)
             }
         }
     }
-    
-    // 🔗 Create IdentityUser for existing UserProfiles (from DbSeeder) that don't have Identity accounts
-    var existingProfiles = await db.UserProfiles.ToListAsync();
-    
-    foreach (var profile in existingProfiles)
+     
+    // 🔗 Backfill UserProfiles for Identity users (stable 1:1 mapping)
+    var allIdentityUsers = await userManager.Users.ToListAsync();
+    foreach (var u in allIdentityUsers)
     {
-        var identityUser = await userManager.FindByNameAsync(profile.Username);
-        
-        if (identityUser == null)
+        if (await db.UserProfiles.AnyAsync(p => p.UserId == u.Id))
+            continue;
+
+        db.UserProfiles.Add(new MathLearning.Domain.Entities.UserProfile
         {
-            // Create IdentityUser for this profile
-            var newIdentityUser = new IdentityUser
-            {
-                UserName = profile.Username,
-                Email = $"{profile.Username}@mathlearning.com",
-                EmailConfirmed = true
-            };
-            
-            var result = await userManager.CreateAsync(newIdentityUser, "Default123!");
-            
-            if (result.Succeeded)
-            {
-                Log.Information($"✓ Identity account created for existing profile '{profile.Username}' (Password: Default123!)");
-            }
-            else
-            {
-                Log.Warning($"✗ Failed to create Identity account for '{profile.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
-            }
-        }
+            UserId = u.Id,
+            Username = u.UserName ?? u.Id,
+            DisplayName = u.UserName ?? u.Id,
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
     }
+    await db.SaveChangesAsync();
 }
 
 static string DescribeDbConnection(string connectionString)

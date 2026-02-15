@@ -1,5 +1,6 @@
 ﻿using MathLearning.Domain.Entities;
 using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Tests.Services;
@@ -13,16 +14,16 @@ public class LeaderboardDataTests
 
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 1, QuestionId = 1, Attempts = 5, CorrectAttempts = 3
+            UserId = "1", QuestionId = 1, Attempts = 5, CorrectAttempts = 3
         });
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 1, QuestionId = 2, Attempts = 3, CorrectAttempts = 2
+            UserId = "1", QuestionId = 2, Attempts = 3, CorrectAttempts = 2
         });
         await db.SaveChangesAsync();
 
         var totalCorrect = await db.UserQuestionStats
-            .Where(s => s.UserId == 1)
+            .Where(s => s.UserId == "1")
             .SumAsync(s => s.CorrectAttempts);
 
         int xp = totalCorrect * 10;
@@ -37,12 +38,12 @@ public class LeaderboardDataTests
 
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 1, QuestionId = 1, Attempts = 15, CorrectAttempts = 15
+            UserId = "1", QuestionId = 1, Attempts = 15, CorrectAttempts = 15
         });
         await db.SaveChangesAsync();
 
         var totalCorrect = await db.UserQuestionStats
-            .Where(s => s.UserId == 1)
+            .Where(s => s.UserId == "1")
             .SumAsync(s => s.CorrectAttempts);
 
         int xp = totalCorrect * 10; // 150
@@ -58,9 +59,10 @@ public class LeaderboardDataTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
         // Add second user
+        db.Users.Add(new IdentityUser { Id = "2", UserName = "user2", Email = "user2@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 2, UserId = 2, Username = "user2", DisplayName = "User Two",
+            UserId = "2", Username = "user2", DisplayName = "User Two",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
@@ -68,12 +70,12 @@ public class LeaderboardDataTests
         // User 1: 3 correct
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 1, QuestionId = 1, Attempts = 3, CorrectAttempts = 3
+            UserId = "1", QuestionId = 1, Attempts = 3, CorrectAttempts = 3
         });
         // User 2: 10 correct
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 2, QuestionId = 1, Attempts = 10, CorrectAttempts = 10
+            UserId = "2", QuestionId = 1, Attempts = 10, CorrectAttempts = 10
         });
         await db.SaveChangesAsync();
 
@@ -89,8 +91,8 @@ public class LeaderboardDataTests
         .OrderByDescending(x => x.TotalCorrect)
         .ToListAsync();
 
-        Assert.Equal(2, ranked[0].UserId); // User 2 first (10 correct)
-        Assert.Equal(1, ranked[1].UserId); // User 1 second (3 correct)
+        Assert.Equal("2", ranked[0].UserId); // User 2 first (10 correct)
+        Assert.Equal("1", ranked[1].UserId); // User 1 second (3 correct)
     }
 
     [Fact]
@@ -100,14 +102,14 @@ public class LeaderboardDataTests
 
         var session = new QuizSession
         {
-            Id = Guid.NewGuid(), UserId = 1, StartedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = "1", StartedAt = DateTime.UtcNow
         };
         db.QuizSessions.Add(session);
 
         // Answer this week
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = 1, QuestionId = 1, QuizSessionId = session.Id,
+            UserId = "1", QuestionId = 1, QuizSessionId = session.Id,
             Answer = "2", IsCorrect = true, TimeSpentSeconds = 5,
             AnsweredAt = DateTime.UtcNow
         });
@@ -115,7 +117,7 @@ public class LeaderboardDataTests
         // Answer last month
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = 1, QuestionId = 2, QuizSessionId = session.Id,
+            UserId = "1", QuestionId = 2, QuizSessionId = session.Id,
             Answer = "4", IsCorrect = true, TimeSpentSeconds = 5,
             AnsweredAt = DateTime.UtcNow.AddDays(-30)
         });
@@ -124,7 +126,7 @@ public class LeaderboardDataTests
         DateTime weekStart = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.Date.DayOfWeek + 1);
 
         var weeklyCorrect = await db.UserAnswers
-            .Where(a => a.AnsweredAt >= weekStart && a.UserId == 1 && a.IsCorrect)
+            .Where(a => a.AnsweredAt >= weekStart && a.UserId == "1" && a.IsCorrect)
             .CountAsync();
 
         Assert.Equal(1, weeklyCorrect);

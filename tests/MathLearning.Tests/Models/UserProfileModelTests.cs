@@ -1,5 +1,6 @@
 ﻿using MathLearning.Domain.Entities;
 using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Tests.Models;
@@ -11,9 +12,10 @@ public class UserProfileModelTests
     {
         var db = TestDbContextFactory.Create();
 
+        db.Users.Add(new IdentityUser { Id = "99", UserName = "newuser", Email = "newuser@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = 99,
+            UserId = "99",
             Username = "newuser",
             DisplayName = "New User",
             Coins = 100,
@@ -25,7 +27,7 @@ public class UserProfileModelTests
         });
         await db.SaveChangesAsync();
 
-        var found = await db.UserProfiles.FirstAsync(p => p.UserId == 99);
+        var found = await db.UserProfiles.FirstAsync(p => p.UserId == "99");
         Assert.Equal("newuser", found.Username);
         Assert.Equal(100, found.Coins);
     }
@@ -48,12 +50,12 @@ public class UserProfileModelTests
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
-        var profile = await db.UserProfiles.FirstAsync(p => p.UserId == 1);
+        var profile = await db.UserProfiles.FirstAsync(p => p.UserId == "1");
         profile.Coins -= 25;
         profile.TotalCoinsSpent += 25;
         await db.SaveChangesAsync();
 
-        var updated = await db.UserProfiles.FirstAsync(p => p.UserId == 1);
+        var updated = await db.UserProfiles.FirstAsync(p => p.UserId == "1");
         Assert.Equal(75, updated.Coins);
         Assert.Equal(25, updated.TotalCoinsSpent);
     }

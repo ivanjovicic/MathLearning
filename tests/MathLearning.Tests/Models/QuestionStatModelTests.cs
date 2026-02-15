@@ -13,7 +13,7 @@ public class QuestionStatModelTests
 
         var stat = new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             SuccessStreak = 0,
             Ease = 1.3,
@@ -23,7 +23,7 @@ public class QuestionStatModelTests
         db.QuestionStats.Add(stat);
         await db.SaveChangesAsync();
 
-        var found = await db.QuestionStats.FirstOrDefaultAsync(x => x.UserId == 1 && x.QuestionId == 1);
+        var found = await db.QuestionStats.FirstOrDefaultAsync(x => x.UserId == "1" && x.QuestionId == 1);
         Assert.NotNull(found);
         Assert.Equal(1.3, found.Ease, 2);
     }
@@ -35,7 +35,7 @@ public class QuestionStatModelTests
 
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             Ease = 1.3,
             NextReview = DateTime.UtcNow
@@ -45,7 +45,7 @@ public class QuestionStatModelTests
         // InMemory provider doesn't enforce unique constraints,
         // but we verify only one record exists after upsert pattern
         var count = await db.QuestionStats
-            .CountAsync(x => x.UserId == 1 && x.QuestionId == 1);
+            .CountAsync(x => x.UserId == "1" && x.QuestionId == 1);
 
         Assert.Equal(1, count);
     }
@@ -57,7 +57,7 @@ public class QuestionStatModelTests
 
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             Ease = 1.3,
             NextReview = DateTime.UtcNow
@@ -66,7 +66,7 @@ public class QuestionStatModelTests
 
         var stat = await db.QuestionStats
             .Include(x => x.Question)
-            .FirstAsync(x => x.UserId == 1 && x.QuestionId == 1);
+            .FirstAsync(x => x.UserId == "1" && x.QuestionId == 1);
 
         Assert.NotNull(stat.Question);
         Assert.Equal(1, stat.Question.Id);

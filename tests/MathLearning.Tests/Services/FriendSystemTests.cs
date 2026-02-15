@@ -1,5 +1,6 @@
 ﻿using MathLearning.Domain.Entities;
 using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Tests.Services;
@@ -11,23 +12,24 @@ public class FriendSystemTests
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
+        db.Users.Add(new IdentityUser { Id = "2", UserName = "friend1", Email = "friend1@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 2, UserId = 2, Username = "friend1", DisplayName = "Friend One",
+            UserId = "2", Username = "friend1", DisplayName = "Friend One",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
 
-        db.UserFriends.Add(new UserFriend { UserId = 1, FriendId = 2 });
+        db.UserFriends.Add(new UserFriend { UserId = "1", FriendId = "2" });
         await db.SaveChangesAsync();
 
         var friends = await db.UserFriends
-            .Where(f => f.UserId == 1)
+            .Where(f => f.UserId == "1")
             .Select(f => f.FriendId)
             .ToListAsync();
 
         Assert.Single(friends);
-        Assert.Contains(2, friends);
+        Assert.Contains("2", friends);
     }
 
     [Fact]
@@ -36,34 +38,36 @@ public class FriendSystemTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
         // Add 2 more users
+        db.Users.Add(new IdentityUser { Id = "2", UserName = "friend1", Email = "friend1@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 2, UserId = 2, Username = "friend1", DisplayName = "Friend One",
+            UserId = "2", Username = "friend1", DisplayName = "Friend One",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
+        db.Users.Add(new IdentityUser { Id = "3", UserName = "stranger", Email = "stranger@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 3, UserId = 3, Username = "stranger", DisplayName = "Stranger",
+            UserId = "3", Username = "stranger", DisplayName = "Stranger",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
 
         // User 1 is friends with user 2, but NOT user 3
-        db.UserFriends.Add(new UserFriend { UserId = 1, FriendId = 2 });
+        db.UserFriends.Add(new UserFriend { UserId = "1", FriendId = "2" });
 
         // All three have stats
-        db.UserQuestionStats.Add(new UserQuestionStat { UserId = 1, QuestionId = 1, Attempts = 5, CorrectAttempts = 5 });
-        db.UserQuestionStats.Add(new UserQuestionStat { UserId = 2, QuestionId = 1, Attempts = 3, CorrectAttempts = 3 });
-        db.UserQuestionStats.Add(new UserQuestionStat { UserId = 3, QuestionId = 1, Attempts = 10, CorrectAttempts = 10 });
+        db.UserQuestionStats.Add(new UserQuestionStat { UserId = "1", QuestionId = 1, Attempts = 5, CorrectAttempts = 5 });
+        db.UserQuestionStats.Add(new UserQuestionStat { UserId = "2", QuestionId = 1, Attempts = 3, CorrectAttempts = 3 });
+        db.UserQuestionStats.Add(new UserQuestionStat { UserId = "3", QuestionId = 1, Attempts = 10, CorrectAttempts = 10 });
         await db.SaveChangesAsync();
 
         // Get friend IDs (+ self)
         var friendIds = await db.UserFriends
-            .Where(f => f.UserId == 1)
+            .Where(f => f.UserId == "1")
             .Select(f => f.FriendId)
             .ToListAsync();
-        friendIds.Add(1); // Include self
+        friendIds.Add("1"); // Include self
 
         var friendStats = await db.UserQuestionStats
             .Where(s => friendIds.Contains(s.UserId))
@@ -73,7 +77,7 @@ public class FriendSystemTests
 
         // Should only include user 1 and 2, NOT user 3
         Assert.Equal(2, friendStats.Count);
-        Assert.DoesNotContain(friendStats, s => s.UserId == 3);
+        Assert.DoesNotContain(friendStats, s => s.UserId == "3");
     }
 
     [Fact]
@@ -81,9 +85,10 @@ public class FriendSystemTests
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
+        db.Users.Add(new IdentityUser { Id = "2", UserName = "marko123", Email = "marko123@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 2, UserId = 2, Username = "marko123", DisplayName = "Marko",
+            UserId = "2", Username = "marko123", DisplayName = "Marko",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
@@ -103,9 +108,10 @@ public class FriendSystemTests
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
+        db.Users.Add(new IdentityUser { Id = "2", UserName = "user2", Email = "user2@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 2, UserId = 2, Username = "user2", DisplayName = "Jelena Petrovic",
+            UserId = "2", Username = "user2", DisplayName = "Jelena Petrovic",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });

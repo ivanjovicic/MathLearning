@@ -4,7 +4,7 @@ public class BugReport
 {
     public Guid Id { get; private set; } = Guid.NewGuid();
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
-    public int UserId { get; private set; }
+    public string UserId { get; private set; } = string.Empty;
     public string UsernameSnapshot { get; private set; } = "";
     public string Screen { get; private set; } = "";
     public string Description { get; private set; } = "";
@@ -21,7 +21,7 @@ public class BugReport
     private BugReport() { }
 
     public BugReport(
-        int userId,
+        string userId,
         string usernameSnapshot,
         string screen,
         string description,

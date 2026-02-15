@@ -5,7 +5,7 @@ namespace MathLearning.Domain.Entities;
 public class UserAnswer
 {
     public int Id { get; private set; }
-    public int UserId { get; set; }
+    public string UserId { get; set; } = string.Empty;
     public int QuestionId { get; set; }
     public Guid QuizSessionId { get; set; }
     public string Answer { get; set; } = "";

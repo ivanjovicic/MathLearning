@@ -9,7 +9,7 @@ namespace MathLearning.Domain.Entities
     public class QuizSession
     {
         public Guid Id { get; set; }
-        public int UserId { get; set; }
+        public string UserId { get; set; } = string.Empty;
         public DateTime StartedAt { get; set; }
     }
 }

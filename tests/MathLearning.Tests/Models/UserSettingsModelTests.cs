@@ -13,13 +13,13 @@ public class UserSettingsModelTests
 
         db.UserSettings.Add(new UserSettings
         {
-            UserId = 1,
+            UserId = "1",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 
-        var settings = await db.UserSettings.FirstAsync(s => s.UserId == 1);
+        var settings = await db.UserSettings.FirstAsync(s => s.UserId == "1");
 
         Assert.Equal("sr", settings.Language);
         Assert.Equal("light", settings.Theme);
@@ -37,13 +37,13 @@ public class UserSettingsModelTests
 
         db.UserSettings.Add(new UserSettings
         {
-            UserId = 1,
+            UserId = "1",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 
-        var settings = await db.UserSettings.FirstAsync(s => s.UserId == 1);
+        var settings = await db.UserSettings.FirstAsync(s => s.UserId == "1");
         settings.Language = "en";
         settings.Theme = "dark";
         settings.HintsEnabled = false;
@@ -53,7 +53,7 @@ public class UserSettingsModelTests
         settings.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        var updated = await db.UserSettings.FirstAsync(s => s.UserId == 1);
+        var updated = await db.UserSettings.FirstAsync(s => s.UserId == "1");
         Assert.Equal("en", updated.Language);
         Assert.Equal("dark", updated.Theme);
         Assert.False(updated.HintsEnabled);

@@ -2,6 +2,7 @@
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Services;
 using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Identity;
 
 namespace MathLearning.Tests.Services;
 
@@ -17,7 +18,7 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var srs = new SrsService(db);
 
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto
         {
             QuestionId = 1,
             IsCorrect = true,
@@ -37,8 +38,8 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var srs = new SrsService(db);
 
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 2000 });
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1500 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 2000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1500 });
 
         Assert.Equal(2, result.SuccessStreak);
     }
@@ -53,9 +54,9 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var srs = new SrsService(db);
 
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 2, IsCorrect = true, TimeMs = 1000 });
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 3, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 2, IsCorrect = true, TimeMs = 1000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 3, IsCorrect = true, TimeMs = 1000 });
 
         // Each question has its own streak
         Assert.Equal(1, result.SuccessStreak);
@@ -68,12 +69,12 @@ public class SrsServiceTests
         var srs = new SrsService(db);
 
         // Build streak
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
 
         // Wrong answer resets
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
 
         Assert.Equal(0, result.SuccessStreak);
     }
@@ -84,10 +85,10 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var srs = new SrsService(db);
 
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
-        await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 1000 });
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 1000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
 
         Assert.Equal(1, result.SuccessStreak);
     }
@@ -102,7 +103,7 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var srs = new SrsService(db);
 
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
 
         Assert.True(result.Ease > 1.3);
         Assert.Equal(1.35, result.Ease, 2);
@@ -114,7 +115,7 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var srs = new SrsService(db);
 
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
 
         Assert.True(result.Ease < 1.3);
         Assert.Equal(1.2, result.Ease, 2);
@@ -129,10 +130,10 @@ public class SrsServiceTests
         // 40 correct in a row → ease should cap at 3.0
         for (int i = 0; i < 40; i++)
         {
-            await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+            await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
         }
 
-        var stat = db.QuestionStats.First(x => x.QuestionId == 1 && x.UserId == 1);
+        var stat = db.QuestionStats.First(x => x.QuestionId == 1 && x.UserId == "1");
         Assert.True(stat.Ease <= 3.0);
     }
 
@@ -145,10 +146,10 @@ public class SrsServiceTests
         // Many wrong answers → ease should not go below 1.0
         for (int i = 0; i < 20; i++)
         {
-            await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
+            await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
         }
 
-        var stat = db.QuestionStats.First(x => x.QuestionId == 1 && x.UserId == 1);
+        var stat = db.QuestionStats.First(x => x.QuestionId == 1 && x.UserId == "1");
         Assert.True(stat.Ease >= 1.0);
     }
 
@@ -163,7 +164,7 @@ public class SrsServiceTests
         var srs = new SrsService(db);
         var before = DateTime.UtcNow;
 
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
 
         // baseIntervals[1] = 2, ease ~1.35 → ~2.7 days
         // streak=1, index=min(1,4)=1 → 2 * 1.35 = 2.7 days
@@ -181,7 +182,7 @@ public class SrsServiceTests
         var srs = new SrsService(db);
         var before = DateTime.UtcNow;
 
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
 
         // streak=0, index=0 → baseIntervals[0]=1 * ease(1.2) = 1.2 days
         var expectedMax = before.AddDays(2);
@@ -198,7 +199,7 @@ public class SrsServiceTests
         QuestionStat result = null!;
         for (int i = 0; i < 6; i++)
         {
-            result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+            result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
         }
 
         // streak=6, capped at index 4 → baseIntervals[4]=15 * ease(~1.6) = ~24 days
@@ -216,7 +217,7 @@ public class SrsServiceTests
         var srs = new SrsService(db);
         var before = DateTime.UtcNow;
 
-        var result = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        var result = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
 
         Assert.NotNull(result.LastAnswered);
         Assert.True(result.LastAnswered >= before);
@@ -234,9 +235,10 @@ public class SrsServiceTests
         var db = await TestDbContextFactory.CreateWithSeedAsync(dbName);
 
         // Add second user profile
+        db.Users.Add(new IdentityUser { Id = "2", UserName = "user2", Email = "user2@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            Id = 2, UserId = 2, Username = "user2", DisplayName = "User Two",
+            UserId = "2", Username = "user2", DisplayName = "User Two",
             Coins = 100, Level = 1, Xp = 0, Streak = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
@@ -244,8 +246,8 @@ public class SrsServiceTests
 
         var srs = new SrsService(db);
 
-        var r1 = await srs.UpdateAsync(1, new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
-        var r2 = await srs.UpdateAsync(2, new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
+        var r1 = await srs.UpdateAsync("1", new SrsUpdateDto { QuestionId = 1, IsCorrect = true, TimeMs = 1000 });
+        var r2 = await srs.UpdateAsync("2", new SrsUpdateDto { QuestionId = 1, IsCorrect = false, TimeMs = 5000 });
 
         Assert.Equal(1, r1.SuccessStreak);
         Assert.Equal(0, r2.SuccessStreak);

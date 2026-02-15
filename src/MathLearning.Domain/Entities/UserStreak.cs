@@ -5,14 +5,14 @@ namespace MathLearning.Domain.Entities;
 
 public class UserStreak : Entity
 {
-    public int UserId { get; private set; }
+    public string UserId { get; private set; } = string.Empty;
     public int CurrentStreak { get; private set; }
     public DateOnly LastActivityDate { get; private set; }
     public int FreezeCount { get; private set; }
 
     private UserStreak() { }
 
-    public UserStreak(int userId)
+    public UserStreak(string userId)
     {
         UserId = userId;
         CurrentStreak = 0;

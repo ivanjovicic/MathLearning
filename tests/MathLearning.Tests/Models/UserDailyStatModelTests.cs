@@ -14,13 +14,13 @@ public class UserDailyStatModelTests
 
         db.UserDailyStats.Add(new UserDailyStat
         {
-            UserId = 1,
+            UserId = "1",
             Day = today,
             Completed = false
         });
         await db.SaveChangesAsync();
 
-        var stat = await db.UserDailyStats.FirstAsync(x => x.UserId == 1);
+        var stat = await db.UserDailyStats.FirstAsync(x => x.UserId == "1");
         Assert.Equal(today, stat.Day);
         Assert.False(stat.Completed);
     }
@@ -33,17 +33,17 @@ public class UserDailyStatModelTests
 
         db.UserDailyStats.Add(new UserDailyStat
         {
-            UserId = 1,
+            UserId = "1",
             Day = today,
             Completed = false
         });
         await db.SaveChangesAsync();
 
-        var stat = await db.UserDailyStats.FirstAsync(x => x.UserId == 1);
+        var stat = await db.UserDailyStats.FirstAsync(x => x.UserId == "1");
         stat.Completed = true;
         await db.SaveChangesAsync();
 
-        var updated = await db.UserDailyStats.FirstAsync(x => x.UserId == 1);
+        var updated = await db.UserDailyStats.FirstAsync(x => x.UserId == "1");
         Assert.True(updated.Completed);
     }
 

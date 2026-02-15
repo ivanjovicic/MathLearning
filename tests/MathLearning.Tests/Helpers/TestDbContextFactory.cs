@@ -1,5 +1,6 @@
 ﻿using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Tests.Helpers;
@@ -56,10 +57,17 @@ public static class TestDbContextFactory
             db.Questions.Add(q);
         }
 
+        // Identity principal (required by 1:1 FK from UserProfile)
+        db.Users.Add(new IdentityUser
+        {
+            Id = "1",
+            UserName = "testuser",
+            Email = "testuser@example.com"
+        });
+
         var profile = new UserProfile
         {
-            Id = 1,
-            UserId = 1,
+            UserId = "1",
             Username = "testuser",
             DisplayName = "Test User",
             Coins = 100,

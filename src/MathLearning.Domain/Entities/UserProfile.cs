@@ -2,8 +2,8 @@
 
 public class UserProfile
 {
-    public int Id { get; set; }
-    public int UserId { get; set; } // Maps to AspNetUsers Id (hash)
+    // Same as AspNetUsers.Id (Identity key). Keep this stable; do not hash/parse.
+    public string UserId { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string? DisplayName { get; set; } // Optional display name
     public string? AvatarUrl { get; set; }
@@ -11,6 +11,8 @@ public class UserProfile
     // 🎓 Optional education metadata (nullable by requirement)
     public string? SchoolName { get; set; }
     public string? FacultyName { get; set; }
+    public int? SchoolId { get; set; }
+    public int? FacultyId { get; set; }
 
     // ❄️ Streak freeze power-up
     public int StreakFreezeCount { get; set; } = 0;
@@ -26,6 +28,15 @@ public class UserProfile
     public int Level { get; set; } = 1;
     public int Xp { get; set; } = 0;
     public int Streak { get; set; } = 0;
+    
+    // 📈 Time-based XP tracking for leaderboards
+    public int DailyXp { get; set; } = 0;
+    public int WeeklyXp { get; set; } = 0;
+    public int MonthlyXp { get; set; } = 0;
+    public DateTime? LastXpResetDate { get; set; }
+    
+    // 🏆 Leaderboard opt-in (privacy setting)
+    public bool LeaderboardOptIn { get; set; } = true;
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

@@ -1,7 +1,7 @@
 namespace MathLearning.Domain.Events;
 
 public sealed record CoinsGranted(
-    int UserId,
+    string UserId,
     int Amount,
     string Reason
 ) : DomainEventBase;

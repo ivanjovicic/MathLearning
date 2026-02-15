@@ -20,7 +20,7 @@ public class RefreshTokenService
     /// Kreira novi RefreshToken entity
     /// </summary>
     public static RefreshToken CreateRefreshToken(
-        int userId, 
+        string userId,
         string? device = null, 
         string? ipAddress = null,
         int expiryDays = 14)

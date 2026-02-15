@@ -18,7 +18,7 @@ public class BugReportService : IBugReportService
         _screenshotStorage = screenshotStorage;
     }
 
-    public async Task<BugReportDto> CreateBugReportAsync(int userId, BugReportRequest request)
+    public async Task<BugReportDto> CreateBugReportAsync(string userId, BugReportRequest request)
     {
         // Validate severity
         if (!BugReportValidation.IsValidSeverity(request.Severity))
@@ -118,7 +118,7 @@ public class BugReportService : IBugReportService
         return new BugReportsResponse(bugs, totalCount, page, pageSize);
     }
 
-    public async Task<BugReportsResponse> GetMyBugReportsAsync(int userId, int page = 1, int pageSize = 50)
+    public async Task<BugReportsResponse> GetMyBugReportsAsync(string userId, int page = 1, int pageSize = 50)
     {
         var query = _db.BugReports
             .Where(b => b.UserId == userId);

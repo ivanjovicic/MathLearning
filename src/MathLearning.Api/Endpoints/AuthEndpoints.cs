@@ -94,12 +94,8 @@ public static class AuthEndpoints
                     ), statusCode: 400);
                 }
 
-                // Parse userId
-                int userId;
-                if (!int.TryParse(user.Id, out userId))
-                {
-                    userId = Math.Abs(user.Id.GetHashCode());
-                }
+                // Identity key is the stable user id
+                string userId = user.Id;
 
                 // Create UserProfile
                 var profile = new UserProfile
@@ -188,12 +184,8 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
-                // Parse userId
-                int userId;
-                if (!int.TryParse(user.Id, out userId))
-{
-    userId = Math.Abs(user.Id.GetHashCode());
-}
+                // Identity key is the stable user id
+                string userId = user.Id;
 
                 var profile = await db.UserProfiles
                     .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -263,7 +255,7 @@ public static class AuthEndpoints
                 }
 
                 // Get user
-                var user = await ResolveIdentityUserByAppUserId(userManager, db, refreshToken!.UserId);
+                var user = await userManager.FindByIdAsync(refreshToken!.UserId);
                 if (user == null)
                 {
                     return Results.Json(new { error = "User not found" }, statusCode: 404);
@@ -329,7 +321,7 @@ public static class AuthEndpoints
         {
             try
             {
-                int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+                string userId = ctx.User.FindFirst("userId")!.Value;
 
                 var userTokens = await db.RefreshTokens
                     .Where(t => t.UserId == userId && t.RevokedAt == null)
@@ -386,11 +378,7 @@ public static class AuthEndpoints
                     return Results.Json(new { error = errors }, statusCode: 400);
                 }
 
-                int userId;
-                if (!int.TryParse(user.Id, out userId))
-                {
-                    userId = Math.Abs(user.Id.GetHashCode());
-                }
+                string userId = user.Id;
 
                 // Generate tokens
                 var accessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
@@ -434,17 +422,13 @@ public static class AuthEndpoints
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-        int userId;
-        if (!int.TryParse(user.Id, out userId))
-        {
-            userId = Math.Abs(user.Id.GetHashCode());
-        }
+        string userId = user.Id;
 
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? ""),
-            new Claim("userId", userId.ToString()),
+            new Claim("userId", userId),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
@@ -459,32 +443,5 @@ public static class AuthEndpoints
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private static async Task<IdentityUser?> ResolveIdentityUserByAppUserId(
-        UserManager<IdentityUser> userManager,
-        ApiDbContext db,
-        int appUserId)
-    {
-        // 1) Direct match for numeric Identity IDs (e.g. admin seeded as "1")
-        var direct = await userManager.FindByIdAsync(appUserId.ToString());
-        if (direct != null)
-            return direct;
-
-        // 2) Stable mapping through UserProfile (works across app restarts)
-        var profile = await db.UserProfiles
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.UserId == appUserId);
-        if (profile?.Username != null)
-        {
-            var byUsername = await userManager.FindByNameAsync(profile.Username);
-            if (byUsername != null)
-                return byUsername;
-        }
-
-        // 3) Last-chance legacy fallback (same-process hash mapping only)
-        var users = await userManager.Users.ToListAsync();
-        return users.FirstOrDefault(u =>
-            int.TryParse(u.Id, out var numericId)
-                ? numericId == appUserId
-                : Math.Abs(u.Id.GetHashCode()) == appUserId);
-    }
+    // No legacy id mapping: the app uses Identity's string key end-to-end.
 }

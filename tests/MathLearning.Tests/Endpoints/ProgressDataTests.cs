@@ -13,20 +13,20 @@ public class ProgressDataTests
 
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 1, QuestionId = 1,
+            UserId = "1", QuestionId = 1,
             Attempts = 10, CorrectAttempts = 7,
             LastAttemptAt = DateTime.UtcNow
         });
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = 1, QuestionId = 2,
+            UserId = "1", QuestionId = 2,
             Attempts = 5, CorrectAttempts = 3,
             LastAttemptAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 
         var stats = await db.UserQuestionStats
-            .Where(s => s.UserId == 1)
+            .Where(s => s.UserId == "1")
             .ToListAsync();
 
         int totalAttempts = stats.Sum(s => s.Attempts);
@@ -44,7 +44,7 @@ public class ProgressDataTests
         var db = await TestDbContextFactory.CreateWithSeedAsync();
 
         var stats = await db.UserQuestionStats
-            .Where(s => s.UserId == 1)
+            .Where(s => s.UserId == "1")
             .ToListAsync();
 
         int totalAttempts = stats.Sum(s => s.Attempts);

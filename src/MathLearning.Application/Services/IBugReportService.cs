@@ -4,9 +4,9 @@ namespace MathLearning.Application.Services;
 
 public interface IBugReportService
 {
-    Task<BugReportDto> CreateBugReportAsync(int userId, BugReportRequest request);
+    Task<BugReportDto> CreateBugReportAsync(string userId, BugReportRequest request);
     Task<BugReportsResponse> GetBugReportsAsync(int page = 1, int pageSize = 20, string? status = null, string? severity = null);
-    Task<BugReportsResponse> GetMyBugReportsAsync(int userId, int page = 1, int pageSize = 50);
+    Task<BugReportsResponse> GetMyBugReportsAsync(string userId, int page = 1, int pageSize = 50);
     Task<BugReportDto?> GetBugReportAsync(Guid id);
     Task<bool> UpdateBugStatusAsync(Guid id, UpdateBugStatusRequest request);
 }

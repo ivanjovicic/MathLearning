@@ -8,7 +8,7 @@ namespace MathLearning.Application.DTOs.Progress
 {
     public record LeaderboardEntryDto(
     int Rank,
-    int UserId,
+    string UserId,
     string DisplayName,
     int Level,
     int Xp,

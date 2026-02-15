@@ -19,7 +19,7 @@ public static class ProgressEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var aggregate = await db.UserQuestionStats
                 .AsNoTracking()
@@ -79,7 +79,7 @@ public static class ProgressEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var weakAreas = await (
                 from q in db.Questions.AsNoTracking()
@@ -110,7 +110,7 @@ public static class ProgressEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var orderedTopics = await db.Topics
                 .AsNoTracking()
@@ -182,7 +182,7 @@ public static class ProgressEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             bool completed = false;
             var day = DateOnly.FromDateTime(DateTime.UtcNow);

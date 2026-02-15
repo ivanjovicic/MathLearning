@@ -23,7 +23,7 @@ public static class QuestionEndpoints
             [FromQuery] int? subtopicId = null,
             [FromQuery] int limit = 20) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string resolvedLang = await ResolveUserLang(db, ctx, userId, lang);
 
             var query = db.Questions
@@ -76,7 +76,7 @@ public static class QuestionEndpoints
             HttpContext ctx,
             [FromQuery] string? lang = null) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string resolvedLang = await ResolveUserLang(db, ctx, userId, lang);
 
             var question = await db.Questions
@@ -116,7 +116,7 @@ public static class QuestionEndpoints
         .WithDescription("Get single question with language support");
     }
 
-    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, int userId, string? explicitLang = null)
+    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId, string? explicitLang = null)
     {
         // 1. Explicit lang parameter takes precedence
         if (!string.IsNullOrWhiteSpace(explicitLang))

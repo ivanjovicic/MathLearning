@@ -16,7 +16,7 @@ public static class CoinEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
             if (profile == null)
@@ -50,7 +50,7 @@ public static class CoinEndpoints
             int amount,
             string? reason = null) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
             if (profile == null)
@@ -81,7 +81,7 @@ public static class CoinEndpoints
             int amount,
             string? reason = null) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
             if (profile == null)
@@ -120,7 +120,7 @@ public static class CoinEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             // Get hint usage (coin spending)
             var hints = await db.UserHints

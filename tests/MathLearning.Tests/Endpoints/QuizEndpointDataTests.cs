@@ -18,13 +18,13 @@ public class QuizEndpointDataTests
         var session = new QuizSession
         {
             Id = Guid.NewGuid(),
-            UserId = 1,
+            UserId = "1",
             StartedAt = DateTime.UtcNow
         };
         db.QuizSessions.Add(session);
         await db.SaveChangesAsync();
 
-        var found = await db.QuizSessions.FirstOrDefaultAsync(s => s.UserId == 1);
+        var found = await db.QuizSessions.FirstOrDefaultAsync(s => s.UserId == "1");
         Assert.NotNull(found);
     }
 
@@ -74,14 +74,14 @@ public class QuizEndpointDataTests
         var session = new QuizSession
         {
             Id = Guid.NewGuid(),
-            UserId = 1,
+            UserId = "1",
             StartedAt = DateTime.UtcNow
         };
         db.QuizSessions.Add(session);
 
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             QuizSessionId = session.Id,
             Answer = "2",
@@ -91,7 +91,7 @@ public class QuizEndpointDataTests
         });
         await db.SaveChangesAsync();
 
-        var answer = await db.UserAnswers.FirstAsync(a => a.UserId == 1);
+        var answer = await db.UserAnswers.FirstAsync(a => a.UserId == "1");
         Assert.True(answer.IsCorrect);
         Assert.Equal("2", answer.Answer);
     }
@@ -108,7 +108,7 @@ public class QuizEndpointDataTests
         // Create
         var stat = new UserQuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             Attempts = 1,
             CorrectAttempts = 1,
@@ -123,7 +123,7 @@ public class QuizEndpointDataTests
         await db.SaveChangesAsync();
 
         var found = await db.UserQuestionStats
-            .FirstAsync(s => s.UserId == 1 && s.QuestionId == 1);
+            .FirstAsync(s => s.UserId == "1" && s.QuestionId == 1);
         Assert.Equal(2, found.Attempts);
         Assert.Equal(2, found.CorrectAttempts);
     }
@@ -140,7 +140,7 @@ public class QuizEndpointDataTests
         // Add a stat with NextReview in the past → due
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 1,
             NextReview = DateTime.UtcNow.AddDays(-1),
             Ease = 1.3,
@@ -150,7 +150,7 @@ public class QuizEndpointDataTests
         // Add a stat with NextReview in the future → not due
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1,
+            UserId = "1",
             QuestionId = 2,
             NextReview = DateTime.UtcNow.AddDays(5),
             Ease = 1.5,
@@ -159,7 +159,7 @@ public class QuizEndpointDataTests
         await db.SaveChangesAsync();
 
         var dueQuestions = await db.QuestionStats
-            .Where(x => x.UserId == 1 && x.NextReview <= DateTime.UtcNow)
+            .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
             .OrderBy(x => x.Ease)
             .ToListAsync();
 
@@ -179,12 +179,12 @@ public class QuizEndpointDataTests
         // Only 2 due questions
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1, QuestionId = 1,
+            UserId = "1", QuestionId = 1,
             NextReview = DateTime.UtcNow.AddDays(-1), Ease = 1.3
         });
         db.QuestionStats.Add(new QuestionStat
         {
-            UserId = 1, QuestionId = 2,
+            UserId = "1", QuestionId = 2,
             NextReview = DateTime.UtcNow.AddDays(-2), Ease = 1.1
         });
         await db.SaveChangesAsync();
@@ -192,7 +192,7 @@ public class QuizEndpointDataTests
         int count = 5;
 
         var dueStats = await db.QuestionStats
-            .Where(x => x.UserId == 1 && x.NextReview <= DateTime.UtcNow)
+            .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
             .OrderBy(x => x.Ease)
             .Take(count)
             .ToListAsync();
@@ -221,7 +221,7 @@ public class QuizEndpointDataTests
         {
             db.QuestionStats.Add(new QuestionStat
             {
-                UserId = 1, QuestionId = i,
+                UserId = "1", QuestionId = i,
                 NextReview = DateTime.UtcNow.AddDays(-1), Ease = 1.3
             });
         }
@@ -229,7 +229,7 @@ public class QuizEndpointDataTests
 
         int count = 5;
         var dueStats = await db.QuestionStats
-            .Where(x => x.UserId == 1 && x.NextReview <= DateTime.UtcNow)
+            .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
             .Take(count)
             .ToListAsync();
 

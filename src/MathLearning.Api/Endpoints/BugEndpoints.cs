@@ -25,22 +25,11 @@ public static class BugEndpoints
             IBugReportService bugService,
             HttpContext ctx) =>
         {
-            // Try to get user ID if authenticated
-            int? userId = null;
-            string? userIdClaim = ctx.User.FindFirst("userId")?.Value;
-            if (int.TryParse(userIdClaim, out int parsedUserId))
-            {
-                userId = parsedUserId;
-            }
-
-            // For anonymous reports, use a default user ID or create a temporary one
-            if (!userId.HasValue)
-            {
-                // For now, require authentication for bug reports
+            var userId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
-            }
 
-            var result = await bugService.CreateBugReportAsync(userId.Value, request);
+            var result = await bugService.CreateBugReportAsync(userId, request);
             return Results.Created($"/api/bugs/{result.Id}", result);
         })
         .WithName("ReportBug")
@@ -53,11 +42,9 @@ public static class BugEndpoints
             int page = 1,
             int pageSize = 50) =>
         {
-            string? userIdClaim = ctx.User.FindFirst("userId")?.Value;
-            if (!int.TryParse(userIdClaim, out int userId))
-            {
+            var userId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
-            }
 
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 50;

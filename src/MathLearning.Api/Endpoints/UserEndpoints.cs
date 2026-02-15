@@ -27,7 +27,7 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles
                 .AsNoTracking()
@@ -61,7 +61,7 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             var today = DateTime.UtcNow.Date;
             var tomorrow = today.AddDays(1);
 
@@ -86,7 +86,7 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -118,7 +118,7 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -157,7 +157,7 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -254,8 +254,8 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
-            if (id != userId)
+            string userId = ctx.User.FindFirst("userId")!.Value;
+            if (id.ToString() != userId)
                 return Results.Forbid();
 
             var settings = await db.UserSettings
@@ -300,8 +300,8 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
-            if (id != userId)
+            string userId = ctx.User.FindFirst("userId")!.Value;
+            if (id.ToString() != userId)
                 return Results.Forbid();
 
             var settings = await db.UserSettings
@@ -370,8 +370,8 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
-            if (id != userId)
+            string userId = ctx.User.FindFirst("userId")!.Value;
+            if (id.ToString() != userId)
                 return Results.Forbid();
 
             var profile = await db.UserProfiles
@@ -412,8 +412,8 @@ public static class UserEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
-            if (id != userId)
+            string userId = ctx.User.FindFirst("userId")!.Value;
+            if (id.ToString() != userId)
                 return Results.Forbid();
 
             var profile = await db.UserProfiles

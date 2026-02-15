@@ -14,7 +14,7 @@ public record BugReportRequest(
 public record BugReportDto(
     Guid Id,
     DateTime CreatedAt,
-    int UserId,
+    string UserId,
     string UsernameSnapshot,
     string Screen,
     string Description,

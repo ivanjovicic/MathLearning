@@ -1,7 +1,7 @@
 ﻿namespace MathLearning.Application.DTOs.Users;
 
 public record UserSettingsDto(
-    int UserId,
+    string UserId,
     string Language,
     string Theme,
     bool HintsEnabled,

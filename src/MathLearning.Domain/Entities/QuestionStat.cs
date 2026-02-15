@@ -4,7 +4,7 @@ public class QuestionStat
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public int UserId { get; set; }
+    public string UserId { get; set; } = string.Empty;
     public int QuestionId { get; set; }
 
     public DateTime? LastAnswered { get; set; }

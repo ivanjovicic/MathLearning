@@ -24,7 +24,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var quiz = new QuizSession
@@ -97,7 +97,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var question = await (
@@ -149,7 +149,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             if (!TryGetInt(request, "questionId", out var questionId) || questionId <= 0)
@@ -273,7 +273,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             if (request.Answers == null || !request.Answers.Any())
                 return Results.BadRequest("No answers to import");
@@ -410,7 +410,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             var sessionGuid = Guid.NewGuid();
             var answers = new List<OfflineAnswerDto>();
 
@@ -552,7 +552,7 @@ public static class QuizEndpoints
             ISrsService srs,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var result = await srs.UpdateAsync(userId, dto);
 
@@ -571,7 +571,7 @@ public static class QuizEndpoints
             HttpContext ctx,
             int limit = 20) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var dueQuestionIds = await db.QuestionStats
@@ -614,7 +614,7 @@ public static class QuizEndpoints
             HttpContext ctx,
             int count = 15) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
 
             var dueStats = await db.QuestionStats
@@ -655,7 +655,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+            string userId = ctx.User.FindFirst("userId")!.Value;
 
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -721,7 +721,7 @@ public static class QuizEndpoints
         int? subtopicId,
         int? topicId)
     {
-        int userId = int.Parse(ctx.User.FindFirst("userId")!.Value);
+        string userId = ctx.User.FindFirst("userId")!.Value;
         string lang = await ResolveUserLang(db, ctx, userId);
 
         IQueryable<Question> query = db.Questions.AsNoTracking();
@@ -816,7 +816,7 @@ public static class QuizEndpoints
     // 📊 Helper za računanje XP, Level i Streak
     private static async Task<(int Xp, int Level, int Streak)> CalculateUserOverview(
         ApiDbContext db, 
-        int userId)
+        string userId)
     {
         // XP i Level
         var stats = await db.UserQuestionStats
@@ -844,7 +844,7 @@ public static class QuizEndpoints
     }
 
     // 🌍 Helper za resolving user language
-    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, int userId)
+    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
     {
         var settings = await db.UserSettings
             .AsNoTracking()

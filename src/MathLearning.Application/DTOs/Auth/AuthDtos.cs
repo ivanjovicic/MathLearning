@@ -7,7 +7,7 @@ public record LoginRequest(
 
 public record LoginResponse(
     string Token,
-    int UserId,
+    string UserId,
     string Username
 );
 
@@ -20,7 +20,7 @@ public record RegisterRequest(
 );
 
 public record RegisterResponse(
-    int UserId,
+    string UserId,
     string Username,
     string Message
 );
