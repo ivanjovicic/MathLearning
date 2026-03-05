@@ -6,6 +6,8 @@ using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.EventBus.Handlers;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -185,6 +187,19 @@ try
             defaultConnectionString,
             npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
+    // Hangfire (PostgreSQL)
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
+        {
+            SchemaName = "hangfire",
+            QueuePollInterval = TimeSpan.FromSeconds(15),
+            InvisibilityTimeout = TimeSpan.FromMinutes(5)
+        }));
+    builder.Services.AddHangfireServer();
+
     // Add Identity (for User management)
     builder.Services.AddIdentityCore<IdentityUser>(options =>
     {
@@ -215,6 +230,12 @@ try
     builder.Services.AddScoped<IAdaptiveLearningService, AdaptiveLearningService>();
     builder.Services.AddScoped<IWeaknessAnalysisService, WeaknessAnalysisService>();
     builder.Services.AddScoped<IQuizAttemptIngestService, QuizAttemptIngestService>();
+    builder.Services.AddScoped<IBktService, BktService>();
+    builder.Services.AddScoped<IQuestionSelector, EfQuestionSelector>();
+    builder.Services.AddScoped<IPracticeAnalyticsUpdater, PracticeAnalyticsUpdater>();
+    builder.Services.AddScoped<IPracticeBackgroundJobs, PracticeBackgroundJobs>();
+    builder.Services.AddScoped<IPracticeHangfireJobs, PracticeHangfireJobs>();
+    builder.Services.AddScoped<IPracticeSessionService, PracticeSessionService>();
     builder.Services.AddScoped<AdaptiveApiFacade>();
     builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
     builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
@@ -441,6 +462,9 @@ try
     // Map Adaptive endpoints
     app.MapAdaptiveEndpoints();
 
+    // Map practice session endpoints
+    app.MapPracticeSessionEndpoints();
+
     // Map analytics/recommendations endpoints
     app.MapAnalyticsEndpoints();
 
@@ -465,6 +489,11 @@ try
     // Map Logging endpoints
     app.MapLoggingEndpoints();
 
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHangfireDashboard("/hangfire");
+    }
+
     // Map Bug endpoints
     app.MapBugEndpoints();
 
@@ -480,6 +509,11 @@ try
     app.MapGet("/", () => Results.Ok("MathLearning API is running"));
 
     Log.Information("✅ MathLearning API started successfully");
+
+    RecurringJob.AddOrUpdate<IPracticeHangfireJobs>(
+        "practice-daily-aggregation",
+        job => job.DailyAggregationJob(),
+        "0 2 * * *");
     
     app.Run();
 }

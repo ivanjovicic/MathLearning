@@ -47,6 +47,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserTopicStat> UserTopicStats => Set<UserTopicStat>();
     public DbSet<UserSubtopicStat> UserSubtopicStats => Set<UserSubtopicStat>();
     public DbSet<UserWeakness> UserWeaknesses => Set<UserWeakness>();
+    public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
+    public DbSet<PracticeSessionItem> PracticeSessionItems => Set<PracticeSessionItem>();
+    public DbSet<MasteryState> MasteryStates => Set<MasteryState>();
 
     // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -701,6 +704,83 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.UserId, e.TopicId, e.SubtopicId })
                   .IsUnique()
                   .HasDatabaseName("UX_user_weakness_user_topic_subtopic");
+        });
+
+        builder.Entity<PracticeSession>(entity =>
+        {
+            entity.ToTable("practice_session");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.SkillNodeId).HasMaxLength(128);
+            entity.Property(e => e.Status)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(PracticeSessionStatuses.Active);
+            entity.Property(e => e.TargetQuestions).HasDefaultValue(10);
+            entity.Property(e => e.AnsweredQuestions).HasDefaultValue(0);
+            entity.Property(e => e.CorrectAnswers).HasDefaultValue(0);
+            entity.Property(e => e.XpEarned).HasDefaultValue(0);
+            entity.Property(e => e.RecommendedDifficulty)
+                  .IsRequired()
+                  .HasMaxLength(16)
+                  .HasDefaultValue(PracticeDifficulties.Medium);
+            entity.Property(e => e.InitialMastery).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.FinalMastery).HasColumnType("numeric(5,4)");
+
+            entity.HasIndex(e => new { e.UserId, e.StartedAt })
+                  .HasDatabaseName("IX_practice_session_user_started_at");
+            entity.HasIndex(e => new { e.UserId, e.Status })
+                  .HasDatabaseName("IX_practice_session_user_status");
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .HasDatabaseName("IX_practice_session_user_topic");
+            entity.HasIndex(e => new { e.UserId, e.SubtopicId })
+                  .HasDatabaseName("IX_practice_session_user_subtopic");
+        });
+
+        builder.Entity<PracticeSessionItem>(entity =>
+        {
+            entity.ToTable("practice_session_item");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Difficulty)
+                  .IsRequired()
+                  .HasMaxLength(16)
+                  .HasDefaultValue(PracticeDifficulties.Medium);
+            entity.Property(e => e.AttemptNumber).HasDefaultValue(1);
+            entity.Property(e => e.BktPrior).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.BktPosterior).HasColumnType("numeric(5,4)");
+
+            entity.HasIndex(e => e.SessionId)
+                  .HasDatabaseName("IX_practice_session_item_session_id");
+            entity.HasIndex(e => new { e.SessionId, e.PresentedAt })
+                  .HasDatabaseName("IX_practice_session_item_session_presented_at");
+            entity.HasIndex(e => e.QuestionId)
+                  .HasDatabaseName("IX_practice_session_item_question_id");
+            entity.HasIndex(e => new { e.SessionId, e.QuestionId, e.AttemptNumber })
+                  .IsUnique()
+                  .HasDatabaseName("UX_practice_session_item_session_question_attempt");
+
+            entity.HasOne(e => e.Session)
+                  .WithMany(s => s.Items)
+                  .HasForeignKey(e => e.SessionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<MasteryState>(entity =>
+        {
+            entity.ToTable("mastery_state");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.PL).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.TopicId, e.SubtopicId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_mastery_state_user_topic_subtopic");
+            entity.HasIndex(e => new { e.UserId, e.UpdatedAt })
+                  .HasDatabaseName("IX_mastery_state_user_updated_at");
         });
 
         builder.Entity<OutboxMessage>(entity =>

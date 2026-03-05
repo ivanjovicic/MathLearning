@@ -23,14 +23,14 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
     }
 
     public async Task IngestAttemptsAsync(
-        int appUserId,
+        string userId,
         IReadOnlyList<QuizAttemptIngestItem> attempts,
         CancellationToken ct = default)
     {
         if (attempts.Count == 0)
             return;
 
-        var userId = UserIdGuidMapper.FromAppUserId(appUserId);
+        var analyticsUserId = UserIdGuidMapper.FromIdentityUserId(userId);
         var subtopicIds = attempts.Select(x => x.SubtopicId).Distinct().ToList();
         var subtopicToTopic = await _db.Subtopics
             .AsNoTracking()
@@ -55,7 +55,7 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
             _db.QuizAttempts.Add(new QuizAttempt
             {
                 Id = Guid.NewGuid(),
-                UserId = userId,
+                UserId = analyticsUserId,
                 QuizId = row.QuizId,
                 QuestionId = row.QuestionId,
                 TopicId = topicId,
@@ -73,10 +73,10 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
         var subtopicIdsDelta = subtopicDelta.Keys.ToList();
 
         var topicStats = await _db.UserTopicStats
-            .Where(x => x.UserId == userId && topicIds.Contains(x.TopicId))
+            .Where(x => x.UserId == analyticsUserId && topicIds.Contains(x.TopicId))
             .ToDictionaryAsync(x => x.TopicId, ct);
         var subtopicStats = await _db.UserSubtopicStats
-            .Where(x => x.UserId == userId && subtopicIdsDelta.Contains(x.SubtopicId))
+            .Where(x => x.UserId == analyticsUserId && subtopicIdsDelta.Contains(x.SubtopicId))
             .ToDictionaryAsync(x => x.SubtopicId, ct);
 
         foreach (var (topicId, delta) in topicDelta)
@@ -85,7 +85,7 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
             {
                 stat = new UserTopicStat
                 {
-                    UserId = userId,
+                    UserId = analyticsUserId,
                     TopicId = topicId,
                     TotalQuestions = 0,
                     CorrectAnswers = 0,
@@ -113,7 +113,7 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
             {
                 stat = new UserSubtopicStat
                 {
-                    UserId = userId,
+                    UserId = analyticsUserId,
                     SubtopicId = subtopicId,
                     TotalQuestions = 0,
                     CorrectAnswers = 0,
@@ -139,12 +139,12 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
         if (tx is not null)
             await tx.CommitAsync(ct);
 
-        _scheduler.Enqueue(userId);
+        _scheduler.Enqueue(analyticsUserId);
 
         _logger.LogInformation(
-            "Quiz attempts ingested. AppUserId={AppUserId} UserId={UserId} Attempts={AttemptsCount} TopicStatsUpdated={TopicStats} SubtopicStatsUpdated={SubtopicStats}",
-            appUserId,
+            "Quiz attempts ingested. UserId={UserId} AnalyticsUserId={AnalyticsUserId} Attempts={AttemptsCount} TopicStatsUpdated={TopicStats} SubtopicStatsUpdated={SubtopicStats}",
             userId,
+            analyticsUserId,
             attempts.Count,
             topicDelta.Count,
             subtopicDelta.Count);

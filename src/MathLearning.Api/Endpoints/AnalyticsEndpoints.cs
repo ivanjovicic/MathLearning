@@ -19,13 +19,12 @@ public static class AnalyticsEndpoints
             int pageSize = 5,
             CancellationToken ct = default) =>
         {
-            if (!TryGetAppUserId(ctx, out var appUserId))
+            if (!TryGetAnalyticsUserId(ctx, out var userId))
                 return Results.Unauthorized();
 
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 50);
 
-            var userId = UserIdGuidMapper.FromAppUserId(appUserId);
             var take = page * pageSize;
             var all = await service.GetWeakTopicsAsync(userId, take, ct);
             var items = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
@@ -53,7 +52,7 @@ public static class AnalyticsEndpoints
             int pageSize = 10,
             CancellationToken ct = default) =>
         {
-            if (!TryGetAppUserId(ctx, out var appUserId))
+            if (!TryGetAnalyticsUserId(ctx, out var userId))
                 return Results.Unauthorized();
 
             page = Math.Max(1, page);
@@ -61,7 +60,6 @@ public static class AnalyticsEndpoints
             var take = page * pageSize;
             var skip = (page - 1) * pageSize;
 
-            var userId = UserIdGuidMapper.FromAppUserId(appUserId);
             var topics = (await service.GetWeakTopicsAsync(userId, take, ct))
                 .Skip(skip)
                 .Take(pageSize)
@@ -93,7 +91,7 @@ public static class AnalyticsEndpoints
             int pageSize = 10,
             CancellationToken ct = default) =>
         {
-            if (!TryGetAppUserId(ctx, out var appUserId))
+            if (!TryGetAnalyticsUserId(ctx, out var userId))
                 return Results.Unauthorized();
 
             page = Math.Max(1, page);
@@ -101,7 +99,6 @@ public static class AnalyticsEndpoints
             var take = page * pageSize;
             var skip = (page - 1) * pageSize;
 
-            var userId = UserIdGuidMapper.FromAppUserId(appUserId);
             var recommendationsRows = (await service.GeneratePracticeRecommendationsAsync(userId, take, ct))
                 .Skip(skip)
                 .Take(pageSize)
@@ -115,11 +112,15 @@ public static class AnalyticsEndpoints
         });
     }
 
-    private static bool TryGetAppUserId(HttpContext ctx, out int appUserId)
+    private static bool TryGetAnalyticsUserId(HttpContext ctx, out Guid analyticsUserId)
     {
-        appUserId = 0;
+        analyticsUserId = Guid.Empty;
         var raw = ctx.User.FindFirst("userId")?.Value;
-        return int.TryParse(raw, out appUserId);
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        analyticsUserId = UserIdGuidMapper.FromIdentityUserId(raw);
+        return analyticsUserId != Guid.Empty;
     }
 
     private static object MapTopicDetail(WeakTopicDto dto) => new

@@ -26,7 +26,7 @@ public class SrsServiceTests
         });
 
         Assert.NotNull(result);
-        Assert.Equal(1, result.UserId);
+        Assert.Equal("1", result.UserId);
         Assert.Equal(1, result.QuestionId);
         Assert.Equal(1, result.SuccessStreak);
         Assert.NotNull(result.LastAnswered);

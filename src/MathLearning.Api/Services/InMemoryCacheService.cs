@@ -29,4 +29,10 @@ public class InMemoryCacheService
             return Task.FromResult<T?>(v);
         return Task.FromResult<T?>(default);
     }
+
+    public Task RemoveAsync(string key)
+    {
+        _cache.Remove(key);
+        return Task.CompletedTask;
+    }
 }

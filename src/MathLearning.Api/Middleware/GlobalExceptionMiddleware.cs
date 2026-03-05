@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MathLearning.Application.DTOs.Common;
 
 namespace MathLearning.Api.Middleware;
 
@@ -30,8 +31,7 @@ public sealed class GlobalExceptionMiddleware
             }
 
             context.Response.Clear();
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            context.Response.ContentType = "application/problem+json";
+            context.Response.ContentType = "application/json";
 
             var correlationId =
                 context.Items.TryGetValue(CorrelationIdMiddleware.ItemKey, out var value)
@@ -39,18 +39,52 @@ public sealed class GlobalExceptionMiddleware
                     : null;
 
             var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+            var retryAfter = ResolveRetryAfterSeconds(ex);
+            var isRateLimited = ex is MathLearning.Api.Services.RateLimitedOperationException || retryAfter.HasValue;
+            context.Response.StatusCode = isRateLimited
+                ? StatusCodes.Status429TooManyRequests
+                : StatusCodes.Status500InternalServerError;
 
-            var problem = new
-            {
-                type = "https://httpstatuses.com/500",
-                title = "Internal Server Error",
-                status = 500,
-                traceId,
-                correlationId,
-            };
+            if (isRateLimited && retryAfter is > 0)
+                context.Response.Headers.RetryAfter = retryAfter.Value.ToString();
+
+            var problem = isRateLimited
+                ? ApiResult<object>.RateLimited(
+                    error: "Too many requests.",
+                    errorDetails: new
+                    {
+                        correlationId,
+                        exceptionType = ex.GetType().Name,
+                        ex.Message
+                    },
+                    traceId: traceId,
+                    retryAfterSeconds: retryAfter)
+                : ApiResult<object>.Fail(
+                    error: "Internal server error.",
+                    errorCode: "INTERNAL_ERROR",
+                    errorDetails: new
+                    {
+                        correlationId,
+                        exceptionType = ex.GetType().Name,
+                        ex.Message
+                    },
+                    traceId: traceId);
 
             await context.Response.WriteAsJsonAsync(problem);
         }
     }
-}
 
+    private static int? ResolveRetryAfterSeconds(Exception ex)
+    {
+        if (ex is MathLearning.Api.Services.RateLimitedOperationException rateLimited)
+            return rateLimited.RetryAfterSeconds;
+
+        if (ex.Data.Contains("Retry-After"))
+            return RetryAfterParser.ParseRetryAfterSeconds(ex.Data["Retry-After"]?.ToString());
+
+        if (ex.Data.Contains("retry-after"))
+            return RetryAfterParser.ParseRetryAfterSeconds(ex.Data["retry-after"]?.ToString());
+
+        return null;
+    }
+}

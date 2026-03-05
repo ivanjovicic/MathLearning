@@ -13,7 +13,7 @@ public class WeaknessAnalysisServiceIntegrationTests
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         var service = new WeaknessAnalysisService(db, NullLogger<WeaknessAnalysisService>.Instance);
-        var userId = UserIdGuidMapper.FromAppUserId(1);
+        var userId = UserIdGuidMapper.FromIdentityUserId("1");
 
         await service.AnalyzeUserAsync(userId, CancellationToken.None);
 
@@ -36,7 +36,7 @@ public class WeaknessAnalysisServiceIntegrationTests
         var now = DateTime.UtcNow;
 
         await ingest.IngestAttemptsAsync(
-            appUserId: 1,
+            userId: "1",
             attempts:
             [
                 new QuizAttemptIngestItem(
@@ -85,7 +85,7 @@ public class WeaknessAnalysisServiceIntegrationTests
                 CreatedAtUtc: start.AddMinutes(i)));
         }
 
-        await ingest.IngestAttemptsAsync(1, attempts, CancellationToken.None);
+        await ingest.IngestAttemptsAsync("1", attempts, CancellationToken.None);
         var userId = scheduler.LastEnqueued!.Value;
         await service.AnalyzeUserAsync(userId, CancellationToken.None);
 
