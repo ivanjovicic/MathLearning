@@ -37,6 +37,16 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
     public DbSet<School> Schools => Set<School>();
     public DbSet<Faculty> Faculties => Set<Faculty>();
+    public DbSet<UserLearningProfile> UserLearningProfiles => Set<UserLearningProfile>();
+    public DbSet<UserTopicMastery> UserTopicMasteries => Set<UserTopicMastery>();
+    public DbSet<UserQuestionHistory> UserQuestionHistories => Set<UserQuestionHistory>();
+    public DbSet<ReviewSchedule> ReviewSchedules => Set<ReviewSchedule>();
+    public DbSet<AdaptiveSession> AdaptiveSessions => Set<AdaptiveSession>();
+    public DbSet<AdaptiveSessionItem> AdaptiveSessionItems => Set<AdaptiveSessionItem>();
+    public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
+    public DbSet<UserTopicStat> UserTopicStats => Set<UserTopicStat>();
+    public DbSet<UserSubtopicStat> UserSubtopicStats => Set<UserSubtopicStat>();
+    public DbSet<UserWeakness> UserWeaknesses => Set<UserWeakness>();
 
     // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -447,6 +457,250 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.QuestionStepId, e.Lang })
                   .IsUnique()
                   .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
+        });
+
+        builder.Entity<UserLearningProfile>(entity =>
+        {
+            entity.ToTable("user_learning_profiles");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.PreferredDifficulty)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(AdaptiveDifficultyLevels.Medium);
+            entity.Property(e => e.RollingWindowSize).HasDefaultValue(20);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.PreferredDifficulty })
+                  .HasDatabaseName("IX_UserLearningProfiles_User_Difficulty");
+        });
+
+        builder.Entity<UserTopicMastery>(entity =>
+        {
+            entity.ToTable("user_topic_mastery");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.MasteryScore).HasDefaultValue(0d);
+            entity.Property(e => e.DifficultyLevel)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(AdaptiveDifficultyLevels.Medium);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserTopicMastery_User_Topic");
+
+            entity.HasIndex(e => new { e.UserId, e.DifficultyLevel })
+                  .HasDatabaseName("IX_UserTopicMastery_User_Difficulty");
+
+            entity.HasIndex(e => new { e.UserId, e.IsWeak })
+                  .HasDatabaseName("IX_UserTopicMastery_User_IsWeak");
+
+            entity.HasOne(e => e.Topic)
+                  .WithMany()
+                  .HasForeignKey(e => e.TopicId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<UserQuestionHistory>(entity =>
+        {
+            entity.ToTable("user_question_history");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.DifficultyLevel)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(AdaptiveDifficultyLevels.Medium);
+            entity.Property(e => e.AnsweredAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .HasDatabaseName("IX_UserQuestionHistory_User_Topic");
+
+            entity.HasIndex(e => new { e.UserId, e.AnsweredAt })
+                  .HasDatabaseName("IX_UserQuestionHistory_User_AnsweredAt");
+
+            entity.HasIndex(e => new { e.UserId, e.QuestionId })
+                  .HasDatabaseName("IX_UserQuestionHistory_User_Question");
+
+            entity.HasOne(e => e.Question)
+                  .WithMany()
+                  .HasForeignKey(e => e.QuestionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Topic)
+                  .WithMany()
+                  .HasForeignKey(e => e.TopicId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Subtopic)
+                  .WithMany()
+                  .HasForeignKey(e => e.SubtopicId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ReviewSchedule>(entity =>
+        {
+            entity.ToTable("review_schedules");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.EasinessFactor).HasDefaultValue(2.5d);
+            entity.Property(e => e.IntervalDays).HasDefaultValue(1);
+            entity.Property(e => e.DueAt).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.QuestionId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_ReviewSchedules_User_Question");
+
+            entity.HasIndex(e => new { e.UserId, e.DueAt })
+                  .HasDatabaseName("IX_ReviewSchedules_User_DueAt");
+
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .HasDatabaseName("IX_ReviewSchedules_User_Topic");
+
+            entity.HasOne(e => e.Question)
+                  .WithMany()
+                  .HasForeignKey(e => e.QuestionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Topic)
+                  .WithMany()
+                  .HasForeignKey(e => e.TopicId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<AdaptiveSession>(entity =>
+        {
+            entity.ToTable("adaptive_sessions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.ProfileDifficulty)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(AdaptiveDifficultyLevels.Medium);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.ExpiresAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt })
+                  .HasDatabaseName("IX_AdaptiveSessions_User_CreatedAt");
+
+            entity.HasMany(e => e.Items)
+                  .WithOne(i => i.AdaptiveSession)
+                  .HasForeignKey(i => i.AdaptiveSessionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AdaptiveSessionItem>(entity =>
+        {
+            entity.ToTable("adaptive_session_items");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.DifficultyLevel)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(AdaptiveDifficultyLevels.Medium);
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.AdaptiveSessionId, e.Sequence })
+                  .IsUnique()
+                  .HasDatabaseName("UX_AdaptiveSessionItems_Session_Sequence");
+
+            entity.HasIndex(e => new { e.TopicId, e.DifficultyLevel })
+                  .HasDatabaseName("IX_AdaptiveSessionItems_Topic_Difficulty");
+
+            entity.HasOne(e => e.Question)
+                  .WithMany()
+                  .HasForeignKey(e => e.QuestionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Topic)
+                  .WithMany()
+                  .HasForeignKey(e => e.TopicId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Subtopic)
+                  .WithMany()
+                  .HasForeignKey(e => e.SubtopicId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<QuizAttempt>(entity =>
+        {
+            entity.ToTable("quiz_attempt");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired();
+            entity.Property(e => e.QuizId).IsRequired();
+            entity.Property(e => e.TimeSpentMs).HasDefaultValue(0);
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt })
+                  .HasDatabaseName("IX_quiz_attempt_user_created_at");
+            entity.HasIndex(e => new { e.UserId, e.TopicId, e.CreatedAt })
+                  .HasDatabaseName("IX_quiz_attempt_user_topic_created_at");
+            entity.HasIndex(e => new { e.UserId, e.SubtopicId, e.CreatedAt })
+                  .HasDatabaseName("IX_quiz_attempt_user_subtopic_created_at");
+            entity.HasIndex(e => new { e.UserId, e.Correct })
+                  .HasDatabaseName("IX_quiz_attempt_user_correct");
+        });
+
+        builder.Entity<UserTopicStat>(entity =>
+        {
+            entity.ToTable("user_topic_stats");
+            entity.HasKey(e => new { e.UserId, e.TopicId });
+            entity.Property(e => e.Accuracy).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.WeaknessScore).HasColumnType("numeric(8,4)");
+            entity.Property(e => e.LastAttempt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_user_topic_stats_user_topic");
+            entity.HasIndex(e => new { e.UserId, e.WeaknessScore })
+                  .HasDatabaseName("IX_user_topic_stats_user_weakness_score");
+            entity.HasIndex(e => new { e.UserId, e.Accuracy })
+                  .HasDatabaseName("IX_user_topic_stats_user_accuracy");
+        });
+
+        builder.Entity<UserSubtopicStat>(entity =>
+        {
+            entity.ToTable("user_subtopic_stats");
+            entity.HasKey(e => new { e.UserId, e.SubtopicId });
+            entity.Property(e => e.Accuracy).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.WeaknessScore).HasColumnType("numeric(8,4)");
+            entity.Property(e => e.LastAttempt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.SubtopicId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_user_subtopic_stats_user_subtopic");
+            entity.HasIndex(e => new { e.UserId, e.WeaknessScore })
+                  .HasDatabaseName("IX_user_subtopic_stats_user_weakness_score");
+            entity.HasIndex(e => new { e.UserId, e.Accuracy })
+                  .HasDatabaseName("IX_user_subtopic_stats_user_accuracy");
+        });
+
+        builder.Entity<UserWeakness>(entity =>
+        {
+            entity.ToTable("user_weakness");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WeaknessLevel).IsRequired().HasMaxLength(16);
+            entity.Property(e => e.Confidence).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.RecommendedPractice).HasColumnType("jsonb");
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.WeaknessLevel })
+                  .HasDatabaseName("IX_user_weakness_user_level");
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .HasDatabaseName("IX_user_weakness_user_topic");
+            entity.HasIndex(e => new { e.UserId, e.SubtopicId })
+                  .HasDatabaseName("IX_user_weakness_user_subtopic");
+            entity.HasIndex(e => new { e.UserId, e.UpdatedAt })
+                  .HasDatabaseName("IX_user_weakness_user_updated");
+            entity.HasIndex(e => new { e.UserId, e.TopicId, e.SubtopicId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_user_weakness_user_topic_subtopic");
         });
 
         builder.Entity<OutboxMessage>(entity =>

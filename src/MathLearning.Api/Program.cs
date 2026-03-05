@@ -18,6 +18,10 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
 using System.Data.Common;
+using System.Diagnostics;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using System.Text;
 
 // 📝 Configure Serilog EARLY (before builder)
@@ -29,7 +33,7 @@ var startupEnvironment =
 var isDevelopment = string.Equals(startupEnvironment, "Development", StringComparison.OrdinalIgnoreCase);
 
 var loggerConfig = new LoggerConfiguration()
-    .MinimumLevel.Warning()
+    .MinimumLevel.Is(isDevelopment ? LogEventLevel.Information : LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
     .Enrich.FromLogContext()
@@ -60,6 +64,11 @@ Log.Logger = loggerConfig.CreateLogger();
 try
 {
     Log.Information("🚀 Starting MathLearning API");
+    Log.Information(
+        "Startup environment detected: Environment={Environment} ASPNETCORE_URLS={AspNetCoreUrls} PORT={Port}",
+        startupEnvironment,
+        Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "<not-set>",
+        Environment.GetEnvironmentVariable("PORT") ?? "<not-set>");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -73,6 +82,35 @@ try
     {
         builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
         Log.Information("🌐 Binding to PORT from environment: {Port}", port);
+    }
+    else
+    {
+        var configuredUrls = builder.Configuration["ASPNETCORE_URLS"];
+        if (isDevelopment)
+        {
+            var resolved = ResolveDevelopmentUrlsWithAutoPortFallback(configuredUrls);
+            if (!string.IsNullOrWhiteSpace(resolved.Urls))
+            {
+                builder.WebHost.UseUrls(resolved.Urls);
+            }
+
+            if (resolved.PortFallbacks.Count > 0)
+            {
+                Log.Warning(
+                    "⚠️ Auto-selected fallback URL(s) due to occupied port(s). Original={OriginalUrls} Effective={EffectiveUrls} Fallbacks={Fallbacks}",
+                    resolved.OriginalUrls ?? "<default:http://localhost:5000>",
+                    resolved.Urls,
+                    resolved.PortFallbacks);
+            }
+            else
+            {
+                Log.Information("🌐 Using development URLs: {Urls}", resolved.Urls);
+            }
+        }
+        else
+        {
+            Log.Information("🌐 Using launch/profile URLs (no explicit PORT override).");
+        }
     }
 
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
@@ -89,6 +127,8 @@ try
     // OpenTelemetry (minimal tracing)
     var otelServiceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "mathlearning-api";
     var otelServiceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+    var enableEfCoreTracing = builder.Configuration.GetValue<bool?>("OpenTelemetry:EnableEntityFrameworkInstrumentation")
+        ?? !builder.Environment.IsDevelopment();
 
     builder.Services.AddOpenTelemetry()
         .ConfigureResource(resource => resource.AddService(
@@ -101,8 +141,12 @@ try
                 {
                     options.RecordException = true;
                 })
-                .AddHttpClientInstrumentation()
-                .AddEntityFrameworkCoreInstrumentation();
+                .AddHttpClientInstrumentation();
+
+            if (enableEfCoreTracing)
+            {
+                tracerProviderBuilder.AddEntityFrameworkCoreInstrumentation();
+            }
 
             // Optional OTLP exporter (Jaeger/Tempo/etc). If not configured, dev uses console exporter.
             var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
@@ -168,6 +212,14 @@ try
 
     // ✅ SRS service
     builder.Services.AddScoped<ISrsService, SrsService>();
+    builder.Services.AddScoped<IAdaptiveLearningService, AdaptiveLearningService>();
+    builder.Services.AddScoped<IWeaknessAnalysisService, WeaknessAnalysisService>();
+    builder.Services.AddScoped<IQuizAttemptIngestService, QuizAttemptIngestService>();
+    builder.Services.AddScoped<AdaptiveApiFacade>();
+    builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
+    builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
+    builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
+    builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
 
     // In-memory cache + lock (replaces Redis for local / single-node)
     // IMPORTANT: when SizeLimit is set, every cache entry MUST set a Size or IMemoryCache will throw.
@@ -386,6 +438,12 @@ try
     // Map Quiz endpoints
     app.MapQuizEndpoints();
 
+    // Map Adaptive endpoints
+    app.MapAdaptiveEndpoints();
+
+    // Map analytics/recommendations endpoints
+    app.MapAnalyticsEndpoints();
+
     // Map Hint endpoints
     app.MapHintEndpoints();
 
@@ -431,6 +489,15 @@ catch (Microsoft.Extensions.Hosting.HostAbortedException)
 }
 catch (Exception ex)
 {
+    if (IsAddressInUse(ex))
+    {
+        var conflictPort = TryExtractPortFromAddressInUse(ex);
+        Log.Error(
+            "❗ Port binding failed because the address is already in use. Port={Port}. Stop the process on that port or run with a different URL, e.g. ASPNETCORE_URLS=http://localhost:5180",
+            conflictPort);
+        LogAddressInUseDiagnostics(conflictPort);
+    }
+
     Log.Fatal(ex, "❌ Application terminated unexpectedly");
 }
 finally
@@ -707,6 +774,326 @@ static string DescribeDbConnection(string connectionString)
         return "<unparseable connection string>";
     }
 }
+
+static bool IsAddressInUse(Exception ex)
+{
+    for (Exception? current = ex; current != null; current = current.InnerException)
+    {
+        if (current is SocketException socketException &&
+            socketException.SocketErrorCode == SocketError.AddressAlreadyInUse)
+        {
+            return true;
+        }
+
+        if (current is IOException ioException &&
+            ioException.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static UrlResolutionResult ResolveDevelopmentUrlsWithAutoPortFallback(string? configuredUrls)
+{
+    var original = configuredUrls;
+    var fallbackSource = string.IsNullOrWhiteSpace(configuredUrls)
+        ? "http://localhost:5000"
+        : configuredUrls;
+
+    var segments = fallbackSource
+        .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Where(s => !string.IsNullOrWhiteSpace(s))
+        .ToList();
+
+    if (segments.Count == 0)
+        segments = ["http://localhost:5000"];
+
+    var activePorts = GetActiveListeningPorts();
+    var usedByThisResolution = new HashSet<int>();
+    var resolvedSegments = new List<string>(segments.Count);
+    var portFallbacks = new List<string>();
+
+    foreach (var raw in segments)
+    {
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+        {
+            resolvedSegments.Add(raw);
+            continue;
+        }
+
+        if (!IsLoopbackHost(uri.Host) || uri.Port <= 0)
+        {
+            resolvedSegments.Add(raw);
+            continue;
+        }
+
+        var requestedPort = uri.Port;
+        var occupied = activePorts.Contains(requestedPort) || usedByThisResolution.Contains(requestedPort);
+        if (!occupied)
+        {
+            usedByThisResolution.Add(requestedPort);
+            resolvedSegments.Add(raw);
+            continue;
+        }
+
+        var nextFree = FindNextAvailablePort(requestedPort + 1, activePorts, usedByThisResolution);
+        if (nextFree is null)
+        {
+            resolvedSegments.Add(raw);
+            continue;
+        }
+
+        var rebased = new UriBuilder(uri)
+        {
+            Port = nextFree.Value
+        };
+
+        resolvedSegments.Add(rebased.Uri.ToString().TrimEnd('/'));
+        usedByThisResolution.Add(nextFree.Value);
+        portFallbacks.Add($"{requestedPort}->{nextFree.Value}");
+    }
+
+    return new UrlResolutionResult(
+        original,
+        string.Join(';', resolvedSegments),
+        portFallbacks);
+}
+
+static HashSet<int> GetActiveListeningPorts()
+{
+    try
+    {
+        return System.Net.NetworkInformation.IPGlobalProperties
+            .GetIPGlobalProperties()
+            .GetActiveTcpListeners()
+            .Select(ep => ep.Port)
+            .ToHashSet();
+    }
+    catch
+    {
+        return [];
+    }
+}
+
+static int? FindNextAvailablePort(int startPort, HashSet<int> activePorts, HashSet<int> reservedPorts)
+{
+    for (var port = Math.Max(1024, startPort); port <= 65535; port++)
+    {
+        if (!activePorts.Contains(port) && !reservedPorts.Contains(port))
+            return port;
+    }
+
+    return null;
+}
+
+static bool IsLoopbackHost(string host)
+{
+    if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
+        return true;
+
+    if (string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase))
+        return true;
+
+    if (string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase))
+        return true;
+
+    return false;
+}
+
+static int? TryExtractPortFromAddressInUse(Exception ex)
+{
+    var urlPortPattern = new Regex(@"https?://[^:\s]+:(?<port>\d{2,5})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    for (Exception? current = ex; current != null; current = current.InnerException)
+    {
+        var urlMatch = urlPortPattern.Match(current.Message);
+        if (urlMatch.Success &&
+            int.TryParse(urlMatch.Groups["port"].Value, out var parsedFromUrl) &&
+            parsedFromUrl is > 0 and <= 65535)
+        {
+            return parsedFromUrl;
+        }
+    }
+
+    for (Exception? current = ex; current != null; current = current.InnerException)
+    {
+        var rawMatches = Regex.Matches(current.Message, @"(?<!\d)(?<port>\d{2,5})(?!\d)");
+        foreach (Match rawMatch in rawMatches)
+        {
+            if (int.TryParse(rawMatch.Groups["port"].Value, out var parsed) && parsed is > 0 and <= 65535)
+                return parsed;
+        }
+    }
+
+    return null;
+}
+
+static void LogAddressInUseDiagnostics(int? conflictPort)
+{
+    try
+    {
+        var apiProcesses = Process.GetProcessesByName("MathLearning.Api")
+            .OrderBy(p => p.Id)
+            .ToList();
+
+        if (apiProcesses.Count > 0)
+        {
+            var processRows = apiProcesses.Select(p => new
+            {
+                p.Id,
+                StartTime = SafeGetStartTime(p),
+                Path = SafeGetProcessPath(p.Id)
+            });
+
+            Log.Warning("Detected running MathLearning.Api processes: {@Processes}", processRows);
+        }
+        else
+        {
+            Log.Warning("No running MathLearning.Api process detected by name.");
+        }
+    }
+    catch (Exception diagEx)
+    {
+        Log.Warning(diagEx, "Could not enumerate MathLearning.Api processes for diagnostics.");
+    }
+
+    if (conflictPort is null)
+    {
+        Log.Warning("Could not extract conflicting port from exception details.");
+        return;
+    }
+
+    if (!OperatingSystem.IsWindows())
+    {
+        Log.Warning("Detailed owning-process diagnostics are currently enabled only on Windows. Conflicting Port={Port}", conflictPort);
+        return;
+    }
+
+    try
+    {
+        var listeners = GetWindowsPortListeners(conflictPort.Value);
+        if (listeners.Count == 0)
+        {
+            Log.Warning("No LISTENING entries found by netstat for Port={Port}.", conflictPort);
+            return;
+        }
+
+        Log.Warning("Port {Port} is currently occupied by: {@Listeners}", conflictPort, listeners);
+    }
+    catch (Exception diagEx)
+    {
+        Log.Warning(diagEx, "Could not gather netstat diagnostics for Port={Port}.", conflictPort);
+    }
+}
+
+static List<object> GetWindowsPortListeners(int port)
+{
+    var psi = new ProcessStartInfo
+    {
+        FileName = "netstat",
+        Arguments = "-ano -p tcp",
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+
+    using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start netstat for diagnostics.");
+    var stdout = process.StandardOutput.ReadToEnd();
+    process.WaitForExit(3000);
+
+    var listeners = new List<object>();
+    var lines = stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+    foreach (var line in lines)
+    {
+        var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 5)
+            continue;
+
+        if (!parts[0].Equals("TCP", StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        var localAddress = parts[1];
+        var state = parts[3];
+        var pidRaw = parts[4];
+
+        if (!state.Equals("LISTENING", StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        var localPort = ExtractPortFromEndpoint(localAddress);
+        if (localPort != port)
+            continue;
+
+        if (!int.TryParse(pidRaw, out var pid))
+            continue;
+
+        listeners.Add(new
+        {
+            Port = port,
+            Pid = pid,
+            ProcessName = SafeGetProcessName(pid),
+            Path = SafeGetProcessPath(pid)
+        });
+    }
+
+    return listeners;
+}
+
+static int? ExtractPortFromEndpoint(string endpoint)
+{
+    var index = endpoint.LastIndexOf(':');
+    if (index < 0 || index + 1 >= endpoint.Length)
+        return null;
+
+    var segment = endpoint[(index + 1)..].Trim();
+    if (int.TryParse(segment, out var port) && port is > 0 and <= 65535)
+        return port;
+
+    return null;
+}
+
+static string SafeGetProcessName(int pid)
+{
+    try
+    {
+        return Process.GetProcessById(pid).ProcessName;
+    }
+    catch
+    {
+        return "<unknown>";
+    }
+}
+
+static string SafeGetProcessPath(int pid)
+{
+    try
+    {
+        return Process.GetProcessById(pid).MainModule?.FileName ?? "<unavailable>";
+    }
+    catch
+    {
+        return "<unavailable>";
+    }
+}
+
+static string SafeGetStartTime(Process process)
+{
+    try
+    {
+        return process.StartTime.ToString("O");
+    }
+    catch
+    {
+        return "<unavailable>";
+    }
+}
+
+sealed record UrlResolutionResult(
+    string? OriginalUrls,
+    string Urls,
+    IReadOnlyList<string> PortFallbacks);
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {

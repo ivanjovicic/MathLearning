@@ -147,7 +147,8 @@ public static class QuizEndpoints
         group.MapPost("/answer", async (
             JsonElement request,
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            IQuizAttemptIngestService ingestService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
@@ -196,6 +197,7 @@ public static class QuizEndpoints
                     StartedAt = DateTime.UtcNow
                 });
             }
+            var answeredAtUtc = DateTime.UtcNow;
 
             db.UserAnswers.Add(new UserAnswer
             {
@@ -205,7 +207,7 @@ public static class QuizEndpoints
                 Answer = answerText,
                 IsCorrect = isCorrect,
                 TimeSpentSeconds = timeSpentSeconds,
-                AnsweredAt = DateTime.UtcNow
+                AnsweredAt = answeredAtUtc
             });
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -240,6 +242,18 @@ public static class QuizEndpoints
             stat.LastAttemptAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
+            await ingestService.IngestAttemptsAsync(
+                userId,
+                [
+                    new QuizAttemptIngestItem(
+                        QuizId: quizSessionId,
+                        QuestionId: questionId,
+                        SubtopicId: question.SubtopicId,
+                        Correct: isCorrect,
+                        TimeSpentMs: Math.Max(0, timeSpentSeconds) * 1000,
+                        CreatedAtUtc: answeredAtUtc)
+                ],
+                ctx.RequestAborted);
 
             // Return explanation and steps only on incorrect answer.
             string? explanation = null;
@@ -271,7 +285,8 @@ public static class QuizEndpoints
         group.MapPost("/offline-submit", async (
             OfflineBatchSubmitRequest request,
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            IQuizAttemptIngestService ingestService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
 
@@ -307,6 +322,7 @@ public static class QuizEndpoints
                 .Include(q => q.Options)
                 .Where(q => questionIds.Contains(q.Id))
                 .ToDictionaryAsync(q => q.Id);
+            var ingestRows = new List<QuizAttemptIngestItem>(request.Answers.Count);
 
             // Batch učitaj postojeće statistike
             var existingStats = await db.UserQuestionStats
@@ -370,6 +386,14 @@ public static class QuizEndpoints
                 if (stat.LastAttemptAt == null || answer.AnsweredAt > stat.LastAttemptAt)
                     stat.LastAttemptAt = answer.AnsweredAt;
 
+                ingestRows.Add(new QuizAttemptIngestItem(
+                    QuizId: sessionId,
+                    QuestionId: answer.QuestionId,
+                    SubtopicId: question.SubtopicId,
+                    Correct: isCorrectServer,
+                    TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
+                    CreatedAtUtc: answer.AnsweredAt));
+
                 importedCount++;
             }
 
@@ -392,6 +416,7 @@ public static class QuizEndpoints
             }
 
             await db.SaveChangesAsync();
+            await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
 
             // Izračunaj fresh XP, Level i Streak
             var overview = await CalculateUserOverview(db, userId);
@@ -408,7 +433,8 @@ public static class QuizEndpoints
         group.MapPost("/batch-submit", async (
             JsonElement payload,
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            IQuizAttemptIngestService ingestService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             var sessionGuid = Guid.NewGuid();
@@ -461,6 +487,7 @@ public static class QuizEndpoints
                 .Include(q => q.Options)
                 .Where(q => questionIds.Contains(q.Id))
                 .ToDictionaryAsync(q => q.Id);
+            var ingestRows = new List<QuizAttemptIngestItem>(answers.Count);
             var existingStats = await db.UserQuestionStats
                 .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
                 .ToDictionaryAsync(s => s.QuestionId);
@@ -514,6 +541,14 @@ public static class QuizEndpoints
                 if (stat.LastAttemptAt == null || answer.AnsweredAt > stat.LastAttemptAt)
                     stat.LastAttemptAt = answer.AnsweredAt;
 
+                ingestRows.Add(new QuizAttemptIngestItem(
+                    QuizId: sessionGuid,
+                    QuestionId: answer.QuestionId,
+                    SubtopicId: questionForAnswer.SubtopicId,
+                    Correct: isCorrectServer,
+                    TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
+                    CreatedAtUtc: answer.AnsweredAt));
+
                 importedCount++;
             }
 
@@ -536,6 +571,7 @@ public static class QuizEndpoints
             }
 
             await db.SaveChangesAsync();
+            await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
             var overview = await CalculateUserOverview(db, userId);
 
             return Results.Ok(new OfflineBatchSubmitResponse(
