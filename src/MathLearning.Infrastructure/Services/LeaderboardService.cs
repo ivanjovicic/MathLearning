@@ -9,7 +9,9 @@ namespace MathLearning.Infrastructure.Services;
 /// <summary>
 /// Service for managing and retrieving leaderboard data with cursor-based pagination
 /// </summary>
-public class LeaderboardService
+using MathLearning.Application.Services;
+
+public class LeaderboardService : ILeaderboardService
 {
     private readonly ApiDbContext _db;
 
@@ -154,7 +156,7 @@ public class LeaderboardService
     /// <summary>
     /// Gets school vs school aggregate leaderboard
     /// </summary>
-    public async Task<SchoolLeaderboardResponseDto> GetSchoolLeaderboardAsync(
+    public virtual async Task<SchoolLeaderboardResponseDto> GetSchoolLeaderboardAsync(
         string userId,
         string period,
         int limit,

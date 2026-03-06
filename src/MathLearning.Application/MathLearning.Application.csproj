@@ -2,12 +2,21 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MathLearning.Domain\MathLearning.Domain.csproj" />
+    <ProjectReference Include="..\MathLearning.Services\MathLearning.Services.csproj" />
+    <ProjectReference Include="..\MathLearning.Core\MathLearning.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="MediatR" Version="10.0.1" />
+    <PackageReference Include="Hangfire" Version="1.8.16" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.6.111" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="DTOs\Leaderboard\LeaderboardEntryDto.cs" />
   </ItemGroup>
 
   <PropertyGroup>

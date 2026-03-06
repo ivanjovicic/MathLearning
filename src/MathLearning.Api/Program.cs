@@ -277,7 +277,12 @@ try
     builder.Services.AddScoped<IScreenshotStorageService, LocalScreenshotStorageService>();
 
     // 🏆 Leaderboard service
-    builder.Services.AddScoped<LeaderboardService>();
+    // Register the DB-backed LeaderboardService in non-test environments only.
+    if (!builder.Environment.IsEnvironment("Test"))
+    {
+        builder.Services.AddScoped<LeaderboardService>();
+        builder.Services.AddScoped<MathLearning.Application.Services.ILeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
+    }
 
     // 📈 XP tracking service
     builder.Services.AddScoped<XpTrackingService>();
@@ -533,10 +538,13 @@ try
 
     Log.Information("✅ MathLearning API started successfully");
 
-    RecurringJob.AddOrUpdate<IPracticeHangfireJobs>(
-        "practice-daily-aggregation",
-        job => job.DailyAggregationJob(),
-        "0 2 * * *");
+    if (!app.Environment.IsEnvironment("Test"))
+    {
+        RecurringJob.AddOrUpdate<IPracticeHangfireJobs>(
+            "practice-daily-aggregation",
+            job => job.DailyAggregationJob(),
+            "0 2 * * *");
+    }
     
     app.Run();
 }
