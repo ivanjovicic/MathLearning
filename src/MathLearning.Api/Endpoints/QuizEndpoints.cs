@@ -22,6 +22,7 @@ public static class QuizEndpoints
         group.MapPost("/start", async (
             StartQuizRequest request,
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -44,7 +45,7 @@ public static class QuizEndpoints
                 .ToListAsync();
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
 
-            var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
+            var questionDtos = questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList();
 
             await db.SaveChangesAsync();
 
@@ -95,6 +96,7 @@ public static class QuizEndpoints
         group.MapPost("/next-question", async (
             NextQuestionRequest request,
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -121,7 +123,7 @@ public static class QuizEndpoints
             if (question == null)
                 return Results.NotFound("No questions available");
 
-            var steps = NormalizeStepsForResponse(StepEngine.GetSteps(question, lang));
+            var steps = NormalizeStepsForResponse(stepAdapter.GetSteps(question, lang));
             var questionText = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, lang)) ?? string.Empty;
             var options = question.Options
                 .Select(o => new OptionDto(
@@ -148,6 +150,7 @@ public static class QuizEndpoints
             JsonElement request,
             ApiDbContext db,
             HttpContext ctx,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             IQuizAttemptIngestService ingestService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -270,7 +273,7 @@ public static class QuizEndpoints
                 {
                     explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
                         TranslationHelper.GetExplanation(questionForFeedback, lang));
-                    steps = NormalizeStepsForResponse(StepEngine.GetSteps(questionForFeedback, lang));
+                    steps = NormalizeStepsForResponse(stepAdapter.GetSteps(questionForFeedback, lang));
                 }
             }
 
@@ -605,6 +608,7 @@ public static class QuizEndpoints
         group.MapGet("/srs/daily", async (
             ApiDbContext db,
             HttpContext ctx,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             int limit = 20) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -641,13 +645,14 @@ public static class QuizEndpoints
                 questions.AddRange(randomFill);
             }
 
-            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang)).ToList());
+            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList());
         });
 
         // 🔀 SRS MIXED (due + random)
         group.MapGet("/srs/mixed", async (
             ApiDbContext db,
             HttpContext ctx,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             int count = 15) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -682,8 +687,8 @@ public static class QuizEndpoints
 
             return Results.Ok(new
             {
-                srs = srsQuestions.Select(q => MapQuestionDto(q, lang)),
-                random = randomQuestions.Select(q => MapQuestionDto(q, lang))
+                srs = srsQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter)),
+                random = randomQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter))
             });
         });
 
@@ -727,7 +732,7 @@ public static class QuizEndpoints
     }
 
     // 🗺️ Shared helper to map Question entity → QuestionDto with translation + steps
-    private static QuestionDto MapQuestionDto(Question q, string lang)
+    private static QuestionDto MapQuestionDto(Question q, string lang, MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter)
     {
         var options = q.Options
             .Select(o => new OptionDto(
@@ -746,7 +751,7 @@ public static class QuizEndpoints
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
-            NormalizeStepsForResponse(StepEngine.GetSteps(q, lang))
+            NormalizeStepsForResponse(stepAdapter.GetSteps(q, lang))
         );
     }
 

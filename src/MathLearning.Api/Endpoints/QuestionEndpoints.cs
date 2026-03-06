@@ -18,6 +18,7 @@ public static class QuestionEndpoints
         // 📚 GET QUESTIONS with language support
         group.MapGet("/", async (
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx,
             [FromQuery] string? lang = null,
             [FromQuery] int? subtopicId = null,
@@ -56,7 +57,7 @@ public static class QuestionEndpoints
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, resolvedLang)),
-                StepEngine.GetSteps(q, resolvedLang)
+                stepAdapter.GetSteps(q, resolvedLang)
                     .Select(s => new StepExplanationDto(
                         InlineLatexFormatter.NormalizeMixedInlineMath(s.Text) ?? s.Text,
                         InlineLatexFormatter.NormalizeMixedInlineMath(s.Hint),
@@ -73,6 +74,7 @@ public static class QuestionEndpoints
         group.MapGet("/{id}", async (
             int id,
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx,
             [FromQuery] string? lang = null) =>
         {
@@ -102,7 +104,7 @@ public static class QuestionEndpoints
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, resolvedLang)),
-                StepEngine.GetSteps(question, resolvedLang)
+                stepAdapter.GetSteps(question, resolvedLang)
                     .Select(s => new StepExplanationDto(
                         InlineLatexFormatter.NormalizeMixedInlineMath(s.Text) ?? s.Text,
                         InlineLatexFormatter.NormalizeMixedInlineMath(s.Hint),
