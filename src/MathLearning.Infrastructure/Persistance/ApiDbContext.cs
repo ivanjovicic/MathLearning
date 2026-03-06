@@ -33,6 +33,11 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
     public DbSet<QuestionStep> QuestionSteps => Set<QuestionStep>();
     public DbSet<QuestionStepTranslation> QuestionStepTranslations => Set<QuestionStepTranslation>();
+    public DbSet<StepExplanationTemplate> StepExplanationTemplates => Set<StepExplanationTemplate>();
+    public DbSet<StepExplanationCacheEntry> StepExplanationCacheEntries => Set<StepExplanationCacheEntry>();
+    public DbSet<MathFormulaReferenceEntity> MathFormulaReferences => Set<MathFormulaReferenceEntity>();
+    public DbSet<CommonMistakePattern> CommonMistakePatterns => Set<CommonMistakePattern>();
+    public DbSet<MathTransformationRule> MathTransformationRules => Set<MathTransformationRule>();
     public DbSet<UserAnswerAudit> UserAnswerAudits => Set<UserAnswerAudit>();
     public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
     public DbSet<School> Schools => Set<School>();
@@ -460,6 +465,92 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.QuestionStepId, e.Lang })
                   .IsUnique()
                   .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
+        });
+
+        builder.Entity<StepExplanationTemplate>(entity =>
+        {
+            entity.ToTable("step_explanation_template");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RuleKey).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Language).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.StepType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.TemplateText).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.HintTemplate).HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.RuleKey, e.Language, e.StepType })
+                  .IsUnique()
+                  .HasDatabaseName("UX_step_explanation_template_rule_lang_step");
+        });
+
+        builder.Entity<StepExplanationCacheEntry>(entity =>
+        {
+            entity.ToTable("step_explanation_cache");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProblemHash).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Difficulty).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.PayloadJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.ExpiresAt).IsRequired();
+            entity.Property(e => e.LastAccessedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.ProblemHash, e.Grade, e.Difficulty })
+                  .IsUnique()
+                  .HasDatabaseName("UX_step_explanation_cache_problem_grade_difficulty");
+            entity.HasIndex(e => e.ExpiresAt)
+                  .HasDatabaseName("IX_step_explanation_cache_expires_at");
+        });
+
+        builder.Entity<MathFormulaReferenceEntity>(entity =>
+        {
+            entity.ToTable("math_formula_reference");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Latex).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.MathMl).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.Description).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => e.Name)
+                  .HasDatabaseName("IX_math_formula_reference_name");
+        });
+
+        builder.Entity<CommonMistakePattern>(entity =>
+        {
+            entity.ToTable("common_mistake_patterns");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Topic).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Subtopic).HasMaxLength(100);
+            entity.Property(e => e.MistakeType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.PatternKey).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Description).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.Remediation).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.Topic, e.Subtopic, e.MistakeType })
+                  .HasDatabaseName("IX_common_mistake_patterns_topic_subtopic_type");
+            entity.HasIndex(e => new { e.MistakeType, e.Priority })
+                  .HasDatabaseName("IX_common_mistake_patterns_type_priority");
+        });
+
+        builder.Entity<MathTransformationRule>(entity =>
+        {
+            entity.ToTable("math_transformation_rules");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.ExpressionPattern).HasColumnType("TEXT");
+            entity.Property(e => e.StepType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ExampleLatex).HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.IsActive, e.StepType })
+                  .HasDatabaseName("IX_math_transformation_rules_active_step");
         });
 
         builder.Entity<UserLearningProfile>(entity =>

@@ -1,6 +1,8 @@
 ﻿using MathLearning.Api.Endpoints;
 using MathLearning.Api.Services;
+using MathLearning.Application.Validators;
 using MathLearning.Application.Services;
+using FluentValidation;
 using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
@@ -19,6 +21,7 @@ using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
+using StackExchange.Redis;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
@@ -236,6 +239,14 @@ try
     builder.Services.AddScoped<IPracticeBackgroundJobs, PracticeBackgroundJobs>();
     builder.Services.AddScoped<IPracticeHangfireJobs, PracticeHangfireJobs>();
     builder.Services.AddScoped<IPracticeSessionService, PracticeSessionService>();
+    builder.Services.AddScoped<IMathReasoningGraphEngine, MathReasoningGraphEngine>();
+    builder.Services.AddScoped<IStepExplanationGenerator, StepExplanationGenerator>();
+    builder.Services.AddScoped<ICommonMistakeDetector, CommonMistakeDetector>();
+    builder.Services.AddScoped<IFormulaReferenceService, FormulaReferenceService>();
+    builder.Services.AddScoped<IAiTutorEnhancer, AiTutorEnhancer>();
+    builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
+    builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
+    builder.Services.AddScoped<LegacyStepExplanationAdapter>();
     builder.Services.AddScoped<AdaptiveApiFacade>();
     builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
     builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
@@ -249,8 +260,17 @@ try
         // Count-based limit (we set Size=1 per entry in InMemoryCacheService).
         options.SizeLimit = 100;
     });
+    builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
     builder.Services.AddSingleton<InMemoryCacheService>();
     builder.Services.AddSingleton<InMemoryLockService>();
+
+    var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+        ?? builder.Configuration["Redis:ConnectionString"];
+    if (!string.IsNullOrWhiteSpace(redisConnectionString))
+    {
+        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+        Log.Information("🧠 Redis connection configured for cache-backed features.");
+    }
 
     // ✅ Bug reporting services
     builder.Services.AddScoped<IBugReportService, BugReportService>();
@@ -467,6 +487,9 @@ try
 
     // Map analytics/recommendations endpoints
     app.MapAnalyticsEndpoints();
+
+    // Map explanation endpoints
+    app.MapExplanationEndpoints();
 
     // Map Hint endpoints
     app.MapHintEndpoints();
