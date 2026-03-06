@@ -53,11 +53,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
                 type: "integer",
                 nullable: true);
 
-            migrationBuilder.AddColumn<string>(
-                name: "FacultyName",
-                table: "UserProfiles",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "UserProfiles"
+                ADD COLUMN IF NOT EXISTS "FacultyName" text;
+                """);
 
             migrationBuilder.AddColumn<DateTime>(
                 name: "LastXpResetDate",
@@ -85,11 +84,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
                 type: "integer",
                 nullable: true);
 
-            migrationBuilder.AddColumn<string>(
-                name: "SchoolName",
-                table: "UserProfiles",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "UserProfiles"
+                ADD COLUMN IF NOT EXISTS "SchoolName" text;
+                """);
 
             migrationBuilder.AddColumn<int>(
                 name: "WeeklyXp",

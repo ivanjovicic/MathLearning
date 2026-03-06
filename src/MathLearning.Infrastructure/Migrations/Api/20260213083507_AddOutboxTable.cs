@@ -11,17 +11,15 @@ namespace MathLearning.Infrastructure.Migrations.Api
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "FacultyName",
-                table: "UserProfiles",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "UserProfiles"
+                ADD COLUMN IF NOT EXISTS "FacultyName" text;
+                """);
 
-            migrationBuilder.AddColumn<string>(
-                name: "SchoolName",
-                table: "UserProfiles",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "UserProfiles"
+                ADD COLUMN IF NOT EXISTS "SchoolName" text;
+                """);
 
             migrationBuilder.CreateTable(
                 name: "Outbox",
