@@ -10,6 +10,30 @@ namespace MathLearning.Api.Endpoints;
 public static class UserEndpoints
 {
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
+            // ADMIN: Get user profile by userId
+            legacyGroup.MapGet("/profile/{userId}", async (
+                ApiDbContext db,
+                string userId) =>
+            {
+                var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+                if (profile == null)
+                {
+                    return Results.NotFound(new { error = "Profile not found" });
+                }
+                return Results.Ok(new
+                {
+                    profile.UserId,
+                    profile.Username,
+                    profile.Xp,
+                    profile.Level,
+                    profile.Streak,
+                    profile.DailyXp,
+                    profile.WeeklyXp,
+                    profile.MonthlyXp
+                });
+            })
+            .WithName("AdminGetUserProfileById")
+            .WithDescription("Admin: Get user XP/level/streak by userId");
     {
         var group = app.MapGroup("/api/users")
                        .RequireAuthorization()

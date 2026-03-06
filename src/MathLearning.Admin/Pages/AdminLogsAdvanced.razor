@@ -1,0 +1,92 @@
+@page "/admin/logs-advanced"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using System.Net.Http.Json
+@using MudBlazor
+
+<PageTitle>Napredni logovi i pretraga</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Napredni prikaz logova (filtriranje, pretraga, stacktrace)</MudText>
+
+<MudPaper Class="pa-4" Elevation="4">
+    <MudTextField @bind-Value="search" Label="Pretraga" Variant="Variant.Outlined" Class="mb-4" Immediate="true" OnBlurred="OnSearch" OnKeyUp="@(e => { if (e.Key == "Enter") OnSearch(); })" />
+    <MudSelect T="string" @bind-Value="level" Label="Nivo" Variant="Variant.Outlined" Class="mb-4">
+        <MudSelectItem Value="">Svi</MudSelectItem>
+        <MudSelectItem Value="Information">Information</MudSelectItem>
+        <MudSelectItem Value="Warning">Warning</MudSelectItem>
+        <MudSelectItem Value="Error">Error</MudSelectItem>
+        <MudSelectItem Value="Fatal">Fatal</MudSelectItem>
+    </MudSelect>
+    <MudButton OnClick="OnSearch" Color="Color.Primary" Variant="Variant.Filled" Disabled="isLoading">
+        @if (isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+            <span>Pretraži</span>
+        }
+        else
+        {
+            <span>Pretraži</span>
+        }
+    </MudButton>
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
+    }
+    <MudList Dense="true" Class="mt-4">
+        @foreach (var log in logs)
+        {
+            <MudListItem>
+                <MudText>@log.Message</MudText>
+                @if (!string.IsNullOrEmpty(log.StackTrace))
+                {
+                    <MudExpansionPanels>
+                        <MudExpansionPanel Text="StackTrace">
+                            <MudText Color="Color.Error">@log.StackTrace</MudText>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+            </MudListItem>
+        }
+    </MudList>
+</MudPaper>
+
+@code {
+    private string search = string.Empty;
+    private string level = string.Empty;
+    private List<LogEntry> logs = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    private async Task OnSearch()
+    {
+        errorMessage = null;
+        isLoading = true;
+        try
+        {
+            var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
+            var url = $"/api/monitoring/logs-advanced?search={Uri.EscapeDataString(search)}&level={level}";
+            logs = await http.GetFromJsonAsync<List<LogEntry>>(url) ?? new();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Greška: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await OnSearch();
+    }
+
+    public class LogEntry
+    {
+        public string Message { get; set; } = string.Empty;
+        public string? StackTrace { get; set; }
+        public string? Level { get; set; }
+    }
+
+    [Inject] NavigationManager NavManager { get; set; } = default!;
+}

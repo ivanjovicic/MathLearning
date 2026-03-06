@@ -1,4 +1,31 @@
-﻿using MathLearning.Api.Endpoints;
+﻿    app.MapGet("/api/monitoring/logs-advanced", (string? search, string? level) =>
+    {
+        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
+        if (!System.IO.File.Exists(logPath))
+            return Results.Json(new[] { new { Message = "Log fajl nije pronađen: " + logPath } });
+        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(200).Reverse();
+        var entries = new List<object>();
+        foreach (var line in lines)
+        {
+            // Basic Serilog text format: 2026-03-06 12:01:23.456 +01:00 [Information] Message
+            var msg = line;
+            string? lvl = null;
+            string? stack = null;
+            var idx1 = line.IndexOf('[');
+            var idx2 = line.IndexOf(']');
+            if (idx1 >= 0 && idx2 > idx1)
+                lvl = line.Substring(idx1 + 1, idx2 - idx1 - 1);
+            if (!string.IsNullOrEmpty(level) && !string.Equals(lvl, level, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!string.IsNullOrEmpty(search) && !line.Contains(search, StringComparison.OrdinalIgnoreCase))
+                continue;
+            // Stack trace: lines after this one that start with whitespace
+            // (not implemented for plain text, but could be extended for JSON logs)
+            entries.Add(new { Message = msg, Level = lvl, StackTrace = stack });
+        }
+        return Results.Json(entries);
+    });
+using MathLearning.Api.Endpoints;
 using MathLearning.Api.Services;
 using MathLearning.Application.Validators;
 using MathLearning.Application.Services;
@@ -513,6 +540,31 @@ try
 
     // Map Maintenance endpoints
     app.MapMaintenanceEndpoints();
+
+
+    // Monitoring endpoints (mock, for admin UI)
+    app.MapGet("/api/monitoring/jobs", () =>
+    {
+        // TODO: Replace with real job status from Hangfire or background services
+        var now = DateTime.UtcNow;
+        return Results.Json(new[]
+        {
+            new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspešan", Timestamp = now.AddMinutes(-30) },
+            new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard ažuriran", Timestamp = now.AddMinutes(-10) },
+            new { Name = "Hangfire Worker", IsSuccess = true, LastMessage = "Svi jobovi OK", Timestamp = now.AddMinutes(-1) }
+        });
+    });
+
+
+    app.MapGet("/api/monitoring/logs", () =>
+    {
+        // Čita poslednjih 20 linija iz Serilog log fajla (ako postoji)
+        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
+        if (!System.IO.File.Exists(logPath))
+            return Results.Json(new[] { "Log fajl nije pronađen: " + logPath });
+        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(20).Reverse().ToList();
+        return Results.Json(lines);
+    });
 
     // Map Logging endpoints
     app.MapLoggingEndpoints();

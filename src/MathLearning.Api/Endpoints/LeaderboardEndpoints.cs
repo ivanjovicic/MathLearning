@@ -12,6 +12,22 @@ namespace MathLearning.Api.Endpoints
     public static class LeaderboardEndpoints
     {
         public static void MapLeaderboardEndpoints(this IEndpointRouteBuilder app)
+                    // ADMIN: Ručno dodeljivanje XP (bonus/korekcija)
+                    group.MapPost("/admin/add-xp/{userId}", async (
+                        [FromServices] XpTrackingService xpService,
+                        string userId,
+                        [FromBody] AddXpRequest req) =>
+                    {
+                        if (req == null || req.Amount == 0)
+                            return Results.BadRequest(new { error = "Nedostaje amount" });
+                        var profile = await xpService.AddXpAsync(userId, req.Amount);
+                        return Results.Ok(new { message = $"XP promenjen za korisnika {userId}", newXp = profile.Xp, newLevel = profile.Level });
+                    })
+                    .RequireAuthorization("Admin")
+                    .WithName("AdminAddXp")
+                    .WithSummary("Ručno dodeljuje XP korisniku (bonus/korekcija, admin endpoint)");
+
+                    public record AddXpRequest(int Amount);
         {
             var group = app.MapGroup("/api/leaderboard")
                            .RequireAuthorization()
@@ -246,6 +262,18 @@ namespace MathLearning.Api.Endpoints
             })
             .WithName("GetFriendsLeaderboard")
             .WithSummary("Get friends leaderboard using Redis");
+
+            // ADMIN: Reset XP for a user
+            group.MapPost("/admin/reset-xp/{userId}", async (
+                [FromServices] XpTrackingService xpService,
+                string userId) =>
+            {
+                await xpService.ResetTimeBasedXpAsync(userId);
+                return Results.Ok(new { message = $"XP reset for user {userId}" });
+            })
+            .RequireAuthorization("Admin")
+            .WithName("AdminResetXp")
+            .WithSummary("Resetuje XP (daily/weekly/monthly) za korisnika (admin endpoint)");
         }
     }
 }
