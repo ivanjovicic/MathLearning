@@ -1,38 +1,13 @@
-﻿    app.MapGet("/api/monitoring/logs-advanced", (string? search, string? level) =>
-    {
-        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
-        if (!System.IO.File.Exists(logPath))
-            return Results.Json(new[] { new { Message = "Log fajl nije pronađen: " + logPath } });
-        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(200).Reverse();
-        var entries = new List<object>();
-        foreach (var line in lines)
-        {
-            // Basic Serilog text format: 2026-03-06 12:01:23.456 +01:00 [Information] Message
-            var msg = line;
-            string? lvl = null;
-            string? stack = null;
-            var idx1 = line.IndexOf('[');
-            var idx2 = line.IndexOf(']');
-            if (idx1 >= 0 && idx2 > idx1)
-                lvl = line.Substring(idx1 + 1, idx2 - idx1 - 1);
-            if (!string.IsNullOrEmpty(level) && !string.Equals(lvl, level, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!string.IsNullOrEmpty(search) && !line.Contains(search, StringComparison.OrdinalIgnoreCase))
-                continue;
-            // Stack trace: lines after this one that start with whitespace
-            // (not implemented for plain text, but could be extended for JSON logs)
-            entries.Add(new { Message = msg, Level = lvl, StackTrace = stack });
-        }
-        return Results.Json(entries);
-    });
 using MathLearning.Api.Endpoints;
 using MathLearning.Api.Services;
 using MathLearning.Application.Validators;
 using MathLearning.Application.Services;
+using MathLearning.Core.Services;
 using FluentValidation;
 using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.EventBus.Handlers;
 using Hangfire;
@@ -43,6 +18,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
@@ -56,7 +32,7 @@ using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Text;
 
-// 📝 Configure Serilog EARLY (before builder)
+// ?? Configure Serilog EARLY (before builder)
 var startupEnvironment =
     Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
     ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
@@ -95,7 +71,7 @@ Log.Logger = loggerConfig.CreateLogger();
 
 try
 {
-    Log.Information("🚀 Starting MathLearning API");
+    Log.Information("?? Starting MathLearning API");
     Log.Information(
         "Startup environment detected: Environment={Environment} ASPNETCORE_URLS={AspNetCoreUrls} PORT={Port}",
         startupEnvironment,
@@ -104,7 +80,7 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    // 📝 Use Serilog for logging
+    // ?? Use Serilog for logging
     builder.Host.UseSerilog();
 
     // Fly.io / container safety: some platforms set PORT instead of ASPNETCORE_URLS.
@@ -113,7 +89,7 @@ try
     if (!string.IsNullOrWhiteSpace(portEnv) && int.TryParse(portEnv, out var port))
     {
         builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
-        Log.Information("🌐 Binding to PORT from environment: {Port}", port);
+        Log.Information("?? Binding to PORT from environment: {Port}", port);
     }
     else
     {
@@ -129,31 +105,31 @@ try
             if (resolved.PortFallbacks.Count > 0)
             {
                 Log.Warning(
-                    "⚠️ Auto-selected fallback URL(s) due to occupied port(s). Original={OriginalUrls} Effective={EffectiveUrls} Fallbacks={Fallbacks}",
+                    "?? Auto-selected fallback URL(s) due to occupied port(s). Original={OriginalUrls} Effective={EffectiveUrls} Fallbacks={Fallbacks}",
                     resolved.OriginalUrls ?? "<default:http://localhost:5000>",
                     resolved.Urls,
                     resolved.PortFallbacks);
             }
             else
             {
-                Log.Information("🌐 Using development URLs: {Urls}", resolved.Urls);
+                Log.Information("?? Using development URLs: {Urls}", resolved.Urls);
             }
         }
         else
         {
-            Log.Information("🌐 Using launch/profile URLs (no explicit PORT override).");
+            Log.Information("?? Using launch/profile URLs (no explicit PORT override).");
         }
     }
 
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
     if (string.IsNullOrWhiteSpace(defaultConnectionString))
     {
-        Log.Error("❌ ConnectionStrings:Default is not configured. Set Fly secret `ConnectionStrings__Default` (recommended) before deploying.");
+        Log.Error("? ConnectionStrings:Default is not configured. Set Fly secret `ConnectionStrings__Default` (recommended) before deploying.");
         throw new InvalidOperationException("Missing ConnectionStrings:Default. Configure ConnectionStrings__Default.");
     }
     else
     {
-        Log.Information("🗄️ DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
+        Log.Information("??? DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
     }
 
     // OpenTelemetry (minimal tracing)
@@ -242,12 +218,12 @@ try
         .AddEntityFrameworkStores<ApiDbContext>()
         .AddDefaultTokenProviders();
 
-    // 🔧 Add Background Services
+    // ?? Add Background Services
     builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
     builder.Services.AddHostedService<XpResetBackgroundService>();
 
-    // 🎯 Domain Events & Outbox Pattern (In‑proc via OutboxProcessor)
-    // Keep OutboxProcessor hosted service; use in‑proc event bus so background worker invokes local handlers.
+    // ?? Domain Events & Outbox Pattern (In-proc via OutboxProcessor)
+    // Keep OutboxProcessor hosted service; use in-proc event bus so background worker invokes local handlers.
     builder.Services.AddScoped<IEventBus, InProcEventBus>();
 
     // Event handlers (unchanged)
@@ -255,7 +231,7 @@ try
     builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
     builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
 
-    // ✅ SRS service
+    // ? SRS service
     builder.Services.AddScoped<ISrsService, SrsService>();
     builder.Services.AddScoped<IAdaptiveLearningService, AdaptiveLearningService>();
     builder.Services.AddScoped<IWeaknessAnalysisService, WeaknessAnalysisService>();
@@ -265,6 +241,7 @@ try
     builder.Services.AddScoped<IPracticeAnalyticsUpdater, PracticeAnalyticsUpdater>();
     builder.Services.AddScoped<IPracticeBackgroundJobs, PracticeBackgroundJobs>();
     builder.Services.AddScoped<IPracticeHangfireJobs, PracticeHangfireJobs>();
+    builder.Services.AddScoped<ISchoolLeaderboardHangfireJobs, SchoolLeaderboardHangfireJobs>();
     builder.Services.AddScoped<IPracticeSessionService, PracticeSessionService>();
     builder.Services.AddScoped<IMathReasoningGraphEngine, MathReasoningGraphEngine>();
     builder.Services.AddScoped<IStepExplanationGenerator, StepExplanationGenerator>();
@@ -296,22 +273,29 @@ try
     if (!string.IsNullOrWhiteSpace(redisConnectionString))
     {
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
-        Log.Information("🧠 Redis connection configured for cache-backed features.");
+        builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
+        Log.Information("?? Redis connection configured for cache-backed features.");
+    }
+    else
+    {
+        Log.Warning("Redis connection string is not configured. Redis-backed leaderboard endpoints will not be available.");
     }
 
-    // ✅ Bug reporting services
+    // ? Bug reporting services
     builder.Services.AddScoped<IBugReportService, BugReportService>();
     builder.Services.AddScoped<IScreenshotStorageService, LocalScreenshotStorageService>();
 
-    // 🏆 Leaderboard service
+    // ?? Leaderboard service
     // Register the DB-backed LeaderboardService in non-test environments only.
     if (!builder.Environment.IsEnvironment("Test"))
     {
         builder.Services.AddScoped<LeaderboardService>();
         builder.Services.AddScoped<MathLearning.Application.Services.ILeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
+        builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
     }
 
-    // 📈 XP tracking service
+    // ?? XP tracking service
+    builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
     builder.Services.AddScoped<XpTrackingService>();
 
     // Configure JWT Authentication
@@ -357,16 +341,16 @@ try
 
     app.Lifetime.ApplicationStarted.Register(() =>
     {
-        Log.Information("🌐 Listening on: {Urls}", string.Join(", ", app.Urls));
+        Log.Information("?? Listening on: {Urls}", string.Join(", ", app.Urls));
     });
 
-    // 🧯 Global exception handler (production-safe problem+json)
+    // ?? Global exception handler (production-safe problem+json)
     app.UseMiddleware<MathLearning.Api.Middleware.GlobalExceptionMiddleware>();
 
-    // 🔗 Correlation ID (must be BEFORE request logging so it appears on the request completion log)
+    // ?? Correlation ID (must be BEFORE request logging so it appears on the request completion log)
     app.UseMiddleware<MathLearning.Api.Middleware.CorrelationIdMiddleware>();
 
-    // 📝 Add Serilog request logging
+    // ?? Add Serilog request logging
     app.UseSerilogRequestLogging(options =>
     {
         options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
@@ -381,7 +365,10 @@ try
         };
     });
 
-    // 🗄️ Auto-migrate and seed database on startup (skip during EF design-time tools)
+    var databaseStartupSucceeded = false;
+    var userProfileIdentitySchemaReady = false;
+
+    // ??? Auto-migrate and seed database on startup (skip during EF design-time tools)
     if (!EF.IsDesignTime)
     {
         using (var scope = app.Services.CreateScope())
@@ -389,11 +376,12 @@ try
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             try
             {
-                Log.Information("🗄️ Applying database migrations...");
+                Log.Information("??? Applying database migrations...");
                 await db.Database.MigrateAsync();
-                Log.Information("✅ Database migrations applied successfully");
+                Log.Information("? Database migrations applied successfully");
+                databaseStartupSucceeded = true;
 
-                // 🔧 Manual fix for RefreshToken column length (if migration didn't apply)
+                // ?? Manual fix for RefreshToken column length (if migration didn't apply)
                 try
                 {
                     await db.Database.ExecuteSqlRawAsync(@"
@@ -410,21 +398,48 @@ try
                             END IF;
                         END $$;
                     ");
-                    Log.Information("✅ RefreshToken column length verified");
+                    Log.Information("? RefreshToken column length verified");
                 }
                 catch (Exception fixEx)
                 {
-                    Log.Warning(fixEx, "⚠️ Could not verify/fix RefreshToken column length");
+                    Log.Warning(fixEx, "?? Could not verify/fix RefreshToken column length");
                 }
 
-                Log.Information("🌱 Seeding database...");
-                await DbSeeder.SeedAsync(db);
-                Log.Information("✅ Database seeding complete");
+                userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "⚠️ Database migration/seed failed. Continuing without it (DB may not be available yet).");
+                Log.Warning(ex, "?? Database migration/seed failed. Continuing without it (DB may not be available yet).");
             }
+
+        }
+
+        var contentSeedEnabled = app.Configuration.GetValue<bool>("SeedContent:Enabled");
+
+        if (databaseStartupSucceeded && contentSeedEnabled)
+        {
+            var seedOptions = new DbContextOptionsBuilder<ApiDbContext>()
+                .UseNpgsql(
+                    defaultConnectionString,
+                    npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+                .Options;
+
+            await using var seedDb = new ApiDbContext(seedOptions);
+
+            try
+            {
+                Log.Information("?? Seeding database...");
+                await DbSeeder.SeedAsync(seedDb);
+                Log.Information("? Database seeding complete");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "?? Database seeding failed after successful migrations. Continuing startup without seed data.");
+            }
+        }
+        else if (databaseStartupSucceeded)
+        {
+            Log.Information("Content seeding skipped. Set `SeedContent__Enabled=true` to run DbSeeder on startup.");
         }
     }
 
@@ -437,7 +452,18 @@ try
 
         if (seedAdminEnabled)
         {
-            await SeedAdminUser(app);
+            if (!databaseStartupSucceeded)
+            {
+                Log.Warning("Skipping admin/test user seeding because database startup did not complete successfully.");
+            }
+            else if (!userProfileIdentitySchemaReady)
+            {
+                Log.Warning("Skipping admin/test user seeding because UserProfiles.UserId is not compatible with Identity text keys.");
+            }
+            else
+            {
+                await SeedAdminUser(app);
+            }
         }
         else
         {
@@ -466,7 +492,7 @@ try
         app.UseSwaggerUI();
         
         // Don't force HTTPS redirect in Development to avoid CORS issues
-        Log.Information("🔓 HTTPS redirection disabled in Development mode");
+        Log.Information("?? HTTPS redirection disabled in Development mode");
     }
     else
     {
@@ -549,8 +575,8 @@ try
         var now = DateTime.UtcNow;
         return Results.Json(new[]
         {
-            new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspešan", Timestamp = now.AddMinutes(-30) },
-            new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard ažuriran", Timestamp = now.AddMinutes(-10) },
+            new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspeÃƒâ€¦Ã‚Â¡an", Timestamp = now.AddMinutes(-30) },
+            new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard aÃƒâ€¦Ã‚Â¾uriran", Timestamp = now.AddMinutes(-10) },
             new { Name = "Hangfire Worker", IsSuccess = true, LastMessage = "Svi jobovi OK", Timestamp = now.AddMinutes(-1) }
         });
     });
@@ -558,12 +584,39 @@ try
 
     app.MapGet("/api/monitoring/logs", () =>
     {
-        // Čita poslednjih 20 linija iz Serilog log fajla (ako postoji)
+        // Cita poslednjih 20 linija iz Serilog log fajla (ako postoji)
         var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
         if (!System.IO.File.Exists(logPath))
-            return Results.Json(new[] { "Log fajl nije pronađen: " + logPath });
+            return Results.Json(new[] { "Log fajl nije pronaden: " + logPath });
         var lines = System.IO.File.ReadLines(logPath).Reverse().Take(20).Reverse().ToList();
         return Results.Json(lines);
+    });
+
+    app.MapGet("/api/monitoring/logs-advanced", (string? search, string? level) =>
+    {
+        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
+        if (!System.IO.File.Exists(logPath))
+            return Results.Json(new[] { new { Message = "Log fajl nije pronaden: " + logPath } });
+
+        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(200).Reverse();
+        var entries = new List<object>();
+        foreach (var line in lines)
+        {
+            var msg = line;
+            string? lvl = null;
+            string? stack = null;
+            var idx1 = line.IndexOf('[');
+            var idx2 = line.IndexOf(']');
+            if (idx1 >= 0 && idx2 > idx1)
+                lvl = line.Substring(idx1 + 1, idx2 - idx1 - 1);
+            if (!string.IsNullOrEmpty(level) && !string.Equals(lvl, level, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!string.IsNullOrEmpty(search) && !line.Contains(search, StringComparison.OrdinalIgnoreCase))
+                continue;
+            entries.Add(new { Message = msg, Level = lvl, StackTrace = stack });
+        }
+
+        return Results.Json(entries);
     });
 
     // Map Logging endpoints
@@ -588,14 +641,30 @@ try
 
     app.MapGet("/", () => Results.Ok("MathLearning API is running"));
 
-    Log.Information("✅ MathLearning API started successfully");
+    Log.Information("? MathLearning API started successfully");
 
-    if (!app.Environment.IsEnvironment("Test"))
+    if (!app.Environment.IsEnvironment("Test") && databaseStartupSucceeded)
     {
         RecurringJob.AddOrUpdate<IPracticeHangfireJobs>(
             "practice-daily-aggregation",
             job => job.DailyAggregationJob(),
             "0 2 * * *");
+        RecurringJob.AddOrUpdate<ISchoolLeaderboardHangfireJobs>(
+            "school-leaderboard-refresh",
+            job => job.RefreshAllCurrentPeriodsJob(),
+            "*/10 * * * *");
+        RecurringJob.AddOrUpdate<ISchoolLeaderboardHangfireJobs>(
+            "school-leaderboard-weekly-snapshot",
+            job => job.CaptureSnapshotJob("week"),
+            "0 * * * *");
+        RecurringJob.AddOrUpdate<ISchoolLeaderboardHangfireJobs>(
+            "school-leaderboard-monthly-snapshot",
+            job => job.CaptureSnapshotJob("month"),
+            "15 */6 * * *");
+    }
+    else if (!app.Environment.IsEnvironment("Test"))
+    {
+        Log.Warning("Skipping Hangfire recurring job registration because database startup did not complete successfully.");
     }
     
     app.Run();
@@ -610,12 +679,12 @@ catch (Exception ex)
     {
         var conflictPort = TryExtractPortFromAddressInUse(ex);
         Log.Error(
-            "❗ Port binding failed because the address is already in use. Port={Port}. Stop the process on that port or run with a different URL, e.g. ASPNETCORE_URLS=http://localhost:5180",
+            "? Port binding failed because the address is already in use. Port={Port}. Stop the process on that port or run with a different URL, e.g. ASPNETCORE_URLS=http://localhost:5180",
             conflictPort);
         LogAddressInUseDiagnostics(conflictPort);
     }
 
-    Log.Fatal(ex, "❌ Application terminated unexpectedly");
+    Log.Fatal(ex, "? Application terminated unexpectedly");
 }
 finally
 {
@@ -637,7 +706,7 @@ static async Task SeedAdminUser(WebApplication app)
             var resetResult = await userManager.ResetPasswordAsync(user, resetToken, password);
             if (!resetResult.Succeeded)
             {
-                Log.Warning($"✗ Failed to reset password for '{user.UserName}': {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
+                Log.Warning($"? Failed to reset password for '{user.UserName}': {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
             }
         }
         else
@@ -645,12 +714,12 @@ static async Task SeedAdminUser(WebApplication app)
             var addResult = await userManager.AddPasswordAsync(user, password);
             if (!addResult.Succeeded)
             {
-                Log.Warning($"✗ Failed to add password for '{user.UserName}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+                Log.Warning($"? Failed to add password for '{user.UserName}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
             }
         }
     }
     
-    // 👤 Seed Admin User
+    // ?? Seed Admin User
     var adminUsername = app.Configuration["SeedAdmin:Username"] ?? "admin";
     var adminPassword =
         app.Configuration["SeedAdmin:Password"]
@@ -681,7 +750,7 @@ static async Task SeedAdminUser(WebApplication app)
         
         if (result.Succeeded)
         {
-            Log.Information("✓ Admin user created successfully!");
+            Log.Information("? Admin user created successfully!");
             
             // Create UserProfile for admin (UserId matches Identity key)
             string adminUserId = admin.Id;
@@ -702,35 +771,35 @@ static async Task SeedAdminUser(WebApplication app)
                 };
                 db.UserProfiles.Add(adminProfile);
                 await db.SaveChangesAsync();
-                Log.Information("✓ Admin user profile created!");
+                Log.Information("? Admin user profile created!");
             }
         }
         else
         {
-            Log.Warning($"✗ Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            Log.Warning($"? Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
         }
     }
     else
     {
-        Log.Information("✓ Admin user already exists.");
+        Log.Information("? Admin user already exists.");
         if (resetAdminPasswordOnStart)
         {
             await EnsurePasswordAsync(userManager, existingAdmin, adminPassword);
-            Log.Information("✓ Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
+            Log.Information("? Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
         }
     }
     
-    // 📱 Seed Test Users for Mobile App
+    // ?? Seed Test Users for Mobile App
     // 
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // 🔑 TEST USERS (for mobile app login)
-    // ═══════════════════════════════════════════════════════════════════════════════
+    // -------------------------------------------------------------------------------
+    // ?? TEST USERS (for mobile app login)
+    // -------------------------------------------------------------------------------
     // 
     // Username: test     | Password: Test123!
     // Username: demo     | Password: Demo123!
     // Username: ivan     | Password: Ivan123!
     // 
-    // ═══════════════════════════════════════════════════════════════════════════════
+    // -------------------------------------------------------------------------------
     
     var seedTestUsersEnabled =
         app.Environment.IsDevelopment()
@@ -766,7 +835,7 @@ static async Task SeedAdminUser(WebApplication app)
             
             if (result.Succeeded)
             {
-                Log.Information($"✓ Test user '{testUser.Username}' created successfully!");
+                Log.Information($"? Test user '{testUser.Username}' created successfully!");
                 
                  // Create UserProfile
                  string userId = user.Id;
@@ -788,21 +857,21 @@ static async Task SeedAdminUser(WebApplication app)
                     };
                     db.UserProfiles.Add(userProfile);
                     await db.SaveChangesAsync();
-                    Log.Information($"✓ User profile for '{testUser.Username}' created!");
+                    Log.Information($"? User profile for '{testUser.Username}' created!");
                 }
                 else
                 {
-                    Log.Information($"✓ User profile for '{testUser.Username}' already exists.");
+                    Log.Information($"? User profile for '{testUser.Username}' already exists.");
                 }
             }
             else
             {
-                Log.Warning($"✗ Failed to create test user '{testUser.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                Log.Warning($"? Failed to create test user '{testUser.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
             }
         }
         else
         {
-            Log.Information($"✓ Test user '{testUser.Username}' already exists.");
+            Log.Information($"? Test user '{testUser.Username}' already exists.");
             await EnsurePasswordAsync(userManager, existingUser, testUser.Password);
               
             // Ensure UserProfile exists even if IdentityUser was created before
@@ -824,12 +893,12 @@ static async Task SeedAdminUser(WebApplication app)
                 };
                 db.UserProfiles.Add(userProfile);
                 await db.SaveChangesAsync();
-                Log.Information($"✓ User profile for existing user '{testUser.Username}' created!");
+                Log.Information($"? User profile for existing user '{testUser.Username}' created!");
             }
         }
     }
      
-    // 🔗 Backfill UserProfiles for Identity users (stable 1:1 mapping)
+    // ?? Backfill UserProfiles for Identity users (stable 1:1 mapping)
     var allIdentityUsers = await userManager.Users.ToListAsync();
     foreach (var u in allIdentityUsers)
     {
@@ -890,6 +959,33 @@ static string DescribeDbConnection(string connectionString)
     {
         return "<unparseable connection string>";
     }
+}
+
+static async Task<bool> HasUserProfileIdentitySchemaAsync(ApiDbContext db, CancellationToken ct = default)
+{
+    var connectionString = db.Database.GetConnectionString();
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return false;
+    }
+
+    await using var connection = new NpgsqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+
+    await using var command = connection.CreateCommand();
+    command.CommandText = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'UserProfiles'
+              AND column_name = 'UserId'
+              AND udt_name = 'text'
+        );
+        """;
+
+    var result = await command.ExecuteScalarAsync(ct);
+    return result is bool boolResult && boolResult;
 }
 
 static bool IsAddressInUse(Exception ex)

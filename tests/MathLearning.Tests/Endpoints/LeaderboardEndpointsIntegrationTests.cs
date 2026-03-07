@@ -73,4 +73,28 @@ public class LeaderboardEndpointsIntegrationTests : IClassFixture<CustomWebAppli
         Assert.NotEmpty(result.Items);
         Assert.NotNull(result.Me);
     }
+
+    [Fact]
+    public async Task GetSchoolLeaderboardDetail_ReturnsSchoolBreakdown()
+    {
+        var response = await _client.GetAsync("/api/leaderboard/schools/1?period=week&neighbors=2");
+
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<SchoolLeaderboardDetailDto>();
+        Assert.NotNull(result);
+        Assert.Equal(1, result.School.SchoolId);
+        Assert.NotEmpty(result.NearbySchools);
+    }
+
+    [Fact]
+    public async Task GetSchoolLeaderboardHistory_ReturnsSnapshots()
+    {
+        var response = await _client.GetAsync("/api/leaderboard/schools/history/1?period=week&take=10");
+
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<SchoolLeaderboardHistoryResponseDto>();
+        Assert.NotNull(result);
+        Assert.Equal(1, result.SchoolId);
+        Assert.NotEmpty(result.Points);
+    }
 }

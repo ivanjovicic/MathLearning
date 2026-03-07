@@ -51,6 +51,15 @@ public class XpResetBackgroundService : BackgroundService
         var hasDaily = await ColumnExistsAsync(db, "DailyXp");
         var hasWeekly = await ColumnExistsAsync(db, "WeeklyXp");
         var hasMonthly = await ColumnExistsAsync(db, "MonthlyXp");
+        var hasLastResetDate = await ColumnExistsAsync(db, "LastXpResetDate");
+
+        if (!hasLastResetDate)
+        {
+            _logger.LogWarning(
+                "Skipping XP reset because column {Column} is missing on UserProfiles. Apply pending migrations to repair the schema.",
+                "LastXpResetDate");
+            return;
+        }
 
         // If all XP columns exist, we can use the EF tracked entities path (simpler)
         if (hasDaily && hasWeekly && hasMonthly)

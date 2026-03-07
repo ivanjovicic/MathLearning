@@ -1,112 +1,149 @@
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
-using Microsoft.EntityFrameworkCore;
+using MathLearning.Infrastructure.Services.Leaderboard;
 
 namespace MathLearning.Infrastructure.Services;
 
-/// <summary>
-/// Helper service for updating user XP across all time periods
-/// </summary>
 public class XpTrackingService
 {
     private readonly ApiDbContext _db;
+    private readonly SchoolLeaderboardAggregationService _schoolLeaderboardAggregationService;
 
-    public XpTrackingService(ApiDbContext db)
+    public XpTrackingService(
+        ApiDbContext db,
+        SchoolLeaderboardAggregationService schoolLeaderboardAggregationService)
     {
         _db = db;
+        _schoolLeaderboardAggregationService = schoolLeaderboardAggregationService;
     }
 
-    /// <summary>
-    /// Adds XP to a user's profile across all time periods (total, daily, weekly, monthly)
-    /// </summary>
-    /// <param name="userId">User ID</param>
-    /// <param name="xpAmount">Amount of XP to add</param>
-    /// <returns>Updated user profile</returns>
-    public async Task<UserProfile> AddXpAsync(string userId, int xpAmount)
+    public async Task<UserProfile> AddXpAsync(
+        string userId,
+        int xpAmount,
+        string sourceType = "manual_adjustment",
+        string? sourceId = null,
+        string? metadataJson = null,
+        CancellationToken ct = default)
     {
-        var profile = await _db.UserProfiles.FindAsync(userId);
+        var profile = await _db.UserProfiles.FindAsync([userId], ct);
         if (profile == null)
-            throw new InvalidOperationException($"User profile not found: {userId}");
-
-        // Always add to total XP
-        profile.Xp += xpAmount;
-
-        // Initialize LastXpResetDate if not set
-        if (profile.LastXpResetDate == null)
         {
-            profile.LastXpResetDate = DateTime.UtcNow;
+            throw new InvalidOperationException($"User profile not found: {userId}");
         }
 
         var now = DateTime.UtcNow;
-        var lastReset = profile.LastXpResetDate.Value;
+        var previousTotalXp = profile.Xp;
+        var previousDailyXp = profile.DailyXp;
+        var previousWeeklyXp = profile.WeeklyXp;
+        var previousMonthlyXp = profile.MonthlyXp;
 
-        // Check if we need to reset any counters before adding XP
+        if (profile.LastXpResetDate == null)
+        {
+            profile.LastXpResetDate = now;
+        }
+
+        var lastReset = profile.LastXpResetDate.Value;
         var today = now.Date;
         var lastResetDate = lastReset.Date;
 
-        // Reset daily XP if it's a new day
-        if (lastResetDate < today)
+        var dailyReset = lastResetDate < today;
+        var weeklyReset = SchoolLeaderboardPeriods.StartOfWeekUtc(today) > SchoolLeaderboardPeriods.StartOfWeekUtc(lastResetDate);
+        var monthlyReset = lastReset.Year < today.Year || lastReset.Month < today.Month;
+
+        if (dailyReset)
         {
             profile.DailyXp = 0;
         }
 
-        // Reset weekly XP if it's a new week
-        var weekStart = GetWeekStart(today);
-        var lastWeekStart = GetWeekStart(lastResetDate);
-        if (weekStart > lastWeekStart)
+        if (weeklyReset)
         {
             profile.WeeklyXp = 0;
         }
 
-        // Reset monthly XP if it's a new month
-        if (lastReset.Year < today.Year || lastReset.Month < today.Month)
+        if (monthlyReset)
         {
             profile.MonthlyXp = 0;
         }
 
-        // Now add XP to all active periods
-        profile.DailyXp += xpAmount;
-        profile.WeeklyXp += xpAmount;
-        profile.MonthlyXp += xpAmount;
-
-        // Update reset timestamp
+        profile.Xp = Math.Max(0, profile.Xp + xpAmount);
+        profile.DailyXp = Math.Max(0, profile.DailyXp + xpAmount);
+        profile.WeeklyXp = Math.Max(0, profile.WeeklyXp + xpAmount);
+        profile.MonthlyXp = Math.Max(0, profile.MonthlyXp + xpAmount);
         profile.LastXpResetDate = now;
-
-        // Update level based on total XP (every 100 XP = 1 level)
         profile.Level = 1 + (profile.Xp / 100);
-
         profile.UpdatedAt = now;
 
-        await _db.SaveChangesAsync();
+        var effectiveTotalDelta = profile.Xp - previousTotalXp;
+        var xpEvent = new UserXpEvent
+        {
+            UserId = userId,
+            SchoolId = profile.SchoolId,
+            XpDelta = xpAmount,
+            ValidatedXpDelta = effectiveTotalDelta,
+            SourceType = string.IsNullOrWhiteSpace(sourceType) ? "manual_adjustment" : sourceType,
+            SourceId = sourceId,
+            ValidationStatus = "approved",
+            IsSuspicious = false,
+            MetadataJson = metadataJson,
+            AwardedAtUtc = now
+        };
+
+        _db.UserXpEvents.Add(xpEvent);
+
+        var change = new UserXpChangeContext(
+            TotalBefore: previousTotalXp,
+            TotalAfter: profile.Xp,
+            DailyBefore: dailyReset ? 0 : previousDailyXp,
+            DailyAfter: profile.DailyXp,
+            WeeklyBefore: weeklyReset ? 0 : previousWeeklyXp,
+            WeeklyAfter: profile.WeeklyXp,
+            MonthlyBefore: monthlyReset ? 0 : previousMonthlyXp,
+            MonthlyAfter: profile.MonthlyXp,
+            DailyReset: dailyReset,
+            WeeklyReset: weeklyReset,
+            MonthlyReset: monthlyReset,
+            OccurredAtUtc: now);
+
+        await _schoolLeaderboardAggregationService.ApplyXpChangeAsync(profile, change, ct);
+        await _db.SaveChangesAsync(ct);
 
         return profile;
     }
 
-    /// <summary>
-    /// Gets the start of the week (Monday) for a given date
-    /// </summary>
-    private static DateTime GetWeekStart(DateTime date)
+    public async Task ResetTimeBasedXpAsync(string userId, CancellationToken ct = default)
     {
-        var dayOfWeek = (int)date.DayOfWeek;
-        var daysToSubtract = dayOfWeek == 0 ? 6 : dayOfWeek - 1; // Sunday = 0, so we want to go back 6 days
-        return date.AddDays(-daysToSubtract).Date;
-    }
-
-    /// <summary>
-    /// Manually resets time-based XP for a specific user (admin function)
-    /// </summary>
-    public async Task ResetTimeBasedXpAsync(string userId)
-    {
-        var profile = await _db.UserProfiles.FindAsync(userId);
+        var profile = await _db.UserProfiles.FindAsync([userId], ct);
         if (profile == null)
+        {
             throw new InvalidOperationException($"User profile not found: {userId}");
+        }
+
+        var now = DateTime.UtcNow;
+        var previousDailyXp = profile.DailyXp;
+        var previousWeeklyXp = profile.WeeklyXp;
+        var previousMonthlyXp = profile.MonthlyXp;
 
         profile.DailyXp = 0;
         profile.WeeklyXp = 0;
         profile.MonthlyXp = 0;
-        profile.LastXpResetDate = DateTime.UtcNow;
-        profile.UpdatedAt = DateTime.UtcNow;
+        profile.LastXpResetDate = now;
+        profile.UpdatedAt = now;
 
-        await _db.SaveChangesAsync();
+        var change = new UserXpChangeContext(
+            TotalBefore: profile.Xp,
+            TotalAfter: profile.Xp,
+            DailyBefore: previousDailyXp,
+            DailyAfter: 0,
+            WeeklyBefore: previousWeeklyXp,
+            WeeklyAfter: 0,
+            MonthlyBefore: previousMonthlyXp,
+            MonthlyAfter: 0,
+            DailyReset: false,
+            WeeklyReset: false,
+            MonthlyReset: false,
+            OccurredAtUtc: now);
+
+        await _schoolLeaderboardAggregationService.ApplyXpChangeAsync(profile, change, ct);
+        await _db.SaveChangesAsync(ct);
     }
 }

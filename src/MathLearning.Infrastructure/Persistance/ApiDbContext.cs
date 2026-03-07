@@ -40,7 +40,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<MathTransformationRule> MathTransformationRules => Set<MathTransformationRule>();
     public DbSet<UserAnswerAudit> UserAnswerAudits => Set<UserAnswerAudit>();
     public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
+    public DbSet<UserXpEvent> UserXpEvents => Set<UserXpEvent>();
     public DbSet<School> Schools => Set<School>();
+    public DbSet<SchoolScoreAggregate> SchoolScoreAggregates => Set<SchoolScoreAggregate>();
+    public DbSet<SchoolRankHistory> SchoolRankHistories => Set<SchoolRankHistory>();
     public DbSet<Faculty> Faculties => Set<Faculty>();
     public DbSet<UserLearningProfile> UserLearningProfiles => Set<UserLearningProfile>();
     public DbSet<UserTopicMastery> UserTopicMasteries => Set<UserTopicMastery>();
@@ -883,6 +886,25 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.ProcessedUtc, e.OccurredUtc });
         });
 
+        builder.Entity<UserXpEvent>(entity =>
+        {
+            entity.ToTable("user_xp_events");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceId).HasMaxLength(128);
+            entity.Property(e => e.ValidationStatus).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.AwardedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.AwardedAtUtc })
+                  .HasDatabaseName("IX_user_xp_events_user_awarded_at");
+            entity.HasIndex(e => new { e.SchoolId, e.AwardedAtUtc })
+                  .HasDatabaseName("IX_user_xp_events_school_awarded_at");
+            entity.HasIndex(e => new { e.ValidationStatus, e.AwardedAtUtc })
+                  .HasDatabaseName("IX_user_xp_events_validation_awarded_at");
+        });
+
         builder.Entity<School>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -892,6 +914,52 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasIndex(e => e.Name)
                   .HasDatabaseName("IX_Schools_Name");
+        });
+
+        builder.Entity<SchoolScoreAggregate>(entity =>
+        {
+            entity.ToTable("school_scores");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Period).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.PeriodStartUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.AverageXpPerActiveStudent).HasColumnType("numeric(18,4)");
+            entity.Property(e => e.ParticipationRate).HasColumnType("numeric(8,6)");
+            entity.Property(e => e.CompositeScore).HasColumnType("numeric(18,6)");
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.SchoolId, e.Period, e.PeriodStartUtc })
+                  .IsUnique()
+                  .HasDatabaseName("UX_school_scores_school_period_start");
+            entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.Rank })
+                  .HasDatabaseName("IX_school_scores_period_start_rank");
+            entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.CompositeScore, e.SchoolId })
+                  .HasDatabaseName("IX_school_scores_period_start_score");
+
+            entity.HasOne(e => e.School)
+                  .WithMany()
+                  .HasForeignKey(e => e.SchoolId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SchoolRankHistory>(entity =>
+        {
+            entity.ToTable("school_rank_history");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Period).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.PeriodStartUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ParticipationRate).HasColumnType("numeric(8,6)");
+            entity.Property(e => e.CompositeScore).HasColumnType("numeric(18,6)");
+            entity.Property(e => e.SnapshotTimeUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.SchoolId, e.Period, e.PeriodStartUtc, e.SnapshotTimeUtc })
+                  .HasDatabaseName("IX_school_rank_history_school_period_snapshot");
+            entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.SnapshotTimeUtc, e.Rank })
+                  .HasDatabaseName("IX_school_rank_history_period_snapshot_rank");
+
+            entity.HasOne(e => e.School)
+                  .WithMany()
+                  .HasForeignKey(e => e.SchoolId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Faculty>(entity =>

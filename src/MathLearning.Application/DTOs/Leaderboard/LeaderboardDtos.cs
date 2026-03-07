@@ -59,6 +59,12 @@ public record SchoolLeaderboardItemDto
     public string SchoolName { get; init; } = string.Empty;
     public int Score { get; init; }
     public int Members { get; init; }
+    public decimal? RankingScore { get; init; }
+    public int? ActiveStudents { get; init; }
+    public int? EligibleStudents { get; init; }
+    public decimal? ParticipationRate { get; init; }
+    public decimal? AverageXpPerActiveStudent { get; init; }
+    public DateTime? UpdatedAtUtc { get; init; }
 }
 
 /// <summary>
@@ -70,4 +76,35 @@ public record SchoolLeaderboardResponseDto
     public List<SchoolLeaderboardItemDto> Items { get; init; } = new();
     public SchoolLeaderboardItemDto? MySchool { get; init; }
     public string? NextCursor { get; init; }
+    public string RankingMetric { get; init; } = "composite_score";
+    public DateTime? PeriodStartUtc { get; init; }
+    public DateTime GeneratedAtUtc { get; init; } = DateTime.UtcNow;
+    public bool IsStale { get; init; }
+}
+
+public record SchoolLeaderboardDetailDto
+{
+    public string Period { get; init; } = string.Empty;
+    public DateTime? PeriodStartUtc { get; init; }
+    public SchoolLeaderboardItemDto School { get; init; } = new();
+    public List<SchoolLeaderboardItemDto> NearbySchools { get; init; } = new();
+    public DateTime GeneratedAtUtc { get; init; } = DateTime.UtcNow;
+}
+
+public record SchoolLeaderboardHistoryPointDto
+{
+    public DateTime SnapshotTimeUtc { get; init; }
+    public int Rank { get; init; }
+    public int Score { get; init; }
+    public int ActiveStudents { get; init; }
+    public decimal ParticipationRate { get; init; }
+    public decimal CompositeScore { get; init; }
+}
+
+public record SchoolLeaderboardHistoryResponseDto
+{
+    public int SchoolId { get; init; }
+    public string Period { get; init; } = string.Empty;
+    public DateTime? PeriodStartUtc { get; init; }
+    public List<SchoolLeaderboardHistoryPointDto> Points { get; init; } = new();
 }

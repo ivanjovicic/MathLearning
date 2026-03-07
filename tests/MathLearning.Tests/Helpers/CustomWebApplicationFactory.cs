@@ -58,6 +58,7 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
                 services.AddSingleton<IRedisLeaderboardService, MockRedisLeaderboardService>();
                 // Replace the ILeaderboardService with a mock to avoid DB access in tests
                 services.AddSingleton<MathLearning.Application.Services.ILeaderboardService, MockLeaderboardService>();
+                services.AddSingleton<MathLearning.Application.Services.ISchoolLeaderboardService, MockLeaderboardService>();
             });
     }
 }

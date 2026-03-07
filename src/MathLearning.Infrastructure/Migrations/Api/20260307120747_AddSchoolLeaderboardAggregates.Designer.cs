@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260307120747_AddSchoolLeaderboardAggregates")]
+    partial class AddSchoolLeaderboardAggregates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2088,63 +2091,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_user_weakness_user_topic_subtopic");
 
                     b.ToTable("user_weakness", (string)null);
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.UserXpEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("AwardedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsSuspicious")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<int?>("SchoolId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SourceId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("SourceType")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.Property<int>("ValidatedXpDelta")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ValidationStatus")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("XpDelta")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SchoolId", "AwardedAtUtc")
-                        .HasDatabaseName("IX_user_xp_events_school_awarded_at");
-
-                    b.HasIndex("UserId", "AwardedAtUtc")
-                        .HasDatabaseName("IX_user_xp_events_user_awarded_at");
-
-                    b.HasIndex("ValidationStatus", "AwardedAtUtc")
-                        .HasDatabaseName("IX_user_xp_events_validation_awarded_at");
-
-                    b.ToTable("user_xp_events", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Infrastructure.Persistance.Models.OutboxMessage", b =>
