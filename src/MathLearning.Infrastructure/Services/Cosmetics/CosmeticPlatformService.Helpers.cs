@@ -235,6 +235,11 @@ public sealed partial class CosmeticPlatformService
         return $"catalog-{(stamp ?? DateTime.UtcNow):yyyyMMddHHmmss}";
     }
 
+    private static string BuildRewardTrackSourceRef(int seasonId, string trackType, string tierToken)
+        => string.IsNullOrWhiteSpace(tierToken)
+            ? $"reward-track:{seasonId}:{trackType}:"
+            : $"reward-track:{seasonId}:{trackType}:{tierToken}";
+
     private Task LogTelemetryAsync(
         string eventType,
         string userId,

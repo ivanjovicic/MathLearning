@@ -125,6 +125,17 @@ public sealed partial class CosmeticPlatformService
 
         var profile = await db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         var currentXp = profile?.Xp ?? 0;
+        var claimPrefix = BuildRewardTrackSourceRef(season.Id, effectiveTrackType, string.Empty);
+        var claimedRefs = await db.CosmeticRewardClaims
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                x.SourceType == CosmeticUnlockTypes.RewardTrack &&
+                x.SourceRef.StartsWith(claimPrefix))
+            .Select(x => x.SourceRef)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var claimedSet = claimedRefs.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var tiers = await db.SeasonRewardTrackEntries
             .AsNoTracking()
@@ -137,11 +148,21 @@ public sealed partial class CosmeticPlatformService
                 x.TrackType,
                 x.RewardType,
                 x.RewardPayloadJson,
-                currentXp >= x.XpRequired))
+                currentXp >= x.XpRequired,
+                claimedSet.Contains(BuildRewardTrackSourceRef(season.Id, effectiveTrackType, x.Tier.ToString())),
+                false))
             .ToListAsync(cancellationToken);
 
+        tiers = tiers
+            .Select(x => x with
+            {
+                CanClaim = x.IsUnlocked && !x.IsClaimed
+            })
+            .ToList();
+
         var currentTier = tiers.Where(x => x.IsUnlocked).Select(x => x.Tier).DefaultIfEmpty(0).Max();
-        return new RewardTrackResponseDto(season.Id, effectiveTrackType, currentXp, currentTier, tiers);
+        var claimableTierCount = tiers.Count(x => x.CanClaim);
+        return new RewardTrackResponseDto(season.Id, effectiveTrackType, currentXp, currentTier, claimableTierCount, tiers);
     }
 
     public async Task<CosmeticInventoryResponseDto> GetInventoryAsync(

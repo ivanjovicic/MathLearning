@@ -1,3 +1,4 @@
+using FluentValidation;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.Services;
 
@@ -189,6 +190,35 @@ public static class AvatarEndpoints
 
             var response = await catalogService.GetRewardTrackAsync(userId, seasonId, trackType ?? "free", cancellationToken);
             return response is null ? Results.NotFound(new { error = "Reward track not found." }) : Results.Ok(response);
+        });
+
+        group.MapPost("/reward-track/claim", async (
+            ClaimRewardTrackTierRequest request,
+            ICosmeticRewardService rewardService,
+            IValidator<ClaimRewardTrackTierRequest> validator,
+            HttpContext ctx,
+            CancellationToken cancellationToken) =>
+        {
+            var userId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var validation = await validator.ValidateAsync(request, cancellationToken);
+            if (!validation.IsValid)
+            {
+                return Results.ValidationProblem(validation.ToDictionary());
+            }
+
+            try
+            {
+                return Results.Ok(await rewardService.ClaimRewardTrackTierAsync(userId, request, cancellationToken));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
 
         group.MapGet("/avatar/{userId}", async (

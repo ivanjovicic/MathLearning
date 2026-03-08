@@ -132,7 +132,9 @@ public record RewardTrackTierDto(
     string TrackType,
     string RewardType,
     string RewardPayloadJson,
-    bool IsUnlocked
+    bool IsUnlocked,
+    bool IsClaimed,
+    bool CanClaim
 );
 
 public record RewardTrackResponseDto(
@@ -140,6 +142,7 @@ public record RewardTrackResponseDto(
     string TrackType,
     int CurrentXp,
     int CurrentTier,
+    int ClaimableTierCount,
     IReadOnlyList<RewardTrackTierDto> Tiers
 );
 
@@ -159,6 +162,21 @@ public record CosmeticRewardSourceRequest(
     string SourceType,
     string SourceRef,
     string? PayloadJson
+);
+
+public record ClaimRewardTrackTierRequest(
+    int? SeasonId,
+    string TrackType,
+    int Tier
+);
+
+public record ClaimRewardTrackTierResponse(
+    bool Success,
+    bool AlreadyClaimed,
+    int SeasonId,
+    string TrackType,
+    int Tier,
+    IReadOnlyList<CosmeticUnlockResultDto> Rewards
 );
 
 public record AdminCosmeticItemDto(

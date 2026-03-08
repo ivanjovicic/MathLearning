@@ -63,6 +63,11 @@ public interface ICosmeticRewardService
     Task<IReadOnlyList<CosmeticUnlockResultDto>> ProcessRewardSourceAsync(
         CosmeticRewardSourceRequest request,
         CancellationToken cancellationToken);
+
+    Task<ClaimRewardTrackTierResponse> ClaimRewardTrackTierAsync(
+        string userId,
+        ClaimRewardTrackTierRequest request,
+        CancellationToken cancellationToken);
 }
 
 public interface ICosmeticAdminService
@@ -73,6 +78,10 @@ public interface ICosmeticAdminService
     Task<CosmeticRewardRuleDto> UpsertRewardRuleAsync(int? id, UpsertCosmeticRewardRuleRequest request, string? actorUserId, CancellationToken cancellationToken);
     Task<IReadOnlyList<CosmeticSeasonDto>> GetAdminSeasonsAsync(CancellationToken cancellationToken);
     Task<CosmeticSeasonDto> UpsertSeasonAsync(int? id, UpsertCosmeticSeasonRequest request, string? actorUserId, CancellationToken cancellationToken);
+    Task<AdminCosmeticItemDto> ReleaseItemAsync(int id, string? actorUserId, CancellationToken cancellationToken);
+    Task<AdminCosmeticItemDto> RetireItemAsync(int id, string? actorUserId, CancellationToken cancellationToken);
+    Task<CosmeticSeasonDto> ActivateSeasonAsync(int id, string? actorUserId, CancellationToken cancellationToken);
+    Task<CosmeticSeasonDto> ArchiveSeasonAsync(int id, string? actorUserId, CancellationToken cancellationToken);
     Task<RewardTrackTierDto> UpsertRewardTrackAsync(int? id, UpsertRewardTrackEntryRequest request, string? actorUserId, CancellationToken cancellationToken);
     Task<CosmeticAnalyticsSummaryDto> GetAnalyticsSummaryAsync(CancellationToken cancellationToken);
 }

@@ -56,6 +56,8 @@ public sealed partial class CosmeticPlatformService
             .ToListAsync(cancellationToken);
 
         var results = new List<CosmeticUnlockResultDto>();
+        results.AddRange(await ProcessLegacySourceRewardsAsync(request, cancellationToken));
+
         foreach (var rule in rules)
         {
             await LogTelemetryAsync(CosmeticTelemetryEventTypes.RewardEvaluated, request.UserId, null, null, new { request.SourceType, request.SourceRef, rule = rule.Key });
@@ -89,7 +91,86 @@ public sealed partial class CosmeticPlatformService
             }
         }
 
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
         return results;
+    }
+
+    public async Task<ClaimRewardTrackTierResponse> ClaimRewardTrackTierAsync(
+        string userId,
+        ClaimRewardTrackTierRequest request,
+        CancellationToken cancellationToken)
+    {
+        var effectiveTrackType = string.IsNullOrWhiteSpace(request.TrackType)
+            ? CosmeticTrackTypes.Free
+            : request.TrackType.Trim().ToLowerInvariant();
+        var season = await ResolveSeasonAsync(request.SeasonId, cancellationToken)
+            ?? throw new InvalidOperationException("Season not found.");
+
+        var entry = await db.SeasonRewardTrackEntries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x => x.SeasonId == season.Id &&
+                     x.TrackType == effectiveTrackType &&
+                     x.Tier == request.Tier &&
+                     x.IsActive,
+                cancellationToken)
+            ?? throw new InvalidOperationException("Reward track tier not found.");
+
+        var profile = await db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken)
+            ?? throw new InvalidOperationException("Profile not found.");
+        if (profile.Xp < entry.XpRequired)
+        {
+            throw new InvalidOperationException("Reward track tier is not unlocked yet.");
+        }
+
+        var sourceRef = BuildRewardTrackSourceRef(season.Id, effectiveTrackType, entry.Tier.ToString());
+        var alreadyClaimed = await db.CosmeticRewardClaims
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.UserId == userId &&
+                     x.SourceType == CosmeticUnlockTypes.RewardTrack &&
+                     x.SourceRef == sourceRef,
+                cancellationToken);
+        if (alreadyClaimed)
+        {
+            return new ClaimRewardTrackTierResponse(true, true, season.Id, effectiveTrackType, entry.Tier, []);
+        }
+
+        if (!TryParseRewardPayload(entry.RewardPayloadJson, out var cosmeticItemId))
+        {
+            throw new InvalidOperationException("Reward track payload is invalid.");
+        }
+
+        var item = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Id == cosmeticItemId, cancellationToken)
+            ?? throw new InvalidOperationException("Reward track cosmetic item was not found.");
+
+        var reward = await TryGrantItemAsync(
+            userId,
+            item,
+            CosmeticUnlockTypes.RewardTrack,
+            sourceRef,
+            $"Reward track {effectiveTrackType} tier {entry.Tier}",
+            cancellationToken);
+
+        await LogTelemetryAsync(
+            CosmeticTelemetryEventTypes.RewardTrackClaimed,
+            userId,
+            item.Id,
+            season.Id,
+            new { seasonId = season.Id, trackType = effectiveTrackType, tier = entry.Tier });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new ClaimRewardTrackTierResponse(
+            true,
+            false,
+            season.Id,
+            effectiveTrackType,
+            entry.Tier,
+            reward is null ? [] : [reward]);
     }
 
     private async Task<List<CosmeticUnlockResultDto>> ProcessLegacyItemRewardsAsync(string userId, UserProfile profile, CancellationToken cancellationToken)
@@ -107,6 +188,43 @@ public sealed partial class CosmeticPlatformService
             }
 
             var granted = await TryGrantItemAsync(userId, item, item.UnlockType, sourceRef, $"Legacy unlock {item.UnlockType}", cancellationToken);
+            if (granted is not null)
+            {
+                results.Add(granted);
+            }
+        }
+
+        return results;
+    }
+
+    private async Task<List<CosmeticUnlockResultDto>> ProcessLegacySourceRewardsAsync(
+        CosmeticRewardSourceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var items = await db.CosmeticItems
+            .Where(x =>
+                x.IsActive &&
+                !x.IsHidden &&
+                x.UnlockType == request.SourceType &&
+                (x.ReleaseDate == null || x.ReleaseDate <= DateTime.UtcNow) &&
+                (x.RetirementDate == null || x.RetirementDate > DateTime.UtcNow))
+            .ToListAsync(cancellationToken);
+
+        var results = new List<CosmeticUnlockResultDto>();
+        foreach (var item in items)
+        {
+            if (!EvaluateLegacySourceUnlock(item, request.PayloadJson))
+            {
+                continue;
+            }
+
+            var granted = await TryGrantItemAsync(
+                request.UserId,
+                item,
+                request.SourceType,
+                request.SourceRef,
+                $"Legacy source unlock {request.SourceType}",
+                cancellationToken);
             if (granted is not null)
             {
                 results.Add(granted);
@@ -232,46 +350,133 @@ public sealed partial class CosmeticPlatformService
             using var conditionDoc = JsonDocument.Parse(rule.ConditionJson);
             var payload = payloadDoc.RootElement;
             var condition = conditionDoc.RootElement;
+            var matches = true;
 
             if (condition.TryGetProperty("level", out var levelCondition) &&
                 payload.TryGetProperty("level", out var payloadLevel) &&
                 payloadLevel.GetInt32() < levelCondition.GetInt32())
             {
-                return false;
+                matches = false;
             }
 
             if (condition.TryGetProperty("minXp", out var minXpCondition) &&
                 payload.TryGetProperty("xp", out var payloadXp) &&
                 payloadXp.GetInt32() < minXpCondition.GetInt32())
             {
-                return false;
+                matches = false;
             }
 
             if (condition.TryGetProperty("streakDays", out var streakCondition) &&
                 payload.TryGetProperty("streakDays", out var payloadStreak) &&
                 payloadStreak.GetInt32() < streakCondition.GetInt32())
             {
-                return false;
+                matches = false;
             }
 
             if (condition.TryGetProperty("badgeKey", out var badgeCondition))
             {
-                return payload.TryGetProperty("badgeKey", out var payloadBadge) &&
-                       string.Equals(payloadBadge.GetString(), badgeCondition.GetString(), StringComparison.OrdinalIgnoreCase);
+                matches = matches &&
+                          payload.TryGetProperty("badgeKey", out var payloadBadge) &&
+                          string.Equals(payloadBadge.GetString(), badgeCondition.GetString(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (condition.TryGetProperty("scope", out var scopeCondition))
+            {
+                matches = matches &&
+                          payload.TryGetProperty("scope", out var payloadScope) &&
+                          string.Equals(payloadScope.GetString(), scopeCondition.GetString(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (condition.TryGetProperty("period", out var periodCondition))
+            {
+                matches = matches &&
+                          payload.TryGetProperty("period", out var payloadPeriod) &&
+                          string.Equals(payloadPeriod.GetString(), periodCondition.GetString(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (condition.TryGetProperty("trackType", out var trackTypeCondition))
+            {
+                matches = matches &&
+                          payload.TryGetProperty("trackType", out var payloadTrackType) &&
+                          string.Equals(payloadTrackType.GetString(), trackTypeCondition.GetString(), StringComparison.OrdinalIgnoreCase);
             }
 
             if (condition.TryGetProperty("maxRank", out var maxRankCondition))
             {
-                return payload.TryGetProperty("rank", out var payloadRank) &&
-                       payloadRank.GetInt32() <= maxRankCondition.GetInt32();
+                matches = matches &&
+                          payload.TryGetProperty("rank", out var payloadRank) &&
+                          payloadRank.GetInt32() <= maxRankCondition.GetInt32();
             }
 
-            return true;
+            if (condition.TryGetProperty("maxPlacement", out var maxPlacementCondition))
+            {
+                matches = matches &&
+                          payload.TryGetProperty("placement", out var payloadPlacement) &&
+                          payloadPlacement.GetInt32() <= maxPlacementCondition.GetInt32();
+            }
+
+            if (condition.TryGetProperty("tier", out var tierCondition))
+            {
+                matches = matches &&
+                          payload.TryGetProperty("tier", out var payloadTier) &&
+                          payloadTier.GetInt32() == tierCondition.GetInt32();
+            }
+
+            return matches;
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool EvaluateLegacySourceUnlock(CosmeticItem item, string? payloadJson)
+    {
+        try
+        {
+            using var payloadDoc = string.IsNullOrWhiteSpace(payloadJson) ? JsonDocument.Parse("{}") : JsonDocument.Parse(payloadJson);
+            var payload = payloadDoc.RootElement;
+            var condition = item.UnlockCondition?.Trim();
+
+            return item.UnlockType switch
+            {
+                CosmeticUnlockTypes.Badge => payload.TryGetProperty("badgeKey", out var badgeKey) &&
+                    !string.IsNullOrWhiteSpace(condition) &&
+                    string.Equals(badgeKey.GetString(), condition, StringComparison.OrdinalIgnoreCase),
+                CosmeticUnlockTypes.Leaderboard => MatchesRankCondition(condition, payload, "rank"),
+                CosmeticUnlockTypes.SchoolCompetition => MatchesRankCondition(condition, payload, "placement"),
+                _ => false
+            };
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool MatchesRankCondition(string? condition, JsonElement payload, string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(condition) ||
+            !payload.TryGetProperty(fieldName, out var rankElement) ||
+            !rankElement.TryGetInt32(out var rank))
+        {
+            return false;
+        }
+
+        var normalized = condition.Trim().ToLowerInvariant();
+        if (normalized.StartsWith("top:", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(normalized["top:".Length..], out var threshold))
+        {
+            return rank <= threshold;
+        }
+
+        if (normalized.StartsWith("rank:", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(normalized["rank:".Length..], out var exactRank))
+        {
+            return rank == exactRank;
+        }
+
+        return false;
     }
 
     private static bool TryParseRewardPayload(string rewardPayloadJson, out int cosmeticItemId)

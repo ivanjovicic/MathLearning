@@ -75,11 +75,38 @@ public sealed partial class CosmeticPlatformService
         await WriteAuditAsync("upsert_item", actorUserId, nameof(CosmeticItem), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
 
-        return new AdminCosmeticItemDto(
-            entity.Id, entity.Key, entity.Name, entity.Category, entity.Rarity, entity.AssetPath, entity.PreviewAssetPath,
-            entity.UnlockType, entity.UnlockCondition, entity.UnlockConditionJson, entity.CompatibilityRulesJson, entity.CoinPrice,
-            entity.SeasonId, entity.IsDefault, entity.IsActive, entity.IsHidden, entity.SortOrder, entity.AssetVersion,
-            entity.ReleaseDate, entity.RetirementDate);
+        return MapAdminItem(entity);
+    }
+
+    public async Task<AdminCosmeticItemDto> ReleaseItemAsync(int id, string? actorUserId, CancellationToken cancellationToken)
+    {
+        var entity = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Cosmetic item not found.");
+        var beforeJson = JsonSerializer.Serialize(entity, SerializerOptions);
+
+        entity.IsActive = true;
+        entity.IsHidden = false;
+        entity.ReleaseDate ??= DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await WriteAuditAsync("release_item", actorUserId, nameof(CosmeticItem), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
+        await db.SaveChangesAsync(cancellationToken);
+        return MapAdminItem(entity);
+    }
+
+    public async Task<AdminCosmeticItemDto> RetireItemAsync(int id, string? actorUserId, CancellationToken cancellationToken)
+    {
+        var entity = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Cosmetic item not found.");
+        var beforeJson = JsonSerializer.Serialize(entity, SerializerOptions);
+
+        entity.IsActive = false;
+        entity.RetirementDate = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await WriteAuditAsync("retire_item", actorUserId, nameof(CosmeticItem), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
+        await db.SaveChangesAsync(cancellationToken);
+        return MapAdminItem(entity);
     }
 
     public async Task<IReadOnlyList<CosmeticRewardRuleDto>> GetRewardRulesAsync(CancellationToken cancellationToken)
@@ -160,7 +187,38 @@ public sealed partial class CosmeticPlatformService
         await WriteAuditAsync("upsert_season", actorUserId, nameof(CosmeticSeason), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
 
-        return new CosmeticSeasonDto(entity.Id, entity.Key, entity.Name, entity.Description, entity.Theme, entity.ThemeAssetPath, entity.Status, entity.StartDate, entity.EndDate, entity.IsActive, entity.Items.Count);
+        return MapSeason(entity);
+    }
+
+    public async Task<CosmeticSeasonDto> ActivateSeasonAsync(int id, string? actorUserId, CancellationToken cancellationToken)
+    {
+        var entity = await db.CosmeticSeasons.Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Cosmetic season not found.");
+        var beforeJson = JsonSerializer.Serialize(entity, SerializerOptions);
+
+        entity.Status = CosmeticSeasonStatuses.Active;
+        entity.IsActive = true;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await WriteAuditAsync("activate_season", actorUserId, nameof(CosmeticSeason), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
+        await db.SaveChangesAsync(cancellationToken);
+        return MapSeason(entity);
+    }
+
+    public async Task<CosmeticSeasonDto> ArchiveSeasonAsync(int id, string? actorUserId, CancellationToken cancellationToken)
+    {
+        var entity = await db.CosmeticSeasons.Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Cosmetic season not found.");
+        var beforeJson = JsonSerializer.Serialize(entity, SerializerOptions);
+
+        entity.Status = CosmeticSeasonStatuses.Archived;
+        entity.IsActive = false;
+        entity.ArchiveAt ??= DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await WriteAuditAsync("archive_season", actorUserId, nameof(CosmeticSeason), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
+        await db.SaveChangesAsync(cancellationToken);
+        return MapSeason(entity);
     }
 
     public async Task<RewardTrackTierDto> UpsertRewardTrackAsync(int? id, UpsertRewardTrackEntryRequest request, string? actorUserId, CancellationToken cancellationToken)
@@ -187,7 +245,7 @@ public sealed partial class CosmeticPlatformService
         await WriteAuditAsync("upsert_reward_track", actorUserId, nameof(SeasonRewardTrackEntry), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
 
-        return new RewardTrackTierDto(entity.Id, entity.Tier, entity.XpRequired, entity.TrackType, entity.RewardType, entity.RewardPayloadJson, false);
+        return new RewardTrackTierDto(entity.Id, entity.Tier, entity.XpRequired, entity.TrackType, entity.RewardType, entity.RewardPayloadJson, false, false, false);
     }
 
     public async Task<CosmeticAnalyticsSummaryDto> GetAnalyticsSummaryAsync(CancellationToken cancellationToken)
@@ -230,4 +288,25 @@ public sealed partial class CosmeticPlatformService
 
         return new CosmeticAnalyticsSummaryDto(totalOwnedItems, activeCustomizedUsers, unlockEvents7d, equipEvents7d, purchaseEvents7d, unlocksBySource, equipByCategory);
     }
+
+    private static AdminCosmeticItemDto MapAdminItem(CosmeticItem entity)
+        => new(
+            entity.Id, entity.Key, entity.Name, entity.Category, entity.Rarity, entity.AssetPath, entity.PreviewAssetPath,
+            entity.UnlockType, entity.UnlockCondition, entity.UnlockConditionJson, entity.CompatibilityRulesJson, entity.CoinPrice,
+            entity.SeasonId, entity.IsDefault, entity.IsActive, entity.IsHidden, entity.SortOrder, entity.AssetVersion,
+            entity.ReleaseDate, entity.RetirementDate);
+
+    private static CosmeticSeasonDto MapSeason(CosmeticSeason entity)
+        => new(
+            entity.Id,
+            entity.Key,
+            entity.Name,
+            entity.Description,
+            entity.Theme,
+            entity.ThemeAssetPath,
+            entity.Status,
+            entity.StartDate,
+            entity.EndDate,
+            entity.IsActive,
+            entity.Items.Count);
 }

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.DTOs.Leaderboard;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
@@ -13,11 +15,13 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
     private static readonly TimeSpan AggregateFreshnessWindow = TimeSpan.FromMinutes(5);
     private readonly ApiDbContext _db;
     private readonly ILogger<LeaderboardService> _logger;
+    private readonly ICosmeticRewardService? _cosmeticRewardService;
 
-    public LeaderboardService(ApiDbContext db, ILogger<LeaderboardService> logger)
+    public LeaderboardService(ApiDbContext db, ILogger<LeaderboardService> logger, ICosmeticRewardService? cosmeticRewardService = null)
     {
         _db = db;
         _logger = logger;
+        _cosmeticRewardService = cosmeticRewardService;
     }
 
     public async Task<LeaderboardResponseDto> GetLeaderboardAsync(
@@ -126,6 +130,32 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
                 Percentile = percentile,
                 Badges = BadgeRules.BuildBadges(scope, percentile, myRank)
             };
+
+            if (_cosmeticRewardService is not null)
+            {
+                var normalizedScope = string.IsNullOrWhiteSpace(scope) ? "global" : scope.Trim().ToLowerInvariant();
+                var normalizedPeriod = string.IsNullOrWhiteSpace(period) ? "all_time" : period.Trim().ToLowerInvariant();
+                var leaderboardSourceRef = BuildLeaderboardSourceRef(normalizedScope, normalizedPeriod);
+
+                await _cosmeticRewardService.ProcessRewardSourceAsync(
+                    new CosmeticRewardSourceRequest(
+                        userId,
+                        CosmeticUnlockTypes.Leaderboard,
+                        leaderboardSourceRef,
+                        JsonSerializer.Serialize(new { scope = normalizedScope, period = normalizedPeriod, rank = myRank, percentile })),
+                    CancellationToken.None);
+
+                foreach (var badge in meDto.Badges)
+                {
+                    await _cosmeticRewardService.ProcessRewardSourceAsync(
+                        new CosmeticRewardSourceRequest(
+                            userId,
+                            CosmeticUnlockTypes.Badge,
+                            $"badge:{normalizedScope}:{badge}",
+                            JsonSerializer.Serialize(new { scope = normalizedScope, badgeKey = badge, rank = myRank, percentile })),
+                        CancellationToken.None);
+                }
+            }
         }
 
         return new LeaderboardResponseDto
@@ -235,6 +265,17 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             if (mySchoolData is not null)
             {
                 mySchool = MapSchoolItem(mySchoolData);
+
+                if (_cosmeticRewardService is not null)
+                {
+                    await _cosmeticRewardService.ProcessRewardSourceAsync(
+                        new CosmeticRewardSourceRequest(
+                            userId,
+                            CosmeticUnlockTypes.SchoolCompetition,
+                            BuildSchoolCompetitionSourceRef(periodInfo),
+                            JsonSerializer.Serialize(new { period = periodInfo.Period, schoolId = me.SchoolId.Value, placement = mySchoolData.Rank, rank = mySchoolData.Rank })),
+                        CancellationToken.None);
+                }
             }
         }
 
@@ -706,6 +747,22 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
 
     private static decimal FromCursorScore(int score)
         => score / 10000m;
+
+    private static string BuildLeaderboardSourceRef(string scope, string period)
+    {
+        var periodKey = period switch
+        {
+            "day" => DateTime.UtcNow.ToString("yyyyMMdd"),
+            "week" => SchoolLeaderboardPeriods.StartOfWeekUtc(DateTime.UtcNow.Date).ToString("yyyyMMdd"),
+            "month" => DateTime.UtcNow.ToString("yyyyMM"),
+            _ => "all-time"
+        };
+
+        return $"leaderboard:{scope}:{period}:{periodKey}";
+    }
+
+    private static string BuildSchoolCompetitionSourceRef(SchoolLeaderboardPeriodInfo periodInfo)
+        => $"school-competition:{periodInfo.Period}:{periodInfo.PeriodStartUtc:yyyyMMdd}";
 
     private async Task<bool> HasSchoolLeaderboardSchemaAsync(string period, CancellationToken ct = default)
     {

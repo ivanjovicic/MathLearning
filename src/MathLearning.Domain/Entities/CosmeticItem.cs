@@ -21,9 +21,11 @@ public static class CosmeticUnlockTypes
     public const string Level = "level";
     public const string Badge = "badge";
     public const string Leaderboard = "leaderboard";
+    public const string SchoolCompetition = "school_competition";
     public const string Streak = "streak";
     public const string Season = "season";
     public const string Challenge = "challenge";
+    public const string RewardTrack = "reward_track";
     public const string RewardRule = "reward_rule";
     public const string AdminGrant = "admin_grant";
 }
@@ -52,6 +54,7 @@ public static class CosmeticTelemetryEventTypes
     public const string Purchase = "cosmetic_purchased";
     public const string RewardClaimDuplicateBlocked = "cosmetic_claim_duplicate_blocked";
     public const string RewardEvaluated = "cosmetic_reward_evaluated";
+    public const string RewardTrackClaimed = "reward_track_claimed";
     public const string AvatarUpdated = "avatar_updated";
 }
 
