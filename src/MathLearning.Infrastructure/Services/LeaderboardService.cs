@@ -87,6 +87,8 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             page.RemoveAt(page.Count - 1);
         }
 
+        var appearanceMap = await LoadAppearanceMapAsync(page.Select(x => x.UserId), CancellationToken.None);
+
         var firstRank = 1;
         if (page.Count > 0)
         {
@@ -95,15 +97,16 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
         }
 
         var items = page.Select((x, i) => new LeaderboardItemDto
-        {
-            Rank = firstRank + i,
-            UserId = x.UserId,
-            DisplayName = x.DisplayName ?? x.Username ?? $"User{x.UserId}",
-            AvatarUrl = x.AvatarUrl,
-            Score = x.Score,
-            StreakDays = x.Streak,
-            Level = x.Level
-        }).ToList();
+            {
+                Rank = firstRank + i,
+                UserId = x.UserId,
+                DisplayName = x.DisplayName ?? x.Username ?? $"User{x.UserId}",
+                AvatarUrl = x.AvatarUrl,
+                Appearance = appearanceMap.TryGetValue(x.UserId, out var appearance) ? appearance : null,
+                Score = x.Score,
+                StreakDays = x.Streak,
+                Level = x.Level
+            }).ToList();
 
         string? nextCursor = null;
         if (hasMore && page.Count > 0)
@@ -763,6 +766,46 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
 
     private static string BuildSchoolCompetitionSourceRef(SchoolLeaderboardPeriodInfo periodInfo)
         => $"school-competition:{periodInfo.Period}:{periodInfo.PeriodStartUtc:yyyyMMdd}";
+
+    private async Task<Dictionary<string, AvatarAppearanceDto>> LoadAppearanceMapAsync(IEnumerable<string> userIds, CancellationToken ct)
+    {
+        var ids = userIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<string, AvatarAppearanceDto>();
+        }
+
+        return await _db.UserAppearanceProjections
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, MapAppearance, ct);
+    }
+
+    private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)
+        => new(
+            new AvatarConfigDto(
+                projection.SkinId,
+                projection.HairId,
+                projection.ClothingId,
+                projection.AccessoryId,
+                projection.EmojiId,
+                projection.FrameId,
+                projection.BackgroundId,
+                projection.EffectId,
+                projection.LeaderboardDecorationId,
+                projection.AvatarVersion),
+            projection.SkinAssetPath,
+            projection.HairAssetPath,
+            projection.ClothingAssetPath,
+            projection.AccessoryAssetPath,
+            projection.EmojiAssetPath,
+            projection.FrameAssetPath,
+            projection.BackgroundAssetPath,
+            projection.EffectAssetPath,
+            projection.LeaderboardDecorationAssetPath);
 
     private async Task<bool> HasSchoolLeaderboardSchemaAsync(string period, CancellationToken ct = default)
     {

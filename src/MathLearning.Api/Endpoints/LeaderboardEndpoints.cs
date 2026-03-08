@@ -1,8 +1,10 @@
 using MathLearning.Application.DTOs.Leaderboard;
 using MathLearning.Application.DTOs.Progress;
 using MathLearning.Application.Services;
+using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Core.DTOs;
 using MathLearning.Core.Services;
+using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +24,7 @@ public static class LeaderboardEndpoints
 
         group.MapGet("", async (
             [FromServices] IRedisLeaderboardService leaderboardService,
+            [FromServices] ApiDbContext db,
             HttpContext ctx,
             string scope = "global",
             string period = "all_time",
@@ -42,6 +45,7 @@ public static class LeaderboardEndpoints
             var userRankCore = includeMe
                 ? await leaderboardService.GetUserRankAsync(new LeaderboardRequestDto { Scope = scope, Period = period, UserId = userId })
                 : null;
+            var appearanceMap = await LoadAppearanceMapAsync(db, leaderboard.Select(x => x.UserId), ctx.RequestAborted);
 
             var items = leaderboard.Select(e => new LeaderboardItemDto
             {
@@ -49,6 +53,7 @@ public static class LeaderboardEndpoints
                 UserId = e.UserId,
                 DisplayName = e.DisplayName,
                 AvatarUrl = null,
+                Appearance = appearanceMap.TryGetValue(e.UserId, out var appearance) ? appearance : null,
                 Score = e.Xp,
                 StreakDays = e.Streak,
                 Level = e.Level
@@ -173,16 +178,21 @@ public static class LeaderboardEndpoints
                 _ => enriched.OrderByDescending(x => x.Xp)
             };
 
-            var ranked = ordered
-                .Take(limit)
-                .Select((x, index) => new MathLearning.Application.DTOs.Progress.LeaderboardEntryDto(
-                    Rank: index + 1,
-                    UserId: x.UserId,
-                    DisplayName: x.DisplayName,
-                    Level: x.Level,
-                    Xp: x.Xp,
-                    WeeklyXp: x.WeeklyXp,
-                    Streak: x.Streak))
+            var rankedRows = ordered.Take(limit).ToList();
+            var appearanceMap = await LoadAppearanceMapAsync(db, rankedRows.Select(x => x.UserId), ctx.RequestAborted);
+
+            var ranked = rankedRows
+                .Select((x, index) => new
+                {
+                    rank = index + 1,
+                    userId = x.UserId,
+                    displayName = x.DisplayName,
+                    level = x.Level,
+                    xp = x.Xp,
+                    weeklyXp = x.WeeklyXp,
+                    streak = x.Streak,
+                    appearance = appearanceMap.TryGetValue(x.UserId, out var appearance) ? appearance : null
+                })
                 .ToList();
 
             return Results.Ok(ranked);
@@ -192,6 +202,7 @@ public static class LeaderboardEndpoints
 
         group.MapGet("/friends", async (
             [FromServices] IRedisLeaderboardService leaderboardService,
+            [FromServices] ApiDbContext db,
             HttpContext ctx,
             string scope = "friends",
             string period = "weekly",
@@ -211,6 +222,7 @@ public static class LeaderboardEndpoints
                 Period = period,
                 UserId = userId
             });
+            var appearanceMap = await LoadAppearanceMapAsync(db, leaderboard.Select(x => x.UserId), ctx.RequestAborted);
 
             var items = leaderboard.Select(e => new LeaderboardItemDto
             {
@@ -218,6 +230,7 @@ public static class LeaderboardEndpoints
                 UserId = e.UserId,
                 DisplayName = e.DisplayName,
                 AvatarUrl = null,
+                Appearance = appearanceMap.TryGetValue(e.UserId, out var appearance) ? appearance : null,
                 Score = e.Xp,
                 StreakDays = e.Streak,
                 Level = e.Level
@@ -275,4 +288,47 @@ public static class LeaderboardEndpoints
         .WithName("AdminResetXp")
         .WithSummary("Resetuje XP (daily/weekly/monthly) za korisnika (admin endpoint)");
     }
+
+    private static async Task<Dictionary<string, AvatarAppearanceDto>> LoadAppearanceMapAsync(
+        ApiDbContext db,
+        IEnumerable<string> userIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = userIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<string, AvatarAppearanceDto>();
+        }
+
+        return await db.UserAppearanceProjections
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, MapAppearance, cancellationToken);
+    }
+
+    private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)
+        => new(
+            new AvatarConfigDto(
+                projection.SkinId,
+                projection.HairId,
+                projection.ClothingId,
+                projection.AccessoryId,
+                projection.EmojiId,
+                projection.FrameId,
+                projection.BackgroundId,
+                projection.EffectId,
+                projection.LeaderboardDecorationId,
+                projection.AvatarVersion),
+            projection.SkinAssetPath,
+            projection.HairAssetPath,
+            projection.ClothingAssetPath,
+            projection.AccessoryAssetPath,
+            projection.EmojiAssetPath,
+            projection.FrameAssetPath,
+            projection.BackgroundAssetPath,
+            projection.EffectAssetPath,
+            projection.LeaderboardDecorationAssetPath);
 }

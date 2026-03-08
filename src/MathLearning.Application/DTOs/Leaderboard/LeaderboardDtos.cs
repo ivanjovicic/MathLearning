@@ -1,22 +1,19 @@
+using MathLearning.Application.DTOs.Cosmetics;
+
 namespace MathLearning.Application.DTOs.Leaderboard;
 
-/// <summary>
-/// Represents a single entry in the leaderboard
-/// </summary>
 public record LeaderboardItemDto
 {
     public int Rank { get; init; }
     public string UserId { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public string? AvatarUrl { get; init; }
+    public AvatarAppearanceDto? Appearance { get; init; }
     public int Score { get; init; }
     public int StreakDays { get; init; }
     public int Level { get; init; }
 }
 
-/// <summary>
-/// Context information for scoped leaderboards (school/faculty)
-/// </summary>
 public record LeaderboardContextDto
 {
     public int? SchoolId { get; init; }
@@ -25,20 +22,14 @@ public record LeaderboardContextDto
     public string? FacultyName { get; init; }
 }
 
-/// <summary>
-/// Current user's position and achievements in the leaderboard
-/// </summary>
 public record LeaderboardMeDto
 {
     public int Rank { get; init; }
     public int Score { get; init; }
-    public int Percentile { get; init; } // 1-100, where 1 = top 1%
+    public int Percentile { get; init; }
     public List<string> Badges { get; init; } = new();
 }
 
-/// <summary>
-/// Complete leaderboard response with top users and current user position
-/// </summary>
 public record LeaderboardResponseDto
 {
     public string Scope { get; init; } = string.Empty;
@@ -49,9 +40,6 @@ public record LeaderboardResponseDto
     public string? NextCursor { get; init; }
 }
 
-/// <summary>
-/// School leaderboard entry (for school vs school rankings)
-/// </summary>
 public record SchoolLeaderboardItemDto
 {
     public int Rank { get; init; }
@@ -67,9 +55,6 @@ public record SchoolLeaderboardItemDto
     public DateTime? UpdatedAtUtc { get; init; }
 }
 
-/// <summary>
-/// Response for school-level aggregate leaderboards
-/// </summary>
 public record SchoolLeaderboardResponseDto
 {
     public string Period { get; init; } = string.Empty;

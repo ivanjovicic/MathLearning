@@ -1,4 +1,6 @@
-﻿namespace MathLearning.Application.DTOs.Auth;
+using MathLearning.Application.DTOs.Cosmetics;
+
+namespace MathLearning.Application.DTOs.Auth;
 
 public record TokenRequest(
     string RefreshToken
@@ -16,7 +18,6 @@ public record RevokeTokenRequest(
     string RefreshToken
 );
 
-// 📱 Mobile Registration DTOs
 public record MobileRegisterRequest(
     string Username,
     string Email,
@@ -43,5 +44,7 @@ public record UserProfileDto(
     int Streak,
     DateTime CreatedAt,
     string? SchoolName = null,
-    string? FacultyName = null
+    string? FacultyName = null,
+    string? AvatarUrl = null,
+    AvatarAppearanceDto? Appearance = null
 );
