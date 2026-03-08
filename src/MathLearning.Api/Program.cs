@@ -5,6 +5,7 @@ using MathLearning.Application.Services;
 using MathLearning.Core.Services;
 using FluentValidation;
 using MathLearning.Domain.Events;
+using MathLearning.Infrastructure;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.Leaderboard;
@@ -215,6 +216,7 @@ try
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequiredLength = 6;
     })
+        .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<ApiDbContext>()
         .AddDefaultTokenProviders();
 
@@ -264,6 +266,8 @@ try
         // Count-based limit (we set Size=1 per entry in InMemoryCacheService).
         options.SizeLimit = 100;
     });
+    builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddControllers();
     builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
     builder.Services.AddSingleton<InMemoryCacheService>();
     builder.Services.AddSingleton<InMemoryLockService>();
@@ -319,7 +323,14 @@ try
             };
         });
 
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy(DesignTokenSecurity.AdminPolicy, policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireRole(DesignTokenSecurity.AdminRole);
+        });
+    });
 
     // Configure CORS
     builder.Services.AddCors(options =>
@@ -406,6 +417,9 @@ try
                 }
 
                 userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
+
+                var designTokenQueryService = scope.ServiceProvider.GetRequiredService<IDesignTokenQueryService>();
+                await designTokenQueryService.EnsureInitializedAsync(CancellationToken.None);
             }
             catch (Exception ex)
             {
@@ -530,12 +544,16 @@ try
 
     // Map Auth endpoints (no auth required)
     app.MapAuthEndpoints();
+    app.MapControllers();
 
     // Map User endpoints
     app.MapUserEndpoints();
 
     // Map Quiz endpoints
     app.MapQuizEndpoints();
+
+    // Map offline sync endpoints
+    app.MapSyncEndpoints();
 
     // Map Adaptive endpoints
     app.MapAdaptiveEndpoints();
@@ -563,6 +581,9 @@ try
 
     // Map Leaderboard endpoints
     app.MapLeaderboardEndpoints();
+
+    // Map Avatar/Cosmetic endpoints
+    app.MapAvatarEndpoints();
 
     // Map Maintenance endpoints
     app.MapMaintenanceEndpoints();
@@ -696,7 +717,13 @@ static async Task SeedAdminUser(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+    if (!await roleManager.RoleExistsAsync(DesignTokenSecurity.AdminRole))
+    {
+        await roleManager.CreateAsync(new IdentityRole(DesignTokenSecurity.AdminRole));
+    }
 
     static async Task EnsurePasswordAsync(UserManager<IdentityUser> userManager, IdentityUser user, string password)
     {
@@ -751,6 +778,7 @@ static async Task SeedAdminUser(WebApplication app)
         if (result.Succeeded)
         {
             Log.Information("? Admin user created successfully!");
+            await userManager.AddToRoleAsync(admin, DesignTokenSecurity.AdminRole);
             
             // Create UserProfile for admin (UserId matches Identity key)
             string adminUserId = admin.Id;
@@ -782,6 +810,10 @@ static async Task SeedAdminUser(WebApplication app)
     else
     {
         Log.Information("? Admin user already exists.");
+        if (!await userManager.IsInRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole))
+        {
+            await userManager.AddToRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole);
+        }
         if (resetAdminPasswordOnStart)
         {
             await EnsurePasswordAsync(userManager, existingAdmin, adminPassword);

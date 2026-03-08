@@ -58,6 +58,21 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
     public DbSet<PracticeSessionItem> PracticeSessionItems => Set<PracticeSessionItem>();
     public DbSet<MasteryState> MasteryStates => Set<MasteryState>();
+    public DbSet<DesignTokenVersion> DesignTokenVersions => Set<DesignTokenVersion>();
+    public DbSet<DesignTokenSet> DesignTokenSets => Set<DesignTokenSet>();
+    public DbSet<DesignToken> DesignTokens => Set<DesignToken>();
+    public DbSet<DesignTokenAuditLog> DesignTokenAuditLogs => Set<DesignTokenAuditLog>();
+    public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
+    public DbSet<SyncEventLog> SyncEventLogs => Set<SyncEventLog>();
+    public DbSet<DeviceSyncState> DeviceSyncStates => Set<DeviceSyncState>();
+    public DbSet<ServerSyncEvent> ServerSyncEvents => Set<ServerSyncEvent>();
+    public DbSet<SyncDeadLetter> SyncDeadLetters => Set<SyncDeadLetter>();
+
+    // 🎨 Cosmetic system
+    public DbSet<CosmeticItem> CosmeticItems => Set<CosmeticItem>();
+    public DbSet<CosmeticSeason> CosmeticSeasons => Set<CosmeticSeason>();
+    public DbSet<UserCosmeticInventory> UserCosmeticInventories => Set<UserCosmeticInventory>();
+    public DbSet<UserAvatarConfig> UserAvatarConfigs => Set<UserAvatarConfig>();
 
     // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -65,6 +80,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.ApplyConfigurationsFromAssembly(typeof(ApiDbContext).Assembly);
 
         builder.Entity<Question>(entity =>
         {
@@ -174,6 +190,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Answer).IsRequired();
+            entity.Property(e => e.DeviceId).HasMaxLength(128);
             entity.HasOne(e => e.Question)
                   .WithMany()
                   .HasForeignKey(e => e.QuestionId)
@@ -197,6 +214,12 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_UserAnswers_User_Answered");
             entity.HasIndex(e => new { e.UserId, e.IsCorrect })
                   .HasDatabaseName("IX_UserAnswers_User_Correct");
+            entity.HasIndex(e => e.SyncOperationId)
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserAnswers_SyncOperationId");
+            entity.HasIndex(e => new { e.UserId, e.DeviceId, e.ClientSequence })
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserAnswers_User_Device_Sequence");
         });
 
         builder.Entity<UserQuestionStat>(entity =>
@@ -903,6 +926,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_user_xp_events_school_awarded_at");
             entity.HasIndex(e => new { e.ValidationStatus, e.AwardedAtUtc })
                   .HasDatabaseName("IX_user_xp_events_validation_awarded_at");
+            entity.HasIndex(e => new { e.UserId, e.SourceType, e.SourceId })
+                  .IsUnique()
+                  .HasFilter("\"SourceId\" IS NOT NULL")
+                  .HasDatabaseName("UX_user_xp_events_user_source");
         });
 
         builder.Entity<School>(entity =>
@@ -972,6 +999,99 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasIndex(e => e.Name)
                   .HasDatabaseName("IX_Faculties_Name");
+        });
+
+        // ─── 🎨 Cosmetic System ───
+
+        builder.Entity<CosmeticSeason>(entity =>
+        {
+            entity.ToTable("cosmetic_seasons");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.ThemeAssetPath).HasMaxLength(500);
+            entity.Property(e => e.StartDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.EndDate).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.IsActive)
+                  .HasDatabaseName("IX_cosmetic_seasons_active");
+            entity.HasIndex(e => new { e.StartDate, e.EndDate })
+                  .HasDatabaseName("IX_cosmetic_seasons_dates");
+        });
+
+        builder.Entity<CosmeticItem>(entity =>
+        {
+            entity.ToTable("cosmetic_items");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Rarity).IsRequired().HasMaxLength(20).HasDefaultValue("common");
+            entity.Property(e => e.AssetPath).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.PreviewAssetPath).HasMaxLength(500);
+            entity.Property(e => e.UnlockType).IsRequired().HasMaxLength(50).HasDefaultValue("default");
+            entity.Property(e => e.UnlockCondition).HasMaxLength(500);
+            entity.Property(e => e.ReleaseDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RetirementDate).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                  .WithMany(s => s.Items)
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.Category)
+                  .HasDatabaseName("IX_cosmetic_items_category");
+            entity.HasIndex(e => e.Rarity)
+                  .HasDatabaseName("IX_cosmetic_items_rarity");
+            entity.HasIndex(e => new { e.Category, e.Rarity })
+                  .HasDatabaseName("IX_cosmetic_items_category_rarity");
+            entity.HasIndex(e => e.SeasonId)
+                  .HasDatabaseName("IX_cosmetic_items_season");
+            entity.HasIndex(e => e.IsDefault)
+                  .HasDatabaseName("IX_cosmetic_items_default");
+        });
+
+        builder.Entity<UserCosmeticInventory>(entity =>
+        {
+            entity.ToTable("user_cosmetic_inventory");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.UnlockedAt).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.CosmeticItem)
+                  .WithMany()
+                  .HasForeignKey(e => e.CosmeticItemId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Each user can own an item only once
+            entity.HasIndex(e => new { e.UserId, e.CosmeticItemId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_user_cosmetic_inventory_user_item");
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("IX_user_cosmetic_inventory_user");
+            entity.HasIndex(e => new { e.UserId, e.Source })
+                  .HasDatabaseName("IX_user_cosmetic_inventory_user_source");
+        });
+
+        builder.Entity<UserAvatarConfig>(entity =>
+        {
+            entity.ToTable("user_avatar_configs");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+
+            entity.HasOne<UserProfile>()
+                  .WithOne()
+                  .HasForeignKey<UserAvatarConfig>(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Skin).WithMany().HasForeignKey(e => e.SkinId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Hair).WithMany().HasForeignKey(e => e.HairId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Clothing).WithMany().HasForeignKey(e => e.ClothingId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Accessory).WithMany().HasForeignKey(e => e.AccessoryId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Emoji).WithMany().HasForeignKey(e => e.EmojiId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Frame).WithMany().HasForeignKey(e => e.FrameId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Background).WithMany().HasForeignKey(e => e.BackgroundId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Effect).WithMany().HasForeignKey(e => e.EffectId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
