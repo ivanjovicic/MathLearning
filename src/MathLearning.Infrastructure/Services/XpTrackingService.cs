@@ -1,6 +1,8 @@
 using MathLearning.Domain.Entities;
+using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Leaderboard;
+using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Infrastructure.Services;
 
@@ -8,13 +10,16 @@ public class XpTrackingService
 {
     private readonly ApiDbContext _db;
     private readonly SchoolLeaderboardAggregationService _schoolLeaderboardAggregationService;
+    private readonly ICosmeticRewardService? _cosmeticRewardService;
 
     public XpTrackingService(
         ApiDbContext db,
-        SchoolLeaderboardAggregationService schoolLeaderboardAggregationService)
+        SchoolLeaderboardAggregationService schoolLeaderboardAggregationService,
+        ICosmeticRewardService? cosmeticRewardService = null)
     {
         _db = db;
         _schoolLeaderboardAggregationService = schoolLeaderboardAggregationService;
+        _cosmeticRewardService = cosmeticRewardService;
     }
 
     public async Task<UserProfile> AddXpAsync(
@@ -29,6 +34,31 @@ public class XpTrackingService
         if (profile == null)
         {
             throw new InvalidOperationException($"User profile not found: {userId}");
+        }
+
+        var effectiveSourceType = string.IsNullOrWhiteSpace(sourceType) ? "manual_adjustment" : sourceType;
+        if (!string.IsNullOrWhiteSpace(sourceId))
+        {
+            var existingTrackedEvent = _db.UserXpEvents.Local.FirstOrDefault(x =>
+                x.UserId == userId &&
+                x.SourceType == effectiveSourceType &&
+                x.SourceId == sourceId);
+            if (existingTrackedEvent is not null)
+            {
+                return profile;
+            }
+
+            var existingPersistedEvent = await _db.UserXpEvents
+                .AsNoTracking()
+                .AnyAsync(
+                    x => x.UserId == userId &&
+                         x.SourceType == effectiveSourceType &&
+                         x.SourceId == sourceId,
+                    ct);
+            if (existingPersistedEvent)
+            {
+                return profile;
+            }
         }
 
         var now = DateTime.UtcNow;
@@ -80,7 +110,7 @@ public class XpTrackingService
             SchoolId = profile.SchoolId,
             XpDelta = xpAmount,
             ValidatedXpDelta = effectiveTotalDelta,
-            SourceType = string.IsNullOrWhiteSpace(sourceType) ? "manual_adjustment" : sourceType,
+            SourceType = effectiveSourceType,
             SourceId = sourceId,
             ValidationStatus = "approved",
             IsSuspicious = false,
@@ -106,6 +136,10 @@ public class XpTrackingService
 
         await _schoolLeaderboardAggregationService.ApplyXpChangeAsync(profile, change, ct);
         await _db.SaveChangesAsync(ct);
+        if (_cosmeticRewardService is not null)
+        {
+            await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
+        }
 
         return profile;
     }
@@ -145,5 +179,9 @@ public class XpTrackingService
 
         await _schoolLeaderboardAggregationService.ApplyXpChangeAsync(profile, change, ct);
         await _db.SaveChangesAsync(ct);
+        if (_cosmeticRewardService is not null)
+        {
+            await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
+        }
     }
 }

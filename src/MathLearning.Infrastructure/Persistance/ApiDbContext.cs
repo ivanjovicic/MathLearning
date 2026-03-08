@@ -73,6 +73,12 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<CosmeticSeason> CosmeticSeasons => Set<CosmeticSeason>();
     public DbSet<UserCosmeticInventory> UserCosmeticInventories => Set<UserCosmeticInventory>();
     public DbSet<UserAvatarConfig> UserAvatarConfigs => Set<UserAvatarConfig>();
+    public DbSet<CosmeticRewardRule> CosmeticRewardRules => Set<CosmeticRewardRule>();
+    public DbSet<CosmeticRewardClaim> CosmeticRewardClaims => Set<CosmeticRewardClaim>();
+    public DbSet<SeasonRewardTrackEntry> SeasonRewardTrackEntries => Set<SeasonRewardTrackEntry>();
+    public DbSet<UserAppearanceProjection> UserAppearanceProjections => Set<UserAppearanceProjection>();
+    public DbSet<CosmeticTelemetryEvent> CosmeticTelemetryEvents => Set<CosmeticTelemetryEvent>();
+    public DbSet<CosmeticAuditLog> CosmeticAuditLogs => Set<CosmeticAuditLog>();
 
     // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -1007,11 +1013,21 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.ToTable("cosmetic_seasons");
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(64);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Theme).HasMaxLength(128);
             entity.Property(e => e.ThemeAssetPath).HasMaxLength(500);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(32);
             entity.Property(e => e.StartDate).HasColumnType("timestamp with time zone");
             entity.Property(e => e.EndDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RewardLockAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ArchiveAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.Key)
+                  .IsUnique()
+                  .HasDatabaseName("UX_cosmetic_seasons_key");
 
             entity.HasIndex(e => e.IsActive)
                   .HasDatabaseName("IX_cosmetic_seasons_active");
@@ -1023,6 +1039,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.ToTable("cosmetic_items");
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(64);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
             entity.Property(e => e.Rarity).IsRequired().HasMaxLength(20).HasDefaultValue("common");
@@ -1030,13 +1047,24 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.PreviewAssetPath).HasMaxLength(500);
             entity.Property(e => e.UnlockType).IsRequired().HasMaxLength(50).HasDefaultValue("default");
             entity.Property(e => e.UnlockCondition).HasMaxLength(500);
+            entity.Property(e => e.UnlockConditionJson).HasColumnType("jsonb");
+            entity.Property(e => e.CompatibilityRulesJson).HasColumnType("jsonb");
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.AssetVersion).IsRequired().HasMaxLength(32).HasDefaultValue("1");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
             entity.Property(e => e.ReleaseDate).HasColumnType("timestamp with time zone");
             entity.Property(e => e.RetirementDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
             entity.HasOne(e => e.Season)
                   .WithMany(s => s.Items)
                   .HasForeignKey(e => e.SeasonId)
                   .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.Key)
+                  .IsUnique()
+                  .HasDatabaseName("UX_cosmetic_items_key");
 
             entity.HasIndex(e => e.Category)
                   .HasDatabaseName("IX_cosmetic_items_category");
@@ -1048,6 +1076,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_cosmetic_items_season");
             entity.HasIndex(e => e.IsDefault)
                   .HasDatabaseName("IX_cosmetic_items_default");
+            entity.HasIndex(e => new { e.IsActive, e.ReleaseDate })
+                  .HasDatabaseName("IX_cosmetic_items_active_release");
         });
 
         builder.Entity<UserCosmeticInventory>(entity =>
@@ -1056,7 +1086,11 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
             entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.SourceRef).HasMaxLength(128);
+            entity.Property(e => e.GrantReason).HasMaxLength(256);
+            entity.Property(e => e.AssetVersion).IsRequired().HasMaxLength(32).HasDefaultValue("1");
             entity.Property(e => e.UnlockedAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RevokedAt).HasColumnType("timestamp with time zone");
 
             entity.HasOne(e => e.CosmeticItem)
                   .WithMany()
@@ -1071,6 +1105,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_user_cosmetic_inventory_user");
             entity.HasIndex(e => new { e.UserId, e.Source })
                   .HasDatabaseName("IX_user_cosmetic_inventory_user_source");
+            entity.HasIndex(e => new { e.Source, e.SourceRef })
+                  .HasDatabaseName("IX_user_cosmetic_inventory_source_ref");
         });
 
         builder.Entity<UserAvatarConfig>(entity =>
@@ -1078,6 +1114,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.ToTable("user_avatar_configs");
             entity.HasKey(e => e.UserId);
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
             entity.HasOne<UserProfile>()
                   .WithOne()
@@ -1092,6 +1129,106 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasOne(e => e.Frame).WithMany().HasForeignKey(e => e.FrameId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Background).WithMany().HasForeignKey(e => e.BackgroundId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Effect).WithMany().HasForeignKey(e => e.EffectId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.LeaderboardDecoration).WithMany().HasForeignKey(e => e.LeaderboardDecorationId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<CosmeticRewardRule>(entity =>
+        {
+            entity.ToTable("cosmetic_reward_rules");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.ConditionJson).HasColumnType("jsonb");
+            entity.Property(e => e.RewardType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.RewardPayloadJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.Key)
+                .IsUnique()
+                .HasDatabaseName("UX_cosmetic_reward_rules_key");
+            entity.HasIndex(e => new { e.SourceType, e.IsActive, e.Priority })
+                .HasDatabaseName("IX_cosmetic_reward_rules_source_active_priority");
+        });
+
+        builder.Entity<CosmeticRewardClaim>(entity =>
+        {
+            entity.ToTable("cosmetic_reward_claims");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.RewardKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceRef).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.CosmeticItem)
+                .WithMany()
+                .HasForeignKey(e => e.CosmeticItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.RewardKey, e.SourceRef })
+                .IsUnique()
+                .HasDatabaseName("UX_cosmetic_reward_claims_user_reward_source");
+            entity.HasIndex(e => new { e.UserId, e.ClaimedAtUtc })
+                .HasDatabaseName("IX_cosmetic_reward_claims_user_claimed_at");
+        });
+
+        builder.Entity<SeasonRewardTrackEntry>(entity =>
+        {
+            entity.ToTable("season_reward_tracks");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TrackType).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.RewardType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.RewardPayloadJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                .WithMany(x => x.RewardTrackEntries)
+                .HasForeignKey(e => e.SeasonId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.SeasonId, e.TrackType, e.Tier })
+                .IsUnique()
+                .HasDatabaseName("UX_season_reward_tracks_season_track_tier");
+        });
+
+        builder.Entity<UserAppearanceProjection>(entity =>
+        {
+            entity.ToTable("user_appearance_projection");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).HasMaxLength(450);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+        });
+
+        builder.Entity<CosmeticTelemetryEvent>(entity =>
+        {
+            entity.ToTable("cosmetic_telemetry_events");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.EventType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.OccurredAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.EventType, e.OccurredAtUtc })
+                .HasDatabaseName("IX_cosmetic_telemetry_events_type_occurred");
+            entity.HasIndex(e => new { e.UserId, e.OccurredAtUtc })
+                .HasDatabaseName("IX_cosmetic_telemetry_events_user_occurred");
+        });
+
+        builder.Entity<CosmeticAuditLog>(entity =>
+        {
+            entity.ToTable("cosmetic_audit_log");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.ActorUserId).HasMaxLength(450);
+            entity.Property(e => e.EntityType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.EntityId).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.BeforeJson).HasColumnType("jsonb");
+            entity.Property(e => e.AfterJson).HasColumnType("jsonb");
+            entity.Property(e => e.OccurredAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAtUtc })
+                .HasDatabaseName("IX_cosmetic_audit_log_entity_occurred");
         });
     }
 }

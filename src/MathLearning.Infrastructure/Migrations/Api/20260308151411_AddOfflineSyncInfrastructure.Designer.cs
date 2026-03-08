@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260308151411_AddOfflineSyncInfrastructure")]
+    partial class AddOfflineSyncInfrastructure
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1690,9 +1693,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("LastFailedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("LastRedriveAttemptAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid>("OperationId")
                         .HasColumnType("uuid");
 
@@ -1708,18 +1708,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("RetryCount")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("ResolvedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ResolutionNote")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
                     b.Property<long?>("SyncEventLogId")
                         .HasColumnType("bigint");
 
@@ -1733,9 +1721,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasIndex("OperationId")
                         .IsUnique()
                         .HasDatabaseName("UX_SyncDeadLetter_OperationId");
-
-                    b.HasIndex("Status", "LastFailedAtUtc")
-                        .HasDatabaseName("IX_SyncDeadLetter_Status_LastFailedAtUtc");
 
                     b.HasIndex("UserId", "CreatedAtUtc")
                         .HasDatabaseName("IX_SyncDeadLetter_User_CreatedAtUtc");

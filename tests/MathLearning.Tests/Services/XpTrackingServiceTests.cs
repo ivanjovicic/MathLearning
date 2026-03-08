@@ -28,7 +28,7 @@ public class XpTrackingServiceTests
         await db.SaveChangesAsync();
 
         var aggregationService = new SchoolLeaderboardAggregationService(db);
-        var xpTrackingService = new XpTrackingService(db, aggregationService);
+        var xpTrackingService = new XpTrackingService(db, aggregationService, null);
 
         await xpTrackingService.AddXpAsync("1", 25, "quiz_completion", "quiz-1");
 
@@ -52,5 +52,23 @@ public class XpTrackingServiceTests
         Assert.Equal(1, weekly.ActiveStudents);
         Assert.Equal(1, weekly.EligibleStudents);
         Assert.Equal(1, weekly.Rank);
+    }
+
+    [Fact]
+    public async Task AddXpAsync_DoesNotDuplicateWhenSourceIsReplayed()
+    {
+        var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var aggregationService = new SchoolLeaderboardAggregationService(db);
+        var xpTrackingService = new XpTrackingService(db, aggregationService, null);
+
+        await xpTrackingService.AddXpAsync("1", 10, "sync_submit_answer", "op-1");
+        await xpTrackingService.AddXpAsync("1", 10, "sync_submit_answer", "op-1");
+
+        var profile = await db.UserProfiles.SingleAsync(x => x.UserId == "1");
+        var xpEvents = await db.UserXpEvents.ToListAsync();
+
+        Assert.Equal(10, profile.Xp);
+        Assert.Single(xpEvents);
+        Assert.Equal("op-1", xpEvents[0].SourceId);
     }
 }

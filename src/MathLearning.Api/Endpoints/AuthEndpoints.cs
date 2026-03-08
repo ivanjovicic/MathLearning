@@ -115,7 +115,7 @@ public static class AuthEndpoints
                 await db.SaveChangesAsync();
 
                 // Generate tokens
-                var accessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
+                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
                 var device = ctx.Request.Headers.UserAgent.ToString();
                 var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
@@ -201,7 +201,7 @@ public static class AuthEndpoints
                 logger.LogInformation($"User authenticated successfully: {request.Username}, UserId: {userId}");
 
                 // Generate Access Token (short-lived: 30 min)
-                var accessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
+                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
                 // Generate Refresh Token (long-lived: 14 days)
                 var device = ctx.Request.Headers.UserAgent.ToString();
@@ -265,7 +265,7 @@ public static class AuthEndpoints
                 RefreshTokenService.RevokeToken(refreshToken);
 
                 // Generate new tokens
-                var newAccessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
+                var newAccessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
                 var device = ctx.Request.Headers.UserAgent.ToString();
                 var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
@@ -381,7 +381,7 @@ public static class AuthEndpoints
                 string userId = user.Id;
 
                 // Generate tokens
-                var accessToken = GenerateJwtToken(user, config, expiryMinutes: 30);
+                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
                 var device = ctx.Request.Headers.UserAgent.ToString();
                 var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
@@ -412,7 +412,11 @@ public static class AuthEndpoints
         })).WithName("TestAuth");
     }
 
-    private static string GenerateJwtToken(IdentityUser user, IConfiguration config, int expiryMinutes = 30)
+    private static async Task<string> GenerateJwtTokenAsync(
+        IdentityUser user,
+        UserManager<IdentityUser> userManager,
+        IConfiguration config,
+        int expiryMinutes = 30)
     {
         var jwtSettings = config.GetSection("JwtSettings");
         var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
@@ -424,13 +428,19 @@ public static class AuthEndpoints
 
         string userId = user.Id;
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? ""),
             new Claim("userId", userId),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        var roles = await userManager.GetRolesAsync(user);
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,

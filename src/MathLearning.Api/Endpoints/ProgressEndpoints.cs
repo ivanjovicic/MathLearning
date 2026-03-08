@@ -1,8 +1,9 @@
-﻿using MathLearning.Application.DTOs.Progress;
+using System.Text.Json;
+using MathLearning.Application.DTOs.Progress;
+using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -14,9 +15,9 @@ public static class ProgressEndpoints
                        .RequireAuthorization()
                        .WithTags("Progress");
 
-        // 📊 OVERVIEW
         group.MapGet("/overview", async (
             ApiDbContext db,
+            ICosmeticRewardService cosmeticRewardService,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -39,7 +40,7 @@ public static class ProgressEndpoints
                 ? 0
                 : Math.Round((double)totalCorrect / totalAttempts * 100, 2);
 
-                        var profile = await db.UserProfiles
+            var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -58,6 +59,7 @@ public static class ProgressEndpoints
                         roll.StreakAfter
                     );
                     await db.SaveChangesAsync();
+                    await cosmeticRewardService.ProcessProgressRewardsAsync(userId, ctx.RequestAborted);
                 }
             }
 
@@ -74,7 +76,6 @@ public static class ProgressEndpoints
             ));
         });
 
-        // ⚠️ WEAK AREAS
         group.MapGet("/weak-areas", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -91,7 +92,7 @@ public static class ProgressEndpoints
                 group new { s, st } by new { st.Id, st.Name } into g
                 let attempts = g.Sum(x => x.s.Attempts)
                 let correct = g.Sum(x => x.s.CorrectAttempts)
-                where attempts >= 5 // filter šuma
+                where attempts >= 5
                 select new WeakAreaDto(
                     g.Key.Id,
                     g.Key.Name,
@@ -105,7 +106,6 @@ public static class ProgressEndpoints
             return Results.Ok(weakAreas);
         });
 
-        // 📚 TOPIC PROGRESS
         group.MapGet("/topics", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -152,7 +152,6 @@ public static class ProgressEndpoints
 
                 if (i == 0)
                 {
-                    // Prva lekcija je uvek otključana
                     unlocked = true;
                 }
                 else
@@ -176,10 +175,10 @@ public static class ProgressEndpoints
             return Results.Ok(result);
         });
 
-        // 🔄 SYNC (legacy mobile endpoint)
         group.MapPost("/sync", async (
             JsonElement payload,
             ApiDbContext db,
+            ICosmeticRewardService cosmeticRewardService,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -210,6 +209,7 @@ public static class ProgressEndpoints
             }
 
             await db.SaveChangesAsync();
+            await cosmeticRewardService.ProcessProgressRewardsAsync(userId, ctx.RequestAborted);
 
             return Results.Ok(new
             {
@@ -252,5 +252,3 @@ public static class ProgressEndpoints
         return !string.IsNullOrWhiteSpace(value);
     }
 }
-
-
