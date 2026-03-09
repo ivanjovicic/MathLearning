@@ -7,8 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace MathLearning.Infrastructure.Services;
 
-public class XpTrackingService
+public class XpTrackingService : IXpTrackingService
 {
+    private const int MaxSingleEventXp = 500;
+    private const int MaxXpPerHour = 2000;
+    private static readonly TimeSpan RateLimitWindow = TimeSpan.FromHours(1);
+
     private readonly ApiDbContext _db;
     private readonly ICosmeticRewardService? _cosmeticRewardService;
     private readonly ILogger<XpTrackingService> _logger;
@@ -64,6 +68,45 @@ public class XpTrackingService
         }
 
         var now = DateTime.UtcNow;
+
+        // Anti-cheat: spike + hourly rate checks (flag-and-log; XP still awarded)
+        bool isSuspicious = false;
+        string? cheatReason = null;
+        if (xpAmount > MaxSingleEventXp)
+        {
+            isSuspicious = true;
+            cheatReason = $"Spike: {xpAmount} XP exceeds MaxSingleEventXp ({MaxSingleEventXp})";
+        }
+        else
+        {
+            var windowStart = now.Subtract(RateLimitWindow);
+            var recentTotal = await _db.UserXpEvents
+                .Where(e => e.UserId == userId && e.AwardedAtUtc >= windowStart)
+                .SumAsync(e => (int?)e.XpDelta, ct) ?? 0;
+            if (recentTotal + xpAmount > MaxXpPerHour)
+            {
+                isSuspicious = true;
+                cheatReason = $"Rate: recent {recentTotal} + {xpAmount} XP exceeds MaxXpPerHour ({MaxXpPerHour})";
+            }
+        }
+
+        if (isSuspicious)
+        {
+            _logger.LogWarning(
+                "XP anti-cheat triggered. UserId={UserId} SourceType={SourceType} SourceId={SourceId} XpDelta={XpDelta} Reason={Reason}",
+                userId, effectiveSourceType, sourceId, xpAmount, cheatReason);
+            _db.XpCheatLogs.Add(new XpCheatLog
+            {
+                UserId = userId,
+                XpDelta = xpAmount,
+                Reason = cheatReason!,
+                SourceType = effectiveSourceType,
+                SourceId = sourceId,
+                MetadataJson = metadataJson,
+                DetectedAtUtc = now
+            });
+        }
+
         var previousTotalXp = profile.Xp;
         var previousDailyXp = profile.DailyXp;
         var previousWeeklyXp = profile.WeeklyXp;
@@ -114,8 +157,8 @@ public class XpTrackingService
             ValidatedXpDelta = effectiveTotalDelta,
             SourceType = effectiveSourceType,
             SourceId = sourceId,
-            ValidationStatus = "approved",
-            IsSuspicious = false,
+            ValidationStatus = isSuspicious ? "flagged" : "approved",
+            IsSuspicious = isSuspicious,
             MetadataJson = metadataJson,
             AwardedAtUtc = now
         };

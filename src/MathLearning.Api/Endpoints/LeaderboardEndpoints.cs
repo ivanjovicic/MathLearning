@@ -46,18 +46,27 @@ public static class LeaderboardEndpoints
             var userRankCore = includeMe
                 ? await leaderboardService.GetUserRankAsync(new LeaderboardRequestDto { Scope = scope, Period = period, UserId = userId })
                 : null;
-            var appearanceMap = await LoadAppearanceMapAsync(db, leaderboard.Select(x => x.UserId), ctx.RequestAborted);
+            var leaderboardUserIds = leaderboard.Select(x => x.UserId).Distinct().ToList();
+            var leaderboardProfiles = await db.UserProfiles.AsNoTracking()
+                .Where(p => leaderboardUserIds.Contains(p.UserId))
+                .Select(p => new { p.UserId, Name = p.DisplayName ?? p.Username ?? ("User" + p.UserId), p.Level, p.Streak })
+                .ToDictionaryAsync(p => p.UserId, ctx.RequestAborted);
+            var appearanceMap = await LoadAppearanceMapAsync(db, leaderboardUserIds, ctx.RequestAborted);
 
-            var items = leaderboard.Select(e => new LeaderboardItemDto
+            var items = leaderboard.Select(e =>
             {
-                Rank = e.Rank,
-                UserId = e.UserId,
-                DisplayName = e.DisplayName,
-                AvatarUrl = null,
-                Appearance = appearanceMap.TryGetValue(e.UserId, out var appearance) ? appearance : null,
-                Score = e.Xp,
-                StreakDays = e.Streak,
-                Level = e.Level
+                leaderboardProfiles.TryGetValue(e.UserId, out var up);
+                return new LeaderboardItemDto
+                {
+                    Rank = e.Rank,
+                    UserId = e.UserId,
+                    DisplayName = up?.Name ?? e.DisplayName,
+                    AvatarUrl = null,
+                    Appearance = appearanceMap.TryGetValue(e.UserId, out var appearance) ? appearance : null,
+                    Score = e.Xp,
+                    StreakDays = up?.Streak ?? e.Streak,
+                    Level = up?.Level ?? e.Level
+                };
             }).ToList();
 
             LeaderboardMeDto? me = null;
@@ -186,18 +195,27 @@ public static class LeaderboardEndpoints
                 Period = period,
                 UserId = userId
             });
-            var appearanceMap = await LoadAppearanceMapAsync(db, leaderboard.Select(x => x.UserId), ctx.RequestAborted);
+            var friendsUserIds = leaderboard.Select(x => x.UserId).Distinct().ToList();
+            var friendsProfiles = await db.UserProfiles.AsNoTracking()
+                .Where(p => friendsUserIds.Contains(p.UserId))
+                .Select(p => new { p.UserId, Name = p.DisplayName ?? p.Username ?? ("User" + p.UserId), p.Level, p.Streak })
+                .ToDictionaryAsync(p => p.UserId, ctx.RequestAborted);
+            var appearanceMap = await LoadAppearanceMapAsync(db, friendsUserIds, ctx.RequestAborted);
 
-            var items = leaderboard.Select(e => new LeaderboardItemDto
+            var items = leaderboard.Select(e =>
             {
-                Rank = e.Rank,
-                UserId = e.UserId,
-                DisplayName = e.DisplayName,
-                AvatarUrl = null,
-                Appearance = appearanceMap.TryGetValue(e.UserId, out var appearance) ? appearance : null,
-                Score = e.Xp,
-                StreakDays = e.Streak,
-                Level = e.Level
+                friendsProfiles.TryGetValue(e.UserId, out var up);
+                return new LeaderboardItemDto
+                {
+                    Rank = e.Rank,
+                    UserId = e.UserId,
+                    DisplayName = up?.Name ?? e.DisplayName,
+                    AvatarUrl = null,
+                    Appearance = appearanceMap.TryGetValue(e.UserId, out var appearance) ? appearance : null,
+                    Score = e.Xp,
+                    StreakDays = up?.Streak ?? e.Streak,
+                    Level = up?.Level ?? e.Level
+                };
             }).ToList();
 
             LeaderboardMeDto? me = null;
@@ -224,8 +242,25 @@ public static class LeaderboardEndpoints
         .WithName("GetFriendsLeaderboard")
         .WithSummary("Get friends leaderboard using Redis");
 
+        group.MapGet("/student", async (
+            [FromServices] IStudentLeaderboardService studentLeaderboardService,
+            HttpContext ctx,
+            string scope = "global",
+            string period = "all_time",
+            int limit = 50,
+            string? cursor = null,
+            bool includeMe = true,
+            CancellationToken ct = default) =>
+        {
+            var userId = ctx.User.FindFirst("userId")!.Value;
+            var result = await studentLeaderboardService.GetLeaderboardAsync(userId, scope, period, limit, cursor, includeMe, ct);
+            return Results.Ok(result);
+        })
+        .WithName("GetStudentLeaderboard")
+        .WithSummary("Get student leaderboard (DB-backed, full cosmetics and badge processing)");
+
         group.MapPost("/admin/add-xp/{userId}", async (
-            [FromServices] XpTrackingService xpService,
+            [FromServices] IXpTrackingService xpService,
             string userId,
             [FromBody] AddXpRequest req) =>
         {
@@ -242,7 +277,7 @@ public static class LeaderboardEndpoints
         .WithSummary("Ručno dodeljuje XP korisniku (bonus/korekcija, admin endpoint)");
 
         group.MapPost("/admin/reset-xp/{userId}", async (
-            [FromServices] XpTrackingService xpService,
+            [FromServices] IXpTrackingService xpService,
             string userId) =>
         {
             await xpService.ResetTimeBasedXpAsync(userId);

@@ -15,7 +15,14 @@ public class SchoolScoreAggregate
     public int Rank { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Fair ranking metric: XpTotal / sqrt(EligibleStudents). Normalises for school size.</summary>
+    public double WeightedXp { get; set; }
+
+    /// <summary>Optional competition season this aggregate belongs to.</summary>
+    public Guid? SeasonId { get; set; }
+
     public School? School { get; set; }
+    public CompetitionSeason? Season { get; set; }
 }
 
 public class SchoolRankHistory
@@ -31,5 +38,12 @@ public class SchoolRankHistory
     public decimal CompositeScore { get; set; }
     public DateTime SnapshotTimeUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Fair ranking metric snapshot: XpTotal / sqrt(EligibleStudents) at time of snapshot.</summary>
+    public double WeightedXp { get; set; }
+
+    /// <summary>Optional competition season this history snapshot belongs to.</summary>
+    public Guid? SeasonId { get; set; }
+
     public School? School { get; set; }
+    public CompetitionSeason? Season { get; set; }
 }

@@ -13,4 +13,8 @@ public class UserXpEvent
     public bool IsSuspicious { get; set; }
     public string? MetadataJson { get; set; }
     public DateTime AwardedAtUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Optional competition season this event belongs to.</summary>
+    public Guid? SeasonId { get; set; }
+    public CompetitionSeason? Season { get; set; }
 }

@@ -13,7 +13,17 @@ public static class SchoolLeaderboardScoring
         row.ParticipationRate = row.EligibleStudents <= 0
             ? 0m
             : decimal.Round((decimal)row.ActiveStudents / row.EligibleStudents, 6);
+
+        row.WeightedXp = ComputeWeightedXp(row.XpTotal, row.EligibleStudents);
     }
+
+    /// <summary>
+    /// Fair ranking metric: total_xp / sqrt(eligible_student_count).
+    /// Normalises school size so a 10-student school with high per-capita XP
+    /// can compete against a 500-student school.
+    /// </summary>
+    public static double ComputeWeightedXp(int xpTotal, int eligibleStudentCount)
+        => eligibleStudentCount <= 0 ? 0.0 : xpTotal / Math.Sqrt(eligibleStudentCount);
 
     public static void RecomputeScoresAndRanks(IList<SchoolScoreAggregate> rows)
     {

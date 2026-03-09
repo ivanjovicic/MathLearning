@@ -44,6 +44,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<School> Schools => Set<School>();
     public DbSet<SchoolScoreAggregate> SchoolScoreAggregates => Set<SchoolScoreAggregate>();
     public DbSet<SchoolRankHistory> SchoolRankHistories => Set<SchoolRankHistory>();
+    public DbSet<CompetitionSeason> CompetitionSeasons => Set<CompetitionSeason>();
+    public DbSet<XpCheatLog> XpCheatLogs => Set<XpCheatLog>();
     public DbSet<Faculty> Faculties => Set<Faculty>();
     public DbSet<UserLearningProfile> UserLearningProfiles => Set<UserLearningProfile>();
     public DbSet<UserTopicMastery> UserTopicMasteries => Set<UserTopicMastery>();
@@ -939,6 +941,41 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .IsUnique()
                   .HasFilter("\"SourceId\" IS NOT NULL")
                   .HasDatabaseName("UX_user_xp_events_user_source");
+
+            entity.HasOne(e => e.Season)
+                  .WithMany()
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<CompetitionSeason>(entity =>
+        {
+            entity.ToTable("competition_seasons");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.StartDateUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.EndDateUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.IsActive)
+                  .HasDatabaseName("IX_competition_seasons_active");
+        });
+
+        builder.Entity<XpCheatLog>(entity =>
+        {
+            entity.ToTable("xp_cheat_log");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Reason).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceId).HasMaxLength(128);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.DetectedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_xp_cheat_log_user_detected");
+            entity.HasIndex(e => e.DetectedAtUtc)
+                  .HasDatabaseName("IX_xp_cheat_log_detected");
         });
 
         builder.Entity<School>(entity =>
@@ -971,6 +1008,13 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.CompositeScore, e.SchoolId })
                   .HasDatabaseName("IX_school_scores_period_start_score");
 
+            entity.Property(e => e.WeightedXp).HasColumnType("double precision").HasDefaultValue(0.0);
+
+            entity.HasOne(e => e.Season)
+                  .WithMany()
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasOne(e => e.School)
                   .WithMany()
                   .HasForeignKey(e => e.SchoolId)
@@ -991,6 +1035,13 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_school_rank_history_school_period_snapshot");
             entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.SnapshotTimeUtc, e.Rank })
                   .HasDatabaseName("IX_school_rank_history_period_snapshot_rank");
+
+            entity.Property(e => e.WeightedXp).HasColumnType("double precision").HasDefaultValue(0.0);
+
+            entity.HasOne(e => e.Season)
+                  .WithMany()
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(e => e.School)
                   .WithMany()

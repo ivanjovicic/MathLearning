@@ -309,6 +309,9 @@ try
     // ?? XP tracking service
     builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
     builder.Services.AddScoped<XpTrackingService>();
+    builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
+    builder.Services.AddScoped<StudentLeaderboardService>();
+    builder.Services.AddScoped<IStudentLeaderboardService>(sp => sp.GetRequiredService<StudentLeaderboardService>());
 
     // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");

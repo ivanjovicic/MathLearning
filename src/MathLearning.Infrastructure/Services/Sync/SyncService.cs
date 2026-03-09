@@ -17,14 +17,14 @@ public sealed class SyncService : ISyncService, ISyncAdminService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ApiDbContext db;
-    private readonly XpTrackingService xpTrackingService;
+    private readonly IXpTrackingService xpTrackingService;
     private readonly IOptions<SyncOptions> options;
     private readonly SyncMetricsService metrics;
     private readonly ILogger<SyncService> logger;
 
     public SyncService(
         ApiDbContext db,
-        XpTrackingService xpTrackingService,
+        IXpTrackingService xpTrackingService,
         IOptions<SyncOptions> options,
         SyncMetricsService metrics,
         ILogger<SyncService> logger)
