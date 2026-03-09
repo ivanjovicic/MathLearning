@@ -146,7 +146,7 @@ public static class AuthEndpoints
                     )
                 ));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return Results.Json(new MobileRegisterResponse(
                     Success: false,

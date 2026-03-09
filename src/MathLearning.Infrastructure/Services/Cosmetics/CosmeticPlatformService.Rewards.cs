@@ -30,10 +30,10 @@ public sealed partial class CosmeticPlatformService
 
         foreach (var source in sources)
         {
-            results.AddRange(await ProcessRewardSourceAsync(source, cancellationToken));
+            results.AddRange(await ProcessRewardSourceInternalAsync(source, saveChanges: false, cancellationToken));
         }
 
-        if (results.Count > 0)
+        if (db.ChangeTracker.HasChanges())
         {
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -45,35 +45,73 @@ public sealed partial class CosmeticPlatformService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<CosmeticUnlockResultDto>> ProcessRewardSourceAsync(
+    public Task<IReadOnlyList<CosmeticUnlockResultDto>> ProcessRewardSourceAsync(
         CosmeticRewardSourceRequest request,
         CancellationToken cancellationToken)
-    {
-        var rules = await db.CosmeticRewardRules
-            .AsNoTracking()
-            .Where(x => x.SourceType == request.SourceType && x.IsActive)
-            .OrderByDescending(x => x.Priority)
-            .ToListAsync(cancellationToken);
+        => ProcessRewardSourceInternalAsync(request, saveChanges: true, cancellationToken);
 
+    private async Task<IReadOnlyList<CosmeticUnlockResultDto>> ProcessRewardSourceInternalAsync(
+        CosmeticRewardSourceRequest request,
+        bool saveChanges,
+        CancellationToken cancellationToken)
+    {
+        var rules = await GetCachedRewardRulesAsync(request.SourceType, cancellationToken);
         var results = new List<CosmeticUnlockResultDto>();
-        results.AddRange(await ProcessLegacySourceRewardsAsync(request, cancellationToken));
+
+        var legacyCandidates = await GetLegacySourceRewardCandidatesAsync(request, cancellationToken);
+        var ruleCandidates = new List<(CosmeticRewardRule Rule, int CosmeticItemId)>();
 
         foreach (var rule in rules)
         {
-            await LogTelemetryAsync(CosmeticTelemetryEventTypes.RewardEvaluated, request.UserId, null, null, new { request.SourceType, request.SourceRef, rule = rule.Key });
+            await LogTelemetryAsync(
+                CosmeticTelemetryEventTypes.RewardEvaluated,
+                request.UserId,
+                null,
+                null,
+                new { request.SourceType, request.SourceRef, rule = rule.Key });
 
-            if (!EvaluateRule(rule, request.PayloadJson))
+            if (!EvaluateRule(rule, request.PayloadJson) || !TryParseRewardPayload(rule.RewardPayloadJson, out var cosmeticItemId))
             {
                 continue;
             }
 
-            if (!TryParseRewardPayload(rule.RewardPayloadJson, out var cosmeticItemId))
-            {
-                continue;
-            }
+            ruleCandidates.Add((rule, cosmeticItemId));
+        }
 
-            var item = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Id == cosmeticItemId, cancellationToken);
-            if (item is null)
+        var candidateItemIds = legacyCandidates
+            .Select(x => x.Id)
+            .Concat(ruleCandidates.Select(x => x.CosmeticItemId))
+            .Distinct()
+            .ToList();
+
+        var itemsById = candidateItemIds.Count == 0
+            ? new Dictionary<int, CosmeticItem>()
+            : (await db.CosmeticItems
+                .AsNoTracking()
+                .Where(x => candidateItemIds.Contains(x.Id))
+                .ToListAsync(cancellationToken))
+                .ToDictionary(x => x.Id);
+        var grantContext = await LoadRewardGrantContextAsync(request.UserId, request.SourceType, request.SourceRef, candidateItemIds, cancellationToken);
+
+        foreach (var item in legacyCandidates)
+        {
+            var granted = await TryGrantItemAsync(
+                request.UserId,
+                item,
+                request.SourceType,
+                request.SourceRef,
+                $"Legacy source unlock {request.SourceType}",
+                grantContext,
+                cancellationToken);
+            if (granted is not null)
+            {
+                results.Add(granted);
+            }
+        }
+
+        foreach (var candidate in ruleCandidates)
+        {
+            if (!itemsById.TryGetValue(candidate.CosmeticItemId, out var item))
             {
                 continue;
             }
@@ -83,7 +121,8 @@ public sealed partial class CosmeticPlatformService
                 item,
                 request.SourceType,
                 request.SourceRef,
-                $"Reward rule {rule.Key}",
+                $"Reward rule {candidate.Rule.Key}",
+                grantContext,
                 cancellationToken);
             if (granted is not null)
             {
@@ -91,7 +130,7 @@ public sealed partial class CosmeticPlatformService
             }
         }
 
-        if (db.ChangeTracker.HasChanges())
+        if (saveChanges && db.ChangeTracker.HasChanges())
         {
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -128,18 +167,6 @@ public sealed partial class CosmeticPlatformService
         }
 
         var sourceRef = BuildRewardTrackSourceRef(season.Id, effectiveTrackType, entry.Tier.ToString());
-        var alreadyClaimed = await db.CosmeticRewardClaims
-            .AsNoTracking()
-            .AnyAsync(
-                x => x.UserId == userId &&
-                     x.SourceType == CosmeticUnlockTypes.RewardTrack &&
-                     x.SourceRef == sourceRef,
-                cancellationToken);
-        if (alreadyClaimed)
-        {
-            return new ClaimRewardTrackTierResponse(true, true, season.Id, effectiveTrackType, entry.Tier, []);
-        }
-
         if (!TryParseRewardPayload(entry.RewardPayloadJson, out var cosmeticItemId))
         {
             throw new InvalidOperationException("Reward track payload is invalid.");
@@ -147,6 +174,17 @@ public sealed partial class CosmeticPlatformService
 
         var item = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Id == cosmeticItemId, cancellationToken)
             ?? throw new InvalidOperationException("Reward track cosmetic item was not found.");
+        var grantContext = await LoadRewardGrantContextAsync(
+            userId,
+            CosmeticUnlockTypes.RewardTrack,
+            sourceRef,
+            [item.Id],
+            cancellationToken);
+
+        if (grantContext.ClaimedRewardKeys.Contains(BuildRewardKey(CosmeticUnlockTypes.RewardTrack, sourceRef, item.Id)))
+        {
+            return new ClaimRewardTrackTierResponse(true, true, season.Id, effectiveTrackType, entry.Tier, []);
+        }
 
         var reward = await TryGrantItemAsync(
             userId,
@@ -154,6 +192,7 @@ public sealed partial class CosmeticPlatformService
             CosmeticUnlockTypes.RewardTrack,
             sourceRef,
             $"Reward track {effectiveTrackType} tier {entry.Tier}",
+            grantContext,
             cancellationToken);
 
         await LogTelemetryAsync(
@@ -175,11 +214,11 @@ public sealed partial class CosmeticPlatformService
 
     private async Task<List<CosmeticUnlockResultDto>> ProcessLegacyItemRewardsAsync(string userId, UserProfile profile, CancellationToken cancellationToken)
     {
-        var items = await db.CosmeticItems
-            .Where(x => x.IsActive && !x.IsHidden && !x.IsDefault)
-            .ToListAsync(cancellationToken);
+        var items = (await GetCachedActiveCatalogItemsAsync(cancellationToken))
+            .Where(x => !x.IsDefault)
+            .ToList();
 
-        var results = new List<CosmeticUnlockResultDto>();
+        var eligibleItems = new List<(CosmeticItem Item, string SourceRef)>();
         foreach (var item in items)
         {
             if (!EvaluateLegacyUnlock(item, profile, out var sourceRef))
@@ -187,51 +226,53 @@ public sealed partial class CosmeticPlatformService
                 continue;
             }
 
-            var granted = await TryGrantItemAsync(userId, item, item.UnlockType, sourceRef, $"Legacy unlock {item.UnlockType}", cancellationToken);
-            if (granted is not null)
+            eligibleItems.Add((item, sourceRef));
+        }
+
+        if (eligibleItems.Count == 0)
+        {
+            return [];
+        }
+
+        var results = new List<CosmeticUnlockResultDto>(eligibleItems.Count);
+
+        foreach (var group in eligibleItems.GroupBy(x => (x.Item.UnlockType, x.SourceRef)))
+        {
+            var itemIds = group.Select(x => x.Item.Id).Distinct().ToList();
+            var context = await LoadRewardGrantContextAsync(userId, group.Key.UnlockType, group.Key.SourceRef, itemIds, cancellationToken);
+
+            foreach (var candidate in group)
             {
-                results.Add(granted);
+                var granted = await TryGrantItemAsync(
+                    userId,
+                    candidate.Item,
+                    candidate.Item.UnlockType,
+                    candidate.SourceRef,
+                    $"Legacy unlock {candidate.Item.UnlockType}",
+                    context,
+                    cancellationToken);
+                if (granted is not null)
+                {
+                    results.Add(granted);
+                }
             }
         }
 
         return results;
     }
 
-    private async Task<List<CosmeticUnlockResultDto>> ProcessLegacySourceRewardsAsync(
+    private async Task<List<CosmeticItem>> GetLegacySourceRewardCandidatesAsync(
         CosmeticRewardSourceRequest request,
         CancellationToken cancellationToken)
     {
-        var items = await db.CosmeticItems
+        var now = DateTime.UtcNow;
+        return (await GetCachedActiveCatalogItemsAsync(cancellationToken))
             .Where(x =>
-                x.IsActive &&
-                !x.IsHidden &&
                 x.UnlockType == request.SourceType &&
-                (x.ReleaseDate == null || x.ReleaseDate <= DateTime.UtcNow) &&
-                (x.RetirementDate == null || x.RetirementDate > DateTime.UtcNow))
-            .ToListAsync(cancellationToken);
-
-        var results = new List<CosmeticUnlockResultDto>();
-        foreach (var item in items)
-        {
-            if (!EvaluateLegacySourceUnlock(item, request.PayloadJson))
-            {
-                continue;
-            }
-
-            var granted = await TryGrantItemAsync(
-                request.UserId,
-                item,
-                request.SourceType,
-                request.SourceRef,
-                $"Legacy source unlock {request.SourceType}",
-                cancellationToken);
-            if (granted is not null)
-            {
-                results.Add(granted);
-            }
-        }
-
-        return results;
+                (x.ReleaseDate == null || x.ReleaseDate <= now) &&
+                (x.RetirementDate == null || x.RetirementDate > now) &&
+                EvaluateLegacySourceUnlock(x, request.PayloadJson))
+            .ToList();
     }
 
     private async Task<CosmeticUnlockResultDto?> TryGrantItemAsync(
@@ -242,20 +283,30 @@ public sealed partial class CosmeticPlatformService
         string grantReason,
         CancellationToken cancellationToken)
     {
-        var rewardKey = $"{sourceType}:{sourceRef}:item:{item.Id}";
+        var context = await LoadRewardGrantContextAsync(userId, sourceType, sourceRef, [item.Id], cancellationToken);
+        return await TryGrantItemAsync(userId, item, sourceType, sourceRef, grantReason, context, cancellationToken);
+    }
 
-        var duplicateClaim = await db.CosmeticRewardClaims
-            .AsNoTracking()
-            .AnyAsync(x => x.UserId == userId && x.RewardKey == rewardKey && x.SourceRef == sourceRef, cancellationToken);
-        if (duplicateClaim)
+    private async Task<CosmeticUnlockResultDto?> TryGrantItemAsync(
+        string userId,
+        CosmeticItem item,
+        string sourceType,
+        string sourceRef,
+        string grantReason,
+        RewardGrantContext context,
+        CancellationToken cancellationToken)
+    {
+        var rewardKey = BuildRewardKey(sourceType, sourceRef, item.Id);
+        if (!context.ClaimedRewardKeys.Add(rewardKey))
         {
-            await LogTelemetryAsync(CosmeticTelemetryEventTypes.RewardClaimDuplicateBlocked, userId, item.Id, item.SeasonId, new { rewardKey, sourceType, sourceRef });
+            await LogTelemetryAsync(
+                CosmeticTelemetryEventTypes.RewardClaimDuplicateBlocked,
+                userId,
+                item.Id,
+                item.SeasonId,
+                new { rewardKey, sourceType, sourceRef });
             return null;
         }
-
-        var existingOwnership = await db.UserCosmeticInventories
-            .AsNoTracking()
-            .AnyAsync(x => x.UserId == userId && x.CosmeticItemId == item.Id && !x.IsRevoked, cancellationToken);
 
         db.CosmeticRewardClaims.Add(new CosmeticRewardClaim
         {
@@ -267,7 +318,7 @@ public sealed partial class CosmeticPlatformService
             ClaimedAtUtc = DateTime.UtcNow
         });
 
-        if (existingOwnership)
+        if (!context.OwnedItemIds.Add(item.Id))
         {
             return null;
         }
@@ -295,6 +346,45 @@ public sealed partial class CosmeticPlatformService
 
         return new CosmeticUnlockResultDto(item.Id, item.Key, item.Name, item.Category, item.Rarity, sourceType, sourceRef, now);
     }
+
+    private async Task<RewardGrantContext> LoadRewardGrantContextAsync(
+        string userId,
+        string sourceType,
+        string sourceRef,
+        IReadOnlyCollection<int> itemIds,
+        CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new RewardGrantContext(new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<int>());
+        }
+
+        var normalizedSourceType = string.IsNullOrWhiteSpace(sourceType) ? string.Empty : sourceType.Trim().ToLowerInvariant();
+        var normalizedSourceRef = sourceRef?.Trim() ?? string.Empty;
+
+        var claimedRewardKeys = (await db.CosmeticRewardClaims
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                x.SourceType == normalizedSourceType &&
+                x.SourceRef == normalizedSourceRef &&
+                itemIds.Contains(x.CosmeticItemId))
+            .Select(x => x.RewardKey)
+            .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ownedItemIds = (await db.UserCosmeticInventories
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && !x.IsRevoked && itemIds.Contains(x.CosmeticItemId))
+            .Select(x => x.CosmeticItemId)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        return new RewardGrantContext(claimedRewardKeys, ownedItemIds);
+    }
+
+    private static string BuildRewardKey(string sourceType, string sourceRef, int itemId)
+        => $"{sourceType}:{sourceRef}:item:{itemId}";
 
     private static bool EvaluateLegacyUnlock(CosmeticItem item, UserProfile profile, out string sourceRef)
     {
@@ -492,5 +582,17 @@ public sealed partial class CosmeticPlatformService
         {
             return false;
         }
+    }
+
+    private sealed class RewardGrantContext
+    {
+        public RewardGrantContext(HashSet<string> claimedRewardKeys, HashSet<int> ownedItemIds)
+        {
+            ClaimedRewardKeys = claimedRewardKeys;
+            OwnedItemIds = ownedItemIds;
+        }
+
+        public HashSet<string> ClaimedRewardKeys { get; }
+        public HashSet<int> OwnedItemIds { get; }
     }
 }

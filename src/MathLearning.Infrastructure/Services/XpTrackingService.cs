@@ -3,22 +3,23 @@ using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Leaderboard;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace MathLearning.Infrastructure.Services;
 
 public class XpTrackingService
 {
     private readonly ApiDbContext _db;
-    private readonly SchoolLeaderboardAggregationService _schoolLeaderboardAggregationService;
     private readonly ICosmeticRewardService? _cosmeticRewardService;
+    private readonly ILogger<XpTrackingService> _logger;
 
     public XpTrackingService(
         ApiDbContext db,
-        SchoolLeaderboardAggregationService schoolLeaderboardAggregationService,
+        ILogger<XpTrackingService> logger,
         ICosmeticRewardService? cosmeticRewardService = null)
     {
         _db = db;
-        _schoolLeaderboardAggregationService = schoolLeaderboardAggregationService;
+        _logger = logger;
         _cosmeticRewardService = cosmeticRewardService;
     }
 
@@ -30,6 +31,7 @@ public class XpTrackingService
         string? metadataJson = null,
         CancellationToken ct = default)
     {
+        var startedAt = DateTime.UtcNow;
         var profile = await _db.UserProfiles.FindAsync([userId], ct);
         if (profile == null)
         {
@@ -120,32 +122,27 @@ public class XpTrackingService
 
         _db.UserXpEvents.Add(xpEvent);
 
-        var change = new UserXpChangeContext(
-            TotalBefore: previousTotalXp,
-            TotalAfter: profile.Xp,
-            DailyBefore: dailyReset ? 0 : previousDailyXp,
-            DailyAfter: profile.DailyXp,
-            WeeklyBefore: weeklyReset ? 0 : previousWeeklyXp,
-            WeeklyAfter: profile.WeeklyXp,
-            MonthlyBefore: monthlyReset ? 0 : previousMonthlyXp,
-            MonthlyAfter: profile.MonthlyXp,
-            DailyReset: dailyReset,
-            WeeklyReset: weeklyReset,
-            MonthlyReset: monthlyReset,
-            OccurredAtUtc: now);
-
-        await _schoolLeaderboardAggregationService.ApplyXpChangeAsync(profile, change, ct);
         await _db.SaveChangesAsync(ct);
         if (_cosmeticRewardService is not null)
         {
             await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
         }
 
+        _logger.LogInformation(
+            "XP processed. UserId={UserId} SourceType={SourceType} SourceId={SourceId} XpDelta={XpDelta} EffectiveDelta={EffectiveDelta} ElapsedMs={ElapsedMs}",
+            userId,
+            effectiveSourceType,
+            sourceId,
+            xpAmount,
+            effectiveTotalDelta,
+            Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds, 2));
+
         return profile;
     }
 
     public async Task ResetTimeBasedXpAsync(string userId, CancellationToken ct = default)
     {
+        var startedAt = DateTime.UtcNow;
         var profile = await _db.UserProfiles.FindAsync([userId], ct);
         if (profile == null)
         {
@@ -163,25 +160,15 @@ public class XpTrackingService
         profile.LastXpResetDate = now;
         profile.UpdatedAt = now;
 
-        var change = new UserXpChangeContext(
-            TotalBefore: profile.Xp,
-            TotalAfter: profile.Xp,
-            DailyBefore: previousDailyXp,
-            DailyAfter: 0,
-            WeeklyBefore: previousWeeklyXp,
-            WeeklyAfter: 0,
-            MonthlyBefore: previousMonthlyXp,
-            MonthlyAfter: 0,
-            DailyReset: false,
-            WeeklyReset: false,
-            MonthlyReset: false,
-            OccurredAtUtc: now);
-
-        await _schoolLeaderboardAggregationService.ApplyXpChangeAsync(profile, change, ct);
         await _db.SaveChangesAsync(ct);
         if (_cosmeticRewardService is not null)
         {
             await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
         }
+
+        _logger.LogInformation(
+            "Time-based XP reset processed. UserId={UserId} ElapsedMs={ElapsedMs}",
+            userId,
+            Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds, 2));
     }
 }

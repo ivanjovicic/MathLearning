@@ -5,6 +5,7 @@ using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Leaderboard;
+using MathLearning.Infrastructure.Services.Performance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -16,11 +17,17 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
     private readonly ApiDbContext _db;
     private readonly ILogger<LeaderboardService> _logger;
     private readonly ICosmeticRewardService? _cosmeticRewardService;
+    private readonly HybridCacheService _cache;
 
-    public LeaderboardService(ApiDbContext db, ILogger<LeaderboardService> logger, ICosmeticRewardService? cosmeticRewardService = null)
+    public LeaderboardService(
+        ApiDbContext db,
+        ILogger<LeaderboardService> logger,
+        HybridCacheService cache,
+        ICosmeticRewardService? cosmeticRewardService = null)
     {
         _db = db;
         _logger = logger;
+        _cache = cache;
         _cosmeticRewardService = cosmeticRewardService;
     }
 
@@ -32,6 +39,7 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
         string? cursor = null,
         bool includeMe = true)
     {
+        var startedAt = DateTime.UtcNow;
         limit = Math.Clamp(limit, 1, 200);
 
         var me = await _db.UserProfiles.FindAsync(userId);
@@ -161,7 +169,7 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             }
         }
 
-        return new LeaderboardResponseDto
+        var response = new LeaderboardResponseDto
         {
             Scope = scope,
             Period = period,
@@ -170,6 +178,17 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             Me = meDto,
             NextCursor = nextCursor
         };
+
+        _logger.LogInformation(
+            "Leaderboard query executed. Scope={Scope} Period={Period} Limit={Limit} ItemCount={ItemCount} IncludeMe={IncludeMe} ElapsedMs={ElapsedMs}",
+            scope,
+            period,
+            limit,
+            items.Count,
+            includeMe,
+            Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds, 2));
+
+        return response;
     }
 
     public async Task<SchoolLeaderboardResponseDto> GetSchoolLeaderboardAsync(
@@ -178,6 +197,7 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
         int limit,
         string? cursor = null)
     {
+        var startedAt = DateTime.UtcNow;
         limit = Math.Clamp(limit, 1, 200);
 
         var me = await _db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId);
@@ -282,7 +302,7 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             }
         }
 
-        return new SchoolLeaderboardResponseDto
+        var response = new SchoolLeaderboardResponseDto
         {
             Period = periodInfo.Period,
             PeriodStartUtc = periodInfo.PeriodStartUtc,
@@ -293,6 +313,15 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             GeneratedAtUtc = DateTime.UtcNow,
             IsStale = page.Any(x => DateTime.UtcNow - x.UpdatedAtUtc > AggregateFreshnessWindow)
         };
+
+        _logger.LogInformation(
+            "School leaderboard query executed. Period={Period} Limit={Limit} ItemCount={ItemCount} ElapsedMs={ElapsedMs}",
+            periodInfo.Period,
+            limit,
+            response.Items.Count,
+            Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds, 2));
+
+        return response;
     }
 
     public async Task EnsureCurrentPeriodAsync(string period, CancellationToken ct = default)
@@ -778,10 +807,43 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             return new Dictionary<string, AvatarAppearanceDto>();
         }
 
-        return await _db.UserAppearanceProjections
+        var results = new Dictionary<string, AvatarAppearanceDto>(StringComparer.Ordinal);
+        var missingIds = new List<string>();
+        foreach (var userId in ids)
+        {
+            var cached = await _cache.GetAsync<AvatarAppearanceDto>($"leaderboard:appearance:{userId}", ct);
+
+            if (cached is null)
+            {
+                missingIds.Add(userId);
+                continue;
+            }
+
+            results[userId] = cached;
+        }
+
+        if (missingIds.Count == 0)
+        {
+            return results;
+        }
+
+        var loaded = await _db.UserAppearanceProjections
             .AsNoTracking()
-            .Where(x => ids.Contains(x.UserId))
+            .Where(x => missingIds.Contains(x.UserId))
             .ToDictionaryAsync(x => x.UserId, MapAppearance, ct);
+
+        foreach (var pair in loaded)
+        {
+            results[pair.Key] = pair.Value;
+            await _cache.SetAsync(
+                $"leaderboard:appearance:{pair.Key}",
+                pair.Value,
+                TimeSpan.FromSeconds(30),
+                TimeSpan.FromMinutes(2),
+                ct);
+        }
+
+        return results;
     }
 
     private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)

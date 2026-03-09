@@ -2,10 +2,12 @@ using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Cosmetics;
 using MathLearning.Infrastructure.Services.DesignTokens;
+using MathLearning.Infrastructure.Services.Performance;
 using MathLearning.Infrastructure.Services.Sync;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace MathLearning.Infrastructure;
 
@@ -13,6 +15,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
+        services.AddSingleton<HybridCacheService>(sp =>
+            new HybridCacheService(
+                sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<HybridCacheService>>(),
+                sp.GetService<IConnectionMultiplexer>()));
         services.Configure<DesignTokenOptions>(config.GetSection("DesignTokens"));
         services.AddScoped<IDesignTokenCacheService, DesignTokenCacheService>();
         services.AddScoped<IDesignTokenMergeService, DesignTokenMergeService>();

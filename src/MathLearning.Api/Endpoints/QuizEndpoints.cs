@@ -326,6 +326,7 @@ public static class QuizEndpoints
                 .Where(q => questionIds.Contains(q.Id))
                 .ToDictionaryAsync(q => q.Id);
             var ingestRows = new List<QuizAttemptIngestItem>(request.Answers.Count);
+            var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, request.Answers, ctx.RequestAborted);
 
             // Batch učitaj postojeće statistike
             var existingStats = await db.UserQuestionStats
@@ -334,14 +335,8 @@ public static class QuizEndpoints
 
             foreach (var answer in request.Answers)
             {
-                // 🔒 IDEMPOTENCY CHECK - Proveri da li već postoji identičan answer
-                bool exists = await db.UserAnswers
-                    .AnyAsync(x =>
-                        x.UserId == userId &&
-                        x.QuestionId == answer.QuestionId &&
-                        x.AnsweredAt == answer.AnsweredAt);
-
-                if (exists)
+                var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
+                if (!existingAnswerKeys.Add(answerKey))
                     continue;
 
                 if (!questions.TryGetValue(answer.QuestionId, out var question))
@@ -491,17 +486,15 @@ public static class QuizEndpoints
                 .Where(q => questionIds.Contains(q.Id))
                 .ToDictionaryAsync(q => q.Id);
             var ingestRows = new List<QuizAttemptIngestItem>(answers.Count);
+            var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, answers, ctx.RequestAborted);
             var existingStats = await db.UserQuestionStats
                 .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
                 .ToDictionaryAsync(s => s.QuestionId);
 
             foreach (var answer in answers)
             {
-                bool exists = await db.UserAnswers.AnyAsync(x =>
-                    x.UserId == userId &&
-                    x.QuestionId == answer.QuestionId &&
-                    x.AnsweredAt == answer.AnsweredAt);
-                if (exists)
+                var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
+                if (!existingAnswerKeys.Add(answerKey))
                     continue;
 
                 if (!questions.TryGetValue(answer.QuestionId, out var questionForAnswer))
@@ -884,12 +877,58 @@ public static class QuizEndpoints
         return (xp, level, streak);
     }
 
+    private static async Task<HashSet<string>> LoadExistingAnswerKeysAsync(
+        ApiDbContext db,
+        string userId,
+        IReadOnlyCollection<OfflineAnswerDto> answers,
+        CancellationToken cancellationToken)
+    {
+        if (answers.Count == 0)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var questionIds = answers.Select(x => x.QuestionId).Distinct().ToList();
+        var minAnsweredAt = answers.Min(x => x.AnsweredAt);
+        var maxAnsweredAt = answers.Max(x => x.AnsweredAt);
+
+        var existing = await db.UserAnswers
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                questionIds.Contains(x.QuestionId) &&
+                x.AnsweredAt >= minAnsweredAt &&
+                x.AnsweredAt <= maxAnsweredAt)
+            .Select(x => new { x.QuestionId, x.AnsweredAt })
+            .ToListAsync(cancellationToken);
+
+        return existing
+            .Select(x => BuildAnswerKey(x.QuestionId, x.AnsweredAt))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static string BuildAnswerKey(int questionId, DateTime answeredAt)
+        => $"{questionId}:{answeredAt.Ticks}";
+
     // 🌍 Helper za resolving user language
     private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
     {
-        var settings = await db.UserSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.UserId == userId);
+        var cacheKey = $"req:user-settings:{userId}";
+        UserSettings? settings = null;
+        if (ctx.Items.TryGetValue(cacheKey, out var cached) && cached is UserSettings cachedSettings)
+        {
+            settings = cachedSettings;
+        }
+        else
+        {
+            settings = await db.UserSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == userId);
+            if (settings is not null)
+            {
+                ctx.Items[cacheKey] = settings;
+            }
+        }
 
         var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
         return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);

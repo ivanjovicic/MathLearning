@@ -79,6 +79,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserAppearanceProjection> UserAppearanceProjections => Set<UserAppearanceProjection>();
     public DbSet<CosmeticTelemetryEvent> CosmeticTelemetryEvents => Set<CosmeticTelemetryEvent>();
     public DbSet<CosmeticAuditLog> CosmeticAuditLogs => Set<CosmeticAuditLog>();
+    public DbSet<LeaderboardSnapshot> LeaderboardSnapshots => Set<LeaderboardSnapshot>();
+    public DbSet<UserQuizSummary> UserQuizSummaries => Set<UserQuizSummary>();
+    public DbSet<UserRewardState> UserRewardStates => Set<UserRewardState>();
 
     // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -1229,6 +1232,50 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAtUtc })
                 .HasDatabaseName("IX_cosmetic_audit_log_entity_occurred");
+        });
+
+        builder.Entity<LeaderboardSnapshot>(entity =>
+        {
+            entity.ToTable("leaderboard_snapshot");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Scope).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Period).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.Scope, e.Period, e.Rank })
+                .HasDatabaseName("IX_leaderboard_snapshot_scope_period_rank");
+            entity.HasIndex(e => new { e.Scope, e.Period, e.UserId })
+                .IsUnique()
+                .HasDatabaseName("UX_leaderboard_snapshot_scope_period_user");
+        });
+
+        builder.Entity<UserQuizSummary>(entity =>
+        {
+            entity.ToTable("user_quiz_summary");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.UpdatedAtUtc)
+                .HasDatabaseName("IX_user_quiz_summary_updated_at");
+        });
+
+        builder.Entity<UserRewardState>(entity =>
+        {
+            entity.ToTable("user_reward_state");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.RewardKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.RewardKey })
+                .IsUnique()
+                .HasDatabaseName("UX_user_reward_state_user_reward");
+            entity.HasIndex(e => new { e.UserId, e.Eligible, e.Claimed })
+                .HasDatabaseName("IX_user_reward_state_user_status");
         });
     }
 }

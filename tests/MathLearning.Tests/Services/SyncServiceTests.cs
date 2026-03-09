@@ -2,7 +2,6 @@ using System.Text.Json;
 using MathLearning.Application.DTOs.Sync;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
-using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Infrastructure.Services.Sync;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
@@ -169,8 +168,7 @@ public class SyncServiceTests
 
     private static SyncService CreateSyncService(ApiDbContext db, bool requireSignatures)
     {
-        var aggregationService = new SchoolLeaderboardAggregationService(db);
-        var xpTrackingService = new XpTrackingService(db, aggregationService, null);
+        var xpTrackingService = new XpTrackingService(db, NullLogger<XpTrackingService>.Instance, null);
 
         return new SyncService(
             db,

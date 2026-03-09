@@ -7,6 +7,65 @@ namespace MathLearning.Infrastructure.Services.Cosmetics;
 
 public sealed partial class CosmeticPlatformService
 {
+    private static string GetCatalogCacheKey()
+        => "cosmetics:catalog:active";
+
+    private static string GetCatalogVersionCacheKey()
+        => "cosmetics:catalog:version";
+
+    private static string GetRewardRulesCacheKey(string sourceType)
+        => $"cosmetics:reward-rules:{sourceType}";
+
+    private static string GetAppearanceCacheKey(string userId)
+        => $"cosmetics:appearance:{userId}";
+
+    private async Task<List<CosmeticItem>> GetCachedActiveCatalogItemsAsync(CancellationToken cancellationToken)
+    {
+        return await cache.GetOrCreateAsync(
+            GetCatalogCacheKey(),
+            async ct => await db.CosmeticItems
+                .AsNoTracking()
+                .Where(x => x.IsActive && !x.IsHidden)
+                .OrderBy(x => x.Category)
+                .ThenBy(x => x.SortOrder)
+                .ThenBy(x => x.Name)
+                .ToListAsync(ct),
+            CatalogCacheTtl,
+            CatalogCacheTtl,
+            cancellationToken);
+    }
+
+    private async Task<List<CosmeticRewardRule>> GetCachedRewardRulesAsync(string sourceType, CancellationToken cancellationToken)
+    {
+        var normalized = string.IsNullOrWhiteSpace(sourceType) ? "unknown" : sourceType.Trim().ToLowerInvariant();
+        return await cache.GetOrCreateAsync(
+            GetRewardRulesCacheKey(normalized),
+            async ct => await db.CosmeticRewardRules
+                .AsNoTracking()
+                .Where(x => x.SourceType == normalized && x.IsActive)
+                .OrderByDescending(x => x.Priority)
+                .ToListAsync(ct),
+            RewardRulesCacheTtl,
+            RewardRulesCacheTtl,
+            cancellationToken);
+    }
+
+    private async Task InvalidateCatalogCacheAsync(CancellationToken cancellationToken)
+    {
+        await cache.RemoveAsync(GetCatalogCacheKey(), cancellationToken);
+        await cache.RemoveAsync(GetCatalogVersionCacheKey(), cancellationToken);
+    }
+
+    private async Task InvalidateRewardRulesCacheAsync(string sourceType, CancellationToken cancellationToken)
+    {
+        await cache.RemoveAsync(GetRewardRulesCacheKey(sourceType.Trim().ToLowerInvariant()), cancellationToken);
+    }
+
+    private async Task InvalidateAppearanceCacheAsync(string userId, CancellationToken cancellationToken)
+    {
+        await cache.RemoveAsync(GetAppearanceCacheKey(userId), cancellationToken);
+    }
+
     private async Task<UserAvatarConfig> EnsureAvatarConfigAsync(string userId, CancellationToken cancellationToken)
     {
         var config = await db.UserAvatarConfigs.FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
@@ -205,6 +264,12 @@ public sealed partial class CosmeticPlatformService
         projection.EffectAssetPath = ResolveAsset(items, config.EffectId);
         projection.LeaderboardDecorationAssetPath = ResolveAsset(items, config.LeaderboardDecorationId);
         projection.UpdatedAtUtc = DateTime.UtcNow;
+        await cache.SetAsync(
+            GetAppearanceCacheKey(userId),
+            projection,
+            AppearanceCacheTtl,
+            TimeSpan.FromMinutes(2),
+            cancellationToken);
 
         return projection;
     }
@@ -226,13 +291,21 @@ public sealed partial class CosmeticPlatformService
 
     private async Task<string> BuildCatalogVersionAsync(CancellationToken cancellationToken)
     {
-        var stamp = await db.CosmeticItems
-            .AsNoTracking()
-            .OrderByDescending(x => x.UpdatedAt)
-            .Select(x => (DateTime?)x.UpdatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+        return await cache.GetOrCreateAsync(
+            GetCatalogVersionCacheKey(),
+            async ct =>
+            {
+                var stamp = await db.CosmeticItems
+                    .AsNoTracking()
+                    .OrderByDescending(x => x.UpdatedAt)
+                    .Select(x => (DateTime?)x.UpdatedAt)
+                    .FirstOrDefaultAsync(ct);
 
-        return $"catalog-{(stamp ?? DateTime.UtcNow):yyyyMMddHHmmss}";
+                return $"catalog-{(stamp ?? DateTime.UtcNow):yyyyMMddHHmmss}";
+            },
+            CatalogCacheTtl,
+            CatalogCacheTtl,
+            cancellationToken);
     }
 
     private static string BuildRewardTrackSourceRef(int seasonId, string trackType, string tierToken)

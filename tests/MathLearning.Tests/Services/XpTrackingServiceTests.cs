@@ -1,15 +1,15 @@
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Services;
-using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MathLearning.Tests.Services;
 
 public class XpTrackingServiceTests
 {
     [Fact]
-    public async Task AddXpAsync_WritesEventAndRefreshesSchoolAggregates()
+    public async Task AddXpAsync_WritesEventAndDefersSchoolAggregates()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
         db.Schools.Add(new School
@@ -27,8 +27,7 @@ public class XpTrackingServiceTests
         profile.LeaderboardOptIn = true;
         await db.SaveChangesAsync();
 
-        var aggregationService = new SchoolLeaderboardAggregationService(db);
-        var xpTrackingService = new XpTrackingService(db, aggregationService, null);
+        var xpTrackingService = new XpTrackingService(db, NullLogger<XpTrackingService>.Instance, null);
 
         await xpTrackingService.AddXpAsync("1", 25, "quiz_completion", "quiz-1");
 
@@ -40,26 +39,14 @@ public class XpTrackingServiceTests
         Assert.Equal("quiz-1", xpEvent.SourceId);
         Assert.Equal(10, xpEvent.SchoolId);
 
-        var allTime = await db.SchoolScoreAggregates.SingleAsync(x => x.SchoolId == 10 && x.Period == "all_time");
-        var weekly = await db.SchoolScoreAggregates.SingleAsync(x => x.SchoolId == 10 && x.Period == "week");
-        var monthly = await db.SchoolScoreAggregates.SingleAsync(x => x.SchoolId == 10 && x.Period == "month");
-        var daily = await db.SchoolScoreAggregates.SingleAsync(x => x.SchoolId == 10 && x.Period == "day");
-
-        Assert.Equal(25, allTime.XpTotal);
-        Assert.Equal(25, weekly.XpTotal);
-        Assert.Equal(25, monthly.XpTotal);
-        Assert.Equal(25, daily.XpTotal);
-        Assert.Equal(1, weekly.ActiveStudents);
-        Assert.Equal(1, weekly.EligibleStudents);
-        Assert.Equal(1, weekly.Rank);
+        Assert.Empty(await db.SchoolScoreAggregates.ToListAsync());
     }
 
     [Fact]
     public async Task AddXpAsync_DoesNotDuplicateWhenSourceIsReplayed()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
-        var aggregationService = new SchoolLeaderboardAggregationService(db);
-        var xpTrackingService = new XpTrackingService(db, aggregationService, null);
+        var xpTrackingService = new XpTrackingService(db, NullLogger<XpTrackingService>.Instance, null);
 
         await xpTrackingService.AddXpAsync("1", 10, "sync_submit_answer", "op-1");
         await xpTrackingService.AddXpAsync("1", 10, "sync_submit_answer", "op-1");

@@ -15,28 +15,16 @@ public sealed partial class CosmeticPlatformService
     {
         await EnsureDefaultOwnershipAsync(userId, cancellationToken);
 
-        var query = db.CosmeticItems.AsNoTracking().AsQueryable();
-        if (!string.IsNullOrWhiteSpace(category))
-        {
-            query = query.Where(x => x.Category == category.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(rarity))
-        {
-            query = query.Where(x => x.Rarity == rarity.Trim());
-        }
-
-        if (seasonId.HasValue)
-        {
-            query = query.Where(x => x.SeasonId == seasonId.Value);
-        }
-
         var now = DateTime.UtcNow;
-        query = query.Where(x =>
-            x.IsActive &&
-            !x.IsHidden &&
-            (x.ReleaseDate == null || x.ReleaseDate <= now) &&
-            (x.RetirementDate == null || x.RetirementDate > now));
+        var items = await GetCachedActiveCatalogItemsAsync(cancellationToken);
+        var filtered = items
+            .Where(x =>
+                (string.IsNullOrWhiteSpace(category) || x.Category == category.Trim()) &&
+                (string.IsNullOrWhiteSpace(rarity) || x.Rarity == rarity.Trim()) &&
+                (!seasonId.HasValue || x.SeasonId == seasonId.Value) &&
+                (x.ReleaseDate == null || x.ReleaseDate <= now) &&
+                (x.RetirementDate == null || x.RetirementDate > now))
+            .ToList();
 
         var ownedIds = (await db.UserCosmeticInventories
             .AsNoTracking()
@@ -48,10 +36,7 @@ public sealed partial class CosmeticPlatformService
         var config = await db.UserAvatarConfigs.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         var equippedIds = BuildEquippedSet(config);
 
-        var items = await query
-            .OrderBy(x => x.Category)
-            .ThenBy(x => x.SortOrder)
-            .ThenBy(x => x.Name)
+        var responseItems = filtered
             .Select(x => new CosmeticCatalogItemDto(
                 x.Id,
                 x.Key,
@@ -71,9 +56,6 @@ public sealed partial class CosmeticPlatformService
                 x.IsActive,
                 x.IsHidden,
                 x.AssetVersion))
-            .ToListAsync(cancellationToken);
-
-        var responseItems = items
             .Select(x => x with
             {
                 IsOwned = x.IsDefault || ownedIds.Contains(x.Id),
@@ -218,7 +200,12 @@ public sealed partial class CosmeticPlatformService
 
     public async Task<AvatarAppearanceDto> GetPublicAppearanceAsync(string userId, CancellationToken cancellationToken)
     {
-        var projection = await db.UserAppearanceProjections.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+        var projection = await cache.GetOrCreateAsync(
+            GetAppearanceCacheKey(userId),
+            async ct => await db.UserAppearanceProjections.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct),
+            AppearanceCacheTtl,
+            TimeSpan.FromMinutes(2),
+            cancellationToken);
         if (projection is null)
         {
             projection = await RebuildAppearanceProjectionAsync(userId, cancellationToken);

@@ -515,7 +515,6 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         };
 
         _db.UserLearningProfiles.Add(profile);
-        await _db.SaveChangesAsync(ct);
         return profile;
     }
 

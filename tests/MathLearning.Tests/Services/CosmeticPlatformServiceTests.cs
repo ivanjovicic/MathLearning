@@ -2,7 +2,9 @@ using System.Text.Json;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Services.Cosmetics;
+using MathLearning.Infrastructure.Services.Performance;
 using MathLearning.Tests.Helpers;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MathLearning.Tests.Services;
@@ -141,5 +143,10 @@ public class CosmeticPlatformServiceTests
     }
 
     private static CosmeticPlatformService CreateService(MathLearning.Infrastructure.Persistance.ApiDbContext db)
-        => new(db, NullLogger<CosmeticPlatformService>.Instance);
+        => new(
+            db,
+            NullLogger<CosmeticPlatformService>.Instance,
+            new HybridCacheService(
+                new MemoryCache(new MemoryCacheOptions { SizeLimit = 1000 }),
+                NullLogger<HybridCacheService>.Instance));
 }

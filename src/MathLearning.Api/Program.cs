@@ -1,4 +1,5 @@
 using MathLearning.Api.Endpoints;
+using MathLearning.Api.Middleware;
 using MathLearning.Api.Services;
 using MathLearning.Application.Validators;
 using MathLearning.Application.Services;
@@ -11,6 +12,7 @@ using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.EventBus.Handlers;
+using MathLearning.Infrastructure.Services.Performance;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -182,17 +184,22 @@ try
         healthChecks.AddNpgSql(defaultConnectionString, name: "postgres");
     }
 
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<PerformanceDbCommandInterceptor>();
+
     // Add ApiDbContext (kombinuje Identity i sve entitete)
-    builder.Services.AddDbContext<ApiDbContext>(options =>
+    builder.Services.AddDbContext<ApiDbContext>((sp, options) =>
         options.UseNpgsql(
-            defaultConnectionString,
-            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+                defaultConnectionString,
+                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+            .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
 
     // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
-    builder.Services.AddDbContext<AppDbContext>(options =>
+    builder.Services.AddDbContext<AppDbContext>((sp, options) =>
         options.UseNpgsql(
-            defaultConnectionString,
-            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+                defaultConnectionString,
+                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+            .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
 
     // Hangfire (PostgreSQL)
     builder.Services.AddHangfire(config => config
@@ -264,13 +271,14 @@ try
     builder.Services.AddMemoryCache(options =>
     {
         // Count-based limit (we set Size=1 per entry in InMemoryCacheService).
-        options.SizeLimit = 100;
+        options.SizeLimit = 1000;
     });
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddControllers();
     builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
     builder.Services.AddSingleton<InMemoryCacheService>();
     builder.Services.AddSingleton<InMemoryLockService>();
+    builder.Services.AddScoped<RequestDataCacheService>();
 
     var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
         ?? builder.Configuration["Redis:ConnectionString"];
@@ -362,6 +370,7 @@ try
     app.UseMiddleware<MathLearning.Api.Middleware.CorrelationIdMiddleware>();
 
     // ?? Add Serilog request logging
+    app.UseMiddleware<RequestPerformanceLoggingMiddleware>();
     app.UseSerilogRequestLogging(options =>
     {
         options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
@@ -416,74 +425,9 @@ try
                     Log.Warning(fixEx, "?? Could not verify/fix RefreshToken column length");
                 }
 
-                // 🎨 Apply cosmetic system tables (idempotent)
+                // 🎨 Seed default cosmetic items (only if table is empty — tables are created by EF migration)
                 try
                 {
-                    await db.Database.ExecuteSqlRawAsync(@"
-                        CREATE TABLE IF NOT EXISTS cosmetic_seasons (
-                            ""Id"" SERIAL PRIMARY KEY,
-                            ""Name"" VARCHAR(200) NOT NULL,
-                            ""Description"" VARCHAR(1000),
-                            ""ThemeAssetPath"" VARCHAR(500),
-                            ""StartDate"" TIMESTAMP WITH TIME ZONE NOT NULL,
-                            ""EndDate"" TIMESTAMP WITH TIME ZONE NOT NULL,
-                            ""IsActive"" BOOLEAN NOT NULL DEFAULT FALSE,
-                            ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE TABLE IF NOT EXISTS cosmetic_items (
-                            ""Id"" SERIAL PRIMARY KEY,
-                            ""Name"" VARCHAR(200) NOT NULL,
-                            ""Category"" VARCHAR(50) NOT NULL,
-                            ""Rarity"" VARCHAR(20) NOT NULL DEFAULT 'common',
-                            ""AssetPath"" VARCHAR(500) NOT NULL,
-                            ""PreviewAssetPath"" VARCHAR(500),
-                            ""UnlockType"" VARCHAR(50) NOT NULL DEFAULT 'default',
-                            ""UnlockCondition"" VARCHAR(500),
-                            ""CoinPrice"" INTEGER,
-                            ""SeasonId"" INTEGER REFERENCES cosmetic_seasons(""Id"") ON DELETE SET NULL,
-                            ""IsDefault"" BOOLEAN NOT NULL DEFAULT FALSE,
-                            ""ReleaseDate"" TIMESTAMP WITH TIME ZONE,
-                            ""RetirementDate"" TIMESTAMP WITH TIME ZONE,
-                            ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE TABLE IF NOT EXISTS user_cosmetic_inventory (
-                            ""Id"" SERIAL PRIMARY KEY,
-                            ""UserId"" VARCHAR(450) NOT NULL,
-                            ""CosmeticItemId"" INTEGER NOT NULL REFERENCES cosmetic_items(""Id"") ON DELETE CASCADE,
-                            ""Source"" VARCHAR(50) NOT NULL,
-                            ""SeasonId"" INTEGER,
-                            ""UnlockedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE TABLE IF NOT EXISTS user_avatar_configs (
-                            ""UserId"" VARCHAR(450) PRIMARY KEY REFERENCES ""UserProfiles""(""UserId"") ON DELETE CASCADE,
-                            ""SkinId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""HairId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""ClothingId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""AccessoryId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""EmojiId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""FrameId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""BackgroundId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""EffectId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        -- Indexes
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_seasons_active"" ON cosmetic_seasons (""IsActive"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_seasons_dates"" ON cosmetic_seasons (""StartDate"", ""EndDate"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_items_category"" ON cosmetic_items (""Category"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_items_rarity"" ON cosmetic_items (""Rarity"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_items_category_rarity"" ON cosmetic_items (""Category"", ""Rarity"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_items_season"" ON cosmetic_items (""SeasonId"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_items_default"" ON cosmetic_items (""IsDefault"");
-                        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_user_cosmetic_inventory_user_item"" ON user_cosmetic_inventory (""UserId"", ""CosmeticItemId"");
-                        CREATE INDEX IF NOT EXISTS ""IX_user_cosmetic_inventory_user"" ON user_cosmetic_inventory (""UserId"");
-                        CREATE INDEX IF NOT EXISTS ""IX_user_cosmetic_inventory_user_source"" ON user_cosmetic_inventory (""UserId"", ""Source"");
-                    ");
-
-                    // Seed default cosmetic items (only if table is empty)
                     var cosmeticCount = await db.CosmeticItems.CountAsync();
                     if (cosmeticCount == 0)
                     {
@@ -541,167 +485,10 @@ try
                     {
                         Log.Information("🎨 Cosmetic system tables verified ({Count} items exist)", cosmeticCount);
                     }
-                    await db.Database.ExecuteSqlRawAsync(@"
-                        ALTER TABLE cosmetic_seasons ADD COLUMN IF NOT EXISTS ""Key"" VARCHAR(64);
-                        ALTER TABLE cosmetic_seasons ADD COLUMN IF NOT EXISTS ""Theme"" VARCHAR(128);
-                        ALTER TABLE cosmetic_seasons ADD COLUMN IF NOT EXISTS ""Status"" VARCHAR(32) NOT NULL DEFAULT 'draft';
-                        ALTER TABLE cosmetic_seasons ADD COLUMN IF NOT EXISTS ""RewardLockAt"" TIMESTAMP WITH TIME ZONE;
-                        ALTER TABLE cosmetic_seasons ADD COLUMN IF NOT EXISTS ""ArchiveAt"" TIMESTAMP WITH TIME ZONE;
-                        ALTER TABLE cosmetic_seasons ADD COLUMN IF NOT EXISTS ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();
-
-                        UPDATE cosmetic_seasons
-                        SET
-                            ""Key"" = COALESCE(NULLIF(""Key"", ''), CONCAT('season-', ""Id"")),
-                            ""UpdatedAt"" = COALESCE(""UpdatedAt"", NOW())
-                        WHERE ""Key"" IS NULL OR ""Key"" = '' OR ""UpdatedAt"" IS NULL;
-
-                        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_cosmetic_seasons_key"" ON cosmetic_seasons (""Key"");
-
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""Key"" VARCHAR(64);
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""UnlockConditionJson"" jsonb;
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""CompatibilityRulesJson"" jsonb;
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""IsActive"" BOOLEAN NOT NULL DEFAULT TRUE;
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""IsHidden"" BOOLEAN NOT NULL DEFAULT FALSE;
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""SortOrder"" INTEGER NOT NULL DEFAULT 0;
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""AssetVersion"" VARCHAR(32) NOT NULL DEFAULT '1';
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""MetadataJson"" jsonb;
-                        ALTER TABLE cosmetic_items ADD COLUMN IF NOT EXISTS ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();
-
-                        UPDATE cosmetic_items
-                        SET
-                            ""Key"" = COALESCE(NULLIF(""Key"", ''), LOWER(REGEXP_REPLACE(CONCAT(""Category"", '-', ""Id"", '-', ""Name""), '[^a-zA-Z0-9]+', '-', 'g'))),
-                            ""AssetVersion"" = COALESCE(NULLIF(""AssetVersion"", ''), '1'),
-                            ""IsActive"" = COALESCE(""IsActive"", TRUE),
-                            ""IsHidden"" = COALESCE(""IsHidden"", FALSE),
-                            ""SortOrder"" = COALESCE(""SortOrder"", 0),
-                            ""UpdatedAt"" = COALESCE(""UpdatedAt"", ""CreatedAt"", NOW())
-                        WHERE
-                            ""Key"" IS NULL OR ""Key"" = '' OR
-                            ""AssetVersion"" IS NULL OR ""AssetVersion"" = '' OR
-                            ""UpdatedAt"" IS NULL;
-
-                        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_cosmetic_items_key"" ON cosmetic_items (""Key"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_items_active_release"" ON cosmetic_items (""IsActive"", ""ReleaseDate"");
-
-                        ALTER TABLE user_cosmetic_inventory ADD COLUMN IF NOT EXISTS ""SourceRef"" VARCHAR(128);
-                        ALTER TABLE user_cosmetic_inventory ADD COLUMN IF NOT EXISTS ""GrantReason"" VARCHAR(256);
-                        ALTER TABLE user_cosmetic_inventory ADD COLUMN IF NOT EXISTS ""AssetVersion"" VARCHAR(32) NOT NULL DEFAULT '1';
-                        ALTER TABLE user_cosmetic_inventory ADD COLUMN IF NOT EXISTS ""IsRevoked"" BOOLEAN NOT NULL DEFAULT FALSE;
-                        ALTER TABLE user_cosmetic_inventory ADD COLUMN IF NOT EXISTS ""RevokedAt"" TIMESTAMP WITH TIME ZONE;
-
-                        UPDATE user_cosmetic_inventory
-                        SET
-                            ""SourceRef"" = COALESCE(""SourceRef"", CONCAT(""Source"", ':', ""CosmeticItemId"")),
-                            ""GrantReason"" = COALESCE(""GrantReason"", 'Legacy grant'),
-                            ""AssetVersion"" = COALESCE(NULLIF(""AssetVersion"", ''), '1'),
-                            ""IsRevoked"" = COALESCE(""IsRevoked"", FALSE)
-                        WHERE
-                            ""SourceRef"" IS NULL OR
-                            ""GrantReason"" IS NULL OR
-                            ""AssetVersion"" IS NULL OR ""AssetVersion"" = '';
-
-                        CREATE INDEX IF NOT EXISTS ""IX_user_cosmetic_inventory_source_ref"" ON user_cosmetic_inventory (""Source"", ""SourceRef"");
-
-                        ALTER TABLE user_avatar_configs ADD COLUMN IF NOT EXISTS ""LeaderboardDecorationId"" INTEGER REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL;
-                        ALTER TABLE user_avatar_configs ADD COLUMN IF NOT EXISTS ""Version"" BIGINT NOT NULL DEFAULT 0;
-
-                        CREATE TABLE IF NOT EXISTS cosmetic_reward_rules (
-                            ""Id"" SERIAL PRIMARY KEY,
-                            ""Key"" VARCHAR(128) NOT NULL,
-                            ""SourceType"" VARCHAR(64) NOT NULL,
-                            ""ConditionJson"" jsonb,
-                            ""RewardType"" VARCHAR(64) NOT NULL,
-                            ""RewardPayloadJson"" jsonb NOT NULL,
-                            ""Priority"" INTEGER NOT NULL DEFAULT 0,
-                            ""IsActive"" BOOLEAN NOT NULL DEFAULT TRUE,
-                            ""CreatedAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                            ""UpdatedAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_cosmetic_reward_rules_key"" ON cosmetic_reward_rules (""Key"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_reward_rules_source_active_priority"" ON cosmetic_reward_rules (""SourceType"", ""IsActive"", ""Priority"");
-
-                        CREATE TABLE IF NOT EXISTS cosmetic_reward_claims (
-                            ""Id"" UUID PRIMARY KEY,
-                            ""UserId"" VARCHAR(450) NOT NULL,
-                            ""RewardKey"" VARCHAR(128) NOT NULL,
-                            ""SourceType"" VARCHAR(64) NOT NULL,
-                            ""SourceRef"" VARCHAR(128) NOT NULL,
-                            ""CosmeticItemId"" INTEGER NOT NULL REFERENCES cosmetic_items(""Id"") ON DELETE CASCADE,
-                            ""ClaimedAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_cosmetic_reward_claims_user_reward_source"" ON cosmetic_reward_claims (""UserId"", ""RewardKey"", ""SourceRef"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_reward_claims_user_claimed_at"" ON cosmetic_reward_claims (""UserId"", ""ClaimedAtUtc"");
-
-                        CREATE TABLE IF NOT EXISTS season_reward_tracks (
-                            ""Id"" SERIAL PRIMARY KEY,
-                            ""SeasonId"" INTEGER NOT NULL REFERENCES cosmetic_seasons(""Id"") ON DELETE CASCADE,
-                            ""TrackType"" VARCHAR(32) NOT NULL,
-                            ""Tier"" INTEGER NOT NULL,
-                            ""XpRequired"" INTEGER NOT NULL,
-                            ""RewardType"" VARCHAR(64) NOT NULL,
-                            ""RewardPayloadJson"" jsonb NOT NULL,
-                            ""IsActive"" BOOLEAN NOT NULL DEFAULT TRUE,
-                            ""CreatedAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_season_reward_tracks_season_track_tier"" ON season_reward_tracks (""SeasonId"", ""TrackType"", ""Tier"");
-
-                        CREATE TABLE IF NOT EXISTS user_appearance_projection (
-                            ""UserId"" VARCHAR(450) PRIMARY KEY,
-                            ""AvatarVersion"" BIGINT NOT NULL DEFAULT 0,
-                            ""SkinId"" INTEGER NULL,
-                            ""HairId"" INTEGER NULL,
-                            ""ClothingId"" INTEGER NULL,
-                            ""AccessoryId"" INTEGER NULL,
-                            ""EmojiId"" INTEGER NULL,
-                            ""FrameId"" INTEGER NULL,
-                            ""BackgroundId"" INTEGER NULL,
-                            ""EffectId"" INTEGER NULL,
-                            ""LeaderboardDecorationId"" INTEGER NULL,
-                            ""SkinAssetPath"" VARCHAR(500) NULL,
-                            ""HairAssetPath"" VARCHAR(500) NULL,
-                            ""ClothingAssetPath"" VARCHAR(500) NULL,
-                            ""AccessoryAssetPath"" VARCHAR(500) NULL,
-                            ""EmojiAssetPath"" VARCHAR(500) NULL,
-                            ""FrameAssetPath"" VARCHAR(500) NULL,
-                            ""BackgroundAssetPath"" VARCHAR(500) NULL,
-                            ""EffectAssetPath"" VARCHAR(500) NULL,
-                            ""LeaderboardDecorationAssetPath"" VARCHAR(500) NULL,
-                            ""UpdatedAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE TABLE IF NOT EXISTS cosmetic_telemetry_events (
-                            ""Id"" UUID PRIMARY KEY,
-                            ""EventType"" VARCHAR(64) NOT NULL,
-                            ""UserId"" VARCHAR(450) NOT NULL,
-                            ""CosmeticItemId"" INTEGER NULL REFERENCES cosmetic_items(""Id"") ON DELETE SET NULL,
-                            ""SeasonId"" INTEGER NULL REFERENCES cosmetic_seasons(""Id"") ON DELETE SET NULL,
-                            ""MetadataJson"" jsonb,
-                            ""OccurredAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_telemetry_events_type_occurred"" ON cosmetic_telemetry_events (""EventType"", ""OccurredAtUtc"");
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_telemetry_events_user_occurred"" ON cosmetic_telemetry_events (""UserId"", ""OccurredAtUtc"");
-
-                        CREATE TABLE IF NOT EXISTS cosmetic_audit_log (
-                            ""Id"" UUID PRIMARY KEY,
-                            ""Action"" VARCHAR(64) NOT NULL,
-                            ""ActorUserId"" VARCHAR(450) NULL,
-                            ""EntityType"" VARCHAR(64) NOT NULL,
-                            ""EntityId"" VARCHAR(128) NOT NULL,
-                            ""BeforeJson"" jsonb,
-                            ""AfterJson"" jsonb,
-                            ""OccurredAtUtc"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                        );
-
-                        CREATE INDEX IF NOT EXISTS ""IX_cosmetic_audit_log_entity_occurred"" ON cosmetic_audit_log (""EntityType"", ""EntityId"", ""OccurredAtUtc"");
-                    ");
                 }
                 catch (Exception cosmeticEx)
                 {
-                    Log.Warning(cosmeticEx, "⚠️ Could not apply cosmetic system migration");
+                    Log.Warning(cosmeticEx, "⚠️ Could not seed cosmetic items");
                 }
 
                 userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);

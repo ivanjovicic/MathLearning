@@ -37,7 +37,7 @@ public class RedisLeaderboardService : IRedisLeaderboardService
 
         return entries.Select((entry, index) => new LeaderboardEntryDto(
             index + 1,
-            entry.Element,
+            entry.Element.ToString(),
             "Unknown", // Placeholder for DisplayName
             0,          // Placeholder for Level
             (int)entry.Score,
@@ -99,7 +99,7 @@ public class RedisLeaderboardService : IRedisLeaderboardService
 
         return entries.Select((entry, index) => new LeaderboardEntryDto(
             (int)start + index + 1,
-            entry.Element,
+            entry.Element.ToString(),
             "Unknown", // Placeholder for DisplayName
             0,          // Placeholder for Level
             (int)entry.Score,

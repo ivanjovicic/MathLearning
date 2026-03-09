@@ -7,6 +7,7 @@ using MathLearning.Core.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Performance;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -125,60 +126,16 @@ public static class LeaderboardEndpoints
 
         group.MapGet("/global", async (
             [FromServices] ApiDbContext db,
+            [FromServices] ILogger<Program> logger,
             HttpContext ctx,
             string range = "allTime",
             int limit = 50) =>
         {
-            var userId = ctx.User.FindFirst("userId")!.Value;
-
-            var profileDict = (await db.UserProfiles
-                .Select(p => new { p.UserId, p.DisplayName, p.Username, p.Level, p.Streak })
-                .ToListAsync())
-                .ToDictionary(p => p.UserId);
-
-            var globalList = await (
-                from s in db.UserQuestionStats
-                group s by s.UserId into g
-                select new
-                {
-                    UserId = g.Key,
-                    TotalCorrect = g.Sum(x => x.CorrectAttempts)
-                }
-            ).ToListAsync();
-
-            var weekStart = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.Date.DayOfWeek + 1);
-
-            var weeklyDict = (await db.UserAnswers
-                .Where(a => a.AnsweredAt >= weekStart && a.IsCorrect)
-                .GroupBy(a => a.UserId)
-                .Select(g => new { UserId = g.Key, WeeklyCorrect = g.Count() })
-                .ToListAsync())
-                .ToDictionary(x => x.UserId, x => x.WeeklyCorrect * 10);
-
-            var enriched = globalList.Select(x =>
-            {
-                var xp = x.TotalCorrect * 10;
-                profileDict.TryGetValue(x.UserId, out var profile);
-                weeklyDict.TryGetValue(x.UserId, out var weeklyXp);
-
-                return new
-                {
-                    x.UserId,
-                    DisplayName = profile?.DisplayName ?? profile?.Username ?? $"User{x.UserId}",
-                    Level = profile?.Level ?? (1 + xp / 100),
-                    Xp = xp,
-                    WeeklyXp = weeklyXp,
-                    Streak = profile?.Streak ?? 0
-                };
-            }).ToList();
-
-            var ordered = range.ToLowerInvariant() switch
-            {
-                "weekly" => enriched.OrderByDescending(x => x.WeeklyXp).ThenByDescending(x => x.Xp),
-                _ => enriched.OrderByDescending(x => x.Xp)
-            };
-
-            var rankedRows = ordered.Take(limit).ToList();
+            var startedAt = DateTime.UtcNow;
+            limit = Math.Clamp(limit, 1, 200);
+            var rankedRows = await ToListAsync(
+                CompiledQueries.GetGlobalLeaderboard(db, range, limit),
+                ctx.RequestAborted);
             var appearanceMap = await LoadAppearanceMapAsync(db, rankedRows.Select(x => x.UserId), ctx.RequestAborted);
 
             var ranked = rankedRows
@@ -186,7 +143,7 @@ public static class LeaderboardEndpoints
                 {
                     rank = index + 1,
                     userId = x.UserId,
-                    displayName = x.DisplayName,
+                    displayName = x.DisplayName ?? x.Username ?? $"User{x.UserId}",
                     level = x.Level,
                     xp = x.Xp,
                     weeklyXp = x.WeeklyXp,
@@ -194,6 +151,13 @@ public static class LeaderboardEndpoints
                     appearance = appearanceMap.TryGetValue(x.UserId, out var appearance) ? appearance : null
                 })
                 .ToList();
+
+            logger.LogInformation(
+                "Global leaderboard query executed. Range={Range} Limit={Limit} Rows={RowCount} ElapsedMs={ElapsedMs}",
+                range,
+                limit,
+                ranked.Count,
+                Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds, 2));
 
             return Results.Ok(ranked);
         })
@@ -331,4 +295,15 @@ public static class LeaderboardEndpoints
             projection.BackgroundAssetPath,
             projection.EffectAssetPath,
             projection.LeaderboardDecorationAssetPath);
+
+    private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source, CancellationToken cancellationToken)
+    {
+        var results = new List<T>();
+        await foreach (var item in source.WithCancellation(cancellationToken))
+        {
+            results.Add(item);
+        }
+
+        return results;
+    }
 }

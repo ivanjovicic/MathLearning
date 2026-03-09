@@ -74,6 +74,7 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("upsert_item", actorUserId, nameof(CosmeticItem), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        await InvalidateCatalogCacheAsync(cancellationToken);
 
         return MapAdminItem(entity);
     }
@@ -91,6 +92,7 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("release_item", actorUserId, nameof(CosmeticItem), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        await InvalidateCatalogCacheAsync(cancellationToken);
         return MapAdminItem(entity);
     }
 
@@ -106,6 +108,7 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("retire_item", actorUserId, nameof(CosmeticItem), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        await InvalidateCatalogCacheAsync(cancellationToken);
         return MapAdminItem(entity);
     }
 
@@ -132,6 +135,7 @@ public sealed partial class CosmeticPlatformService
         var entity = id.HasValue
             ? await db.CosmeticRewardRules.FirstOrDefaultAsync(x => x.Id == id.Value, cancellationToken)
             : null;
+        var previousSourceType = entity?.SourceType;
         var beforeJson = entity is null ? null : JsonSerializer.Serialize(entity, SerializerOptions);
 
         if (entity is null)
@@ -151,6 +155,12 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("upsert_reward_rule", actorUserId, nameof(CosmeticRewardRule), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(previousSourceType) &&
+            !string.Equals(previousSourceType, entity.SourceType, StringComparison.OrdinalIgnoreCase))
+        {
+            await InvalidateRewardRulesCacheAsync(previousSourceType, cancellationToken);
+        }
+        await InvalidateRewardRulesCacheAsync(entity.SourceType, cancellationToken);
 
         return new CosmeticRewardRuleDto(entity.Id, entity.Key, entity.SourceType, entity.ConditionJson, entity.RewardType, entity.RewardPayloadJson, entity.Priority, entity.IsActive);
     }
@@ -186,6 +196,7 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("upsert_season", actorUserId, nameof(CosmeticSeason), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        await InvalidateCatalogCacheAsync(cancellationToken);
 
         return MapSeason(entity);
     }
@@ -202,6 +213,7 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("activate_season", actorUserId, nameof(CosmeticSeason), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        await InvalidateCatalogCacheAsync(cancellationToken);
         return MapSeason(entity);
     }
 
@@ -218,6 +230,7 @@ public sealed partial class CosmeticPlatformService
 
         await WriteAuditAsync("archive_season", actorUserId, nameof(CosmeticSeason), entity.Id.ToString(), beforeJson, JsonSerializer.Serialize(entity, SerializerOptions));
         await db.SaveChangesAsync(cancellationToken);
+        await InvalidateCatalogCacheAsync(cancellationToken);
         return MapSeason(entity);
     }
 
