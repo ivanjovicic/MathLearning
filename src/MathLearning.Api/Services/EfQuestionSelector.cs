@@ -1,4 +1,5 @@
 using MathLearning.Application.Services;
+using MathLearning.Application.Helpers;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
@@ -50,12 +51,24 @@ public sealed class EfQuestionSelector : IQuestionSelector
             candidate.Question.Text,
             candidate.Question.Options
                 .OrderBy(o => o.Id)
-                .Select(o => new SelectedQuestionOption(o.Id, o.Text, o.IsCorrect))
+                .Select(o => new SelectedQuestionOption(
+                    o.Id,
+                    o.Text,
+                    o.IsCorrect,
+                    o.TextFormat,
+                    o.RenderMode,
+                    TranslationHelper.ResolveSemanticsAltText(o.SemanticsAltText, o.Text, o.TextFormat)))
                 .ToList(),
             candidate.TopicId,
             candidate.Question.SubtopicId,
             NumericToDifficulty(candidate.Question.Difficulty),
-            candidate.Question.CorrectAnswer);
+            candidate.Question.CorrectAnswer,
+            candidate.Question.TextFormat,
+            candidate.Question.TextRenderMode,
+            TranslationHelper.ResolveSemanticsAltText(
+                candidate.Question.SemanticsAltText,
+                candidate.Question.Text,
+                candidate.Question.TextFormat));
     }
 
     private static int DifficultyToNumeric(string difficulty) =>

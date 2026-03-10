@@ -1,12 +1,14 @@
-﻿@page "/questions/new"
+@page "/questions/new"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using Microsoft.AspNetCore.Authorization
+@using MathLearning.Admin.Data
+@using MathLearning.Admin.Models
+@using MathLearning.Application.Content
+@using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
-@using MathLearning.Admin.Data
-@using MathLearning.Domain.Entities
 
 @inject AdminDbContext Db
+@inject IMathContentSanitizer Sanitizer
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ILogger<New> Logger
@@ -18,304 +20,59 @@
     Dodaj Novo Pitanje
 </MudText>
 <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
-    Kreirajte novo pitanje sa odgovorima
+    Authoring za math sadržaj sa format metadata i preview-em
 </MudText>
 
-<MudPaper Class="pa-6" Elevation="4">
-    <MudGrid>
-        <MudItem xs="12">
-            <div class="form-group">
-                <label for="questionText" class="form-label">Tekst Pitanja *</label>
-                <textarea id="questionText"
-                          class="form-textarea"
-                          rows="3"
-                          @bind="Text"
-                          @bind:event="oninput"></textarea>
-            </div>
-        </MudItem>
-
-        <MudItem xs="12" md="6">
-            <div class="form-group">
-                <label for="category" class="form-label">Kategorija *</label>
-                <select id="category" 
-                        class="form-select"
-                        @bind="CategoryId">
-                    @foreach (var c in Categories)
-                    {
-                        <option value="@c.Id">@c.Name</option>
-                    }
-                </select>
-            </div>
-        </MudItem>
-
-        <MudItem xs="12" md="6">
-            <div class="form-group">
-                <label class="form-label">Tezina Pitanja</label>
-                <div class="star-rating">
-                    @for (int i = 1; i <= 5; i++)
-                    {
-                        var rating = i;
-                        <button type="button" 
-                                @onclick="@(() => SetDifficulty(rating))" 
-                                class="star-btn @(Difficulty >= rating ? "active" : "")">
-                            @if (Difficulty >= rating) { <span>★</span> } else { <span>☆</span> }
-                        </button>
-                    }
-                </div>
-                <span class="helper-text">Izabrana tezina: @Difficulty / 5</span>
-            </div>
-        </MudItem>
-
-        <MudItem xs="12">
-            <MudDivider Class="my-4" />
-        </MudItem>
-
-        <MudItem xs="12">
-            <MudText Typo="Typo.h6" Class="mb-2">
-                <MudIcon Icon="@Icons.Material.Filled.List" Class="mr-2" Size="Size.Small" />
-                Opcije Odgovora
-            </MudText>
-            <p class="helper-text mb-4">Oznacite tacan odgovor klikom na dugme pored opcije</p>
-        </MudItem>
-
-        @for (int i = 0; i < Options.Count; i++)
-        {
-            var index = i;
-            <MudItem xs="12">
-                <div class="option-row">
-                    <span class="option-number">@(index + 1).</span>
-                    <input type="text" 
-                           class="form-input flex-grow"
-                           placeholder="Unesite opciju @(index + 1)"
-                           @bind="Options[index].Text"
-                           @bind:event="oninput" />
-                    <button type="button" 
-                            @onclick="@(() => SetCorrectAnswer(index))" 
-                            class="correct-btn @(CorrectIndex == index ? "active" : "")">
-                        @if (CorrectIndex == index) 
-                        { 
-                            <span>Tacno</span> 
-                        } 
-                        else 
-                        { 
-                            <span>Oznaci</span> 
-                        }
-                    </button>
-                </div>
-            </MudItem>
-        }
-
-        <MudItem xs="12">
-            <MudDivider Class="my-4" />
-        </MudItem>
-
-        <MudItem xs="12">
-            <div class="d-flex gap-2">
-                <MudButton OnClick="Save"
-                           Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Save"
-                           Disabled="@IsSaving">
-                    @if (IsSaving)
-                    {
-                        <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
-                        <span>Cuvanje...</span>
-                    }
-                    else
-                    {
-                        <span>Sacuvaj Pitanje</span>
-                    }
-                </MudButton>
-
-                <MudButton Href="/questions"
-                           Variant="Variant.Outlined"
-                           Color="Color.Default"
-                           StartIcon="@Icons.Material.Filled.ArrowBack">
-                    Nazad
-                </MudButton>
-            </div>
-
-            @if (!string.IsNullOrEmpty(ErrorMessage))
-            {
-                <MudAlert Severity="Severity.Error" Class="mt-3">@ErrorMessage</MudAlert>
-            }
-        </MudItem>
-    </MudGrid>
-</MudPaper>
-
-<style>
-    .form-group {
-        margin-bottom: 16px;
-    }
-
-    .form-label {
-        display: block;
-        margin-bottom: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        color: #424242;
-    }
-
-    .form-input, .form-textarea, .form-select {
-        width: 100%;
-        padding: 14px;
-        font-size: 16px;
-        font-family: inherit;
-        border: 1px solid #bdbdbd;
-        border-radius: 4px;
-        box-sizing: border-box;
-        transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .form-input:focus, .form-textarea:focus, .form-select:focus {
-        outline: none;
-        border-color: #594ae2;
-        border-width: 2px;
-        box-shadow: 0 0 0 3px rgba(89, 74, 226, 0.1);
-    }
-
-    .form-textarea {
-        resize: vertical;
-        min-height: 100px;
-    }
-
-    .form-select {
-        appearance: auto;
-        background-color: white;
-    }
-
-    .helper-text {
-        font-size: 12px;
-        color: #757575;
-    }
-
-    .star-rating {
-        display: flex;
-        gap: 4px;
-    }
-
-    .star-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 36px;
-        color: #ccc;
-        padding: 4px;
-        transition: all 0.2s;
-        line-height: 1;
-    }
-
-    .star-btn:hover {
-        transform: scale(1.2);
-        color: #FFA726;
-    }
-
-    .star-btn.active {
-        color: #FFA726;
-    }
-
-    .option-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
-    }
-
-    .option-number {
-        font-weight: 500;
-        font-size: 16px;
-        min-width: 24px;
-    }
-
-    .flex-grow {
-        flex-grow: 1;
-    }
-
-    .correct-btn {
-        padding: 10px 16px;
-        border: 2px solid #ccc;
-        border-radius: 4px;
-        background: white;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s;
-        min-width: 100px;
-    }
-
-    .correct-btn:hover {
-        border-color: #4CAF50;
-        color: #4CAF50;
-    }
-
-    .correct-btn.active {
-        border-color: #4CAF50;
-        background-color: #4CAF50;
-        color: white;
-    }
-</style>
+<QuestionEditor Model="@Model"
+                Categories="@Categories"
+                Subtopics="@Subtopics"
+                IsSaving="@IsSaving"
+                SaveButtonText="Sačuvaj pitanje"
+                ErrorMessage="@ErrorMessage"
+                OnSave="SaveAsync" />
 
 @code {
-    public string Text { get; set; } = "";
-    public int CategoryId { get; set; }
-    public int Difficulty { get; set; } = 1;
-    public string? ErrorMessage { get; set; }
-    public bool IsSaving { get; set; } = false;
-
-    public List<Category> Categories = new();
-    public List<QuestionOptionDto> Options = new();
-    public int CorrectIndex { get; set; } = 0;
+    private readonly QuestionEditorModel Model = new();
+    private List<Category> Categories { get; set; } = [];
+    private List<Subtopic> Subtopics { get; set; } = [];
+    private bool IsSaving { get; set; }
+    private string? ErrorMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        Logger.LogInformation("Questions/New page initializing...");
-        
-        Categories = await Db.Categories.OrderBy(c => c.Name).ToListAsync();
+        Categories = await Db.Categories
+            .AsNoTracking()
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+
+        Subtopics = await Db.Subtopics
+            .AsNoTracking()
+            .Include(x => x.Topic)
+            .OrderBy(x => x.Topic!.Name)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
 
         if (Categories.Count > 0)
         {
-            CategoryId = Categories[0].Id;
+            Model.CategoryId = Categories[0].Id;
         }
 
-        Options = new List<QuestionOptionDto>
+        if (Subtopics.Count > 0)
         {
-            new(), new(), new(), new()
-        };
-    }
-
-    private void SetDifficulty(int value)
-    {
-        Difficulty = value;
-        Logger.LogInformation("Difficulty set to: {Difficulty}", Difficulty);
-        StateHasChanged();
-    }
-
-    private void SetCorrectAnswer(int index)
-    {
-        CorrectIndex = index;
-        Logger.LogInformation("Correct answer set to option: {Index}", index);
-        StateHasChanged();
-    }
-
-    async Task Save()
-    {
-        ErrorMessage = null;
-
-        if (string.IsNullOrWhiteSpace(Text))
-        {
-            ErrorMessage = "Tekst pitanja je obavezan";
-            return;
+            Model.SubtopicId = Subtopics[0].Id;
         }
 
-        if (CategoryId == 0)
+        if (Model.Options.Count > 0)
         {
-            ErrorMessage = "Izaberite kategoriju";
-            return;
+            Model.Options[0].IsCorrect = true;
         }
+    }
 
-        if (Options.Any(o => string.IsNullOrWhiteSpace(o.Text)))
+    private async Task SaveAsync()
+    {
+        ErrorMessage = ValidateModel();
+        if (!string.IsNullOrWhiteSpace(ErrorMessage))
         {
-            ErrorMessage = "Sve opcije moraju biti popunjene";
             return;
         }
 
@@ -324,30 +81,149 @@
 
         try
         {
-            var options = Options.Select((o, index) =>
-                new QuestionOption(o.Text.Trim(), index == CorrectIndex)
-            ).ToList();
+            var question = new Question(
+                Sanitize(Model.Text, Model.TextFormat),
+                Model.Difficulty,
+                Model.CategoryId,
+                Sanitize(Model.Explanation, Model.ExplanationFormat));
 
-            var q = new Question(Text.Trim(), Difficulty, CategoryId);
-            q.ReplaceOptions(options);
+            ApplyQuestionFields(question);
+            question.ReplaceOptions(BuildOptions());
 
-            Db.Questions.Add(q);
+            Db.Questions.Add(question);
             await Db.SaveChangesAsync();
 
-            Logger.LogInformation("Question saved successfully with Difficulty={Difficulty}", Difficulty);
-            Snackbar.Add($"Pitanje je uspesno dodato sa tezinom {Difficulty}!", Severity.Success);
+            var steps = BuildSteps(question.Id);
+            if (steps.Count > 0)
+            {
+                question.ReplaceSteps(steps);
+                await Db.SaveChangesAsync();
+            }
+
+            Snackbar.Add("Pitanje je uspešno dodato.", Severity.Success);
             Nav.NavigateTo("/questions");
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error saving question");
-            ErrorMessage = $"Greska: {ex.Message}";
+            ErrorMessage = $"Greška: {ex.Message}";
             IsSaving = false;
         }
     }
 
-    public class QuestionOptionDto
+    private void ApplyQuestionFields(Question question)
     {
-        public string Text { get; set; } = "";
+        question.SetType(Model.Type);
+        question.SetCategory(Model.CategoryId);
+        question.SetSubtopic(Model.SubtopicId);
+        question.SetDifficulty(Model.Difficulty);
+        question.SetExplanation(Sanitize(Model.Explanation, Model.ExplanationFormat));
+        question.SetHintFormula(Sanitize(Model.HintFormula, Model.HintFormat));
+        question.SetHintClue(Sanitize(Model.HintClue, Model.HintFormat));
+        question.SetHintFull(Sanitize(Model.HintFull, Model.HintFormat));
+        question.SetTextFormat(Model.TextFormat);
+        question.SetExplanationFormat(Model.ExplanationFormat);
+        question.SetHintFormat(Model.HintFormat);
+        question.SetTextRenderMode(Model.TextRenderMode);
+        question.SetExplanationRenderMode(Model.ExplanationRenderMode);
+        question.SetHintRenderMode(Model.HintRenderMode);
+        question.SetSemanticsAltText(ResolveSemantics(Model.SemanticsAltText, Model.Text, Model.TextFormat));
+        question.SetCorrectAnswer(ResolveCorrectAnswer());
+        question.SetHintDifficulty(Model.Difficulty switch
+        {
+            <= 2 => 1,
+            3 or 4 => 2,
+            _ => 3
+        });
     }
+
+    private List<QuestionOption> BuildOptions()
+        => Model.Options
+            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .Select(x => new QuestionOption(
+                Sanitize(x.Text, x.TextFormat),
+                x.IsCorrect,
+                x.TextFormat,
+                x.RenderMode,
+                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat)))
+            .ToList();
+
+    private List<QuestionStep> BuildSteps(int questionId)
+        => Model.Steps
+            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .OrderBy(x => x.Order)
+            .Select(x => new QuestionStep(
+                questionId,
+                x.Order,
+                Sanitize(x.Text, x.TextFormat),
+                Sanitize(x.Hint, x.HintFormat),
+                x.Highlight,
+                x.TextFormat,
+                x.HintFormat,
+                x.TextRenderMode,
+                x.HintRenderMode,
+                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat)))
+            .ToList();
+
+    private string? ResolveCorrectAnswer()
+    {
+        if (!string.Equals(Model.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
+        {
+            return Sanitize(Model.CorrectAnswer, Model.TextFormat);
+        }
+
+        var correct = Model.Options.FirstOrDefault(x => x.IsCorrect)?.Text;
+        return Sanitize(correct, Model.TextFormat);
+    }
+
+    private string? ValidateModel()
+    {
+        if (string.IsNullOrWhiteSpace(Model.Text))
+        {
+            return "Tekst pitanja je obavezan.";
+        }
+
+        if (Model.CategoryId <= 0)
+        {
+            return "Izaberite kategoriju.";
+        }
+
+        if (Model.SubtopicId <= 0)
+        {
+            return "Izaberite podtemu.";
+        }
+
+        if (string.Equals(Model.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
+        {
+            var filledOptions = Model.Options.Count(x => !string.IsNullOrWhiteSpace(x.Text));
+            if (filledOptions < 2)
+            {
+                return "Unesite najmanje dve opcije.";
+            }
+
+            if (Model.Options.Any(x => string.IsNullOrWhiteSpace(x.Text)))
+            {
+                return "Sve opcije moraju biti popunjene ili uklonjene.";
+            }
+
+            if (!Model.Options.Any(x => x.IsCorrect))
+            {
+                return "Označite tačan odgovor.";
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(Model.CorrectAnswer))
+        {
+            return "Tačan odgovor je obavezan za open answer pitanje.";
+        }
+
+        return null;
+    }
+
+    private string Sanitize(string? raw, MathLearning.Domain.Enums.ContentFormat format)
+        => Sanitizer.NormalizeMathContent(raw, format);
+
+    private string? ResolveSemantics(string? semanticsAltText, string? raw, MathLearning.Domain.Enums.ContentFormat format)
+        => !string.IsNullOrWhiteSpace(semanticsAltText)
+            ? semanticsAltText.Trim()
+            : Sanitizer.GenerateSemanticsAltText(raw, format);
 }

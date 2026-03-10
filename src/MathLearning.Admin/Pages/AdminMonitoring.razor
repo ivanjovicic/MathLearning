@@ -1,29 +1,21 @@
 @page "/admin/monitoring"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using System.Net.Http.Json
-@using MudBlazor
 
-<PageTitle>Monitoring i status servisa</PageTitle>
+<PageTitle>Monitoring</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Monitoring: Pozadinski servisi i status</MudText>
+<MudText Typo="Typo.h4" Class="mb-4">Monitoring servisa</MudText>
 
 <MudPaper Class="pa-4" Elevation="4">
-    <MudButton OnClick="Refresh" Color="Color.Primary" Variant="Variant.Filled" Disabled="isLoading">
-        @if (isLoading)
-        {
-            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
-            <span>Učitavanje...</span>
-        }
-        else
-        {
-            <span>Osveži</span>
-        }
+    <MudButton OnClick="RefreshAsync" Color="Color.Primary" Variant="Variant.Filled" Disabled="@isLoading">
+        Osvezi
     </MudButton>
-    @if (!string.IsNullOrEmpty(errorMessage))
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
         <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
     }
-    <MudTable Dense="true" Class="mt-4" Items="@statuses">
+
+    <MudTable T="ServiceStatus" Dense="true" Class="mt-4" Items="@statuses">
         <HeaderContent>
             <MudTh>Servis</MudTh>
             <MudTh>Status</MudTh>
@@ -32,14 +24,9 @@
         <RowTemplate>
             <MudTd>@context.Name</MudTd>
             <MudTd>
-                @if (context.IsHealthy)
-                {
-                    <MudChip Color="Color.Success">OK</MudChip>
-                }
-                else
-                {
-                    <MudChip Color="Color.Error">Greška</MudChip>
-                }
+                <MudChip T="string" Color="@(context.IsHealthy ? Color.Success : Color.Error)">
+                    @(context.IsHealthy ? "OK" : "Greska")
+                </MudChip>
             </MudTd>
             <MudTd>@context.Details</MudTd>
         </RowTemplate>
@@ -47,45 +34,39 @@
 </MudPaper>
 
 @code {
-    private List<ServiceStatus> statuses = new();
-    private string? errorMessage;
-    private bool isLoading = false;
+    [Inject] private NavigationManager NavManager { get; set; } = default!;
 
-    private async Task Refresh()
+    private List<ServiceStatus> statuses = [];
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
     {
         errorMessage = null;
         isLoading = true;
+
         try
         {
-            var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
-            // Health endpoint
+            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
             var health = await http.GetAsync("/health");
-            statuses = new List<ServiceStatus>
-            {
-                new ServiceStatus {
-                    Name = "API Health",
-                    IsHealthy = health.IsSuccessStatusCode,
-                    Details = health.IsSuccessStatusCode ? "API radi" : $"Status: {health.StatusCode}"
-                }
-            };
-            // Hangfire dashboard (just check if reachable)
             var hangfire = await http.GetAsync("/hangfire");
-            statuses.Add(new ServiceStatus {
-                Name = "Hangfire Dashboard",
-                IsHealthy = hangfire.IsSuccessStatusCode,
-                Details = hangfire.IsSuccessStatusCode ? "Dashboard OK" : $"Status: {hangfire.StatusCode}"
-            });
-            // Metrics endpoint
             var metrics = await http.GetAsync("/metrics");
-            statuses.Add(new ServiceStatus {
-                Name = "API Metrics",
-                IsHealthy = metrics.IsSuccessStatusCode,
-                Details = metrics.IsSuccessStatusCode ? "Dostupno" : $"Status: {metrics.StatusCode}"
-            });
+
+            statuses =
+            [
+                new ServiceStatus("API Health", health.IsSuccessStatusCode, health.IsSuccessStatusCode ? "API radi" : health.StatusCode.ToString()),
+                new ServiceStatus("Hangfire", hangfire.IsSuccessStatusCode, hangfire.IsSuccessStatusCode ? "Dashboard OK" : hangfire.StatusCode.ToString()),
+                new ServiceStatus("Metrics", metrics.IsSuccessStatusCode, metrics.IsSuccessStatusCode ? "Dostupno" : metrics.StatusCode.ToString())
+            ];
         }
         catch (Exception ex)
         {
-            errorMessage = $"Greška: {ex.Message}";
+            errorMessage = ex.Message;
         }
         finally
         {
@@ -93,17 +74,5 @@
         }
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        await Refresh();
-    }
-
-    public class ServiceStatus
-    {
-        public string Name { get; set; } = string.Empty;
-        public bool IsHealthy { get; set; }
-        public string Details { get; set; } = string.Empty;
-    }
-
-    [Inject] NavigationManager NavManager { get; set; } = default!;
+    private sealed record ServiceStatus(string Name, bool IsHealthy, string Details);
 }

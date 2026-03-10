@@ -33,6 +33,12 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
     public DbSet<QuestionStep> QuestionSteps => Set<QuestionStep>();
     public DbSet<QuestionStepTranslation> QuestionStepTranslations => Set<QuestionStepTranslation>();
+    public DbSet<QuestionDraft> QuestionDrafts => Set<QuestionDraft>();
+    public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
+    public DbSet<QuestionValidationResult> QuestionValidationResults => Set<QuestionValidationResult>();
+    public DbSet<QuestionValidationIssue> QuestionValidationIssues => Set<QuestionValidationIssue>();
+    public DbSet<QuestionPreviewCache> QuestionPreviewCaches => Set<QuestionPreviewCache>();
+    public DbSet<QuestionAuthoringAuditLog> QuestionAuthoringAuditLogs => Set<QuestionAuthoringAuditLog>();
     public DbSet<StepExplanationTemplate> StepExplanationTemplates => Set<StepExplanationTemplate>();
     public DbSet<StepExplanationCacheEntry> StepExplanationCacheEntries => Set<StepExplanationCacheEntry>();
     public DbSet<MathFormulaReferenceEntity> MathFormulaReferences => Set<MathFormulaReferenceEntity>();
@@ -98,6 +104,13 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
             entity.Property(e => e.Type).IsRequired().HasDefaultValue("multiple_choice");
+            entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.ExplanationFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.TextRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.ExplanationRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.SemanticsAltText).HasMaxLength(1000);
             entity.HasOne(e => e.Category)
                   .WithMany()
                   .HasForeignKey(e => e.CategoryId)
@@ -121,6 +134,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             // 💡 Hint properties
             entity.Property(e => e.HintFormula).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.HintClue).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.HintFull).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.HintDifficulty).HasDefaultValue(1);
             
             // 🚀 Performance indexes
@@ -136,6 +150,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.RenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.SemanticsAltText).HasMaxLength(500);
             entity.HasMany(e => e.Translations)
                   .WithOne(t => t.Option)
                   .HasForeignKey(t => t.OptionId)
@@ -482,6 +499,11 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.Hint).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.Highlight).HasDefaultValue(false);
             entity.Property(e => e.StepIndex).IsRequired();
+            entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.TextRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.SemanticsAltText).HasMaxLength(500);
 
             entity.HasMany(e => e.Translations)
                   .WithOne(t => t.QuestionStep)

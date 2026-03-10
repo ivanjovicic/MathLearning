@@ -1,3 +1,5 @@
+using MathLearning.Domain.Enums;
+
 namespace MathLearning.Application.Services;
 
 public sealed record QuestionSelectionCriteria(
@@ -14,12 +16,18 @@ public sealed record SelectedQuestion(
     int TopicId,
     int SubtopicId,
     string Difficulty,
-    string? CorrectAnswer);
+    string? CorrectAnswer,
+    ContentFormat PromptFormat = ContentFormat.MarkdownWithMath,
+    RenderMode RenderMode = RenderMode.Auto,
+    string? SemanticsAltText = null);
 
 public sealed record SelectedQuestionOption(
     int Id,
     string Text,
-    bool IsCorrect);
+    bool IsCorrect,
+    ContentFormat TextFormat = ContentFormat.MarkdownWithMath,
+    RenderMode RenderMode = RenderMode.Auto,
+    string? SemanticsAltText = null);
 
 public interface IQuestionSelector
 {

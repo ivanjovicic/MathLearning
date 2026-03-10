@@ -1,3 +1,5 @@
+using MathLearning.Domain.Enums;
+
 namespace MathLearning.Application.DTOs.Practice;
 
 public sealed record StartPracticeSessionRequest(
@@ -10,13 +12,19 @@ public sealed record StartPracticeSessionRequest(
 
 public sealed record PracticeQuestionOptionDto(
     int Id,
-    string Text);
+    string Text,
+    ContentFormat TextFormat = ContentFormat.MarkdownWithMath,
+    RenderMode RenderMode = RenderMode.Auto,
+    string? SemanticsAltText = null);
 
 public sealed record PracticeQuestionDto(
     int Id,
     string Prompt,
     IReadOnlyList<PracticeQuestionOptionDto> Options,
-    string Difficulty);
+    string Difficulty,
+    ContentFormat PromptFormat = ContentFormat.MarkdownWithMath,
+    RenderMode RenderMode = RenderMode.Auto,
+    string? SemanticsAltText = null);
 
 public sealed record StartPracticeSessionResponse(
     Guid SessionId,

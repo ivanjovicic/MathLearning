@@ -22,7 +22,7 @@
     </MudButton>
     @if (profile != null)
     {
-        <MudTable Dense="true" Class="mt-4">
+        <MudTable T="UserProfileDto" Dense="true" Class="mt-4" Items="@ProfileRows">
             <HeaderContent>
                 <MudTh>Korisnik</MudTh>
                 <MudTh>XP</MudTh>
@@ -54,6 +54,7 @@
     private UserProfileDto? profile;
     private string? errorMessage;
     private bool isLoading = false;
+    private IEnumerable<UserProfileDto> ProfileRows => profile is null ? [] : [profile];
 
     private async Task GetUserXp()
     {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MathLearning.Application.DTOs.Practice;
+using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -604,6 +605,19 @@ public sealed class PracticeSessionService : IPracticeSessionService
         new(
             Id: question.Id,
             Prompt: question.Prompt,
-            Options: question.Options.Select(x => new PracticeQuestionOptionDto(x.Id, x.Text)).ToList(),
-            Difficulty: question.Difficulty);
+            Options: question.Options
+                .Select(x => new PracticeQuestionOptionDto(
+                    x.Id,
+                    x.Text,
+                    x.TextFormat,
+                    x.RenderMode,
+                    TranslationHelper.ResolveSemanticsAltText(x.SemanticsAltText, x.Text, x.TextFormat)))
+                .ToList(),
+            Difficulty: question.Difficulty,
+            PromptFormat: question.PromptFormat,
+            RenderMode: question.RenderMode,
+            SemanticsAltText: TranslationHelper.ResolveSemanticsAltText(
+                question.SemanticsAltText,
+                question.Prompt,
+                question.PromptFormat));
 }

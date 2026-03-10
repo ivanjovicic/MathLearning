@@ -630,6 +630,9 @@ try
     // Map Quiz endpoints
     app.MapQuizEndpoints();
 
+    // Map question authoring endpoints
+    app.MapQuestionAuthoringEndpoints();
+
     // Map offline sync endpoints
     app.MapSyncEndpoints();
 

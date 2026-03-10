@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MathLearning.Application.DTOs.Sync;
+using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -92,12 +93,24 @@ public sealed class OfflineBundleService : IOfflineBundleService
                 q.Difficulty,
                 q.Options
                     .OrderBy(o => o.Id)
-                    .Select(o => new SyncBundleOptionDto(o.Id, o.Text))
+                    .Select(o => new SyncBundleOptionDto(
+                        o.Id,
+                        o.Text,
+                        o.TextFormat,
+                        o.RenderMode,
+                        TranslationHelper.ResolveSemanticsAltText(o.SemanticsAltText, o.Text, o.TextFormat)))
                     .ToList(),
                 q.HintClue,
                 q.HintFormula,
                 q.Explanation,
-                q.Explanation))
+                q.Explanation,
+                q.TextFormat,
+                q.ExplanationFormat,
+                q.HintFormat,
+                q.TextRenderMode,
+                q.ExplanationRenderMode,
+                q.HintRenderMode,
+                TranslationHelper.ResolveSemanticsAltText(q.SemanticsAltText, q.Text, q.TextFormat)))
                 .ToList(),
             topics.Select(x => new OfflineBundleTopicDto(x.Id, x.Name, x.Description)).ToList(),
             subtopics.Select(x => new OfflineBundleSubtopicDto(x.Id, x.TopicId, x.Name)).ToList(),

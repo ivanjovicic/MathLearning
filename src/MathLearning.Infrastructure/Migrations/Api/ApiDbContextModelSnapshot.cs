@@ -1405,11 +1405,27 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CurrentDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CurrentVersionNumber")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Difficulty")
                         .HasColumnType("integer");
 
                     b.Property<string>("Explanation")
                         .HasColumnType("text");
+
+                    b.Property<string>("ExplanationFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ExplanationRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("HintClue")
                         .HasColumnType("TEXT");
@@ -1419,8 +1435,39 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<string>("HintFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("HintFormula")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("HintFull")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HintRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("draft");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<int>("SubtopicId")
                         .HasColumnType("integer");
@@ -1428,6 +1475,16 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TextRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1442,8 +1499,14 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.HasIndex("CategoryId");
 
+                    b.HasIndex("CurrentDraftId")
+                        .HasDatabaseName("IX_Questions_CurrentDraftId");
+
                     b.HasIndex("Difficulty")
                         .HasDatabaseName("IX_Questions_Difficulty");
+
+                    b.HasIndex("PublishState")
+                        .HasDatabaseName("IX_Questions_PublishState");
 
                     b.HasIndex("SubtopicId")
                         .HasDatabaseName("IX_Questions_SubtopicId");
@@ -1452,6 +1515,124 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("IX_Questions_Subtopic_Difficulty");
 
                     b.ToTable("Questions");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionAuthoringAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("DraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_question_authoring_audit_draft_occurred");
+
+                    b.HasIndex("QuestionId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_question_authoring_audit_question_occurred");
+
+                    b.ToTable("question_authoring_audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DraftVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EditorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<Guid?>("LatestValidationResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NormalizedContentJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("PreviousDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ValidationStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentHash")
+                        .HasDatabaseName("IX_question_drafts_content_hash");
+
+                    b.HasIndex("LatestValidationResultId");
+
+                    b.HasIndex("QuestionId", "DraftVersion")
+                        .IsUnique()
+                        .HasDatabaseName("UX_question_drafts_question_version");
+
+                    b.ToTable("question_drafts", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionOption", b =>
@@ -1468,9 +1649,23 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int?>("QuestionId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -1480,6 +1675,43 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasIndex("QuestionId");
 
                     b.ToTable("Options");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionPreviewCache", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviewPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentHash")
+                        .HasDatabaseName("IX_question_preview_cache_content_hash");
+
+                    b.HasIndex("DraftId");
+
+                    b.HasIndex("ExpiresAtUtc")
+                        .HasDatabaseName("IX_question_preview_cache_expires");
+
+                    b.ToTable("question_preview_cache", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStat", b =>
@@ -1543,8 +1775,22 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("Hint")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("HintFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("HintRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("StepIndex")
                         .HasColumnType("integer");
@@ -1552,6 +1798,16 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TextRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -1641,6 +1897,168 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_QuestionTranslations_Question_Lang");
 
                     b.ToTable("QuestionTranslations");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationIssue", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("FieldPath")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RuleId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Suggestion")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ValidationResultId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ValidationResultId", "Stage")
+                        .HasDatabaseName("IX_question_validation_issues_result_stage");
+
+                    b.ToTable("question_validation_issues", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("HasErrors")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HasWarnings")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("IssueCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreviewPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SummaryJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("ValidatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId", "ValidatedAtUtc")
+                        .HasDatabaseName("IX_question_validation_results_draft_validated");
+
+                    b.ToTable("question_validation_results", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionVersion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AuthorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EditorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("NormalizedSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<long?>("PreviousVersionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("SourceDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviousVersionId");
+
+                    b.HasIndex("SourceDraftId");
+
+                    b.HasIndex("QuestionId", "PublishedAtUtc")
+                        .HasDatabaseName("IX_question_versions_question_published_at");
+
+                    b.HasIndex("QuestionId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_question_versions_question_version");
+
+                    b.ToTable("question_versions", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuizAttempt", b =>
@@ -3922,12 +4340,56 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Subtopic");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionAuthoringAuditLog", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Draft");
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionDraft", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionValidationResult", "LatestValidationResult")
+                        .WithMany()
+                        .HasForeignKey("LatestValidationResultId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("LatestValidationResult");
+
+                    b.Navigation("Question");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionOption", b =>
                 {
                     b.HasOne("MathLearning.Domain.Entities.Question", null)
                         .WithMany("Options")
                         .HasForeignKey("QuestionId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionPreviewCache", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Draft");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStat", b =>
@@ -3972,6 +4434,54 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .IsRequired();
 
                     b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationIssue", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionValidationResult", "ValidationResult")
+                        .WithMany("Issues")
+                        .HasForeignKey("ValidationResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ValidationResult");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationResult", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Draft");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionVersion", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionVersion", "PreviousVersion")
+                        .WithMany()
+                        .HasForeignKey("PreviousVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "SourceDraft")
+                        .WithMany()
+                        .HasForeignKey("SourceDraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PreviousVersion");
+
+                    b.Navigation("Question");
+
+                    b.Navigation("SourceDraft");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.ReviewSchedule", b =>
@@ -4329,6 +4839,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStep", b =>
                 {
                     b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationResult", b =>
+                {
+                    b.Navigation("Issues");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,4 +1,5 @@
 ﻿@using MudBlazor
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Web
 
 <!DOCTYPE html>
@@ -9,6 +10,7 @@
     <base href="/" />
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link href="lib/katex/katex.min.css" rel="stylesheet" />
     <HeadOutlet @rendermode="@RenderMode.InteractiveServer" />
 </head>
 <body>
@@ -41,6 +43,9 @@
     
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="lib/katex/katex.min.js"></script>
+    <script src="lib/katex/contrib/auto-render.min.js"></script>
+    <script src="mathPreview.js"></script>
 </body>
 </html>
 

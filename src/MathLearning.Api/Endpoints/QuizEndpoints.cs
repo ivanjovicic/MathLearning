@@ -128,7 +128,10 @@ public static class QuizEndpoints
             var options = question.Options
                 .Select(o => new OptionDto(
                     o.Id,
-                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty))
+                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty,
+                    o.TextFormat,
+                    o.RenderMode,
+                    TranslationHelper.GetOptionSemanticsAltText(o, lang)))
                 .ToList();
 
             return Results.Ok(new NextQuestionResponse(
@@ -141,7 +144,14 @@ public static class QuizEndpoints
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, lang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, lang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, lang)),
-                steps
+                steps,
+                question.TextFormat,
+                question.ExplanationFormat,
+                question.HintFormat,
+                question.TextRenderMode,
+                question.ExplanationRenderMode,
+                question.HintRenderMode,
+                TranslationHelper.GetQuestionSemanticsAltText(question, lang)
             ));
         });
 
@@ -730,7 +740,10 @@ public static class QuizEndpoints
         var options = q.Options
             .Select(o => new OptionDto(
                 o.Id,
-                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty))
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty,
+                o.TextFormat,
+                o.RenderMode,
+                TranslationHelper.GetOptionSemanticsAltText(o, lang)))
             .ToList();
 
         return new QuestionDto(
@@ -744,7 +757,14 @@ public static class QuizEndpoints
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
-            NormalizeStepsForResponse(stepAdapter.GetSteps(q, lang))
+            NormalizeStepsForResponse(stepAdapter.GetSteps(q, lang)),
+            q.TextFormat,
+            q.ExplanationFormat,
+            q.HintFormat,
+            q.TextRenderMode,
+            q.ExplanationRenderMode,
+            q.HintRenderMode,
+            TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         );
     }
 
@@ -789,12 +809,17 @@ public static class QuizEndpoints
         {
             id = q.Id,
             text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)),
+            textFormat = q.TextFormat,
+            renderMode = q.TextRenderMode,
             type = q.Type,
             options = q.Options
                 .Select(o => new
                 {
                     id = o.Id,
-                    text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang))
+                    text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)),
+                    textFormat = o.TextFormat,
+                    renderMode = o.RenderMode,
+                    semanticsAltText = TranslationHelper.GetOptionSemanticsAltText(o, lang)
                 })
                 .ToList(),
             correctAnswerId = q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
@@ -802,7 +827,12 @@ public static class QuizEndpoints
             hintLight = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
             hintMedium = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
             hintFull = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
-            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang))
+            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
+            explanationFormat = q.ExplanationFormat,
+            hintFormat = q.HintFormat,
+            explanationRenderMode = q.ExplanationRenderMode,
+            hintRenderMode = q.HintRenderMode,
+            semanticsAltText = TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         });
 
         return Results.Ok(new
@@ -818,7 +848,12 @@ public static class QuizEndpoints
             .Select(step => new StepExplanationDto(
                 InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
                 InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
-                step.Highlight))
+                step.Highlight,
+                step.TextFormat,
+                step.HintFormat,
+                step.TextRenderMode,
+                step.HintRenderMode,
+                TranslationHelper.ResolveSemanticsAltText(step.SemanticsAltText, step.Text, step.TextFormat)))
             .ToList();
     }
 

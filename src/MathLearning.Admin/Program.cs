@@ -1,6 +1,7 @@
 ﻿using MathLearning.Admin.Components;
 using MathLearning.Admin.Data;
 using MathLearning.Admin.Services;
+using MathLearning.Application.Content;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -57,6 +58,7 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
 
 builder.Services.AddMudServices();
+builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();

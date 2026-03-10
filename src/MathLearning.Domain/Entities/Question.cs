@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using MathLearning.Domain.Enums;
 
 namespace MathLearning.Domain.Entities
 {
@@ -11,6 +12,13 @@ namespace MathLearning.Domain.Entities
         public string Type { get; private set; } = "multiple_choice";
         public string? CorrectAnswer { get; private set; }
         public string? Explanation { get; private set; }
+        public ContentFormat TextFormat { get; private set; } = ContentFormat.MarkdownWithMath;
+        public ContentFormat ExplanationFormat { get; private set; } = ContentFormat.MarkdownWithMath;
+        public ContentFormat HintFormat { get; private set; } = ContentFormat.MarkdownWithMath;
+        public RenderMode TextRenderMode { get; private set; } = RenderMode.Auto;
+        public RenderMode ExplanationRenderMode { get; private set; } = RenderMode.Auto;
+        public RenderMode HintRenderMode { get; private set; } = RenderMode.Auto;
+        public string? SemanticsAltText { get; private set; }
         public int Difficulty { get; private set; } = 1;
         public int CategoryId { get; private set; }
         public int SubtopicId { get; private set; }
@@ -18,6 +26,7 @@ namespace MathLearning.Domain.Entities
         // 💡 Hints
         public string? HintFormula { get; private set; }
         public string? HintClue { get; private set; }
+        public string? HintFull { get; private set; }
         public int HintDifficulty { get; private set; } = 1;
         
         public Category? Category { get; private set; }
@@ -26,6 +35,12 @@ namespace MathLearning.Domain.Entities
         public List<QuestionOption> Options { get; private set; } = new();
         public List<QuestionTranslation> Translations { get; private set; } = new();
         public List<QuestionStep> Steps { get; private set; } = new();
+
+        public string PublishState { get; private set; } = QuestionPublishStates.Draft;
+        public int CurrentVersionNumber { get; private set; }
+        public Guid? CurrentDraftId { get; private set; }
+        public string? PublishedByUserId { get; private set; }
+        public DateTime? PublishedAtUtc { get; private set; }
 
         public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
@@ -71,6 +86,48 @@ namespace MathLearning.Domain.Entities
             Touch();
         }
 
+        public void SetTextFormat(ContentFormat format)
+        {
+            TextFormat = format;
+            Touch();
+        }
+
+        public void SetExplanationFormat(ContentFormat format)
+        {
+            ExplanationFormat = format;
+            Touch();
+        }
+
+        public void SetHintFormat(ContentFormat format)
+        {
+            HintFormat = format;
+            Touch();
+        }
+
+        public void SetTextRenderMode(RenderMode renderMode)
+        {
+            TextRenderMode = renderMode;
+            Touch();
+        }
+
+        public void SetExplanationRenderMode(RenderMode renderMode)
+        {
+            ExplanationRenderMode = renderMode;
+            Touch();
+        }
+
+        public void SetHintRenderMode(RenderMode renderMode)
+        {
+            HintRenderMode = renderMode;
+            Touch();
+        }
+
+        public void SetSemanticsAltText(string? semanticsAltText)
+        {
+            SemanticsAltText = semanticsAltText;
+            Touch();
+        }
+
         public void SetCategory(int categoryId)
         {
             CategoryId = categoryId;
@@ -89,6 +146,18 @@ namespace MathLearning.Domain.Entities
             Touch();
         }
 
+        public void ReplaceSteps(IEnumerable<QuestionStep> steps)
+        {
+            Steps = steps.OrderBy(x => x.StepIndex).ToList();
+            Touch();
+        }
+
+        public void ReplaceTranslations(IEnumerable<QuestionTranslation> translations)
+        {
+            Translations = translations.ToList();
+            Touch();
+        }
+
         // 💡 Hint Methods
         public void SetHintFormula(string? hintFormula)
         {
@@ -102,11 +171,39 @@ namespace MathLearning.Domain.Entities
             Touch();
         }
 
+        public void SetHintFull(string? hintFull)
+        {
+            HintFull = hintFull;
+            Touch();
+        }
+
         public void SetHintDifficulty(int hintDifficulty)
         {
             if (hintDifficulty < 1 || hintDifficulty > 3) 
                 throw new ArgumentOutOfRangeException(nameof(hintDifficulty), "Hint difficulty must be 1..3");
             HintDifficulty = hintDifficulty;
+            Touch();
+        }
+
+        public void SetPublishState(string publishState, string? actorUserId = null, DateTime? publishedAtUtc = null)
+        {
+            PublishState = string.IsNullOrWhiteSpace(publishState)
+                ? QuestionPublishStates.Draft
+                : publishState.Trim().ToLowerInvariant();
+            PublishedByUserId = actorUserId;
+            PublishedAtUtc = publishedAtUtc;
+            Touch();
+        }
+
+        public void SetCurrentDraft(Guid? draftId)
+        {
+            CurrentDraftId = draftId;
+            Touch();
+        }
+
+        public void SetCurrentVersionNumber(int versionNumber)
+        {
+            CurrentVersionNumber = Math.Max(0, versionNumber);
             Touch();
         }
 
