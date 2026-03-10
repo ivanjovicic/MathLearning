@@ -207,14 +207,10 @@ public sealed class AdaptiveApiFacade
 
     private async Task<AdaptivePathPayload> BuildAdaptivePathPayloadAsync(string userId, CancellationToken ct)
     {
-        var recommendationsTask = _adaptiveLearningService.GetRecommendationsAsync(userId);
-        var dueReviewsTask = _adaptiveLearningService.GetDueReviewsAsync(userId);
-        await Task.WhenAll(recommendationsTask, dueReviewsTask);
+        var recommendations = await _adaptiveLearningService.GetRecommendationsAsync(userId);
+        var dueReviews = await _adaptiveLearningService.GetDueReviewsAsync(userId);
 
-        return new AdaptivePathPayload(
-            recommendationsTask.Result,
-            dueReviewsTask.Result,
-            DateTime.UtcNow);
+        return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow);
     }
 
     private static AdaptiveSessionDto MapSession(AdaptiveSession session)
@@ -322,14 +318,10 @@ public sealed class AdaptiveApiFacade
         string userId,
         IAdaptiveLearningService adaptiveLearningService)
     {
-        var recommendationsTask = adaptiveLearningService.GetRecommendationsAsync(userId);
-        var dueReviewsTask = adaptiveLearningService.GetDueReviewsAsync(userId);
-        await Task.WhenAll(recommendationsTask, dueReviewsTask);
+        var recommendations = await adaptiveLearningService.GetRecommendationsAsync(userId);
+        var dueReviews = await adaptiveLearningService.GetDueReviewsAsync(userId);
 
-        return new AdaptivePathPayload(
-            recommendationsTask.Result,
-            dueReviewsTask.Result,
-            DateTime.UtcNow);
+        return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow);
     }
 
     private static ApiResult<T> BuildFailureResult<T>(Exception ex, string defaultMessage)

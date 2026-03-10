@@ -291,7 +291,8 @@ try
     }
     else
     {
-        Log.Warning("Redis connection string is not configured. Redis-backed leaderboard endpoints will not be available.");
+        builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
+        Log.Warning("Redis connection string is not configured. Falling back to DB-backed leaderboard service.");
     }
 
     // ? Bug reporting services
