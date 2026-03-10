@@ -251,6 +251,7 @@ try
     builder.Services.AddScoped<IPracticeBackgroundJobs, PracticeBackgroundJobs>();
     builder.Services.AddScoped<IPracticeHangfireJobs, PracticeHangfireJobs>();
     builder.Services.AddScoped<ISchoolLeaderboardHangfireJobs, SchoolLeaderboardHangfireJobs>();
+    builder.Services.AddScoped<IAntiCheatHangfireJobs, AntiCheatHangfireJobs>();
     builder.Services.AddScoped<IPracticeSessionService, PracticeSessionService>();
     builder.Services.AddScoped<IMathReasoningGraphEngine, MathReasoningGraphEngine>();
     builder.Services.AddScoped<IStepExplanationGenerator, StepExplanationGenerator>();
@@ -763,6 +764,10 @@ try
             "school-leaderboard-monthly-snapshot",
             job => job.CaptureSnapshotJob("month"),
             "15 */6 * * *");
+        RecurringJob.AddOrUpdate<IAntiCheatHangfireJobs>(
+            "anti-cheat-ml-review-sweep",
+            job => job.RunMlReviewSweepJob(0),
+            "*/5 * * * *");
     }
     else if (!app.Environment.IsEnvironment("Test"))
     {

@@ -173,6 +173,7 @@ public class SyncServiceTests
         return new SyncService(
             db,
             xpTrackingService,
+            new NoOpAnswerPatternAntiCheatService(),
             Options.Create(new SyncOptions
             {
                 RequireOperationSignatures = requireSignatures,

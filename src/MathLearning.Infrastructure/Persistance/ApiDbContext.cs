@@ -66,6 +66,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
     public DbSet<PracticeSessionItem> PracticeSessionItems => Set<PracticeSessionItem>();
     public DbSet<MasteryState> MasteryStates => Set<MasteryState>();
+    public DbSet<AnswerPatternDetectionLog> AnswerPatternDetectionLogs => Set<AnswerPatternDetectionLog>();
     public DbSet<DesignTokenVersion> DesignTokenVersions => Set<DesignTokenVersion>();
     public DbSet<DesignTokenSet> DesignTokenSets => Set<DesignTokenSet>();
     public DbSet<DesignToken> DesignTokens => Set<DesignToken>();
@@ -998,6 +999,46 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_xp_cheat_log_user_detected");
             entity.HasIndex(e => e.DetectedAtUtc)
                   .HasDatabaseName("IX_xp_cheat_log_detected");
+        });
+
+        builder.Entity<AnswerPatternDetectionLog>(entity =>
+        {
+            entity.ToTable("answer_pattern_detection_log");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.DeviceId).HasMaxLength(128);
+            entity.Property(e => e.AnswerFingerprint).HasMaxLength(32);
+            entity.Property(e => e.Severity).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.Decision).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.ReasonSummary).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.SignalsJson).HasColumnType("jsonb");
+            entity.Property(e => e.PromptVersion).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.PromptPayloadJson).HasColumnType("jsonb");
+            entity.Property(e => e.DetectionEngine).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.ReviewStatus).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.ReviewedByUserId).HasMaxLength(450);
+            entity.Property(e => e.ReviewNotes).HasMaxLength(1000);
+            entity.Property(e => e.MlReviewStatus).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.MlModelName).HasMaxLength(128);
+            entity.Property(e => e.MlReviewOutputJson).HasColumnType("jsonb");
+            entity.Property(e => e.MlLastError).HasMaxLength(1000);
+            entity.Property(e => e.AnsweredAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.DetectedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReviewedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.MlLastAttemptAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.MlReviewedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_user_detected");
+            entity.HasIndex(e => new { e.ReviewStatus, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_review_detected");
+            entity.HasIndex(e => new { e.Severity, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_severity_detected");
+            entity.HasIndex(e => new { e.SourceType, e.AnsweredAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_source_answered");
+            entity.HasIndex(e => new { e.MlReviewStatus, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_ml_review_detected");
         });
 
         builder.Entity<School>(entity =>

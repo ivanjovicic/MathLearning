@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260310131114_AddAnswerPatternAntiCheatDetection")]
+    partial class AddAnswerPatternAntiCheatDetection
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -163,31 +166,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<bool>("IsCorrect")
                         .HasColumnType("boolean");
 
-                    b.Property<DateTime?>("MlLastAttemptAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("MlLastError")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("MlModelName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int>("MlReviewAttempts")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("MlReviewOutputJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("MlReviewStatus")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTime?>("MlReviewedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("PromptPayloadJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -256,9 +234,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("character varying(450)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("MlReviewStatus", "DetectedAtUtc")
-                        .HasDatabaseName("IX_answer_pattern_detection_ml_review_detected");
 
                     b.HasIndex("ReviewStatus", "DetectedAtUtc")
                         .HasDatabaseName("IX_answer_pattern_detection_review_detected");

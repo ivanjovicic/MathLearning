@@ -1,4 +1,5 @@
 using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -23,17 +24,20 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
     private readonly ApiDbContext _db;
     private readonly ISrsService _srsService;
     private readonly InMemoryCacheService _cache;
+    private readonly IAnswerPatternAntiCheatService _antiCheatService;
     private readonly ILogger<AdaptiveLearningService> _logger;
 
     public AdaptiveLearningService(
         ApiDbContext db,
         ISrsService srsService,
         InMemoryCacheService cache,
+        IAnswerPatternAntiCheatService antiCheatService,
         ILogger<AdaptiveLearningService> logger)
     {
         _db = db;
         _srsService = srsService;
         _cache = cache;
+        _antiCheatService = antiCheatService;
         _logger = logger;
     }
 
@@ -227,6 +231,23 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         };
 
         _db.UserQuestionHistories.Add(historyEntry);
+
+        await _antiCheatService.EvaluateAndTrackAsync(
+            new AntiCheatAnswerObservationInput(
+                userId,
+                "adaptive_session_answer",
+                question.Id,
+                question.Subtopic.TopicId,
+                question.SubtopicId,
+                request.AdaptiveSessionId,
+                null,
+                null,
+                request.Answer,
+                isCorrect,
+                boundedResponseTime * 1000,
+                boundedConfidence,
+                answeredAt),
+            ct);
 
         var reviewSchedule = await UpsertReviewScheduleAsync(
             userId,

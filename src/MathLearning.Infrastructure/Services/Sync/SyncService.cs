@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.DTOs.Sync;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
@@ -18,6 +19,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ApiDbContext db;
     private readonly IXpTrackingService xpTrackingService;
+    private readonly IAnswerPatternAntiCheatService antiCheatService;
     private readonly IOptions<SyncOptions> options;
     private readonly SyncMetricsService metrics;
     private readonly ILogger<SyncService> logger;
@@ -25,12 +27,14 @@ public sealed class SyncService : ISyncService, ISyncAdminService
     public SyncService(
         ApiDbContext db,
         IXpTrackingService xpTrackingService,
+        IAnswerPatternAntiCheatService antiCheatService,
         IOptions<SyncOptions> options,
         SyncMetricsService metrics,
         ILogger<SyncService> logger)
     {
         this.db = db;
         this.xpTrackingService = xpTrackingService;
+        this.antiCheatService = antiCheatService;
         this.options = options;
         this.metrics = metrics;
         this.logger = logger;
@@ -757,6 +761,23 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         ApplySpacedRepetition(questionStat, isCorrect, payload.AnsweredAtUtc);
         await UpdateAnalyticsProjectionAsync(log.UserId, question.SubtopicId, sessionId, payload.QuestionId, isCorrect, payload.TimeSpentSeconds, payload.AnsweredAtUtc, cancellationToken);
         await UpdateDailyStatsAndStreakAsync(profile, payload.AnsweredAtUtc, cancellationToken);
+        await antiCheatService.EvaluateAndTrackAsync(
+            new AntiCheatAnswerObservationInput(
+                log.UserId,
+                "sync_submit_answer",
+                payload.QuestionId,
+                null,
+                question.SubtopicId,
+                sessionId,
+                log.DeviceId,
+                log.ClientSequence,
+                payload.Answer,
+                isCorrect,
+                Math.Max(0, payload.TimeSpentSeconds) * 1000,
+                null,
+                payload.AnsweredAtUtc,
+                log.PayloadJson),
+            cancellationToken);
 
         if (isCorrect)
         {

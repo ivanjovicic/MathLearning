@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.DTOs.Practice;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
@@ -16,6 +17,7 @@ public sealed class PracticeSessionService : IPracticeSessionService
     private readonly IPracticeAnalyticsUpdater _analyticsUpdater;
     private readonly IPracticeBackgroundJobs _backgroundJobs;
     private readonly IAdaptiveAnalyticsService _adaptiveAnalytics;
+    private readonly IAnswerPatternAntiCheatService _antiCheatService;
     private readonly ILogger<PracticeSessionService> _logger;
 
     public PracticeSessionService(
@@ -25,6 +27,7 @@ public sealed class PracticeSessionService : IPracticeSessionService
         IPracticeAnalyticsUpdater analyticsUpdater,
         IPracticeBackgroundJobs backgroundJobs,
         IAdaptiveAnalyticsService adaptiveAnalytics,
+        IAnswerPatternAntiCheatService antiCheatService,
         ILogger<PracticeSessionService> logger)
     {
         _db = db;
@@ -33,6 +36,7 @@ public sealed class PracticeSessionService : IPracticeSessionService
         _analyticsUpdater = analyticsUpdater;
         _backgroundJobs = backgroundJobs;
         _adaptiveAnalytics = adaptiveAnalytics;
+        _antiCheatService = antiCheatService;
         _logger = logger;
     }
 
@@ -236,6 +240,23 @@ public sealed class PracticeSessionService : IPracticeSessionService
                 IsCorrect: isCorrect,
                 TimeSpentMs: Math.Max(0, request.TimeSpentMs),
                 AttemptedAtUtc: nowUtc),
+            ct);
+
+        await _antiCheatService.EvaluateAndTrackAsync(
+            new AntiCheatAnswerObservationInput(
+                userId,
+                "practice_session_answer",
+                request.QuestionId,
+                latestMatchingItem.TopicId,
+                latestMatchingItem.SubtopicId,
+                sessionId,
+                null,
+                null,
+                request.SelectedOption,
+                isCorrect,
+                Math.Max(0, request.TimeSpentMs),
+                null,
+                nowUtc),
             ct);
 
         var nextQuestion = await BuildNextQuestionAsync(session, ct);

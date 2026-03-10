@@ -182,6 +182,7 @@ public class PracticeSessionServiceIntegrationTests
             analyticsUpdater,
             backgroundJobs,
             adaptiveAnalytics,
+            new NoOpAnswerPatternAntiCheatService(),
             NullLogger<PracticeSessionService>.Instance);
     }
 

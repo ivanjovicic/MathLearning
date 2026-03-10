@@ -1,6 +1,7 @@
 ﻿using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Application.DTOs.Progress;
 using MathLearning.Application.Helpers;
+using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -161,7 +162,8 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx,
             MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
-            IQuizAttemptIngestService ingestService) =>
+            IQuizAttemptIngestService ingestService,
+            IAnswerPatternAntiCheatService antiCheatService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
@@ -254,6 +256,23 @@ public static class QuizEndpoints
 
             stat.LastAttemptAt = DateTime.UtcNow;
 
+            await antiCheatService.EvaluateAndTrackAsync(
+                new AntiCheatAnswerObservationInput(
+                    userId,
+                    "quiz_answer",
+                    questionId,
+                    null,
+                    question.SubtopicId,
+                    quizSessionId,
+                    null,
+                    null,
+                    answerText,
+                    isCorrect,
+                    Math.Max(0, timeSpentSeconds) * 1000,
+                    null,
+                    answeredAtUtc),
+                ctx.RequestAborted);
+
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(
                 userId,
@@ -299,7 +318,8 @@ public static class QuizEndpoints
             OfflineBatchSubmitRequest request,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService) =>
+            IQuizAttemptIngestService ingestService,
+            IAnswerPatternAntiCheatService antiCheatService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
 
@@ -328,6 +348,7 @@ public static class QuizEndpoints
             }
 
             int importedCount = 0;
+            var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(request.Answers.Count);
             
             // Batch učitaj sva pitanja odjednom (optimizacija)
             var questionIds = request.Answers.Select(a => a.QuestionId).Distinct().ToList();
@@ -402,6 +423,21 @@ public static class QuizEndpoints
                     TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
                     CreatedAtUtc: answer.AnsweredAt));
 
+                antiCheatInputs.Add(new AntiCheatAnswerObservationInput(
+                    userId,
+                    "quiz_offline_submit",
+                    answer.QuestionId,
+                    null,
+                    question.SubtopicId,
+                    sessionId,
+                    null,
+                    null,
+                    answer.Answer,
+                    isCorrectServer,
+                    Math.Max(0, answer.TimeSpent) * 1000,
+                    null,
+                    answer.AnsweredAt));
+
                 importedCount++;
             }
 
@@ -423,6 +459,7 @@ public static class QuizEndpoints
                 }
             }
 
+            await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
 
@@ -442,7 +479,8 @@ public static class QuizEndpoints
             JsonElement payload,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService) =>
+            IQuizAttemptIngestService ingestService,
+            IAnswerPatternAntiCheatService antiCheatService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             var sessionGuid = Guid.NewGuid();
@@ -490,6 +528,7 @@ public static class QuizEndpoints
             db.QuizSessions.Add(session);
 
             int importedCount = 0;
+            var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(answers.Count);
             var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
             var questions = await db.Questions
                 .Include(q => q.Options)
@@ -555,6 +594,21 @@ public static class QuizEndpoints
                     TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
                     CreatedAtUtc: answer.AnsweredAt));
 
+                antiCheatInputs.Add(new AntiCheatAnswerObservationInput(
+                    userId,
+                    "quiz_batch_submit",
+                    answer.QuestionId,
+                    null,
+                    questionForAnswer.SubtopicId,
+                    sessionGuid,
+                    null,
+                    null,
+                    answer.Answer,
+                    isCorrectServer,
+                    Math.Max(0, answer.TimeSpent) * 1000,
+                    null,
+                    answer.AnsweredAt));
+
                 importedCount++;
             }
 
@@ -576,6 +630,7 @@ public static class QuizEndpoints
                 }
             }
 
+            await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
             var overview = await CalculateUserOverview(db, userId);

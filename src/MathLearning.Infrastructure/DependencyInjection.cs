@@ -1,6 +1,7 @@
 using MathLearning.Application.Content;
 using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.AntiCheat;
 using MathLearning.Infrastructure.Services.Cosmetics;
 using MathLearning.Infrastructure.Services.DesignTokens;
 using MathLearning.Infrastructure.Services.Performance;
@@ -22,6 +23,12 @@ public static class DependencyInjection
                 sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<HybridCacheService>>(),
                 sp.GetService<IConnectionMultiplexer>()));
+        services.Configure<AntiCheatOptions>(config.GetSection("AntiCheat"));
+        services.AddScoped<IAntiCheatMlPromptBuilder, AntiCheatMlPromptBuilder>();
+        services.AddScoped<AnswerPatternAntiCheatService>();
+        services.AddScoped<IAnswerPatternAntiCheatService>(sp => sp.GetRequiredService<AnswerPatternAntiCheatService>());
+        services.AddScoped<IAntiCheatAdminService>(sp => sp.GetRequiredService<AnswerPatternAntiCheatService>());
+        services.AddScoped<IAntiCheatMlReviewService>(sp => sp.GetRequiredService<AnswerPatternAntiCheatService>());
         services.Configure<DesignTokenOptions>(config.GetSection("DesignTokens"));
         services.AddScoped<IDesignTokenCacheService, DesignTokenCacheService>();
         services.AddScoped<IDesignTokenMergeService, DesignTokenMergeService>();
