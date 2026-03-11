@@ -48,6 +48,24 @@ public class AdaptiveApiFacadeIntegrationTests
         Assert.NotNull(offline.Data.Payload);
     }
 
+    [Fact]
+    public async Task GetAdaptivePath_AllowsEmptyListsForNewUsers()
+    {
+        var fakeAdaptiveService = new FakeAdaptiveLearningService
+        {
+            ReturnEmptyRecommendations = true,
+            ReturnEmptyReviews = true
+        };
+        var facade = BuildFacade(fakeAdaptiveService);
+
+        var result = await facade.GetAdaptivePathAsync("1", CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Empty(result.Data!.Payload.Recommendations);
+        Assert.Empty(result.Data.Payload.DueReviews);
+    }
+
     private static AdaptiveApiFacade BuildFacade(FakeAdaptiveLearningService fakeAdaptiveService)
     {
         var services = new ServiceCollection();
@@ -67,6 +85,8 @@ public class AdaptiveApiFacadeIntegrationTests
     {
         public bool FailRecommendations { get; set; }
         public bool FailReviews { get; set; }
+        public bool ReturnEmptyRecommendations { get; set; }
+        public bool ReturnEmptyReviews { get; set; }
 
         public Task<AdaptiveSession> GeneratePracticeSessionAsync(string userId)
         {
@@ -109,6 +129,9 @@ public class AdaptiveApiFacadeIntegrationTests
             if (FailRecommendations)
                 throw new TimeoutException("offline");
 
+            if (ReturnEmptyRecommendations)
+                return Task.FromResult(new List<AdaptiveRecommendation>());
+
             return Task.FromResult(new List<AdaptiveRecommendation>
             {
                 new()
@@ -127,6 +150,9 @@ public class AdaptiveApiFacadeIntegrationTests
         {
             if (FailReviews)
                 throw new TimeoutException("offline");
+
+            if (ReturnEmptyReviews)
+                return Task.FromResult(new List<ReviewItem>());
 
             return Task.FromResult(new List<ReviewItem>
             {

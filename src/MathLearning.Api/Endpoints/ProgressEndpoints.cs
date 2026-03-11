@@ -109,71 +109,15 @@ public static class ProgressEndpoints
         group.MapGet("/topics", async (
             ApiDbContext db,
             HttpContext ctx) =>
-        {
-            string userId = ctx.User.FindFirst("userId")!.Value;
+            await GetTopicProgressAsync(db, ctx));
 
-            var orderedTopics = await db.Topics
-                .AsNoTracking()
-                .OrderBy(t => t.Id)
-                .Select(t => new { t.Id, t.Name })
-                .ToListAsync();
-
-            var topicAggregates = await (
-                from s in db.UserQuestionStats.AsNoTracking()
-                    .Where(x => x.UserId == userId)
-                join q in db.Questions.AsNoTracking()
-                    on s.QuestionId equals q.Id
-                join sub in db.Subtopics.AsNoTracking()
-                    on q.SubtopicId equals sub.Id
-                group s by sub.TopicId into g
-                select new
-                {
-                    TopicId = g.Key,
-                    Attempts = g.Sum(x => x.Attempts),
-                    Correct = g.Sum(x => x.CorrectAttempts)
-                }
-            ).ToListAsync();
-
-            var aggregateByTopicId = topicAggregates
-                .ToDictionary(
-                    x => x.TopicId,
-                    x => x.Attempts == 0 ? 0 : (x.Correct * 100.0 / x.Attempts));
-
-            var result = new List<TopicProgressDto>();
-
-            for (int i = 0; i < orderedTopics.Count; i++)
-            {
-                var topic = orderedTopics[i];
-                var accuracy = aggregateByTopicId.TryGetValue(topic.Id, out var value)
-                    ? value
-                    : 0;
-
-                bool unlocked;
-
-                if (i == 0)
-                {
-                    unlocked = true;
-                }
-                else
-                {
-                    var previousTopic = orderedTopics[i - 1];
-                    double prevAccuracy = aggregateByTopicId.TryGetValue(previousTopic.Id, out var prevValue)
-                        ? prevValue
-                        : 0;
-
-                    unlocked = prevAccuracy >= 60.0;
-                }
-
-                result.Add(new TopicProgressDto(
-                    topic.Id,
-                    topic.Name,
-                    Math.Round(accuracy, 2),
-                    unlocked
-                ));
-            }
-
-            return Results.Ok(result);
-        });
+        app.MapGet("/api/topics/progress", async (
+            ApiDbContext db,
+            HttpContext ctx) =>
+            await GetTopicProgressAsync(db, ctx))
+            .RequireAuthorization()
+            .WithTags("Progress")
+            .WithName("GetTopicProgressLegacyAlias");
 
         group.MapPost("/sync", async (
             JsonElement payload,
@@ -217,6 +161,75 @@ public static class ProgressEndpoints
                 syncedAt = DateTime.UtcNow
             });
         });
+    }
+
+    private static async Task<IResult> GetTopicProgressAsync(
+        ApiDbContext db,
+        HttpContext ctx)
+    {
+        string userId = ctx.User.FindFirst("userId")!.Value;
+
+        var orderedTopics = await db.Topics
+            .AsNoTracking()
+            .OrderBy(t => t.Id)
+            .Select(t => new { t.Id, t.Name })
+            .ToListAsync();
+
+        var topicAggregates = await (
+            from s in db.UserQuestionStats.AsNoTracking()
+                .Where(x => x.UserId == userId)
+            join q in db.Questions.AsNoTracking()
+                on s.QuestionId equals q.Id
+            join sub in db.Subtopics.AsNoTracking()
+                on q.SubtopicId equals sub.Id
+            group s by sub.TopicId into g
+            select new
+            {
+                TopicId = g.Key,
+                Attempts = g.Sum(x => x.Attempts),
+                Correct = g.Sum(x => x.CorrectAttempts)
+            }
+        ).ToListAsync();
+
+        var aggregateByTopicId = topicAggregates
+            .ToDictionary(
+                x => x.TopicId,
+                x => x.Attempts == 0 ? 0 : (x.Correct * 100.0 / x.Attempts));
+
+        var result = new List<TopicProgressDto>();
+
+        for (int i = 0; i < orderedTopics.Count; i++)
+        {
+            var topic = orderedTopics[i];
+            var accuracy = aggregateByTopicId.TryGetValue(topic.Id, out var value)
+                ? value
+                : 0;
+
+            bool unlocked;
+
+            if (i == 0)
+            {
+                unlocked = true;
+            }
+            else
+            {
+                var previousTopic = orderedTopics[i - 1];
+                double prevAccuracy = aggregateByTopicId.TryGetValue(previousTopic.Id, out var prevValue)
+                    ? prevValue
+                    : 0;
+
+                unlocked = prevAccuracy >= 60.0;
+            }
+
+            result.Add(new TopicProgressDto(
+                topic.Id,
+                topic.Name,
+                Math.Round(accuracy, 2),
+                unlocked
+            ));
+        }
+
+        return Results.Ok(result);
     }
 
     private static bool TryGetBool(JsonElement json, string property, out bool value)

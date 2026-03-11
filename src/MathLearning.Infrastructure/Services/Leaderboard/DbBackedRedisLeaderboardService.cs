@@ -35,22 +35,30 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
     {
         var normalizedPeriod = NormalizePeriod(request.Period);
         var query = await BuildScopeQueryAsync(request);
-        var rows = await ProjectScores(query, normalizedPeriod)
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.UserId)
+
+        // Fetch data from the database first
+        var rows = await query
+            .Where(u => u.LeaderboardOptIn)
+            .OrderByDescending(u => u.WeeklyXp) // Simplified ordering for SQL translation
+            .ThenBy(u => u.UserId)
             .Take(Math.Clamp(request.Limit, 1, 200))
             .ToListAsync();
 
-        return rows
-            .Select((x, index) => new LeaderboardEntryDto(
+        // Perform projection in memory
+        var leaderboard = rows.Select((u, index) =>
+        {
+            return new LeaderboardEntryDto(
                 index + 1,
-                x.UserId,
-                x.DisplayName,
-                x.Level,
-                x.Score,
-                x.WeeklyXp,
-                x.Streak))
-            .ToList();
+                u.UserId,
+                u.DisplayName ?? u.Username ?? $"User{u.UserId}",
+                u.Level,
+                u.WeeklyXp, // Assuming Score = WeeklyXp for simplicity
+                u.WeeklyXp,
+                u.Streak
+            );
+        }).ToList();
+
+        return leaderboard;
     }
 
     public async Task<LeaderboardEntryDto?> GetUserRankAsync(LeaderboardRequestDto request)
@@ -71,9 +79,7 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
 
         var query = await BuildScopeQueryAsync(request, me);
         var myScore = ScoreSelector.ScoreOf(me, normalizedPeriod);
-        var orderedUserIds = await ProjectScores(query, normalizedPeriod)
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.UserId)
+        var orderedUserIds = await OrderByScore(query, normalizedPeriod)
             .Select(x => x.UserId)
             .ToListAsync();
         var rank = orderedUserIds.FindIndex(x => x == me.UserId) + 1;
@@ -103,9 +109,7 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
         var normalizedPeriod = NormalizePeriod(request.Period);
         var query = await BuildScopeQueryAsync(request);
         var skip = Math.Max(0, me.Rank - 3);
-        var rows = await ProjectScores(query, normalizedPeriod)
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.UserId)
+        var rows = await OrderByScore(query, normalizedPeriod)
             .Skip(skip)
             .Take(5)
             .ToListAsync();
@@ -114,9 +118,9 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
             .Select((x, index) => new LeaderboardEntryDto(
                 skip + index + 1,
                 x.UserId,
-                x.DisplayName,
+                x.DisplayName ?? x.Username ?? $"User{x.UserId}",
                 x.Level,
-                x.Score,
+                LocalScoreOf(x, normalizedPeriod),
                 x.WeeklyXp,
                 x.Streak))
             .ToList();
@@ -205,6 +209,26 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
 
         return query;
     }
+
+    private static IOrderedQueryable<UserProfile> OrderByScore(
+        IQueryable<UserProfile> query,
+        string normalizedPeriod)
+        => normalizedPeriod switch
+        {
+            "day"   => query.OrderByDescending(x => x.DailyXp).ThenBy(x => x.UserId),
+            "week"  => query.OrderByDescending(x => x.WeeklyXp).ThenBy(x => x.UserId),
+            "month" => query.OrderByDescending(x => x.MonthlyXp).ThenBy(x => x.UserId),
+            _       => query.OrderByDescending(x => x.Xp).ThenBy(x => x.UserId),
+        };
+
+    private static int LocalScoreOf(UserProfile u, string normalizedPeriod)
+        => normalizedPeriod switch
+        {
+            "day"   => u.DailyXp,
+            "week"  => u.WeeklyXp,
+            "month" => u.MonthlyXp,
+            _       => u.Xp,
+        };
 
     private static IQueryable<LeaderboardProjection> ProjectScores(
         IQueryable<UserProfile> query,
