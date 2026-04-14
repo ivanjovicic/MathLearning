@@ -12,284 +12,218 @@ namespace MathLearning.Infrastructure.Migrations.Api
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropPrimaryKey(
-                name: "PK_UserProfiles",
-                table: "UserProfiles");
-
-            migrationBuilder.DropIndex(
-                name: "UX_UserProfiles_UserId",
-                table: "UserProfiles");
-
-            migrationBuilder.DropColumn(
-                name: "Id",
-                table: "UserProfiles");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "UserQuestionStats",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "UserProfiles",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AddColumn<int>(
-                name: "DailyXp",
-                table: "UserProfiles",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
-
-            migrationBuilder.AddColumn<int>(
-                name: "FacultyId",
-                table: "UserProfiles",
-                type: "integer",
-                nullable: true);
+            migrationBuilder.Sql("""
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_name = 'UserProfiles'
+    ) THEN
+        IF EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'PK_UserProfiles'
+              AND conrelid = '"UserProfiles"'::regclass
+        ) THEN
+            ALTER TABLE "UserProfiles" DROP CONSTRAINT "PK_UserProfiles";
+        END IF;
+    END IF;
+END $$;
+DROP INDEX IF EXISTS "UX_UserProfiles_UserId";
+ALTER TABLE "UserProfiles" DROP COLUMN IF EXISTS "Id";
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "DailyXp" integer NOT NULL DEFAULT 0;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "FacultyId" integer NULL;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "FacultyName" text NULL;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "LastXpResetDate" timestamp with time zone NULL;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "LeaderboardOptIn" boolean NOT NULL DEFAULT TRUE;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "MonthlyXp" integer NOT NULL DEFAULT 0;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "SchoolId" integer NULL;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "SchoolName" text NULL;
+ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "WeeklyXp" integer NOT NULL DEFAULT 0;
+""");
 
             migrationBuilder.Sql("""
-                ALTER TABLE "UserProfiles"
-                ADD COLUMN IF NOT EXISTS "FacultyName" text;
-                """);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UserProfiles'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "UserProfiles" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
 
-            migrationBuilder.AddColumn<DateTime>(
-                name: "LastXpResetDate",
-                table: "UserProfiles",
-                type: "timestamp with time zone",
-                nullable: true);
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UserQuestionStats'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "UserQuestionStats" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
 
-            migrationBuilder.AddColumn<bool>(
-                name: "LeaderboardOptIn",
-                table: "UserProfiles",
-                type: "boolean",
-                nullable: false,
-                defaultValue: true);
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UserHints'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "UserHints" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
 
-            migrationBuilder.AddColumn<int>(
-                name: "MonthlyXp",
-                table: "UserProfiles",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UserFriends'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "UserFriends" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
 
-            migrationBuilder.AddColumn<int>(
-                name: "SchoolId",
-                table: "UserProfiles",
-                type: "integer",
-                nullable: true);
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UserFriends'
+          AND column_name = 'FriendId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "UserFriends" ALTER COLUMN "FriendId" TYPE text USING "FriendId"::text;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UserAnswers'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "UserAnswers" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'user_settings'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "user_settings" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'user_daily_stats'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "user_daily_stats" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'RefreshTokens'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "RefreshTokens" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'QuizSessions'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "QuizSessions" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'question_stats'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "question_stats" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'bug_reports'
+          AND column_name = 'UserId'
+          AND udt_name <> 'text'
+    ) THEN
+        ALTER TABLE "bug_reports" ALTER COLUMN "UserId" TYPE text USING "UserId"::text;
+    END IF;
+END $$;
+""");
 
             migrationBuilder.Sql("""
-                ALTER TABLE "UserProfiles"
-                ADD COLUMN IF NOT EXISTS "SchoolName" text;
-                """);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'PK_UserProfiles'
+          AND conrelid = '"UserProfiles"'::regclass
+    ) THEN
+        ALTER TABLE "UserProfiles" ADD CONSTRAINT "PK_UserProfiles" PRIMARY KEY ("UserId");
+    END IF;
+END $$;
 
-            migrationBuilder.AddColumn<int>(
-                name: "WeeklyXp",
-                table: "UserProfiles",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+CREATE TABLE IF NOT EXISTS "Faculties"
+(
+    "Id" integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    "Name" character varying(200) NOT NULL,
+    "University" character varying(200),
+    "City" character varying(100),
+    "Country" character varying(100),
+    "CreatedAt" timestamp with time zone NOT NULL
+);
 
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "UserHints",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
+CREATE TABLE IF NOT EXISTS "Schools"
+(
+    "Id" integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    "Name" character varying(200) NOT NULL,
+    "City" character varying(100),
+    "Country" character varying(100),
+    "CreatedAt" timestamp with time zone NOT NULL
+);
 
-            migrationBuilder.AlterColumn<string>(
-                name: "FriendId",
-                table: "UserFriends",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
+CREATE TABLE IF NOT EXISTS "UserAnswerAudits"
+(
+    "Id" integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    "UserId" text NOT NULL,
+    "QuestionId" integer NOT NULL,
+    "Answer" text NOT NULL,
+    "IsCorrect" boolean NOT NULL,
+    "AwardedXp" integer NOT NULL,
+    "AnsweredAt" timestamp with time zone NOT NULL
+);
 
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "UserFriends",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
+CREATE TABLE IF NOT EXISTS "UserQuestionAttempts"
+(
+    "Id" integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    "UserId" text NOT NULL,
+    "QuestionId" integer NOT NULL,
+    "AttemptedAt" timestamp with time zone NOT NULL
+);
 
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "UserAnswers",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
+CREATE INDEX IF NOT EXISTS "IX_UserProfiles_Faculty_Leaderboard"
+    ON "UserProfiles" ("FacultyId", "LeaderboardOptIn");
+CREATE INDEX IF NOT EXISTS "IX_UserProfiles_Leaderboard_DailyXp"
+    ON "UserProfiles" ("LeaderboardOptIn", "DailyXp");
+CREATE INDEX IF NOT EXISTS "IX_UserProfiles_Leaderboard_MonthlyXp"
+    ON "UserProfiles" ("LeaderboardOptIn", "MonthlyXp");
+CREATE INDEX IF NOT EXISTS "IX_UserProfiles_Leaderboard_TotalXp"
+    ON "UserProfiles" ("LeaderboardOptIn", "Xp");
+CREATE INDEX IF NOT EXISTS "IX_UserProfiles_Leaderboard_WeeklyXp"
+    ON "UserProfiles" ("LeaderboardOptIn", "WeeklyXp");
+CREATE INDEX IF NOT EXISTS "IX_UserProfiles_School_Leaderboard"
+    ON "UserProfiles" ("SchoolId", "LeaderboardOptIn");
+CREATE INDEX IF NOT EXISTS "IX_Faculties_Name"
+    ON "Faculties" ("Name");
+CREATE INDEX IF NOT EXISTS "IX_Schools_Name"
+    ON "Schools" ("Name");
+""");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "user_settings",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "user_daily_stats",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "RefreshTokens",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "QuizSessions",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "question_stats",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "bug_reports",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
-
-            migrationBuilder.AddPrimaryKey(
-                name: "PK_UserProfiles",
-                table: "UserProfiles",
-                column: "UserId");
-
-            migrationBuilder.CreateTable(
-                name: "Faculties",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    University = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    City = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    Country = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Faculties", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Schools",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    City = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    Country = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Schools", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserAnswerAudits",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    UserId = table.Column<string>(type: "text", nullable: false),
-                    QuestionId = table.Column<int>(type: "integer", nullable: false),
-                    Answer = table.Column<string>(type: "text", nullable: false),
-                    IsCorrect = table.Column<bool>(type: "boolean", nullable: false),
-                    AwardedXp = table.Column<int>(type: "integer", nullable: false),
-                    AnsweredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserAnswerAudits", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserQuestionAttempts",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    UserId = table.Column<string>(type: "text", nullable: false),
-                    QuestionId = table.Column<int>(type: "integer", nullable: false),
-                    AttemptedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserQuestionAttempts", x => x.Id);
-                });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Faculty_Leaderboard",
-                table: "UserProfiles",
-                columns: new[] { "FacultyId", "LeaderboardOptIn" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Leaderboard_DailyXp",
-                table: "UserProfiles",
-                columns: new[] { "LeaderboardOptIn", "DailyXp" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Leaderboard_MonthlyXp",
-                table: "UserProfiles",
-                columns: new[] { "LeaderboardOptIn", "MonthlyXp" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Leaderboard_TotalXp",
-                table: "UserProfiles",
-                columns: new[] { "LeaderboardOptIn", "Xp" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Leaderboard_WeeklyXp",
-                table: "UserProfiles",
-                columns: new[] { "LeaderboardOptIn", "WeeklyXp" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_School_Leaderboard",
-                table: "UserProfiles",
-                columns: new[] { "SchoolId", "LeaderboardOptIn" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Faculties_Name",
-                table: "Faculties",
-                column: "Name");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Schools_Name",
-                table: "Schools",
-                column: "Name");
-
-            // If upgrading an existing dev DB from the old int-based user IDs to Identity string IDs,
-            // existing UserProfiles rows may no longer match AspNetUsers.Id. Clean them up before
-            // adding the FK to avoid migration failure.
             migrationBuilder.Sql("""
 DELETE FROM "UserProfiles" up
 WHERE NOT EXISTS (
@@ -299,13 +233,23 @@ WHERE NOT EXISTS (
 );
 """);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_UserProfiles_AspNetUsers_UserId",
-                table: "UserProfiles",
-                column: "UserId",
-                principalTable: "AspNetUsers",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
+            migrationBuilder.Sql("""
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'FK_UserProfiles_AspNetUsers_UserId'
+          AND conrelid = '"UserProfiles"'::regclass
+    ) THEN
+        ALTER TABLE "UserProfiles"
+        ADD CONSTRAINT "FK_UserProfiles_AspNetUsers_UserId"
+        FOREIGN KEY ("UserId")
+        REFERENCES "AspNetUsers" ("Id")
+        ON DELETE CASCADE;
+    END IF;
+END $$;
+""");
         }
 
         /// <inheritdoc />

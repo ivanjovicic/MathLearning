@@ -1,0 +1,224 @@
+@page "/admin/monitoring"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using System.Net.Http.Json
+
+<PageTitle>Monitoring</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Monitoring servisa</MudText>
+
+<MudPaper Class="pa-4" Elevation="4">
+    <MudStack Row="true" Spacing="2">
+        <MudButton OnClick="RefreshAsync" Color="Color.Primary" Variant="Variant.Filled" Disabled="@isLoading">
+            Osvezi
+        </MudButton>
+        <MudButton OnClick="TriggerAntiCheatSweepAsync" Color="Color.Secondary" Variant="Variant.Outlined" Disabled="@isLoading">
+            Pokreni anti-cheat sweep
+        </MudButton>
+    </MudStack>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
+    }
+
+    <MudTable T="ServiceStatus" Dense="true" Class="mt-4" Items="@statuses">
+        <HeaderContent>
+            <MudTh>Servis</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Detalji</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@(context.IsHealthy ? Color.Success : Color.Error)">
+                    @(context.IsHealthy ? "OK" : "Greska")
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.Details</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+<MudPaper Class="pa-4 mt-4" Elevation="4">
+    <MudText Typo="Typo.h6">Anti-cheat overview</MudText>
+
+    @if (antiCheatOverview is null)
+    {
+        <MudText Class="mt-2">Podaci nisu dostupni.</MudText>
+    }
+    else
+    {
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.caption">Pending review</MudText>
+                    <MudText Typo="Typo.h5">@antiCheatOverview.PendingCount</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.caption">High / critical</MudText>
+                    <MudText Typo="Typo.h5">@($"{antiCheatOverview.HighSeverityCount} / {antiCheatOverview.CriticalSeverityCount}")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.caption">ML queued</MudText>
+                    <MudText Typo="Typo.h5">@antiCheatOverview.MlQueuedCount</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.caption">ML failed / completed</MudText>
+                    <MudText Typo="Typo.h5">@($"{antiCheatOverview.MlFailedCount} / {antiCheatOverview.MlCompletedCount}")</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
+<MudPaper Class="pa-4 mt-4" Elevation="4">
+    <MudText Typo="Typo.h6">Recent anti-cheat detections</MudText>
+
+    <MudTable T="AntiCheatDetectionItem" Dense="true" Hover="true" Class="mt-4" Items="@antiCheatDetections">
+        <HeaderContent>
+            <MudTh>User</MudTh>
+            <MudTh>Question</MudTh>
+            <MudTh>Risk</MudTh>
+            <MudTh>Severity</MudTh>
+            <MudTh>Review</MudTh>
+            <MudTh>ML</MudTh>
+            <MudTh>Detected</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.UserId</MudTd>
+            <MudTd>@context.QuestionId</MudTd>
+            <MudTd>@context.RiskScore</MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@GetSeverityColor(context.Severity)">@context.Severity</MudChip>
+            </MudTd>
+            <MudTd>@context.ReviewStatus</MudTd>
+            <MudTd>@context.MlReviewStatus</MudTd>
+            <MudTd>@context.DetectedAtUtc.ToLocalTime().ToString("g")</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    [Inject] private NavigationManager NavManager { get; set; } = default!;
+
+    private List<ServiceStatus> statuses = [];
+    private List<AntiCheatDetectionItem> antiCheatDetections = [];
+    private AntiCheatOverview? antiCheatOverview;
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
+            var health = await http.GetAsync("/health");
+            var hangfire = await http.GetAsync("/hangfire");
+            var metrics = await http.GetAsync("/metrics");
+            antiCheatOverview = await http.GetFromJsonAsync<AntiCheatOverview>("/api/admin/anti-cheat/overview");
+            antiCheatDetections = await http.GetFromJsonAsync<List<AntiCheatDetectionItem>>("/api/admin/anti-cheat/detections?take=10") ?? [];
+
+            statuses =
+            [
+                new ServiceStatus("API Health", health.IsSuccessStatusCode, health.IsSuccessStatusCode ? "API radi" : health.StatusCode.ToString()),
+                new ServiceStatus("Hangfire", hangfire.IsSuccessStatusCode, hangfire.IsSuccessStatusCode ? "Dashboard OK" : hangfire.StatusCode.ToString()),
+                new ServiceStatus("Metrics", metrics.IsSuccessStatusCode, metrics.IsSuccessStatusCode ? "Dostupno" : metrics.StatusCode.ToString())
+            ];
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task TriggerAntiCheatSweepAsync()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
+            var response = await http.PostAsync("/api/admin/anti-cheat/ml-review/run?take=25", null);
+            response.EnsureSuccessStatusCode();
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static Color GetSeverityColor(string severity)
+        => severity switch
+        {
+            "critical" => Color.Error,
+            "high" => Color.Warning,
+            _ => Color.Info
+        };
+
+    private sealed record ServiceStatus(string Name, bool IsHealthy, string Details);
+
+    private sealed record AntiCheatOverview(
+        long PendingCount,
+        long HighSeverityCount,
+        long CriticalSeverityCount,
+        long ConfirmedCount,
+        long FalsePositiveCount,
+        long Last24HoursCount,
+        long MlQueuedCount,
+        long MlFailedCount,
+        long MlCompletedCount);
+
+    private sealed record AntiCheatDetectionItem(
+        Guid Id,
+        string UserId,
+        string SourceType,
+        int QuestionId,
+        int? TopicId,
+        int? SubtopicId,
+        Guid? SessionId,
+        string? DeviceId,
+        long? ClientSequence,
+        DateTime AnsweredAtUtc,
+        int ResponseTimeMs,
+        bool IsCorrect,
+        double? Confidence,
+        int RiskScore,
+        string Severity,
+        string Decision,
+        string ReasonSummary,
+        string ReviewStatus,
+        DateTime DetectedAtUtc,
+        DateTime? ReviewedAtUtc,
+        string SignalsJson,
+        string PromptVersion,
+        string MlReviewStatus,
+        int MlReviewAttempts,
+        string? MlModelName,
+        DateTime? MlReviewedAtUtc,
+        string? MlLastError,
+        string? MlReviewOutputJson);
+}

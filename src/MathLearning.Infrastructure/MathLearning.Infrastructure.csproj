@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\MathLearning.Application\MathLearning.Application.csproj" />
     <ProjectReference Include="..\MathLearning.Domain\MathLearning.Domain.csproj" />
+    <ProjectReference Include="..\MathLearning.Services\MathLearning.Services.csproj" />
+    <ProjectReference Include="..\MathLearning.Core\MathLearning.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,6 +23,10 @@
 
   <ItemGroup>
     <Folder Include="Persistance\DesignTime\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Services\RedisLeaderboardService.cs" />
   </ItemGroup>
 
   <PropertyGroup>

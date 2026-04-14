@@ -3,7 +3,7 @@ namespace MathLearning.Application.Services;
 public interface IQuizAttemptIngestService
 {
     Task IngestAttemptsAsync(
-        int appUserId,
+        string userId,
         IReadOnlyList<QuizAttemptIngestItem> attempts,
         CancellationToken ct = default);
 }

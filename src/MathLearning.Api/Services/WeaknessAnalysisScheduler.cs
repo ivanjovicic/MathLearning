@@ -102,7 +102,7 @@ public sealed class WeaknessAnalysisDailyHostedService : BackgroundService
 
             foreach (var appUserId in activeUserIds)
             {
-                var mapped = MathLearning.Application.Helpers.UserIdGuidMapper.FromAppUserId(appUserId);
+                var mapped = MathLearning.Application.Helpers.UserIdGuidMapper.FromIdentityUserId(appUserId);
                 _scheduler.Enqueue(mapped);
             }
 

@@ -62,7 +62,7 @@ namespace MathLearning.Admin.Migrations
 
                     b.HasIndex("OptionId");
 
-                    b.ToTable("OptionTranslation");
+                    b.ToTable("OptionTranslation", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Question", b =>
@@ -82,11 +82,27 @@ namespace MathLearning.Admin.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CurrentDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CurrentVersionNumber")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Difficulty")
                         .HasColumnType("integer");
 
                     b.Property<string>("Explanation")
                         .HasColumnType("text");
+
+                    b.Property<string>("ExplanationFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ExplanationRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("HintClue")
                         .HasColumnType("text");
@@ -94,8 +110,35 @@ namespace MathLearning.Admin.Migrations
                     b.Property<int>("HintDifficulty")
                         .HasColumnType("integer");
 
+                    b.Property<string>("HintFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("HintFormula")
                         .HasColumnType("text");
+
+                    b.Property<string>("HintFull")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HintRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<int>("SubtopicId")
                         .HasColumnType("integer");
@@ -103,6 +146,16 @@ namespace MathLearning.Admin.Migrations
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TextRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -134,9 +187,23 @@ namespace MathLearning.Admin.Migrations
                     b.Property<int?>("QuestionId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -157,10 +224,24 @@ namespace MathLearning.Admin.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("Hint")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HintFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("HintRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("StepIndex")
                         .HasColumnType("integer");
@@ -169,11 +250,21 @@ namespace MathLearning.Admin.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TextRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("QuestionId");
 
-                    b.ToTable("QuestionStep");
+                    b.ToTable("QuestionStep", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStepTranslation", b =>
@@ -202,7 +293,7 @@ namespace MathLearning.Admin.Migrations
 
                     b.HasIndex("QuestionStepId");
 
-                    b.ToTable("QuestionStepTranslation");
+                    b.ToTable("QuestionStepTranslation", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionTranslation", b =>
@@ -246,7 +337,7 @@ namespace MathLearning.Admin.Migrations
 
                     b.HasIndex("QuestionId");
 
-                    b.ToTable("QuestionTranslation");
+                    b.ToTable("QuestionTranslation", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Subtopic", b =>
@@ -268,7 +359,7 @@ namespace MathLearning.Admin.Migrations
 
                     b.HasIndex("TopicId");
 
-                    b.ToTable("Subtopic");
+                    b.ToTable("Subtopic", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Topic", b =>
@@ -288,7 +379,7 @@ namespace MathLearning.Admin.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Topic");
+                    b.ToTable("Topic", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

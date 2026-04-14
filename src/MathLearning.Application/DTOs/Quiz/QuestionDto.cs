@@ -1,4 +1,6 @@
-﻿namespace MathLearning.Application.DTOs.Quiz;
+using MathLearning.Domain.Enums;
+
+namespace MathLearning.Application.DTOs.Quiz;
 
 public record QuestionDto(
     int Id,
@@ -11,5 +13,12 @@ public record QuestionDto(
     string? HintMedium,
     string? HintFull,
     string? Explanation,
-    List<StepExplanationDto>? Steps
+    List<StepExplanationDto>? Steps,
+    ContentFormat TextFormat = ContentFormat.MarkdownWithMath,
+    ContentFormat ExplanationFormat = ContentFormat.MarkdownWithMath,
+    ContentFormat HintFormat = ContentFormat.MarkdownWithMath,
+    RenderMode TextRenderMode = RenderMode.Auto,
+    RenderMode ExplanationRenderMode = RenderMode.Auto,
+    RenderMode HintRenderMode = RenderMode.Auto,
+    string? SemanticsAltText = null
 );

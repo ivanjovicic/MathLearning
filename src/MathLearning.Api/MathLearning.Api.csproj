@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.16" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.12" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="10.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.12">
@@ -33,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MathLearning.Application\MathLearning.Application.csproj" />
     <ProjectReference Include="..\MathLearning.Infrastructure\MathLearning.Infrastructure.csproj" />
+    <ProjectReference Include="..\MathLearning.Core\MathLearning.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -121,6 +121,160 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("adaptive_session_items", (string)null);
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.AnswerPatternDetectionLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnswerFingerprint")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("AnswerLength")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("AnsweredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ClientSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("DetectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DetectionEngine")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("MlLastAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MlLastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("MlModelName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("MlReviewAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MlReviewOutputJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("MlReviewStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("MlReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PromptPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReasonSummary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("ResponseTimeMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReviewNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ReviewStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("RiskScore")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SignalsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("SubtopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MlReviewStatus", "DetectedAtUtc")
+                        .HasDatabaseName("IX_answer_pattern_detection_ml_review_detected");
+
+                    b.HasIndex("ReviewStatus", "DetectedAtUtc")
+                        .HasDatabaseName("IX_answer_pattern_detection_review_detected");
+
+                    b.HasIndex("Severity", "DetectedAtUtc")
+                        .HasDatabaseName("IX_answer_pattern_detection_severity_detected");
+
+                    b.HasIndex("SourceType", "AnsweredAtUtc")
+                        .HasDatabaseName("IX_answer_pattern_detection_source_answered");
+
+                    b.HasIndex("UserId", "DetectedAtUtc")
+                        .HasDatabaseName("IX_answer_pattern_detection_user_detected");
+
+                    b.ToTable("answer_pattern_detection_log", (string)null);
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.ApplicationLog", b =>
                 {
                     b.Property<long>("Id")
@@ -282,6 +436,727 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("Categories");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.CommonMistakePattern", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MistakeType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PatternKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Remediation")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subtopic")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MistakeType", "Priority")
+                        .HasDatabaseName("IX_common_mistake_patterns_type_priority");
+
+                    b.HasIndex("Topic", "Subtopic", "MistakeType")
+                        .HasDatabaseName("IX_common_mistake_patterns_topic_subtopic_type");
+
+                    b.ToTable("common_mistake_patterns", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CompetitionSeason", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EndDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("StartDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_competition_seasons_active");
+
+                    b.ToTable("competition_seasons", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "EntityId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_cosmetic_audit_log_entity_occurred");
+
+                    b.ToTable("cosmetic_audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssetPath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("AssetVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("1");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("CoinPrice")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CompatibilityRulesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PreviewAssetPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Rarity")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("common");
+
+                    b.Property<DateTime?>("ReleaseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RetirementDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SeasonId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("UnlockCondition")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UnlockConditionJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("UnlockType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("default");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category")
+                        .HasDatabaseName("IX_cosmetic_items_category");
+
+                    b.HasIndex("IsDefault")
+                        .HasDatabaseName("IX_cosmetic_items_default");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasDatabaseName("UX_cosmetic_items_key");
+
+                    b.HasIndex("Rarity")
+                        .HasDatabaseName("IX_cosmetic_items_rarity");
+
+                    b.HasIndex("SeasonId")
+                        .HasDatabaseName("IX_cosmetic_items_season");
+
+                    b.HasIndex("Category", "Rarity")
+                        .HasDatabaseName("IX_cosmetic_items_category_rarity");
+
+                    b.HasIndex("IsActive", "ReleaseDate")
+                        .HasDatabaseName("IX_cosmetic_items_active_release");
+
+                    b.ToTable("cosmetic_items", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticRewardClaim", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ClaimedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CosmeticItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RewardKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SourceRef")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CosmeticItemId");
+
+                    b.HasIndex("UserId", "ClaimedAtUtc")
+                        .HasDatabaseName("IX_cosmetic_reward_claims_user_claimed_at");
+
+                    b.HasIndex("UserId", "RewardKey", "SourceRef")
+                        .IsUnique()
+                        .HasDatabaseName("UX_cosmetic_reward_claims_user_reward_source");
+
+                    b.ToTable("cosmetic_reward_claims", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticRewardRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConditionJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RewardPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RewardType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasDatabaseName("UX_cosmetic_reward_rules_key");
+
+                    b.HasIndex("SourceType", "IsActive", "Priority")
+                        .HasDatabaseName("IX_cosmetic_reward_rules_source_active_priority");
+
+                    b.ToTable("cosmetic_reward_rules", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticSeason", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ArchiveAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("RewardLockAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Theme")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ThemeAssetPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_cosmetic_seasons_active");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasDatabaseName("UX_cosmetic_seasons_key");
+
+                    b.HasIndex("StartDate", "EndDate")
+                        .HasDatabaseName("IX_cosmetic_seasons_dates");
+
+                    b.ToTable("cosmetic_seasons", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticTelemetryEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CosmeticItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SeasonId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventType", "OccurredAtUtc")
+                        .HasDatabaseName("IX_cosmetic_telemetry_events_type_occurred");
+
+                    b.HasIndex("UserId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_cosmetic_telemetry_events_user_occurred");
+
+                    b.ToTable("cosmetic_telemetry_events", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TokenKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("TokenSetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ValueJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ValueType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category", "TokenKey")
+                        .HasDatabaseName("IX_DesignToken_Category_Key");
+
+                    b.HasIndex("TokenSetId", "Category", "TokenKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DesignToken_Set_Category_Key");
+
+                    b.ToTable("DesignToken", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("AfterSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BeforeSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Theme")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("TokenSetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("VersionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasDatabaseName("IX_DesignTokenAuditLog_CreatedAtUtc");
+
+                    b.HasIndex("TokenSetId");
+
+                    b.HasIndex("Theme", "CreatedAtUtc")
+                        .HasDatabaseName("IX_DesignTokenAuditLog_Theme_CreatedAtUtc");
+
+                    b.HasIndex("VersionId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_DesignTokenAuditLog_Version_CreatedAtUtc");
+
+                    b.ToTable("DesignTokenAuditLog", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenSet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CompiledPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VersionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Theme", "UpdatedAtUtc")
+                        .HasDatabaseName("IX_DesignTokenSet_Theme_UpdatedAtUtc");
+
+                    b.HasIndex("VersionId", "Theme")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DesignTokenSet_Version_Theme");
+
+                    b.ToTable("DesignTokenSet", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BaseWidth")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<Guid?>("SourceVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsCurrent")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DesignTokenVersion_Current")
+                        .HasFilter("\"IsCurrent\" = TRUE");
+
+                    b.HasIndex("SourceVersionId");
+
+                    b.HasIndex("Version")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DesignTokenVersion_Version");
+
+                    b.HasIndex("Status", "CreatedAtUtc")
+                        .HasDatabaseName("IX_DesignTokenVersion_Status_CreatedAtUtc");
+
+                    b.ToTable("DesignTokenVersion", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DeviceSyncState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("LastAcknowledgedEvent")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LastBundleVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("LastProcessedClientSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LastSyncTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DeviceSyncState_DeviceId");
+
+                    b.HasIndex("UserId", "LastSyncTimeUtc")
+                        .HasDatabaseName("IX_DeviceSyncState_User_LastSync");
+
+                    b.ToTable("DeviceSyncState", (string)null);
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.Faculty", b =>
                 {
                     b.Property<int>("Id")
@@ -318,6 +1193,176 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("Faculties");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.LeaderboardSnapshot", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Streak")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Scope", "Period", "Rank")
+                        .HasDatabaseName("IX_leaderboard_snapshot_scope_period_rank");
+
+                    b.HasIndex("Scope", "Period", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_leaderboard_snapshot_scope_period_user");
+
+                    b.ToTable("leaderboard_snapshot", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.MasteryState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("PL")
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<int?>("SubtopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "UpdatedAt")
+                        .HasDatabaseName("IX_mastery_state_user_updated_at");
+
+                    b.HasIndex("UserId", "TopicId", "SubtopicId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_mastery_state_user_topic_subtopic");
+
+                    b.ToTable("mastery_state", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.MathFormulaReferenceEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Latex")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MathMl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("IX_math_formula_reference_name");
+
+                    b.ToTable("math_formula_reference", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.MathTransformationRule", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExampleLatex")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExpressionPattern")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("StepType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive", "StepType")
+                        .HasDatabaseName("IX_math_transformation_rules_active_step");
+
+                    b.ToTable("math_transformation_rules", (string)null);
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.OptionTranslation", b =>
                 {
                     b.Property<int>("Id")
@@ -347,6 +1392,156 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("OptionTranslations");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.PracticeSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AnsweredQuestions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CorrectAnswers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<decimal?>("FinalMastery")
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<decimal>("InitialMastery")
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<string>("RecommendedDifficulty")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("medium");
+
+                    b.Property<string>("SkillNodeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Active");
+
+                    b.Property<int?>("SubtopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TargetQuestions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(10);
+
+                    b.Property<int?>("TopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("XpEarned")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "StartedAt")
+                        .HasDatabaseName("IX_practice_session_user_started_at");
+
+                    b.HasIndex("UserId", "Status")
+                        .HasDatabaseName("IX_practice_session_user_status");
+
+                    b.HasIndex("UserId", "SubtopicId")
+                        .HasDatabaseName("IX_practice_session_user_subtopic");
+
+                    b.HasIndex("UserId", "TopicId")
+                        .HasDatabaseName("IX_practice_session_user_topic");
+
+                    b.ToTable("practice_session", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.PracticeSessionItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AnsweredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("AttemptNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<decimal>("BktPosterior")
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<decimal>("BktPrior")
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<bool?>("Correct")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Difficulty")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("medium");
+
+                    b.Property<DateTime>("PresentedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SubtopicId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TimeSpentMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TopicId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId")
+                        .HasDatabaseName("IX_practice_session_item_question_id");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("IX_practice_session_item_session_id");
+
+                    b.HasIndex("SessionId", "PresentedAt")
+                        .HasDatabaseName("IX_practice_session_item_session_presented_at");
+
+                    b.HasIndex("SessionId", "QuestionId", "AttemptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_practice_session_item_session_question_attempt");
+
+                    b.ToTable("practice_session_item", (string)null);
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.Question", b =>
                 {
                     b.Property<int>("Id")
@@ -364,11 +1559,27 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CurrentDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CurrentVersionNumber")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Difficulty")
                         .HasColumnType("integer");
 
                     b.Property<string>("Explanation")
                         .HasColumnType("text");
+
+                    b.Property<string>("ExplanationFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ExplanationRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("HintClue")
                         .HasColumnType("TEXT");
@@ -378,8 +1589,39 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<string>("HintFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("HintFormula")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("HintFull")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HintRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("draft");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<int>("SubtopicId")
                         .HasColumnType("integer");
@@ -387,6 +1629,16 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TextRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -401,8 +1653,14 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.HasIndex("CategoryId");
 
+                    b.HasIndex("CurrentDraftId")
+                        .HasDatabaseName("IX_Questions_CurrentDraftId");
+
                     b.HasIndex("Difficulty")
                         .HasDatabaseName("IX_Questions_Difficulty");
+
+                    b.HasIndex("PublishState")
+                        .HasDatabaseName("IX_Questions_PublishState");
 
                     b.HasIndex("SubtopicId")
                         .HasDatabaseName("IX_Questions_SubtopicId");
@@ -411,6 +1669,124 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("IX_Questions_Subtopic_Difficulty");
 
                     b.ToTable("Questions");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionAuthoringAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("DraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_question_authoring_audit_draft_occurred");
+
+                    b.HasIndex("QuestionId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_question_authoring_audit_question_occurred");
+
+                    b.ToTable("question_authoring_audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DraftVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EditorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<Guid?>("LatestValidationResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NormalizedContentJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("PreviousDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ValidationStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentHash")
+                        .HasDatabaseName("IX_question_drafts_content_hash");
+
+                    b.HasIndex("LatestValidationResultId");
+
+                    b.HasIndex("QuestionId", "DraftVersion")
+                        .IsUnique()
+                        .HasDatabaseName("UX_question_drafts_question_version");
+
+                    b.ToTable("question_drafts", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionOption", b =>
@@ -427,9 +1803,23 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int?>("QuestionId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -439,6 +1829,43 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasIndex("QuestionId");
 
                     b.ToTable("Options");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionPreviewCache", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviewPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentHash")
+                        .HasDatabaseName("IX_question_preview_cache_content_hash");
+
+                    b.HasIndex("DraftId");
+
+                    b.HasIndex("ExpiresAtUtc")
+                        .HasDatabaseName("IX_question_preview_cache_expires");
+
+                    b.ToTable("question_preview_cache", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStat", b =>
@@ -502,8 +1929,22 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("Hint")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("HintFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("HintRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SemanticsAltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("StepIndex")
                         .HasColumnType("integer");
@@ -511,6 +1952,16 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("TextFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TextRenderMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -600,6 +2051,168 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_QuestionTranslations_Question_Lang");
 
                     b.ToTable("QuestionTranslations");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationIssue", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("FieldPath")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RuleId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Suggestion")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ValidationResultId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ValidationResultId", "Stage")
+                        .HasDatabaseName("IX_question_validation_issues_result_stage");
+
+                    b.ToTable("question_validation_issues", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("HasErrors")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HasWarnings")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("IssueCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreviewPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SummaryJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("ValidatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId", "ValidatedAtUtc")
+                        .HasDatabaseName("IX_question_validation_results_draft_validated");
+
+                    b.ToTable("question_validation_results", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionVersion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AuthorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EditorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("NormalizedSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<long?>("PreviousVersionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PublishState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("SourceDraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviousVersionId");
+
+                    b.HasIndex("SourceDraftId");
+
+                    b.HasIndex("QuestionId", "PublishedAtUtc")
+                        .HasDatabaseName("IX_question_versions_question_published_at");
+
+                    b.HasIndex("QuestionId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_question_versions_question_version");
+
+                    b.ToTable("question_versions", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuizAttempt", b =>
@@ -722,38 +2335,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("MathLearning.Domain.Entities.School", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Country")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_Schools_Name");
-
-                    b.ToTable("Schools");
-                });
-
             modelBuilder.Entity("MathLearning.Domain.Entities.ReviewSchedule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -818,6 +2399,351 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("review_schedules", (string)null);
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.School", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("IX_Schools_Name");
+
+                    b.ToTable("Schools");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SchoolRankHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActiveStudents")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("CompositeScore")
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<decimal>("ParticipationRate")
+                        .HasColumnType("numeric(8,6)");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("PeriodStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SchoolId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SeasonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("SnapshotTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("WeightedXp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.0);
+
+                    b.Property<int>("XpTotal")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeasonId");
+
+                    b.HasIndex("Period", "PeriodStartUtc", "SnapshotTimeUtc", "Rank")
+                        .HasDatabaseName("IX_school_rank_history_period_snapshot_rank");
+
+                    b.HasIndex("SchoolId", "Period", "PeriodStartUtc", "SnapshotTimeUtc")
+                        .HasDatabaseName("IX_school_rank_history_school_period_snapshot");
+
+                    b.ToTable("school_rank_history", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SchoolScoreAggregate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActiveStudents")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("AverageXpPerActiveStudent")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("CompositeScore")
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<int>("EligibleStudents")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ParticipationRate")
+                        .HasColumnType("numeric(8,6)");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("PeriodStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SchoolId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SeasonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("WeightedXp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.0);
+
+                    b.Property<int>("XpTotal")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeasonId");
+
+                    b.HasIndex("Period", "PeriodStartUtc", "Rank")
+                        .HasDatabaseName("IX_school_scores_period_start_rank");
+
+                    b.HasIndex("SchoolId", "Period", "PeriodStartUtc")
+                        .IsUnique()
+                        .HasDatabaseName("UX_school_scores_school_period_start");
+
+                    b.HasIndex("Period", "PeriodStartUtc", "CompositeScore", "SchoolId")
+                        .HasDatabaseName("IX_school_scores_period_start_score");
+
+                    b.ToTable("school_scores", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SeasonRewardTrackEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RewardPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RewardType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SeasonId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Tier")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TrackType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("XpRequired")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeasonId", "TrackType", "Tier")
+                        .IsUnique()
+                        .HasDatabaseName("UX_season_reward_tracks_season_track_tier");
+
+                    b.ToTable("season_reward_tracks", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.ServerSyncEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("SourceOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_ServerSyncEvent_User_CreatedAtUtc");
+
+                    b.HasIndex("UserId", "Id")
+                        .HasDatabaseName("IX_ServerSyncEvent_User_Id");
+
+                    b.ToTable("ServerSyncEvent", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.StepExplanationCacheEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Difficulty")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Grade")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("LastAccessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ProblemHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_step_explanation_cache_expires_at");
+
+                    b.HasIndex("ProblemHash", "Grade", "Difficulty")
+                        .IsUnique()
+                        .HasDatabaseName("UX_step_explanation_cache_problem_grade_difficulty");
+
+                    b.ToTable("step_explanation_cache", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.StepExplanationTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HintTemplate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("RuleKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("StepType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TemplateText")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RuleKey", "Language", "StepType")
+                        .IsUnique()
+                        .HasDatabaseName("UX_step_explanation_template_rule_lang_step");
+
+                    b.ToTable("step_explanation_template", (string)null);
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.Subtopic", b =>
                 {
                     b.Property<int>("Id")
@@ -843,6 +2769,215 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_Subtopics_Topic_Name");
 
                     b.ToTable("Subtopics");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SyncDeadLetter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("FailureReason")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime>("LastFailedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastRedriveAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long?>("SyncEventLogId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SyncDeadLetter_OperationId");
+
+                    b.HasIndex("Status", "LastFailedAtUtc")
+                        .HasDatabaseName("IX_SyncDeadLetter_Status_LastFailedAtUtc");
+
+                    b.HasIndex("UserId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_SyncDeadLetter_User_CreatedAtUtc");
+
+                    b.ToTable("SyncDeadLetter", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SyncDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecretKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SyncDevices_DeviceId");
+
+                    b.HasIndex("UserId", "Status")
+                        .HasDatabaseName("IX_SyncDevices_User_Status");
+
+                    b.ToTable("SyncDevices", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SyncEventLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ClientSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SyncEventLog_OperationId");
+
+                    b.HasIndex("DeviceId", "ClientSequence")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SyncEventLog_Device_Sequence");
+
+                    b.HasIndex("Status", "ReceivedAtUtc")
+                        .HasDatabaseName("IX_SyncEventLog_Status_ReceivedAtUtc");
+
+                    b.HasIndex("UserId", "Id")
+                        .HasDatabaseName("IX_SyncEventLog_User_Id");
+
+                    b.ToTable("SyncEventLog", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Topic", b =>
@@ -884,6 +3019,13 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("AnsweredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("ClientSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<bool>("IsCorrect")
                         .HasColumnType("boolean");
 
@@ -891,6 +3033,9 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("integer");
 
                     b.Property<Guid>("QuizSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SyncOperationId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("TimeSpentSeconds")
@@ -907,6 +3052,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.HasIndex("QuizSessionId");
 
+                    b.HasIndex("SyncOperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserAnswers_SyncOperationId");
+
                     b.HasIndex("UserId")
                         .HasDatabaseName("IX_UserAnswers_UserId");
 
@@ -915,6 +3064,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.HasIndex("UserId", "IsCorrect")
                         .HasDatabaseName("IX_UserAnswers_User_Correct");
+
+                    b.HasIndex("UserId", "DeviceId", "ClientSequence")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserAnswers_User_Device_Sequence");
 
                     b.HasIndex("UserId", "QuestionId", "AnsweredAt")
                         .IsUnique()
@@ -954,6 +3107,207 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasKey("Id");
 
                     b.ToTable("UserAnswerAudits");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserAppearanceProjection", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("AccessoryAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("AccessoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("AvatarVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("BackgroundAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("BackgroundId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ClothingAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ClothingId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EffectAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("EffectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EmojiAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("EmojiId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FrameAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("FrameId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("HairAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("HairId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LeaderboardDecorationAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("LeaderboardDecorationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SkinAssetPath")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("SkinId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_appearance_projection", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserAvatarConfig", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int?>("AccessoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("BackgroundId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ClothingId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EffectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EmojiId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FrameId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("HairId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("LeaderboardDecorationId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SkinId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("AccessoryId");
+
+                    b.HasIndex("BackgroundId");
+
+                    b.HasIndex("ClothingId");
+
+                    b.HasIndex("EffectId");
+
+                    b.HasIndex("EmojiId");
+
+                    b.HasIndex("FrameId");
+
+                    b.HasIndex("HairId");
+
+                    b.HasIndex("LeaderboardDecorationId");
+
+                    b.HasIndex("SkinId");
+
+                    b.ToTable("user_avatar_configs", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserCosmeticInventory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssetVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("1");
+
+                    b.Property<int>("CosmeticItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GrantReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SeasonId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SourceRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("UnlockedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CosmeticItemId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_user_cosmetic_inventory_user");
+
+                    b.HasIndex("Source", "SourceRef")
+                        .HasDatabaseName("IX_user_cosmetic_inventory_source_ref");
+
+                    b.HasIndex("UserId", "CosmeticItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_user_cosmetic_inventory_user_item");
+
+                    b.HasIndex("UserId", "Source")
+                        .HasDatabaseName("IX_user_cosmetic_inventory_user_source");
+
+                    b.ToTable("user_cosmetic_inventory", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserDailyStat", b =>
@@ -1335,6 +3689,77 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.ToTable("UserQuestionStats");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserQuizSummary", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("TotalAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalCorrect")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("WeeklyCorrect")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WeeklyXp")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("UpdatedAtUtc")
+                        .HasDatabaseName("IX_user_quiz_summary_updated_at");
+
+                    b.ToTable("user_quiz_summary", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserRewardState", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("Claimed")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ClaimedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Eligible")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RewardKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "RewardKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_user_reward_state_user_reward");
+
+                    b.HasIndex("UserId", "Eligible", "Claimed")
+                        .HasDatabaseName("IX_user_reward_state_user_status");
+
+                    b.ToTable("user_reward_state", (string)null);
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.UserSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -1580,6 +4005,118 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("UX_user_weakness_user_topic_subtopic");
 
                     b.ToTable("user_weakness", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserXpEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AwardedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsSuspicious")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int?>("SchoolId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SeasonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("ValidatedXpDelta")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ValidationStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("XpDelta")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeasonId");
+
+                    b.HasIndex("SchoolId", "AwardedAtUtc")
+                        .HasDatabaseName("IX_user_xp_events_school_awarded_at");
+
+                    b.HasIndex("UserId", "AwardedAtUtc")
+                        .HasDatabaseName("IX_user_xp_events_user_awarded_at");
+
+                    b.HasIndex("ValidationStatus", "AwardedAtUtc")
+                        .HasDatabaseName("IX_user_xp_events_validation_awarded_at");
+
+                    b.HasIndex("UserId", "SourceType", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_user_xp_events_user_source")
+                        .HasFilter("\"SourceId\" IS NOT NULL");
+
+                    b.ToTable("user_xp_events", (string)null);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.XpCheatLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("DetectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("SourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("XpDelta")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DetectedAtUtc")
+                        .HasDatabaseName("IX_xp_cheat_log_detected");
+
+                    b.HasIndex("UserId", "DetectedAtUtc")
+                        .HasDatabaseName("IX_xp_cheat_log_user_detected");
+
+                    b.ToTable("xp_cheat_log", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Infrastructure.Persistance.Models.OutboxMessage", b =>
@@ -1846,6 +4383,76 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Topic");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticItem", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticSeason", "Season")
+                        .WithMany("Items")
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Season");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticRewardClaim", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "CosmeticItem")
+                        .WithMany()
+                        .HasForeignKey("CosmeticItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CosmeticItem");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignToken", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.DesignTokenSet", "TokenSet")
+                        .WithMany("Tokens")
+                        .HasForeignKey("TokenSetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TokenSet");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenAuditLog", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.DesignTokenSet", "TokenSet")
+                        .WithMany()
+                        .HasForeignKey("TokenSetId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.DesignTokenVersion", "Version")
+                        .WithMany("AuditLogs")
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("TokenSet");
+
+                    b.Navigation("Version");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenSet", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.DesignTokenVersion", "Version")
+                        .WithMany("TokenSets")
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Version");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenVersion", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.DesignTokenVersion", "SourceVersion")
+                        .WithMany()
+                        .HasForeignKey("SourceVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("SourceVersion");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.OptionTranslation", b =>
                 {
                     b.HasOne("MathLearning.Domain.Entities.QuestionOption", "Option")
@@ -1855,6 +4462,17 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .IsRequired();
 
                     b.Navigation("Option");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.PracticeSessionItem", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.PracticeSession", "Session")
+                        .WithMany("Items")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Question", b =>
@@ -1876,12 +4494,56 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Subtopic");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionAuthoringAuditLog", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Draft");
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionDraft", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionValidationResult", "LatestValidationResult")
+                        .WithMany()
+                        .HasForeignKey("LatestValidationResultId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("LatestValidationResult");
+
+                    b.Navigation("Question");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionOption", b =>
                 {
                     b.HasOne("MathLearning.Domain.Entities.Question", null)
                         .WithMany("Options")
                         .HasForeignKey("QuestionId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionPreviewCache", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Draft");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStat", b =>
@@ -1928,6 +4590,54 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Question");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationIssue", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionValidationResult", "ValidationResult")
+                        .WithMany("Issues")
+                        .HasForeignKey("ValidationResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ValidationResult");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationResult", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Draft");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionVersion", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.QuestionVersion", "PreviousVersion")
+                        .WithMany()
+                        .HasForeignKey("PreviousVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MathLearning.Domain.Entities.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MathLearning.Domain.Entities.QuestionDraft", "SourceDraft")
+                        .WithMany()
+                        .HasForeignKey("SourceDraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PreviousVersion");
+
+                    b.Navigation("Question");
+
+                    b.Navigation("SourceDraft");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.ReviewSchedule", b =>
                 {
                     b.HasOne("MathLearning.Domain.Entities.Question", "Question")
@@ -1945,6 +4655,53 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Question");
 
                     b.Navigation("Topic");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SchoolRankHistory", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.School", "School")
+                        .WithMany()
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MathLearning.Domain.Entities.CompetitionSeason", "Season")
+                        .WithMany()
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("School");
+
+                    b.Navigation("Season");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SchoolScoreAggregate", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.School", "School")
+                        .WithMany()
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MathLearning.Domain.Entities.CompetitionSeason", "Season")
+                        .WithMany()
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("School");
+
+                    b.Navigation("Season");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.SeasonRewardTrackEntry", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticSeason", "Season")
+                        .WithMany("RewardTrackEntries")
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Season");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.Subtopic", b =>
@@ -1975,6 +4732,89 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Question");
 
                     b.Navigation("QuizSession");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserAvatarConfig", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Accessory")
+                        .WithMany()
+                        .HasForeignKey("AccessoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Background")
+                        .WithMany()
+                        .HasForeignKey("BackgroundId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Clothing")
+                        .WithMany()
+                        .HasForeignKey("ClothingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Effect")
+                        .WithMany()
+                        .HasForeignKey("EffectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Emoji")
+                        .WithMany()
+                        .HasForeignKey("EmojiId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Frame")
+                        .WithMany()
+                        .HasForeignKey("FrameId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Hair")
+                        .WithMany()
+                        .HasForeignKey("HairId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "LeaderboardDecoration")
+                        .WithMany()
+                        .HasForeignKey("LeaderboardDecorationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "Skin")
+                        .WithMany()
+                        .HasForeignKey("SkinId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MathLearning.Domain.Entities.UserProfile", null)
+                        .WithOne()
+                        .HasForeignKey("MathLearning.Domain.Entities.UserAvatarConfig", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Accessory");
+
+                    b.Navigation("Background");
+
+                    b.Navigation("Clothing");
+
+                    b.Navigation("Effect");
+
+                    b.Navigation("Emoji");
+
+                    b.Navigation("Frame");
+
+                    b.Navigation("Hair");
+
+                    b.Navigation("LeaderboardDecoration");
+
+                    b.Navigation("Skin");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserCosmeticInventory", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "CosmeticItem")
+                        .WithMany()
+                        .HasForeignKey("CosmeticItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CosmeticItem");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.UserHint", b =>
@@ -2046,6 +4886,16 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Topic");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.UserXpEvent", b =>
+                {
+                    b.HasOne("MathLearning.Domain.Entities.CompetitionSeason", "Season")
+                        .WithMany()
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Season");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -2102,6 +4952,30 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Items");
                 });
 
+            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticSeason", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("RewardTrackEntries");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenSet", b =>
+                {
+                    b.Navigation("Tokens");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.DesignTokenVersion", b =>
+                {
+                    b.Navigation("AuditLogs");
+
+                    b.Navigation("TokenSets");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.PracticeSession", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("MathLearning.Domain.Entities.Question", b =>
                 {
                     b.Navigation("Options");
@@ -2119,6 +4993,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
             modelBuilder.Entity("MathLearning.Domain.Entities.QuestionStep", b =>
                 {
                     b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("MathLearning.Domain.Entities.QuestionValidationResult", b =>
+                {
+                    b.Navigation("Issues");
                 });
 #pragma warning restore 612, 618
         }

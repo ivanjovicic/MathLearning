@@ -1,0 +1,37 @@
+@using MathLearning.Domain.Enums
+@using MathRenderMode = MathLearning.Domain.Enums.RenderMode
+@inject IJSRuntime Js
+
+<div class="@($"math-preview-shell {Class}")">
+    <div @ref="_container" class="math-preview-host"></div>
+</div>
+
+@code {
+    private ElementReference _container;
+
+    [Parameter]
+    public string? Content { get; set; }
+
+    [Parameter]
+    public ContentFormat Format { get; set; } = ContentFormat.MarkdownWithMath;
+
+    [Parameter]
+    public MathRenderMode RenderMode { get; set; } = MathRenderMode.Auto;
+
+    [Parameter]
+    public string EmptyText { get; set; } = "Nema sadržaja za preview.";
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await Js.InvokeVoidAsync(
+            "mathPreview.render",
+            _container,
+            Content ?? string.Empty,
+            Format.ToString(),
+            RenderMode.ToString(),
+            EmptyText);
+    }
+}

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MathLearning.Application.DTOs.Common;
 using Microsoft.AspNetCore.Http;
 
 namespace MathLearning.Api.Middleware;
@@ -44,9 +45,22 @@ public class InMemorySlidingWindowRateLimitMiddleware
 
         if (q.Count > _limit)
         {
-            context.Response.StatusCode = 429;
-            context.Response.Headers["Retry-After"] = _window.TotalSeconds.ToString();
-            await context.Response.WriteAsync("Too many requests (sliding window, in-memory).");
+            var retryAfterSeconds = (int)Math.Ceiling(_window.TotalSeconds);
+            context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            context.Response.ContentType = "application/json";
+            context.Response.Headers.RetryAfter = retryAfterSeconds.ToString();
+
+            var result = ApiResult<object>.RateLimited(
+                error: "Too many requests (sliding window, in-memory).",
+                errorDetails: new
+                {
+                    limit = _limit,
+                    windowSeconds = retryAfterSeconds
+                },
+                traceId: context.TraceIdentifier,
+                retryAfterSeconds: retryAfterSeconds);
+
+            await context.Response.WriteAsJsonAsync(result);
             return;
         }
 

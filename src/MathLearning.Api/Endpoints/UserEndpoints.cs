@@ -1,4 +1,5 @@
-﻿using MathLearning.Application.DTOs.Auth;
+using MathLearning.Application.DTOs.Auth;
+using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.DTOs.Users;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -22,7 +23,34 @@ public static class UserEndpoints
                               .RequireAuthorization()
                               .WithTags("UserSettings");
 
-        // Legacy mobile endpoint: GET /api/user/coins
+        legacyGroup.MapGet("/profile/{userId}", async (
+            ApiDbContext db,
+            string userId) =>
+        {
+            var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null)
+            {
+                return Results.NotFound(new { error = "Profile not found" });
+            }
+
+            var appearance = await LoadAppearanceAsync(db, userId);
+            return Results.Ok(new
+            {
+                profile.UserId,
+                profile.Username,
+                profile.Xp,
+                profile.Level,
+                profile.Streak,
+                profile.DailyXp,
+                profile.WeeklyXp,
+                profile.MonthlyXp,
+                profile.AvatarUrl,
+                appearance
+            });
+        })
+        .WithName("AdminGetUserProfileById")
+        .WithDescription("Admin: Get user XP/level/streak by userId");
+
         legacyGroup.MapGet("/coins", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -56,7 +84,6 @@ public static class UserEndpoints
             });
         });
 
-        // Legacy mobile endpoint: GET /api/user/daily-hints
         legacyGroup.MapGet("/daily-hints", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -81,7 +108,6 @@ public static class UserEndpoints
             });
         });
 
-        // 👤 GET PROFILE
         group.MapGet("/profile", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -96,6 +122,7 @@ public static class UserEndpoints
                 return Results.NotFound(new { error = "Profile not found" });
             }
 
+            var appearance = await LoadAppearanceAsync(db, userId);
             return Results.Ok(new UserProfileDto(
                 UserId: profile.UserId,
                 Username: profile.Username,
@@ -106,13 +133,14 @@ public static class UserEndpoints
                 Streak: profile.Streak,
                 CreatedAt: profile.CreatedAt,
                 SchoolName: profile.SchoolName,
-                FacultyName: profile.FacultyName
+                FacultyName: profile.FacultyName,
+                AvatarUrl: profile.AvatarUrl,
+                Appearance: appearance
             ));
         })
         .WithName("GetUserProfile")
         .WithDescription("Get current user's profile");
 
-        // ✏️ UPDATE PROFILE
         group.MapPut("/profile", async (
             UpdateProfileRequest request,
             ApiDbContext db,
@@ -128,7 +156,6 @@ public static class UserEndpoints
                 return Results.NotFound(new { error = "Profile not found" });
             }
 
-            // Update display name
             if (!string.IsNullOrWhiteSpace(request.DisplayName))
             {
                 profile.DisplayName = request.DisplayName;
@@ -136,6 +163,7 @@ public static class UserEndpoints
                 await db.SaveChangesAsync();
             }
 
+            var appearance = await LoadAppearanceAsync(db, userId);
             return Results.Ok(new UserProfileDto(
                 UserId: profile.UserId,
                 Username: profile.Username,
@@ -146,13 +174,14 @@ public static class UserEndpoints
                 Streak: profile.Streak,
                 CreatedAt: profile.CreatedAt,
                 SchoolName: profile.SchoolName,
-                FacultyName: profile.FacultyName
+                FacultyName: profile.FacultyName,
+                AvatarUrl: profile.AvatarUrl,
+                Appearance: appearance
             ));
         })
         .WithName("UpdateUserProfile")
         .WithDescription("Update user profile");
 
-        // 📊 GET STATS
         group.MapGet("/stats", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -167,7 +196,6 @@ public static class UserEndpoints
                 return Results.NotFound(new { error = "Profile not found" });
             }
 
-            // Get question stats
             var questionStats = await db.UserQuestionStats
                 .Where(s => s.UserId == userId)
                 .ToListAsync();
@@ -175,14 +203,14 @@ public static class UserEndpoints
             var totalQuestions = questionStats.Count;
             var totalAttempts = questionStats.Sum(s => s.Attempts);
             var totalCorrect = questionStats.Sum(s => s.CorrectAttempts);
-            var accuracy = totalAttempts > 0 
-                ? Math.Round((double)totalCorrect / totalAttempts * 100, 2) 
+            var accuracy = totalAttempts > 0
+                ? Math.Round((double)totalCorrect / totalAttempts * 100, 2)
                 : 0;
 
-            // Get hint usage
             var hintsUsed = await db.UserHints
                 .Where(h => h.UserId == userId)
                 .CountAsync();
+            var appearance = await LoadAppearanceAsync(db, userId);
 
             return Results.Ok(new
             {
@@ -196,7 +224,9 @@ public static class UserEndpoints
                     Streak: profile.Streak,
                     CreatedAt: profile.CreatedAt,
                     SchoolName: profile.SchoolName,
-                    FacultyName: profile.FacultyName
+                    FacultyName: profile.FacultyName,
+                    AvatarUrl: profile.AvatarUrl,
+                    Appearance: appearance
                 ),
                 stats = new
                 {
@@ -217,7 +247,6 @@ public static class UserEndpoints
         .WithName("GetUserStats")
         .WithDescription("Get user statistics");
 
-        // 🔍 SEARCH USERS (for friend system)
         group.MapGet("/search", async (
             string query,
             ApiDbContext db,
@@ -229,7 +258,7 @@ public static class UserEndpoints
             }
 
             var users = await db.UserProfiles
-                .Where(p => p.Username.Contains(query) || 
+                .Where(p => p.Username.Contains(query) ||
                            (p.DisplayName != null && p.DisplayName.Contains(query)))
                 .OrderBy(p => p.Username)
                 .Take(limit)
@@ -243,12 +272,23 @@ public static class UserEndpoints
                 })
                 .ToListAsync();
 
-            return Results.Ok(users);
+            var appearanceMap = await LoadAppearanceMapAsync(db, users.Select(x => x.UserId));
+
+            var result = users.Select(x => new
+            {
+                x.UserId,
+                x.Username,
+                x.DisplayName,
+                x.Level,
+                x.Xp,
+                appearance = appearanceMap.TryGetValue(x.UserId, out var appearance) ? appearance : null
+            });
+
+            return Results.Ok(result);
         })
         .WithName("SearchUsers")
         .WithDescription("Search users by username or display name");
 
-        // GET /users/{id}/settings
         settingsGroup.MapGet("/{id:int}/settings", async (
             int id,
             ApiDbContext db,
@@ -293,7 +333,6 @@ public static class UserEndpoints
             ));
         });
 
-        // PATCH /users/{id}/settings
         settingsGroup.MapPatch("/{id:int}/settings", async (
             int id,
             UpdateUserSettingsRequest request,
@@ -363,7 +402,6 @@ public static class UserEndpoints
             ));
         });
 
-        // POST /users/{id}/avatar
         settingsGroup.MapPost("/{id:int}/avatar", async (
             int id,
             HttpRequest request,
@@ -405,7 +443,6 @@ public static class UserEndpoints
             return Results.Ok(new { avatarUrl = url });
         });
 
-        // GET /users/{id}/avatar/{fileName}
         settingsGroup.MapGet("/{id:int}/avatar/{fileName}", async (
             int id,
             string fileName,
@@ -437,6 +474,52 @@ public static class UserEndpoints
             return Results.File(File.OpenRead(filePath), contentType);
         });
     }
+
+    private static async Task<Dictionary<string, AvatarAppearanceDto>> LoadAppearanceMapAsync(ApiDbContext db, IEnumerable<string> userIds)
+    {
+        var ids = userIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<string, AvatarAppearanceDto>();
+        }
+
+        return await db.UserAppearanceProjections
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, MapAppearance);
+    }
+
+    private static async Task<AvatarAppearanceDto?> LoadAppearanceAsync(ApiDbContext db, string userId)
+    {
+        var appearanceMap = await LoadAppearanceMapAsync(db, [userId]);
+        return appearanceMap.TryGetValue(userId, out var appearance) ? appearance : null;
+    }
+
+    private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)
+        => new(
+            new AvatarConfigDto(
+                projection.SkinId,
+                projection.HairId,
+                projection.ClothingId,
+                projection.AccessoryId,
+                projection.EmojiId,
+                projection.FrameId,
+                projection.BackgroundId,
+                projection.EffectId,
+                projection.LeaderboardDecorationId,
+                projection.AvatarVersion),
+            projection.SkinAssetPath,
+            projection.HairAssetPath,
+            projection.ClothingAssetPath,
+            projection.AccessoryAssetPath,
+            projection.EmojiAssetPath,
+            projection.FrameAssetPath,
+            projection.BackgroundAssetPath,
+            projection.EffectAssetPath,
+            projection.LeaderboardDecorationAssetPath);
 }
 
 public record UpdateProfileRequest(

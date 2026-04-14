@@ -1,22 +1,33 @@
-﻿using MathLearning.Api.Endpoints;
+using MathLearning.Api.Endpoints;
+using MathLearning.Api.Middleware;
 using MathLearning.Api.Services;
+using MathLearning.Application.Validators;
 using MathLearning.Application.Services;
+using MathLearning.Core.Services;
+using FluentValidation;
 using MathLearning.Domain.Events;
+using MathLearning.Infrastructure;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.EventBus.Handlers;
+using MathLearning.Infrastructure.Services.Performance;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
+using StackExchange.Redis;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
@@ -24,7 +35,7 @@ using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Text;
 
-// 📝 Configure Serilog EARLY (before builder)
+// ?? Configure Serilog EARLY (before builder)
 var startupEnvironment =
     Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
     ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
@@ -63,7 +74,7 @@ Log.Logger = loggerConfig.CreateLogger();
 
 try
 {
-    Log.Information("🚀 Starting MathLearning API");
+    Log.Information("?? Starting MathLearning API");
     Log.Information(
         "Startup environment detected: Environment={Environment} ASPNETCORE_URLS={AspNetCoreUrls} PORT={Port}",
         startupEnvironment,
@@ -72,7 +83,7 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    // 📝 Use Serilog for logging
+    // ?? Use Serilog for logging
     builder.Host.UseSerilog();
 
     // Fly.io / container safety: some platforms set PORT instead of ASPNETCORE_URLS.
@@ -81,7 +92,7 @@ try
     if (!string.IsNullOrWhiteSpace(portEnv) && int.TryParse(portEnv, out var port))
     {
         builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
-        Log.Information("🌐 Binding to PORT from environment: {Port}", port);
+        Log.Information("?? Binding to PORT from environment: {Port}", port);
     }
     else
     {
@@ -97,31 +108,31 @@ try
             if (resolved.PortFallbacks.Count > 0)
             {
                 Log.Warning(
-                    "⚠️ Auto-selected fallback URL(s) due to occupied port(s). Original={OriginalUrls} Effective={EffectiveUrls} Fallbacks={Fallbacks}",
+                    "?? Auto-selected fallback URL(s) due to occupied port(s). Original={OriginalUrls} Effective={EffectiveUrls} Fallbacks={Fallbacks}",
                     resolved.OriginalUrls ?? "<default:http://localhost:5000>",
                     resolved.Urls,
                     resolved.PortFallbacks);
             }
             else
             {
-                Log.Information("🌐 Using development URLs: {Urls}", resolved.Urls);
+                Log.Information("?? Using development URLs: {Urls}", resolved.Urls);
             }
         }
         else
         {
-            Log.Information("🌐 Using launch/profile URLs (no explicit PORT override).");
+            Log.Information("?? Using launch/profile URLs (no explicit PORT override).");
         }
     }
 
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
     if (string.IsNullOrWhiteSpace(defaultConnectionString))
     {
-        Log.Error("❌ ConnectionStrings:Default is not configured. Set Fly secret `ConnectionStrings__Default` (recommended) before deploying.");
+        Log.Error("? ConnectionStrings:Default is not configured. Set Fly secret `ConnectionStrings__Default` (recommended) before deploying.");
         throw new InvalidOperationException("Missing ConnectionStrings:Default. Configure ConnectionStrings__Default.");
     }
     else
     {
-        Log.Information("🗄️ DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
+        Log.Information("??? DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
     }
 
     // OpenTelemetry (minimal tracing)
@@ -173,17 +184,38 @@ try
         healthChecks.AddNpgSql(defaultConnectionString, name: "postgres");
     }
 
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<PerformanceDbCommandInterceptor>();
+
     // Add ApiDbContext (kombinuje Identity i sve entitete)
-    builder.Services.AddDbContext<ApiDbContext>(options =>
+    builder.Services.AddDbContext<ApiDbContext>((sp, options) =>
         options.UseNpgsql(
-            defaultConnectionString,
-            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+                defaultConnectionString,
+                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+            .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
 
     // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
-    builder.Services.AddDbContext<AppDbContext>(options =>
+    builder.Services.AddDbContext<AppDbContext>((sp, options) =>
         options.UseNpgsql(
-            defaultConnectionString,
-            npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+                defaultConnectionString,
+                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+            .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
+
+    if (!builder.Environment.IsEnvironment("Test"))
+    {
+        // Hangfire (PostgreSQL)
+        builder.Services.AddHangfire(config => config
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
+            {
+                SchemaName = "hangfire",
+                QueuePollInterval = TimeSpan.FromSeconds(15),
+                InvisibilityTimeout = TimeSpan.FromMinutes(5)
+            }));
+        builder.Services.AddHangfireServer();
+    }
 
     // Add Identity (for User management)
     builder.Services.AddIdentityCore<IdentityUser>(options =>
@@ -194,15 +226,16 @@ try
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequiredLength = 6;
     })
+        .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<ApiDbContext>()
         .AddDefaultTokenProviders();
 
-    // 🔧 Add Background Services
+    // ?? Add Background Services
     builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
     builder.Services.AddHostedService<XpResetBackgroundService>();
 
-    // 🎯 Domain Events & Outbox Pattern (In‑proc via OutboxProcessor)
-    // Keep OutboxProcessor hosted service; use in‑proc event bus so background worker invokes local handlers.
+    // ?? Domain Events & Outbox Pattern (In-proc via OutboxProcessor)
+    // Keep OutboxProcessor hosted service; use in-proc event bus so background worker invokes local handlers.
     builder.Services.AddScoped<IEventBus, InProcEventBus>();
 
     // Event handlers (unchanged)
@@ -210,11 +243,27 @@ try
     builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
     builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
 
-    // ✅ SRS service
+    // ? SRS service
     builder.Services.AddScoped<ISrsService, SrsService>();
     builder.Services.AddScoped<IAdaptiveLearningService, AdaptiveLearningService>();
     builder.Services.AddScoped<IWeaknessAnalysisService, WeaknessAnalysisService>();
     builder.Services.AddScoped<IQuizAttemptIngestService, QuizAttemptIngestService>();
+    builder.Services.AddScoped<IBktService, BktService>();
+    builder.Services.AddScoped<IQuestionSelector, EfQuestionSelector>();
+    builder.Services.AddScoped<IPracticeAnalyticsUpdater, PracticeAnalyticsUpdater>();
+    builder.Services.AddScoped<IPracticeBackgroundJobs, PracticeBackgroundJobs>();
+    builder.Services.AddScoped<IPracticeHangfireJobs, PracticeHangfireJobs>();
+    builder.Services.AddScoped<ISchoolLeaderboardHangfireJobs, SchoolLeaderboardHangfireJobs>();
+    builder.Services.AddScoped<IAntiCheatHangfireJobs, AntiCheatHangfireJobs>();
+    builder.Services.AddScoped<IPracticeSessionService, PracticeSessionService>();
+    builder.Services.AddScoped<IMathReasoningGraphEngine, MathReasoningGraphEngine>();
+    builder.Services.AddScoped<IStepExplanationGenerator, StepExplanationGenerator>();
+    builder.Services.AddScoped<ICommonMistakeDetector, CommonMistakeDetector>();
+    builder.Services.AddScoped<IFormulaReferenceService, FormulaReferenceService>();
+    builder.Services.AddScoped<IAiTutorEnhancer, AiTutorEnhancer>();
+    builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
+    builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
+    builder.Services.AddScoped<LegacyStepExplanationAdapter>();
     builder.Services.AddScoped<AdaptiveApiFacade>();
     builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
     builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
@@ -226,20 +275,48 @@ try
     builder.Services.AddMemoryCache(options =>
     {
         // Count-based limit (we set Size=1 per entry in InMemoryCacheService).
-        options.SizeLimit = 100;
+        options.SizeLimit = 1000;
     });
+    builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddControllers();
+    builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
     builder.Services.AddSingleton<InMemoryCacheService>();
     builder.Services.AddSingleton<InMemoryLockService>();
+    builder.Services.AddScoped<RequestDataCacheService>();
 
-    // ✅ Bug reporting services
+    var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+        ?? builder.Configuration["Redis:ConnectionString"];
+    if (!string.IsNullOrWhiteSpace(redisConnectionString))
+    {
+        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+        builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
+        Log.Information("?? Redis connection configured for cache-backed features.");
+    }
+    else
+    {
+        builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
+        Log.Warning("Redis connection string is not configured. Falling back to DB-backed leaderboard service.");
+    }
+
+    // ? Bug reporting services
     builder.Services.AddScoped<IBugReportService, BugReportService>();
     builder.Services.AddScoped<IScreenshotStorageService, LocalScreenshotStorageService>();
 
-    // 🏆 Leaderboard service
-    builder.Services.AddScoped<LeaderboardService>();
+    // ?? Leaderboard service
+    // Register the DB-backed LeaderboardService in non-test environments only.
+    if (!builder.Environment.IsEnvironment("Test"))
+    {
+        builder.Services.AddScoped<LeaderboardService>();
+        builder.Services.AddScoped<MathLearning.Application.Services.ILeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
+        builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
+    }
 
-    // 📈 XP tracking service
+    // ?? XP tracking service
+    builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
     builder.Services.AddScoped<XpTrackingService>();
+    builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
+    builder.Services.AddScoped<StudentLeaderboardService>();
+    builder.Services.AddScoped<IStudentLeaderboardService>(sp => sp.GetRequiredService<StudentLeaderboardService>());
 
     // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -262,7 +339,14 @@ try
             };
         });
 
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy(DesignTokenSecurity.AdminPolicy, policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireRole(DesignTokenSecurity.AdminRole);
+        });
+    });
 
     // Configure CORS
     builder.Services.AddCors(options =>
@@ -284,16 +368,17 @@ try
 
     app.Lifetime.ApplicationStarted.Register(() =>
     {
-        Log.Information("🌐 Listening on: {Urls}", string.Join(", ", app.Urls));
+        Log.Information("?? Listening on: {Urls}", string.Join(", ", app.Urls));
     });
 
-    // 🧯 Global exception handler (production-safe problem+json)
+    // ?? Global exception handler (production-safe problem+json)
     app.UseMiddleware<MathLearning.Api.Middleware.GlobalExceptionMiddleware>();
 
-    // 🔗 Correlation ID (must be BEFORE request logging so it appears on the request completion log)
+    // ?? Correlation ID (must be BEFORE request logging so it appears on the request completion log)
     app.UseMiddleware<MathLearning.Api.Middleware.CorrelationIdMiddleware>();
 
-    // 📝 Add Serilog request logging
+    // ?? Add Serilog request logging
+    app.UseMiddleware<RequestPerformanceLoggingMiddleware>();
     app.UseSerilogRequestLogging(options =>
     {
         options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
@@ -308,19 +393,23 @@ try
         };
     });
 
-    // 🗄️ Auto-migrate and seed database on startup (skip during EF design-time tools)
-    if (!EF.IsDesignTime)
+    var databaseStartupSucceeded = false;
+    var userProfileIdentitySchemaReady = false;
+
+    // ??? Auto-migrate and seed database on startup (skip during EF design-time tools)
+    if (!EF.IsDesignTime && !app.Environment.IsEnvironment("Test"))
     {
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             try
             {
-                Log.Information("🗄️ Applying database migrations...");
+                Log.Information("??? Applying database migrations...");
                 await db.Database.MigrateAsync();
-                Log.Information("✅ Database migrations applied successfully");
+                Log.Information("? Database migrations applied successfully");
+                databaseStartupSucceeded = true;
 
-                // 🔧 Manual fix for RefreshToken column length (if migration didn't apply)
+                // ?? Manual fix for RefreshToken column length (if migration didn't apply)
                 try
                 {
                     await db.Database.ExecuteSqlRawAsync(@"
@@ -337,21 +426,117 @@ try
                             END IF;
                         END $$;
                     ");
-                    Log.Information("✅ RefreshToken column length verified");
+                    Log.Information("? RefreshToken column length verified");
                 }
                 catch (Exception fixEx)
                 {
-                    Log.Warning(fixEx, "⚠️ Could not verify/fix RefreshToken column length");
+                    Log.Warning(fixEx, "?? Could not verify/fix RefreshToken column length");
                 }
 
-                Log.Information("🌱 Seeding database...");
-                await DbSeeder.SeedAsync(db);
-                Log.Information("✅ Database seeding complete");
+                // 🎨 Seed default cosmetic items (only if table is empty — tables are created by EF migration)
+                try
+                {
+                    var cosmeticCount = await db.CosmeticItems.CountAsync();
+                    if (cosmeticCount == 0)
+                    {
+                        await db.Database.ExecuteSqlRawAsync(@"
+                            INSERT INTO cosmetic_items (""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""IsDefault"", ""ReleaseDate"")
+                            VALUES
+                                ('Classic Student', 'skin', 'common', 'cosmetics/skin/classic_student.png', 'cosmetics/skin/preview/classic_student.png', 'default', TRUE, NOW()),
+                                ('Math Explorer', 'skin', 'common', 'cosmetics/skin/math_explorer.png', 'cosmetics/skin/preview/math_explorer.png', 'default', TRUE, NOW()),
+                                ('Short Classic', 'hair', 'common', 'cosmetics/hair/short_classic.png', 'cosmetics/hair/preview/short_classic.png', 'default', TRUE, NOW()),
+                                ('Long Straight', 'hair', 'common', 'cosmetics/hair/long_straight.png', 'cosmetics/hair/preview/long_straight.png', 'default', TRUE, NOW()),
+                                ('Curly', 'hair', 'common', 'cosmetics/hair/curly.png', 'cosmetics/hair/preview/curly.png', 'default', TRUE, NOW()),
+                                ('School Uniform', 'clothing', 'common', 'cosmetics/clothing/school_uniform.png', 'cosmetics/clothing/preview/school_uniform.png', 'default', TRUE, NOW()),
+                                ('Casual T-Shirt', 'clothing', 'common', 'cosmetics/clothing/casual_tshirt.png', 'cosmetics/clothing/preview/casual_tshirt.png', 'default', TRUE, NOW()),
+                                ('None', 'accessory', 'common', 'cosmetics/accessory/none.png', 'cosmetics/accessory/preview/none.png', 'default', TRUE, NOW()),
+                                ('Basic Frame', 'frame', 'common', 'cosmetics/frame/basic.png', 'cosmetics/frame/preview/basic.png', 'default', TRUE, NOW()),
+                                ('Classroom', 'background', 'common', 'cosmetics/background/classroom.png', 'cosmetics/background/preview/classroom.png', 'default', TRUE, NOW()),
+                                ('Math Board', 'background', 'common', 'cosmetics/background/math_board.png', 'cosmetics/background/preview/math_board.png', 'default', TRUE, NOW());
+
+                            INSERT INTO cosmetic_items (""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""CoinPrice"", ""IsDefault"", ""ReleaseDate"")
+                            VALUES
+                                ('Ninja Mathematician', 'skin', 'rare', 'cosmetics/skin/ninja_math.png', 'cosmetics/skin/preview/ninja_math.png', 'shop', 200, FALSE, NOW()),
+                                ('Robot Student', 'skin', 'rare', 'cosmetics/skin/robot_student.png', 'cosmetics/skin/preview/robot_student.png', 'shop', 200, FALSE, NOW()),
+                                ('Spiky Blue', 'hair', 'rare', 'cosmetics/hair/spiky_blue.png', 'cosmetics/hair/preview/spiky_blue.png', 'shop', 100, FALSE, NOW()),
+                                ('Rainbow Ponytail', 'hair', 'rare', 'cosmetics/hair/rainbow_ponytail.png', 'cosmetics/hair/preview/rainbow_ponytail.png', 'shop', 100, FALSE, NOW()),
+                                ('Lab Coat', 'clothing', 'rare', 'cosmetics/clothing/lab_coat.png', 'cosmetics/clothing/preview/lab_coat.png', 'shop', 150, FALSE, NOW()),
+                                ('Hoodie', 'clothing', 'rare', 'cosmetics/clothing/hoodie.png', 'cosmetics/clothing/preview/hoodie.png', 'shop', 150, FALSE, NOW()),
+                                ('Calculator Watch', 'accessory', 'rare', 'cosmetics/accessory/calculator_watch.png', 'cosmetics/accessory/preview/calculator_watch.png', 'shop', 100, FALSE, NOW()),
+                                ('Pi Necklace', 'accessory', 'rare', 'cosmetics/accessory/pi_necklace.png', 'cosmetics/accessory/preview/pi_necklace.png', 'shop', 100, FALSE, NOW()),
+                                ('Golden Frame', 'frame', 'rare', 'cosmetics/frame/golden.png', 'cosmetics/frame/preview/golden.png', 'shop', 150, FALSE, NOW()),
+                                ('Neon Frame', 'frame', 'rare', 'cosmetics/frame/neon.png', 'cosmetics/frame/preview/neon.png', 'shop', 150, FALSE, NOW()),
+                                ('Einstein Hair', 'hair', 'epic', 'cosmetics/hair/einstein.png', 'cosmetics/hair/preview/einstein.png', 'shop', 300, FALSE, NOW()),
+                                ('Professor Outfit', 'clothing', 'epic', 'cosmetics/clothing/professor.png', 'cosmetics/clothing/preview/professor.png', 'shop', 400, FALSE, NOW()),
+                                ('Starfield Background', 'background', 'epic', 'cosmetics/background/starfield.png', 'cosmetics/background/preview/starfield.png', 'shop', 350, FALSE, NOW()),
+                                ('Animated Fire Frame', 'frame', 'epic', 'cosmetics/frame/animated_fire.png', 'cosmetics/frame/preview/animated_fire.png', 'shop', 500, FALSE, NOW()),
+                                ('Golden Genius Skin', 'skin', 'legendary', 'cosmetics/skin/golden_genius.png', 'cosmetics/skin/preview/golden_genius.png', 'shop', 1000, FALSE, NOW()),
+                                ('Galaxy Background', 'background', 'legendary', 'cosmetics/background/galaxy.png', 'cosmetics/background/preview/galaxy.png', 'shop', 800, FALSE, NOW());
+
+                            INSERT INTO cosmetic_items (""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""UnlockCondition"", ""IsDefault"", ""ReleaseDate"")
+                            VALUES
+                                ('7-Day Streak Badge', 'accessory', 'rare', 'cosmetics/accessory/streak_7day.png', 'cosmetics/accessory/preview/streak_7day.png', 'streak', 'streak:7', FALSE, NOW()),
+                                ('30-Day Streak Crown', 'accessory', 'epic', 'cosmetics/accessory/streak_30day_crown.png', 'cosmetics/accessory/preview/streak_30day_crown.png', 'streak', 'streak:30', FALSE, NOW()),
+                                ('100-Day Streak Aura', 'effect', 'legendary', 'cosmetics/effect/streak_100day_aura.png', 'cosmetics/effect/preview/streak_100day_aura.png', 'streak', 'streak:100', FALSE, NOW()),
+                                ('Apprentice Hat', 'accessory', 'common', 'cosmetics/accessory/apprentice_hat.png', 'cosmetics/accessory/preview/apprentice_hat.png', 'level', 'level:5', FALSE, NOW()),
+                                ('Scholar Robe', 'clothing', 'rare', 'cosmetics/clothing/scholar_robe.png', 'cosmetics/clothing/preview/scholar_robe.png', 'level', 'level:10', FALSE, NOW()),
+                                ('Master Frame', 'frame', 'epic', 'cosmetics/frame/master.png', 'cosmetics/frame/preview/master.png', 'level', 'level:25', FALSE, NOW()),
+                                ('Grandmaster Skin', 'skin', 'legendary', 'cosmetics/skin/grandmaster.png', 'cosmetics/skin/preview/grandmaster.png', 'level', 'level:50', FALSE, NOW()),
+                                ('Top 10 Trophy Frame', 'frame', 'epic', 'cosmetics/frame/top10_trophy.png', 'cosmetics/frame/preview/top10_trophy.png', 'leaderboard', 'top:10', FALSE, NOW()),
+                                ('#1 Champion Crown', 'accessory', 'legendary', 'cosmetics/accessory/champion_crown.png', 'cosmetics/accessory/preview/champion_crown.png', 'leaderboard', 'top:1', FALSE, NOW()),
+                                ('1000 XP Star', 'effect', 'rare', 'cosmetics/effect/xp_1000_star.png', 'cosmetics/effect/preview/xp_1000_star.png', 'xp_milestone', 'xp:1000', FALSE, NOW()),
+                                ('10000 XP Nova', 'effect', 'epic', 'cosmetics/effect/xp_10000_nova.png', 'cosmetics/effect/preview/xp_10000_nova.png', 'xp_milestone', 'xp:10000', FALSE, NOW());
+                        ");
+                        Log.Information("🎨 Cosmetic items seeded: {Count} default + shop + achievement items", await db.CosmeticItems.CountAsync());
+                    }
+                    else
+                    {
+                        Log.Information("🎨 Cosmetic system tables verified ({Count} items exist)", cosmeticCount);
+                    }
+                }
+                catch (Exception cosmeticEx)
+                {
+                    Log.Warning(cosmeticEx, "⚠️ Could not seed cosmetic items");
+                }
+
+                userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
+
+                var designTokenQueryService = scope.ServiceProvider.GetRequiredService<IDesignTokenQueryService>();
+                await designTokenQueryService.EnsureInitializedAsync(CancellationToken.None);
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "⚠️ Database migration/seed failed. Continuing without it (DB may not be available yet).");
+                Log.Warning(ex, "?? Database migration/seed failed. Continuing without it (DB may not be available yet).");
             }
+
+        }
+
+        var contentSeedEnabled = app.Configuration.GetValue<bool>("SeedContent:Enabled");
+
+        if (databaseStartupSucceeded && contentSeedEnabled)
+        {
+            var seedOptions = new DbContextOptionsBuilder<ApiDbContext>()
+                .UseNpgsql(
+                    defaultConnectionString,
+                    npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+                .Options;
+
+            await using var seedDb = new ApiDbContext(seedOptions);
+
+            try
+            {
+                Log.Information("?? Seeding database...");
+                await DbSeeder.SeedAsync(seedDb);
+                Log.Information("? Database seeding complete");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "?? Database seeding failed after successful migrations. Continuing startup without seed data.");
+            }
+        }
+        else if (databaseStartupSucceeded)
+        {
+            Log.Information("Content seeding skipped. Set `SeedContent__Enabled=true` to run DbSeeder on startup.");
         }
     }
 
@@ -364,7 +549,18 @@ try
 
         if (seedAdminEnabled)
         {
-            await SeedAdminUser(app);
+            if (!databaseStartupSucceeded)
+            {
+                Log.Warning("Skipping admin/test user seeding because database startup did not complete successfully.");
+            }
+            else if (!userProfileIdentitySchemaReady)
+            {
+                Log.Warning("Skipping admin/test user seeding because UserProfiles.UserId is not compatible with Identity text keys.");
+            }
+            else
+            {
+                await SeedAdminUser(app);
+            }
         }
         else
         {
@@ -393,7 +589,7 @@ try
         app.UseSwaggerUI();
         
         // Don't force HTTPS redirect in Development to avoid CORS issues
-        Log.Information("🔓 HTTPS redirection disabled in Development mode");
+        Log.Information("?? HTTPS redirection disabled in Development mode");
     }
     else
     {
@@ -431,6 +627,7 @@ try
 
     // Map Auth endpoints (no auth required)
     app.MapAuthEndpoints();
+    app.MapControllers();
 
     // Map User endpoints
     app.MapUserEndpoints();
@@ -438,11 +635,23 @@ try
     // Map Quiz endpoints
     app.MapQuizEndpoints();
 
+    // Map question authoring endpoints
+    app.MapQuestionAuthoringEndpoints();
+
+    // Map offline sync endpoints
+    app.MapSyncEndpoints();
+
     // Map Adaptive endpoints
     app.MapAdaptiveEndpoints();
 
+    // Map practice session endpoints
+    app.MapPracticeSessionEndpoints();
+
     // Map analytics/recommendations endpoints
     app.MapAnalyticsEndpoints();
+
+    // Map explanation endpoints
+    app.MapExplanationEndpoints();
 
     // Map Hint endpoints
     app.MapHintEndpoints();
@@ -459,11 +668,71 @@ try
     // Map Leaderboard endpoints
     app.MapLeaderboardEndpoints();
 
+    // Map Avatar/Cosmetic endpoints
+    app.MapAvatarEndpoints();
+
     // Map Maintenance endpoints
     app.MapMaintenanceEndpoints();
 
+
+    // Monitoring endpoints (mock, for admin UI)
+    app.MapGet("/api/monitoring/jobs", () =>
+    {
+        // TODO: Replace with real job status from Hangfire or background services
+        var now = DateTime.UtcNow;
+        return Results.Json(new[]
+        {
+            new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspeÃƒâ€¦Ã‚Â¡an", Timestamp = now.AddMinutes(-30) },
+            new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard aÃƒâ€¦Ã‚Â¾uriran", Timestamp = now.AddMinutes(-10) },
+            new { Name = "Hangfire Worker", IsSuccess = true, LastMessage = "Svi jobovi OK", Timestamp = now.AddMinutes(-1) }
+        });
+    });
+
+
+    app.MapGet("/api/monitoring/logs", () =>
+    {
+        // Cita poslednjih 20 linija iz Serilog log fajla (ako postoji)
+        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
+        if (!System.IO.File.Exists(logPath))
+            return Results.Json(new[] { "Log fajl nije pronaden: " + logPath });
+        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(20).Reverse().ToList();
+        return Results.Json(lines);
+    });
+
+    app.MapGet("/api/monitoring/logs-advanced", (string? search, string? level) =>
+    {
+        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
+        if (!System.IO.File.Exists(logPath))
+            return Results.Json(new[] { new { Message = "Log fajl nije pronaden: " + logPath } });
+
+        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(200).Reverse();
+        var entries = new List<object>();
+        foreach (var line in lines)
+        {
+            var msg = line;
+            string? lvl = null;
+            string? stack = null;
+            var idx1 = line.IndexOf('[');
+            var idx2 = line.IndexOf(']');
+            if (idx1 >= 0 && idx2 > idx1)
+                lvl = line.Substring(idx1 + 1, idx2 - idx1 - 1);
+            if (!string.IsNullOrEmpty(level) && !string.Equals(lvl, level, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!string.IsNullOrEmpty(search) && !line.Contains(search, StringComparison.OrdinalIgnoreCase))
+                continue;
+            entries.Add(new { Message = msg, Level = lvl, StackTrace = stack });
+        }
+
+        return Results.Json(entries);
+    });
+
     // Map Logging endpoints
     app.MapLoggingEndpoints();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHangfireDashboard("/hangfire");
+    }
 
     // Map Bug endpoints
     app.MapBugEndpoints();
@@ -479,7 +748,35 @@ try
 
     app.MapGet("/", () => Results.Ok("MathLearning API is running"));
 
-    Log.Information("✅ MathLearning API started successfully");
+    Log.Information("? MathLearning API started successfully");
+
+    if (!app.Environment.IsEnvironment("Test") && databaseStartupSucceeded)
+    {
+        RecurringJob.AddOrUpdate<IPracticeHangfireJobs>(
+            "practice-daily-aggregation",
+            job => job.DailyAggregationJob(),
+            "0 2 * * *");
+        RecurringJob.AddOrUpdate<ISchoolLeaderboardHangfireJobs>(
+            "school-leaderboard-refresh",
+            job => job.RefreshAllCurrentPeriodsJob(),
+            "*/10 * * * *");
+        RecurringJob.AddOrUpdate<ISchoolLeaderboardHangfireJobs>(
+            "school-leaderboard-weekly-snapshot",
+            job => job.CaptureSnapshotJob("week"),
+            "0 * * * *");
+        RecurringJob.AddOrUpdate<ISchoolLeaderboardHangfireJobs>(
+            "school-leaderboard-monthly-snapshot",
+            job => job.CaptureSnapshotJob("month"),
+            "15 */6 * * *");
+        RecurringJob.AddOrUpdate<IAntiCheatHangfireJobs>(
+            "anti-cheat-ml-review-sweep",
+            job => job.RunMlReviewSweepJob(0),
+            "*/5 * * * *");
+    }
+    else if (!app.Environment.IsEnvironment("Test"))
+    {
+        Log.Warning("Skipping Hangfire recurring job registration because database startup did not complete successfully.");
+    }
     
     app.Run();
 }
@@ -493,12 +790,12 @@ catch (Exception ex)
     {
         var conflictPort = TryExtractPortFromAddressInUse(ex);
         Log.Error(
-            "❗ Port binding failed because the address is already in use. Port={Port}. Stop the process on that port or run with a different URL, e.g. ASPNETCORE_URLS=http://localhost:5180",
+            "? Port binding failed because the address is already in use. Port={Port}. Stop the process on that port or run with a different URL, e.g. ASPNETCORE_URLS=http://localhost:5180",
             conflictPort);
         LogAddressInUseDiagnostics(conflictPort);
     }
 
-    Log.Fatal(ex, "❌ Application terminated unexpectedly");
+    Log.Fatal(ex, "? Application terminated unexpectedly");
 }
 finally
 {
@@ -510,7 +807,13 @@ static async Task SeedAdminUser(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+    if (!await roleManager.RoleExistsAsync(DesignTokenSecurity.AdminRole))
+    {
+        await roleManager.CreateAsync(new IdentityRole(DesignTokenSecurity.AdminRole));
+    }
 
     static async Task EnsurePasswordAsync(UserManager<IdentityUser> userManager, IdentityUser user, string password)
     {
@@ -520,7 +823,7 @@ static async Task SeedAdminUser(WebApplication app)
             var resetResult = await userManager.ResetPasswordAsync(user, resetToken, password);
             if (!resetResult.Succeeded)
             {
-                Log.Warning($"✗ Failed to reset password for '{user.UserName}': {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
+                Log.Warning($"? Failed to reset password for '{user.UserName}': {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
             }
         }
         else
@@ -528,12 +831,12 @@ static async Task SeedAdminUser(WebApplication app)
             var addResult = await userManager.AddPasswordAsync(user, password);
             if (!addResult.Succeeded)
             {
-                Log.Warning($"✗ Failed to add password for '{user.UserName}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+                Log.Warning($"? Failed to add password for '{user.UserName}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
             }
         }
     }
     
-    // 👤 Seed Admin User
+    // ?? Seed Admin User
     var adminUsername = app.Configuration["SeedAdmin:Username"] ?? "admin";
     var adminPassword =
         app.Configuration["SeedAdmin:Password"]
@@ -564,7 +867,8 @@ static async Task SeedAdminUser(WebApplication app)
         
         if (result.Succeeded)
         {
-            Log.Information("✓ Admin user created successfully!");
+            Log.Information("? Admin user created successfully!");
+            await userManager.AddToRoleAsync(admin, DesignTokenSecurity.AdminRole);
             
             // Create UserProfile for admin (UserId matches Identity key)
             string adminUserId = admin.Id;
@@ -585,35 +889,39 @@ static async Task SeedAdminUser(WebApplication app)
                 };
                 db.UserProfiles.Add(adminProfile);
                 await db.SaveChangesAsync();
-                Log.Information("✓ Admin user profile created!");
+                Log.Information("? Admin user profile created!");
             }
         }
         else
         {
-            Log.Warning($"✗ Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            Log.Warning($"? Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
         }
     }
     else
     {
-        Log.Information("✓ Admin user already exists.");
+        Log.Information("? Admin user already exists.");
+        if (!await userManager.IsInRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole))
+        {
+            await userManager.AddToRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole);
+        }
         if (resetAdminPasswordOnStart)
         {
             await EnsurePasswordAsync(userManager, existingAdmin, adminPassword);
-            Log.Information("✓ Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
+            Log.Information("? Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
         }
     }
     
-    // 📱 Seed Test Users for Mobile App
+    // ?? Seed Test Users for Mobile App
     // 
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // 🔑 TEST USERS (for mobile app login)
-    // ═══════════════════════════════════════════════════════════════════════════════
+    // -------------------------------------------------------------------------------
+    // ?? TEST USERS (for mobile app login)
+    // -------------------------------------------------------------------------------
     // 
     // Username: test     | Password: Test123!
     // Username: demo     | Password: Demo123!
     // Username: ivan     | Password: Ivan123!
     // 
-    // ═══════════════════════════════════════════════════════════════════════════════
+    // -------------------------------------------------------------------------------
     
     var seedTestUsersEnabled =
         app.Environment.IsDevelopment()
@@ -649,7 +957,7 @@ static async Task SeedAdminUser(WebApplication app)
             
             if (result.Succeeded)
             {
-                Log.Information($"✓ Test user '{testUser.Username}' created successfully!");
+                Log.Information($"? Test user '{testUser.Username}' created successfully!");
                 
                  // Create UserProfile
                  string userId = user.Id;
@@ -671,21 +979,21 @@ static async Task SeedAdminUser(WebApplication app)
                     };
                     db.UserProfiles.Add(userProfile);
                     await db.SaveChangesAsync();
-                    Log.Information($"✓ User profile for '{testUser.Username}' created!");
+                    Log.Information($"? User profile for '{testUser.Username}' created!");
                 }
                 else
                 {
-                    Log.Information($"✓ User profile for '{testUser.Username}' already exists.");
+                    Log.Information($"? User profile for '{testUser.Username}' already exists.");
                 }
             }
             else
             {
-                Log.Warning($"✗ Failed to create test user '{testUser.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                Log.Warning($"? Failed to create test user '{testUser.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
             }
         }
         else
         {
-            Log.Information($"✓ Test user '{testUser.Username}' already exists.");
+            Log.Information($"? Test user '{testUser.Username}' already exists.");
             await EnsurePasswordAsync(userManager, existingUser, testUser.Password);
               
             // Ensure UserProfile exists even if IdentityUser was created before
@@ -707,12 +1015,12 @@ static async Task SeedAdminUser(WebApplication app)
                 };
                 db.UserProfiles.Add(userProfile);
                 await db.SaveChangesAsync();
-                Log.Information($"✓ User profile for existing user '{testUser.Username}' created!");
+                Log.Information($"? User profile for existing user '{testUser.Username}' created!");
             }
         }
     }
      
-    // 🔗 Backfill UserProfiles for Identity users (stable 1:1 mapping)
+    // ?? Backfill UserProfiles for Identity users (stable 1:1 mapping)
     var allIdentityUsers = await userManager.Users.ToListAsync();
     foreach (var u in allIdentityUsers)
     {
@@ -773,6 +1081,33 @@ static string DescribeDbConnection(string connectionString)
     {
         return "<unparseable connection string>";
     }
+}
+
+static async Task<bool> HasUserProfileIdentitySchemaAsync(ApiDbContext db, CancellationToken ct = default)
+{
+    var connectionString = db.Database.GetConnectionString();
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return false;
+    }
+
+    await using var connection = new NpgsqlConnection(connectionString);
+    await connection.OpenAsync(ct);
+
+    await using var command = connection.CreateCommand();
+    command.CommandText = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'UserProfiles'
+              AND column_name = 'UserId'
+              AND udt_name = 'text'
+        );
+        """;
+
+    var result = await command.ExecuteScalarAsync(ct);
+    return result is bool boolResult && boolResult;
 }
 
 static bool IsAddressInUse(Exception ex)

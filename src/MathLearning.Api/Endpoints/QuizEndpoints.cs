@@ -1,6 +1,7 @@
 ﻿using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Application.DTOs.Progress;
 using MathLearning.Application.Helpers;
+using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -22,6 +23,7 @@ public static class QuizEndpoints
         group.MapPost("/start", async (
             StartQuizRequest request,
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -44,7 +46,7 @@ public static class QuizEndpoints
                 .ToListAsync();
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
 
-            var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
+            var questionDtos = questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList();
 
             await db.SaveChangesAsync();
 
@@ -95,6 +97,7 @@ public static class QuizEndpoints
         group.MapPost("/next-question", async (
             NextQuestionRequest request,
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -121,12 +124,15 @@ public static class QuizEndpoints
             if (question == null)
                 return Results.NotFound("No questions available");
 
-            var steps = NormalizeStepsForResponse(StepEngine.GetSteps(question, lang));
+            var steps = NormalizeStepsForResponse(stepAdapter.GetSteps(question, lang));
             var questionText = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, lang)) ?? string.Empty;
             var options = question.Options
                 .Select(o => new OptionDto(
                     o.Id,
-                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty))
+                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty,
+                    o.TextFormat,
+                    o.RenderMode,
+                    TranslationHelper.GetOptionSemanticsAltText(o, lang)))
                 .ToList();
 
             return Results.Ok(new NextQuestionResponse(
@@ -139,7 +145,14 @@ public static class QuizEndpoints
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, lang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, lang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, lang)),
-                steps
+                steps,
+                question.TextFormat,
+                question.ExplanationFormat,
+                question.HintFormat,
+                question.TextRenderMode,
+                question.ExplanationRenderMode,
+                question.HintRenderMode,
+                TranslationHelper.GetQuestionSemanticsAltText(question, lang)
             ));
         });
 
@@ -148,7 +161,9 @@ public static class QuizEndpoints
             JsonElement request,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService) =>
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
+            IQuizAttemptIngestService ingestService,
+            IAnswerPatternAntiCheatService antiCheatService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId);
@@ -241,6 +256,23 @@ public static class QuizEndpoints
 
             stat.LastAttemptAt = DateTime.UtcNow;
 
+            await antiCheatService.EvaluateAndTrackAsync(
+                new AntiCheatAnswerObservationInput(
+                    userId,
+                    "quiz_answer",
+                    questionId,
+                    null,
+                    question.SubtopicId,
+                    quizSessionId,
+                    null,
+                    null,
+                    answerText,
+                    isCorrect,
+                    Math.Max(0, timeSpentSeconds) * 1000,
+                    null,
+                    answeredAtUtc),
+                ctx.RequestAborted);
+
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(
                 userId,
@@ -270,7 +302,7 @@ public static class QuizEndpoints
                 {
                     explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
                         TranslationHelper.GetExplanation(questionForFeedback, lang));
-                    steps = NormalizeStepsForResponse(StepEngine.GetSteps(questionForFeedback, lang));
+                    steps = NormalizeStepsForResponse(stepAdapter.GetSteps(questionForFeedback, lang));
                 }
             }
 
@@ -286,7 +318,8 @@ public static class QuizEndpoints
             OfflineBatchSubmitRequest request,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService) =>
+            IQuizAttemptIngestService ingestService,
+            IAnswerPatternAntiCheatService antiCheatService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
 
@@ -315,6 +348,7 @@ public static class QuizEndpoints
             }
 
             int importedCount = 0;
+            var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(request.Answers.Count);
             
             // Batch učitaj sva pitanja odjednom (optimizacija)
             var questionIds = request.Answers.Select(a => a.QuestionId).Distinct().ToList();
@@ -323,6 +357,7 @@ public static class QuizEndpoints
                 .Where(q => questionIds.Contains(q.Id))
                 .ToDictionaryAsync(q => q.Id);
             var ingestRows = new List<QuizAttemptIngestItem>(request.Answers.Count);
+            var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, request.Answers, ctx.RequestAborted);
 
             // Batch učitaj postojeće statistike
             var existingStats = await db.UserQuestionStats
@@ -331,14 +366,8 @@ public static class QuizEndpoints
 
             foreach (var answer in request.Answers)
             {
-                // 🔒 IDEMPOTENCY CHECK - Proveri da li već postoji identičan answer
-                bool exists = await db.UserAnswers
-                    .AnyAsync(x =>
-                        x.UserId == userId &&
-                        x.QuestionId == answer.QuestionId &&
-                        x.AnsweredAt == answer.AnsweredAt);
-
-                if (exists)
+                var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
+                if (!existingAnswerKeys.Add(answerKey))
                     continue;
 
                 if (!questions.TryGetValue(answer.QuestionId, out var question))
@@ -394,6 +423,21 @@ public static class QuizEndpoints
                     TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
                     CreatedAtUtc: answer.AnsweredAt));
 
+                antiCheatInputs.Add(new AntiCheatAnswerObservationInput(
+                    userId,
+                    "quiz_offline_submit",
+                    answer.QuestionId,
+                    null,
+                    question.SubtopicId,
+                    sessionId,
+                    null,
+                    null,
+                    answer.Answer,
+                    isCorrectServer,
+                    Math.Max(0, answer.TimeSpent) * 1000,
+                    null,
+                    answer.AnsweredAt));
+
                 importedCount++;
             }
 
@@ -415,6 +459,7 @@ public static class QuizEndpoints
                 }
             }
 
+            await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
 
@@ -434,7 +479,8 @@ public static class QuizEndpoints
             JsonElement payload,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService) =>
+            IQuizAttemptIngestService ingestService,
+            IAnswerPatternAntiCheatService antiCheatService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             var sessionGuid = Guid.NewGuid();
@@ -482,23 +528,22 @@ public static class QuizEndpoints
             db.QuizSessions.Add(session);
 
             int importedCount = 0;
+            var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(answers.Count);
             var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
             var questions = await db.Questions
                 .Include(q => q.Options)
                 .Where(q => questionIds.Contains(q.Id))
                 .ToDictionaryAsync(q => q.Id);
             var ingestRows = new List<QuizAttemptIngestItem>(answers.Count);
+            var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, answers, ctx.RequestAborted);
             var existingStats = await db.UserQuestionStats
                 .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
                 .ToDictionaryAsync(s => s.QuestionId);
 
             foreach (var answer in answers)
             {
-                bool exists = await db.UserAnswers.AnyAsync(x =>
-                    x.UserId == userId &&
-                    x.QuestionId == answer.QuestionId &&
-                    x.AnsweredAt == answer.AnsweredAt);
-                if (exists)
+                var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
+                if (!existingAnswerKeys.Add(answerKey))
                     continue;
 
                 if (!questions.TryGetValue(answer.QuestionId, out var questionForAnswer))
@@ -549,6 +594,21 @@ public static class QuizEndpoints
                     TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
                     CreatedAtUtc: answer.AnsweredAt));
 
+                antiCheatInputs.Add(new AntiCheatAnswerObservationInput(
+                    userId,
+                    "quiz_batch_submit",
+                    answer.QuestionId,
+                    null,
+                    questionForAnswer.SubtopicId,
+                    sessionGuid,
+                    null,
+                    null,
+                    answer.Answer,
+                    isCorrectServer,
+                    Math.Max(0, answer.TimeSpent) * 1000,
+                    null,
+                    answer.AnsweredAt));
+
                 importedCount++;
             }
 
@@ -570,6 +630,7 @@ public static class QuizEndpoints
                 }
             }
 
+            await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
             var overview = await CalculateUserOverview(db, userId);
@@ -605,6 +666,7 @@ public static class QuizEndpoints
         group.MapGet("/srs/daily", async (
             ApiDbContext db,
             HttpContext ctx,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             int limit = 20) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -641,13 +703,14 @@ public static class QuizEndpoints
                 questions.AddRange(randomFill);
             }
 
-            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang)).ToList());
+            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList());
         });
 
         // 🔀 SRS MIXED (due + random)
         group.MapGet("/srs/mixed", async (
             ApiDbContext db,
             HttpContext ctx,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             int count = 15) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -682,8 +745,8 @@ public static class QuizEndpoints
 
             return Results.Ok(new
             {
-                srs = srsQuestions.Select(q => MapQuestionDto(q, lang)),
-                random = randomQuestions.Select(q => MapQuestionDto(q, lang))
+                srs = srsQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter)),
+                random = randomQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter))
             });
         });
 
@@ -727,12 +790,15 @@ public static class QuizEndpoints
     }
 
     // 🗺️ Shared helper to map Question entity → QuestionDto with translation + steps
-    private static QuestionDto MapQuestionDto(Question q, string lang)
+    private static QuestionDto MapQuestionDto(Question q, string lang, MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter)
     {
         var options = q.Options
             .Select(o => new OptionDto(
                 o.Id,
-                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty))
+                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty,
+                o.TextFormat,
+                o.RenderMode,
+                TranslationHelper.GetOptionSemanticsAltText(o, lang)))
             .ToList();
 
         return new QuestionDto(
@@ -746,7 +812,14 @@ public static class QuizEndpoints
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
-            NormalizeStepsForResponse(StepEngine.GetSteps(q, lang))
+            NormalizeStepsForResponse(stepAdapter.GetSteps(q, lang)),
+            q.TextFormat,
+            q.ExplanationFormat,
+            q.HintFormat,
+            q.TextRenderMode,
+            q.ExplanationRenderMode,
+            q.HintRenderMode,
+            TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         );
     }
 
@@ -791,12 +864,17 @@ public static class QuizEndpoints
         {
             id = q.Id,
             text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)),
+            textFormat = q.TextFormat,
+            renderMode = q.TextRenderMode,
             type = q.Type,
             options = q.Options
                 .Select(o => new
                 {
                     id = o.Id,
-                    text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang))
+                    text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)),
+                    textFormat = o.TextFormat,
+                    renderMode = o.RenderMode,
+                    semanticsAltText = TranslationHelper.GetOptionSemanticsAltText(o, lang)
                 })
                 .ToList(),
             correctAnswerId = q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
@@ -804,7 +882,12 @@ public static class QuizEndpoints
             hintLight = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
             hintMedium = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
             hintFull = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
-            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang))
+            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
+            explanationFormat = q.ExplanationFormat,
+            hintFormat = q.HintFormat,
+            explanationRenderMode = q.ExplanationRenderMode,
+            hintRenderMode = q.HintRenderMode,
+            semanticsAltText = TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         });
 
         return Results.Ok(new
@@ -820,7 +903,12 @@ public static class QuizEndpoints
             .Select(step => new StepExplanationDto(
                 InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
                 InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
-                step.Highlight))
+                step.Highlight,
+                step.TextFormat,
+                step.HintFormat,
+                step.TextRenderMode,
+                step.HintRenderMode,
+                TranslationHelper.ResolveSemanticsAltText(step.SemanticsAltText, step.Text, step.TextFormat)))
             .ToList();
     }
 
@@ -879,12 +967,58 @@ public static class QuizEndpoints
         return (xp, level, streak);
     }
 
+    private static async Task<HashSet<string>> LoadExistingAnswerKeysAsync(
+        ApiDbContext db,
+        string userId,
+        IReadOnlyCollection<OfflineAnswerDto> answers,
+        CancellationToken cancellationToken)
+    {
+        if (answers.Count == 0)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var questionIds = answers.Select(x => x.QuestionId).Distinct().ToList();
+        var minAnsweredAt = answers.Min(x => x.AnsweredAt);
+        var maxAnsweredAt = answers.Max(x => x.AnsweredAt);
+
+        var existing = await db.UserAnswers
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                questionIds.Contains(x.QuestionId) &&
+                x.AnsweredAt >= minAnsweredAt &&
+                x.AnsweredAt <= maxAnsweredAt)
+            .Select(x => new { x.QuestionId, x.AnsweredAt })
+            .ToListAsync(cancellationToken);
+
+        return existing
+            .Select(x => BuildAnswerKey(x.QuestionId, x.AnsweredAt))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static string BuildAnswerKey(int questionId, DateTime answeredAt)
+        => $"{questionId}:{answeredAt.Ticks}";
+
     // 🌍 Helper za resolving user language
     private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
     {
-        var settings = await db.UserSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.UserId == userId);
+        var cacheKey = $"req:user-settings:{userId}";
+        UserSettings? settings = null;
+        if (ctx.Items.TryGetValue(cacheKey, out var cached) && cached is UserSettings cachedSettings)
+        {
+            settings = cachedSettings;
+        }
+        else
+        {
+            settings = await db.UserSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == userId);
+            if (settings is not null)
+            {
+                ctx.Items[cacheKey] = settings;
+            }
+        }
 
         var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
         return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);

@@ -18,6 +18,7 @@ public static class QuestionEndpoints
         // 📚 GET QUESTIONS with language support
         group.MapGet("/", async (
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx,
             [FromQuery] string? lang = null,
             [FromQuery] int? subtopicId = null,
@@ -46,22 +47,21 @@ public static class QuestionEndpoints
                 q.Id,
                 q.Type,
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, resolvedLang)) ?? string.Empty,
-                q.Options.Select(o => new OptionDto(
-                    o.Id,
-                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, resolvedLang)) ?? string.Empty))
-                    .ToList(),
+                q.Options.Select(o => MapOptionDto(o, resolvedLang)).ToList(),
                 q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
                 q.Difficulty,
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, resolvedLang)),
-                StepEngine.GetSteps(q, resolvedLang)
-                    .Select(s => new StepExplanationDto(
-                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Text) ?? s.Text,
-                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Hint),
-                        s.Highlight))
-                    .ToList()
+                NormalizeStepsForResponse(stepAdapter.GetSteps(q, resolvedLang)),
+                q.TextFormat,
+                q.ExplanationFormat,
+                q.HintFormat,
+                q.TextRenderMode,
+                q.ExplanationRenderMode,
+                q.HintRenderMode,
+                TranslationHelper.GetQuestionSemanticsAltText(q, resolvedLang)
             )).ToList();
 
             return Results.Ok(questionDtos);
@@ -73,6 +73,7 @@ public static class QuestionEndpoints
         group.MapGet("/{id}", async (
             int id,
             ApiDbContext db,
+            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx,
             [FromQuery] string? lang = null) =>
         {
@@ -92,22 +93,21 @@ public static class QuestionEndpoints
                 question.Id,
                 question.Type,
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, resolvedLang)) ?? string.Empty,
-                question.Options.Select(o => new OptionDto(
-                    o.Id,
-                    InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, resolvedLang)) ?? string.Empty))
-                    .ToList(),
+                question.Options.Select(o => MapOptionDto(o, resolvedLang)).ToList(),
                 question.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
                 question.Difficulty,
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(question, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, resolvedLang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, resolvedLang)),
-                StepEngine.GetSteps(question, resolvedLang)
-                    .Select(s => new StepExplanationDto(
-                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Text) ?? s.Text,
-                        InlineLatexFormatter.NormalizeMixedInlineMath(s.Hint),
-                        s.Highlight))
-                    .ToList()
+                NormalizeStepsForResponse(stepAdapter.GetSteps(question, resolvedLang)),
+                question.TextFormat,
+                question.ExplanationFormat,
+                question.HintFormat,
+                question.TextRenderMode,
+                question.ExplanationRenderMode,
+                question.HintRenderMode,
+                TranslationHelper.GetQuestionSemanticsAltText(question, resolvedLang)
             );
 
             return Results.Ok(dto);
@@ -131,4 +131,24 @@ public static class QuestionEndpoints
 
         return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);
     }
+
+    private static OptionDto MapOptionDto(QuestionOption option, string language)
+        => new(
+            option.Id,
+            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(option, language)) ?? string.Empty,
+            option.TextFormat,
+            option.RenderMode,
+            TranslationHelper.GetOptionSemanticsAltText(option, language));
+
+    private static List<StepExplanationDto> NormalizeStepsForResponse(IEnumerable<StepExplanationDto> steps)
+        => steps.Select(step => new StepExplanationDto(
+                InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
+                InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
+                step.Highlight,
+                step.TextFormat,
+                step.HintFormat,
+                step.TextRenderMode,
+                step.HintRenderMode,
+                TranslationHelper.ResolveSemanticsAltText(step.SemanticsAltText, step.Text, step.TextFormat)))
+            .ToList();
 }

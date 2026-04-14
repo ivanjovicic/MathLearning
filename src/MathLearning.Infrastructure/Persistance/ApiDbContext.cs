@@ -33,9 +33,25 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
     public DbSet<QuestionStep> QuestionSteps => Set<QuestionStep>();
     public DbSet<QuestionStepTranslation> QuestionStepTranslations => Set<QuestionStepTranslation>();
+    public DbSet<QuestionDraft> QuestionDrafts => Set<QuestionDraft>();
+    public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
+    public DbSet<QuestionValidationResult> QuestionValidationResults => Set<QuestionValidationResult>();
+    public DbSet<QuestionValidationIssue> QuestionValidationIssues => Set<QuestionValidationIssue>();
+    public DbSet<QuestionPreviewCache> QuestionPreviewCaches => Set<QuestionPreviewCache>();
+    public DbSet<QuestionAuthoringAuditLog> QuestionAuthoringAuditLogs => Set<QuestionAuthoringAuditLog>();
+    public DbSet<StepExplanationTemplate> StepExplanationTemplates => Set<StepExplanationTemplate>();
+    public DbSet<StepExplanationCacheEntry> StepExplanationCacheEntries => Set<StepExplanationCacheEntry>();
+    public DbSet<MathFormulaReferenceEntity> MathFormulaReferences => Set<MathFormulaReferenceEntity>();
+    public DbSet<CommonMistakePattern> CommonMistakePatterns => Set<CommonMistakePattern>();
+    public DbSet<MathTransformationRule> MathTransformationRules => Set<MathTransformationRule>();
     public DbSet<UserAnswerAudit> UserAnswerAudits => Set<UserAnswerAudit>();
     public DbSet<UserQuestionAttempt> UserQuestionAttempts => Set<UserQuestionAttempt>();
+    public DbSet<UserXpEvent> UserXpEvents => Set<UserXpEvent>();
     public DbSet<School> Schools => Set<School>();
+    public DbSet<SchoolScoreAggregate> SchoolScoreAggregates => Set<SchoolScoreAggregate>();
+    public DbSet<SchoolRankHistory> SchoolRankHistories => Set<SchoolRankHistory>();
+    public DbSet<CompetitionSeason> CompetitionSeasons => Set<CompetitionSeason>();
+    public DbSet<XpCheatLog> XpCheatLogs => Set<XpCheatLog>();
     public DbSet<Faculty> Faculties => Set<Faculty>();
     public DbSet<UserLearningProfile> UserLearningProfiles => Set<UserLearningProfile>();
     public DbSet<UserTopicMastery> UserTopicMasteries => Set<UserTopicMastery>();
@@ -47,6 +63,34 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserTopicStat> UserTopicStats => Set<UserTopicStat>();
     public DbSet<UserSubtopicStat> UserSubtopicStats => Set<UserSubtopicStat>();
     public DbSet<UserWeakness> UserWeaknesses => Set<UserWeakness>();
+    public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
+    public DbSet<PracticeSessionItem> PracticeSessionItems => Set<PracticeSessionItem>();
+    public DbSet<MasteryState> MasteryStates => Set<MasteryState>();
+    public DbSet<AnswerPatternDetectionLog> AnswerPatternDetectionLogs => Set<AnswerPatternDetectionLog>();
+    public DbSet<DesignTokenVersion> DesignTokenVersions => Set<DesignTokenVersion>();
+    public DbSet<DesignTokenSet> DesignTokenSets => Set<DesignTokenSet>();
+    public DbSet<DesignToken> DesignTokens => Set<DesignToken>();
+    public DbSet<DesignTokenAuditLog> DesignTokenAuditLogs => Set<DesignTokenAuditLog>();
+    public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
+    public DbSet<SyncEventLog> SyncEventLogs => Set<SyncEventLog>();
+    public DbSet<DeviceSyncState> DeviceSyncStates => Set<DeviceSyncState>();
+    public DbSet<ServerSyncEvent> ServerSyncEvents => Set<ServerSyncEvent>();
+    public DbSet<SyncDeadLetter> SyncDeadLetters => Set<SyncDeadLetter>();
+
+    // 🎨 Cosmetic system
+    public DbSet<CosmeticItem> CosmeticItems => Set<CosmeticItem>();
+    public DbSet<CosmeticSeason> CosmeticSeasons => Set<CosmeticSeason>();
+    public DbSet<UserCosmeticInventory> UserCosmeticInventories => Set<UserCosmeticInventory>();
+    public DbSet<UserAvatarConfig> UserAvatarConfigs => Set<UserAvatarConfig>();
+    public DbSet<CosmeticRewardRule> CosmeticRewardRules => Set<CosmeticRewardRule>();
+    public DbSet<CosmeticRewardClaim> CosmeticRewardClaims => Set<CosmeticRewardClaim>();
+    public DbSet<SeasonRewardTrackEntry> SeasonRewardTrackEntries => Set<SeasonRewardTrackEntry>();
+    public DbSet<UserAppearanceProjection> UserAppearanceProjections => Set<UserAppearanceProjection>();
+    public DbSet<CosmeticTelemetryEvent> CosmeticTelemetryEvents => Set<CosmeticTelemetryEvent>();
+    public DbSet<CosmeticAuditLog> CosmeticAuditLogs => Set<CosmeticAuditLog>();
+    public DbSet<LeaderboardSnapshot> LeaderboardSnapshots => Set<LeaderboardSnapshot>();
+    public DbSet<UserQuizSummary> UserQuizSummaries => Set<UserQuizSummary>();
+    public DbSet<UserRewardState> UserRewardStates => Set<UserRewardState>();
 
     // Outbox for background processing (OutboxProcessor uses AppDbContext, but the schema is shared).
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -54,12 +98,20 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.ApplyConfigurationsFromAssembly(typeof(ApiDbContext).Assembly);
 
         builder.Entity<Question>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
             entity.Property(e => e.Type).IsRequired().HasDefaultValue("multiple_choice");
+            entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.ExplanationFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.TextRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.ExplanationRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.SemanticsAltText).HasMaxLength(1000);
             entity.HasOne(e => e.Category)
                   .WithMany()
                   .HasForeignKey(e => e.CategoryId)
@@ -83,6 +135,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             // 💡 Hint properties
             entity.Property(e => e.HintFormula).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.HintClue).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.HintFull).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.HintDifficulty).HasDefaultValue(1);
             
             // 🚀 Performance indexes
@@ -92,12 +145,19 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_Questions_Difficulty");
             entity.HasIndex(e => new { e.SubtopicId, e.Difficulty })
                   .HasDatabaseName("IX_Questions_Subtopic_Difficulty");
+            entity.Property<uint>("xmin")
+                  .HasColumnName("xmin")
+                  .IsRowVersion();
         });
 
         builder.Entity<QuestionOption>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
+            entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.RenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.SemanticsAltText).HasMaxLength(500);
+            entity.Property(e => e.Order).HasDefaultValue(0).IsRequired();
             entity.HasMany(e => e.Translations)
                   .WithOne(t => t.Option)
                   .HasForeignKey(t => t.OptionId)
@@ -163,6 +223,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Answer).IsRequired();
+            entity.Property(e => e.DeviceId).HasMaxLength(128);
             entity.HasOne(e => e.Question)
                   .WithMany()
                   .HasForeignKey(e => e.QuestionId)
@@ -186,6 +247,12 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_UserAnswers_User_Answered");
             entity.HasIndex(e => new { e.UserId, e.IsCorrect })
                   .HasDatabaseName("IX_UserAnswers_User_Correct");
+            entity.HasIndex(e => e.SyncOperationId)
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserAnswers_SyncOperationId");
+            entity.HasIndex(e => new { e.UserId, e.DeviceId, e.ClientSequence })
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserAnswers_User_Device_Sequence");
         });
 
         builder.Entity<UserQuestionStat>(entity =>
@@ -437,6 +504,11 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.Hint).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.Highlight).HasDefaultValue(false);
             entity.Property(e => e.StepIndex).IsRequired();
+            entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintFormat).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.TextRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(e => e.SemanticsAltText).HasMaxLength(500);
 
             entity.HasMany(e => e.Translations)
                   .WithOne(t => t.QuestionStep)
@@ -457,6 +529,92 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.QuestionStepId, e.Lang })
                   .IsUnique()
                   .HasDatabaseName("UX_QuestionStepTranslations_Step_Lang");
+        });
+
+        builder.Entity<StepExplanationTemplate>(entity =>
+        {
+            entity.ToTable("step_explanation_template");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RuleKey).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Language).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.StepType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.TemplateText).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.HintTemplate).HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.RuleKey, e.Language, e.StepType })
+                  .IsUnique()
+                  .HasDatabaseName("UX_step_explanation_template_rule_lang_step");
+        });
+
+        builder.Entity<StepExplanationCacheEntry>(entity =>
+        {
+            entity.ToTable("step_explanation_cache");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProblemHash).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Difficulty).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.PayloadJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.ExpiresAt).IsRequired();
+            entity.Property(e => e.LastAccessedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.ProblemHash, e.Grade, e.Difficulty })
+                  .IsUnique()
+                  .HasDatabaseName("UX_step_explanation_cache_problem_grade_difficulty");
+            entity.HasIndex(e => e.ExpiresAt)
+                  .HasDatabaseName("IX_step_explanation_cache_expires_at");
+        });
+
+        builder.Entity<MathFormulaReferenceEntity>(entity =>
+        {
+            entity.ToTable("math_formula_reference");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Latex).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.MathMl).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.Description).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => e.Name)
+                  .HasDatabaseName("IX_math_formula_reference_name");
+        });
+
+        builder.Entity<CommonMistakePattern>(entity =>
+        {
+            entity.ToTable("common_mistake_patterns");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Topic).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Subtopic).HasMaxLength(100);
+            entity.Property(e => e.MistakeType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.PatternKey).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Description).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.Remediation).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.Topic, e.Subtopic, e.MistakeType })
+                  .HasDatabaseName("IX_common_mistake_patterns_topic_subtopic_type");
+            entity.HasIndex(e => new { e.MistakeType, e.Priority })
+                  .HasDatabaseName("IX_common_mistake_patterns_type_priority");
+        });
+
+        builder.Entity<MathTransformationRule>(entity =>
+        {
+            entity.ToTable("math_transformation_rules");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasMaxLength(100);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).IsRequired().HasColumnType("TEXT");
+            entity.Property(e => e.ExpressionPattern).HasColumnType("TEXT");
+            entity.Property(e => e.StepType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ExampleLatex).HasColumnType("TEXT");
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.IsActive, e.StepType })
+                  .HasDatabaseName("IX_math_transformation_rules_active_step");
         });
 
         builder.Entity<UserLearningProfile>(entity =>
@@ -703,6 +861,83 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("UX_user_weakness_user_topic_subtopic");
         });
 
+        builder.Entity<PracticeSession>(entity =>
+        {
+            entity.ToTable("practice_session");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.SkillNodeId).HasMaxLength(128);
+            entity.Property(e => e.Status)
+                  .IsRequired()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(PracticeSessionStatuses.Active);
+            entity.Property(e => e.TargetQuestions).HasDefaultValue(10);
+            entity.Property(e => e.AnsweredQuestions).HasDefaultValue(0);
+            entity.Property(e => e.CorrectAnswers).HasDefaultValue(0);
+            entity.Property(e => e.XpEarned).HasDefaultValue(0);
+            entity.Property(e => e.RecommendedDifficulty)
+                  .IsRequired()
+                  .HasMaxLength(16)
+                  .HasDefaultValue(PracticeDifficulties.Medium);
+            entity.Property(e => e.InitialMastery).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.FinalMastery).HasColumnType("numeric(5,4)");
+
+            entity.HasIndex(e => new { e.UserId, e.StartedAt })
+                  .HasDatabaseName("IX_practice_session_user_started_at");
+            entity.HasIndex(e => new { e.UserId, e.Status })
+                  .HasDatabaseName("IX_practice_session_user_status");
+            entity.HasIndex(e => new { e.UserId, e.TopicId })
+                  .HasDatabaseName("IX_practice_session_user_topic");
+            entity.HasIndex(e => new { e.UserId, e.SubtopicId })
+                  .HasDatabaseName("IX_practice_session_user_subtopic");
+        });
+
+        builder.Entity<PracticeSessionItem>(entity =>
+        {
+            entity.ToTable("practice_session_item");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Difficulty)
+                  .IsRequired()
+                  .HasMaxLength(16)
+                  .HasDefaultValue(PracticeDifficulties.Medium);
+            entity.Property(e => e.AttemptNumber).HasDefaultValue(1);
+            entity.Property(e => e.BktPrior).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.BktPosterior).HasColumnType("numeric(5,4)");
+
+            entity.HasIndex(e => e.SessionId)
+                  .HasDatabaseName("IX_practice_session_item_session_id");
+            entity.HasIndex(e => new { e.SessionId, e.PresentedAt })
+                  .HasDatabaseName("IX_practice_session_item_session_presented_at");
+            entity.HasIndex(e => e.QuestionId)
+                  .HasDatabaseName("IX_practice_session_item_question_id");
+            entity.HasIndex(e => new { e.SessionId, e.QuestionId, e.AttemptNumber })
+                  .IsUnique()
+                  .HasDatabaseName("UX_practice_session_item_session_question_attempt");
+
+            entity.HasOne(e => e.Session)
+                  .WithMany(s => s.Items)
+                  .HasForeignKey(e => e.SessionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<MasteryState>(entity =>
+        {
+            entity.ToTable("mastery_state");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.PL).HasColumnType("numeric(5,4)");
+            entity.Property(e => e.UpdatedAt).IsRequired();
+
+            entity.HasIndex(e => new { e.UserId, e.TopicId, e.SubtopicId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_mastery_state_user_topic_subtopic");
+            entity.HasIndex(e => new { e.UserId, e.UpdatedAt })
+                  .HasDatabaseName("IX_mastery_state_user_updated_at");
+        });
+
         builder.Entity<OutboxMessage>(entity =>
         {
             entity.ToTable("Outbox");
@@ -710,6 +945,104 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.Type).IsRequired();
             entity.Property(e => e.PayloadJson).IsRequired();
             entity.HasIndex(e => new { e.ProcessedUtc, e.OccurredUtc });
+        });
+
+        builder.Entity<UserXpEvent>(entity =>
+        {
+            entity.ToTable("user_xp_events");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceId).HasMaxLength(128);
+            entity.Property(e => e.ValidationStatus).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.AwardedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.AwardedAtUtc })
+                  .HasDatabaseName("IX_user_xp_events_user_awarded_at");
+            entity.HasIndex(e => new { e.SchoolId, e.AwardedAtUtc })
+                  .HasDatabaseName("IX_user_xp_events_school_awarded_at");
+            entity.HasIndex(e => new { e.ValidationStatus, e.AwardedAtUtc })
+                  .HasDatabaseName("IX_user_xp_events_validation_awarded_at");
+            entity.HasIndex(e => new { e.UserId, e.SourceType, e.SourceId })
+                  .IsUnique()
+                  .HasFilter("\"SourceId\" IS NOT NULL")
+                  .HasDatabaseName("UX_user_xp_events_user_source");
+
+            entity.HasOne(e => e.Season)
+                  .WithMany()
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<CompetitionSeason>(entity =>
+        {
+            entity.ToTable("competition_seasons");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.StartDateUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.EndDateUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.IsActive)
+                  .HasDatabaseName("IX_competition_seasons_active");
+        });
+
+        builder.Entity<XpCheatLog>(entity =>
+        {
+            entity.ToTable("xp_cheat_log");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Reason).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceId).HasMaxLength(128);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.DetectedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_xp_cheat_log_user_detected");
+            entity.HasIndex(e => e.DetectedAtUtc)
+                  .HasDatabaseName("IX_xp_cheat_log_detected");
+        });
+
+        builder.Entity<AnswerPatternDetectionLog>(entity =>
+        {
+            entity.ToTable("answer_pattern_detection_log");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.DeviceId).HasMaxLength(128);
+            entity.Property(e => e.AnswerFingerprint).HasMaxLength(32);
+            entity.Property(e => e.Severity).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.Decision).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.ReasonSummary).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.SignalsJson).HasColumnType("jsonb");
+            entity.Property(e => e.PromptVersion).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.PromptPayloadJson).HasColumnType("jsonb");
+            entity.Property(e => e.DetectionEngine).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.ReviewStatus).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.ReviewedByUserId).HasMaxLength(450);
+            entity.Property(e => e.ReviewNotes).HasMaxLength(1000);
+            entity.Property(e => e.MlReviewStatus).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.MlModelName).HasMaxLength(128);
+            entity.Property(e => e.MlReviewOutputJson).HasColumnType("jsonb");
+            entity.Property(e => e.MlLastError).HasMaxLength(1000);
+            entity.Property(e => e.AnsweredAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.DetectedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReviewedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.MlLastAttemptAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.MlReviewedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_user_detected");
+            entity.HasIndex(e => new { e.ReviewStatus, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_review_detected");
+            entity.HasIndex(e => new { e.Severity, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_severity_detected");
+            entity.HasIndex(e => new { e.SourceType, e.AnsweredAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_source_answered");
+            entity.HasIndex(e => new { e.MlReviewStatus, e.DetectedAtUtc })
+                  .HasDatabaseName("IX_answer_pattern_detection_ml_review_detected");
         });
 
         builder.Entity<School>(entity =>
@@ -723,6 +1056,66 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_Schools_Name");
         });
 
+        builder.Entity<SchoolScoreAggregate>(entity =>
+        {
+            entity.ToTable("school_scores");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Period).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.PeriodStartUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.AverageXpPerActiveStudent).HasColumnType("numeric(18,4)");
+            entity.Property(e => e.ParticipationRate).HasColumnType("numeric(8,6)");
+            entity.Property(e => e.CompositeScore).HasColumnType("numeric(18,6)");
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.SchoolId, e.Period, e.PeriodStartUtc })
+                  .IsUnique()
+                  .HasDatabaseName("UX_school_scores_school_period_start");
+            entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.Rank })
+                  .HasDatabaseName("IX_school_scores_period_start_rank");
+            entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.CompositeScore, e.SchoolId })
+                  .HasDatabaseName("IX_school_scores_period_start_score");
+
+            entity.Property(e => e.WeightedXp).HasColumnType("double precision").HasDefaultValue(0.0);
+
+            entity.HasOne(e => e.Season)
+                  .WithMany()
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.School)
+                  .WithMany()
+                  .HasForeignKey(e => e.SchoolId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SchoolRankHistory>(entity =>
+        {
+            entity.ToTable("school_rank_history");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Period).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.PeriodStartUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ParticipationRate).HasColumnType("numeric(8,6)");
+            entity.Property(e => e.CompositeScore).HasColumnType("numeric(18,6)");
+            entity.Property(e => e.SnapshotTimeUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.SchoolId, e.Period, e.PeriodStartUtc, e.SnapshotTimeUtc })
+                  .HasDatabaseName("IX_school_rank_history_school_period_snapshot");
+            entity.HasIndex(e => new { e.Period, e.PeriodStartUtc, e.SnapshotTimeUtc, e.Rank })
+                  .HasDatabaseName("IX_school_rank_history_period_snapshot_rank");
+
+            entity.Property(e => e.WeightedXp).HasColumnType("double precision").HasDefaultValue(0.0);
+
+            entity.HasOne(e => e.Season)
+                  .WithMany()
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.School)
+                  .WithMany()
+                  .HasForeignKey(e => e.SchoolId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<Faculty>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -733,6 +1126,274 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasIndex(e => e.Name)
                   .HasDatabaseName("IX_Faculties_Name");
+        });
+
+        // ─── 🎨 Cosmetic System ───
+
+        builder.Entity<CosmeticSeason>(entity =>
+        {
+            entity.ToTable("cosmetic_seasons");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Theme).HasMaxLength(128);
+            entity.Property(e => e.ThemeAssetPath).HasMaxLength(500);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.StartDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.EndDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RewardLockAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ArchiveAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.Key)
+                  .IsUnique()
+                  .HasDatabaseName("UX_cosmetic_seasons_key");
+
+            entity.HasIndex(e => e.IsActive)
+                  .HasDatabaseName("IX_cosmetic_seasons_active");
+            entity.HasIndex(e => new { e.StartDate, e.EndDate })
+                  .HasDatabaseName("IX_cosmetic_seasons_dates");
+        });
+
+        builder.Entity<CosmeticItem>(entity =>
+        {
+            entity.ToTable("cosmetic_items");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Rarity).IsRequired().HasMaxLength(20).HasDefaultValue("common");
+            entity.Property(e => e.AssetPath).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.PreviewAssetPath).HasMaxLength(500);
+            entity.Property(e => e.UnlockType).IsRequired().HasMaxLength(50).HasDefaultValue("default");
+            entity.Property(e => e.UnlockCondition).HasMaxLength(500);
+            entity.Property(e => e.UnlockConditionJson).HasColumnType("jsonb");
+            entity.Property(e => e.CompatibilityRulesJson).HasColumnType("jsonb");
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.AssetVersion).IsRequired().HasMaxLength(32).HasDefaultValue("1");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.ReleaseDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RetirementDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                  .WithMany(s => s.Items)
+                  .HasForeignKey(e => e.SeasonId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.Key)
+                  .IsUnique()
+                  .HasDatabaseName("UX_cosmetic_items_key");
+
+            entity.HasIndex(e => e.Category)
+                  .HasDatabaseName("IX_cosmetic_items_category");
+            entity.HasIndex(e => e.Rarity)
+                  .HasDatabaseName("IX_cosmetic_items_rarity");
+            entity.HasIndex(e => new { e.Category, e.Rarity })
+                  .HasDatabaseName("IX_cosmetic_items_category_rarity");
+            entity.HasIndex(e => e.SeasonId)
+                  .HasDatabaseName("IX_cosmetic_items_season");
+            entity.HasIndex(e => e.IsDefault)
+                  .HasDatabaseName("IX_cosmetic_items_default");
+            entity.HasIndex(e => new { e.IsActive, e.ReleaseDate })
+                  .HasDatabaseName("IX_cosmetic_items_active_release");
+        });
+
+        builder.Entity<UserCosmeticInventory>(entity =>
+        {
+            entity.ToTable("user_cosmetic_inventory");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.SourceRef).HasMaxLength(128);
+            entity.Property(e => e.GrantReason).HasMaxLength(256);
+            entity.Property(e => e.AssetVersion).IsRequired().HasMaxLength(32).HasDefaultValue("1");
+            entity.Property(e => e.UnlockedAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RevokedAt).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.CosmeticItem)
+                  .WithMany()
+                  .HasForeignKey(e => e.CosmeticItemId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Each user can own an item only once
+            entity.HasIndex(e => new { e.UserId, e.CosmeticItemId })
+                  .IsUnique()
+                  .HasDatabaseName("UX_user_cosmetic_inventory_user_item");
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("IX_user_cosmetic_inventory_user");
+            entity.HasIndex(e => new { e.UserId, e.Source })
+                  .HasDatabaseName("IX_user_cosmetic_inventory_user_source");
+            entity.HasIndex(e => new { e.Source, e.SourceRef })
+                  .HasDatabaseName("IX_user_cosmetic_inventory_source_ref");
+        });
+
+        builder.Entity<UserAvatarConfig>(entity =>
+        {
+            entity.ToTable("user_avatar_configs");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+            entity.HasOne<UserProfile>()
+                  .WithOne()
+                  .HasForeignKey<UserAvatarConfig>(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Skin).WithMany().HasForeignKey(e => e.SkinId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Hair).WithMany().HasForeignKey(e => e.HairId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Clothing).WithMany().HasForeignKey(e => e.ClothingId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Accessory).WithMany().HasForeignKey(e => e.AccessoryId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Emoji).WithMany().HasForeignKey(e => e.EmojiId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Frame).WithMany().HasForeignKey(e => e.FrameId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Background).WithMany().HasForeignKey(e => e.BackgroundId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Effect).WithMany().HasForeignKey(e => e.EffectId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.LeaderboardDecoration).WithMany().HasForeignKey(e => e.LeaderboardDecorationId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<CosmeticRewardRule>(entity =>
+        {
+            entity.ToTable("cosmetic_reward_rules");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.ConditionJson).HasColumnType("jsonb");
+            entity.Property(e => e.RewardType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.RewardPayloadJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.Key)
+                .IsUnique()
+                .HasDatabaseName("UX_cosmetic_reward_rules_key");
+            entity.HasIndex(e => new { e.SourceType, e.IsActive, e.Priority })
+                .HasDatabaseName("IX_cosmetic_reward_rules_source_active_priority");
+        });
+
+        builder.Entity<CosmeticRewardClaim>(entity =>
+        {
+            entity.ToTable("cosmetic_reward_claims");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.RewardKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceRef).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.CosmeticItem)
+                .WithMany()
+                .HasForeignKey(e => e.CosmeticItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.RewardKey, e.SourceRef })
+                .IsUnique()
+                .HasDatabaseName("UX_cosmetic_reward_claims_user_reward_source");
+            entity.HasIndex(e => new { e.UserId, e.ClaimedAtUtc })
+                .HasDatabaseName("IX_cosmetic_reward_claims_user_claimed_at");
+        });
+
+        builder.Entity<SeasonRewardTrackEntry>(entity =>
+        {
+            entity.ToTable("season_reward_tracks");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TrackType).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.RewardType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.RewardPayloadJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                .WithMany(x => x.RewardTrackEntries)
+                .HasForeignKey(e => e.SeasonId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.SeasonId, e.TrackType, e.Tier })
+                .IsUnique()
+                .HasDatabaseName("UX_season_reward_tracks_season_track_tier");
+        });
+
+        builder.Entity<UserAppearanceProjection>(entity =>
+        {
+            entity.ToTable("user_appearance_projection");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).HasMaxLength(450);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+        });
+
+        builder.Entity<CosmeticTelemetryEvent>(entity =>
+        {
+            entity.ToTable("cosmetic_telemetry_events");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.EventType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.OccurredAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.EventType, e.OccurredAtUtc })
+                .HasDatabaseName("IX_cosmetic_telemetry_events_type_occurred");
+            entity.HasIndex(e => new { e.UserId, e.OccurredAtUtc })
+                .HasDatabaseName("IX_cosmetic_telemetry_events_user_occurred");
+        });
+
+        builder.Entity<CosmeticAuditLog>(entity =>
+        {
+            entity.ToTable("cosmetic_audit_log");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.ActorUserId).HasMaxLength(450);
+            entity.Property(e => e.EntityType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.EntityId).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.BeforeJson).HasColumnType("jsonb");
+            entity.Property(e => e.AfterJson).HasColumnType("jsonb");
+            entity.Property(e => e.OccurredAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAtUtc })
+                .HasDatabaseName("IX_cosmetic_audit_log_entity_occurred");
+        });
+
+        builder.Entity<LeaderboardSnapshot>(entity =>
+        {
+            entity.ToTable("leaderboard_snapshot");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Scope).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Period).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.Scope, e.Period, e.Rank })
+                .HasDatabaseName("IX_leaderboard_snapshot_scope_period_rank");
+            entity.HasIndex(e => new { e.Scope, e.Period, e.UserId })
+                .IsUnique()
+                .HasDatabaseName("UX_leaderboard_snapshot_scope_period_user");
+        });
+
+        builder.Entity<UserQuizSummary>(entity =>
+        {
+            entity.ToTable("user_quiz_summary");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.UpdatedAtUtc)
+                .HasDatabaseName("IX_user_quiz_summary_updated_at");
+        });
+
+        builder.Entity<UserRewardState>(entity =>
+        {
+            entity.ToTable("user_reward_state");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.RewardKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.RewardKey })
+                .IsUnique()
+                .HasDatabaseName("UX_user_reward_state_user_reward");
+            entity.HasIndex(e => new { e.UserId, e.Eligible, e.Claimed })
+                .HasDatabaseName("IX_user_reward_state_user_status");
         });
     }
 }

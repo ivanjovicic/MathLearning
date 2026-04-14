@@ -12,36 +12,23 @@ namespace MathLearning.Infrastructure.Migrations.Api
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                ALTER TABLE "UserProfiles"
-                ADD COLUMN IF NOT EXISTS "FacultyName" text;
+                ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "FacultyName" text NULL;
+                ALTER TABLE "UserProfiles" ADD COLUMN IF NOT EXISTS "SchoolName" text NULL;
+
+                CREATE TABLE IF NOT EXISTS "Outbox"
+                (
+                    "Id" uuid NOT NULL PRIMARY KEY,
+                    "OccurredUtc" timestamp with time zone NOT NULL,
+                    "Type" text NOT NULL,
+                    "PayloadJson" text NOT NULL,
+                    "ProcessedUtc" timestamp with time zone NULL,
+                    "Attempts" integer NOT NULL,
+                    "LastError" text NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS "IX_Outbox_ProcessedUtc_OccurredUtc"
+                    ON "Outbox" ("ProcessedUtc", "OccurredUtc");
                 """);
-
-            migrationBuilder.Sql("""
-                ALTER TABLE "UserProfiles"
-                ADD COLUMN IF NOT EXISTS "SchoolName" text;
-                """);
-
-            migrationBuilder.CreateTable(
-                name: "Outbox",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OccurredUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Type = table.Column<string>(type: "text", nullable: false),
-                    PayloadJson = table.Column<string>(type: "text", nullable: false),
-                    ProcessedUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    Attempts = table.Column<int>(type: "integer", nullable: false),
-                    LastError = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Outbox", x => x.Id);
-                });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Outbox_ProcessedUtc_OccurredUtc",
-                table: "Outbox",
-                columns: new[] { "ProcessedUtc", "OccurredUtc" });
         }
 
         /// <inheritdoc />

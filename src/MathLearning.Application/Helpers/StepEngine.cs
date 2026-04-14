@@ -20,7 +20,12 @@ public static class StepEngine
                 .Select(s => new StepExplanationDto(
                     GetStepText(s, userLang),
                     GetStepHint(s, userLang),
-                    s.Highlight
+                    s.Highlight,
+                    s.TextFormat,
+                    s.HintFormat,
+                    s.TextRenderMode,
+                    s.HintRenderMode,
+                    TranslationHelper.GetStepSemanticsAltText(s, userLang)
                 ))
                 .ToList();
         }
@@ -34,7 +39,14 @@ public static class StepEngine
         var explanation = TranslationHelper.GetExplanation(question, userLang);
         if (!string.IsNullOrWhiteSpace(explanation))
         {
-            return [new StepExplanationDto(explanation, null, true)];
+            return [new StepExplanationDto(
+                explanation,
+                null,
+                true,
+                SemanticsAltText: TranslationHelper.ResolveSemanticsAltText(
+                    null,
+                    explanation,
+                    question.ExplanationFormat))];
         }
 
         return [];

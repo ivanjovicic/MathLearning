@@ -1,9 +1,14 @@
 ﻿using MathLearning.Domain.Entities;
 
+using MathLearning.Application.Content;
+using MathLearning.Domain.Enums;
+
 namespace MathLearning.Application.Helpers;
 
 public static class TranslationHelper
 {
+    private static readonly IMathContentSanitizer Sanitizer = new MathContentSanitizer();
+
     /// <summary>
     /// Default language for question content (original text stored on Question entity).
     /// </summary>
@@ -223,7 +228,7 @@ public static class TranslationHelper
     public static string? GetHintFull(Question question, string userLang)
     {
         if (string.Equals(userLang, DefaultLang, StringComparison.OrdinalIgnoreCase))
-            return null; // No original full hint
+            return question.HintFull;
 
         var translation = question.Translations
             .FirstOrDefault(t => string.Equals(t.Lang, userLang, StringComparison.OrdinalIgnoreCase));
@@ -240,6 +245,41 @@ public static class TranslationHelper
                 return translation.HintFull;
         }
 
-        return null;
+        return question.HintFull;
+    }
+
+    public static string? ResolveSemanticsAltText(string? semanticsAltText, string? raw, ContentFormat format)
+        => string.IsNullOrWhiteSpace(semanticsAltText)
+            ? Sanitizer.GenerateSemanticsAltText(raw, format)
+            : semanticsAltText;
+
+    public static string? GetQuestionSemanticsAltText(Question question, string userLang)
+        => ResolveSemanticsAltText(question.SemanticsAltText, GetText(question, userLang), question.TextFormat);
+
+    public static string? GetOptionSemanticsAltText(QuestionOption option, string userLang)
+        => ResolveSemanticsAltText(option.SemanticsAltText, GetOptionText(option, userLang), option.TextFormat);
+
+    public static string? GetStepSemanticsAltText(QuestionStep step, string userLang)
+        => ResolveSemanticsAltText(step.SemanticsAltText, GetTranslatedStepText(step, userLang), step.TextFormat);
+
+    private static string GetTranslatedStepText(QuestionStep step, string userLang)
+    {
+        if (string.Equals(userLang, DefaultLang, StringComparison.OrdinalIgnoreCase))
+            return step.Text;
+
+        var translation = step.Translations
+            .FirstOrDefault(t => string.Equals(t.Lang, userLang, StringComparison.OrdinalIgnoreCase));
+        if (translation != null)
+            return translation.Text;
+
+        if (!string.Equals(userLang, FallbackLang, StringComparison.OrdinalIgnoreCase))
+        {
+            translation = step.Translations
+                .FirstOrDefault(t => string.Equals(t.Lang, FallbackLang, StringComparison.OrdinalIgnoreCase));
+            if (translation != null)
+                return translation.Text;
+        }
+
+        return step.Text;
     }
 }

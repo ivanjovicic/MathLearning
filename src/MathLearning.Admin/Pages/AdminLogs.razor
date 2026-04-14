@@ -1,0 +1,97 @@
+@page "/admin/logs"
+@rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using System.Net.Http.Json
+
+<PageTitle>Admin Logs</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Logovi i status poslova</MudText>
+
+<MudPaper Class="pa-4" Elevation="4">
+    <MudButton OnClick="RefreshAsync" Color="Color.Primary" Variant="Variant.Filled" Disabled="@isLoading">
+        @if (isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+            <span>Ucitam...</span>
+        }
+        else
+        {
+            <span>Osvezi</span>
+        }
+    </MudButton>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
+    }
+
+    <MudTable T="JobStatus" Dense="true" Class="mt-4" Items="@jobs">
+        <HeaderContent>
+            <MudTh>Job</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Poruka</MudTh>
+            <MudTh>Vreme</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@(context.IsSuccess ? Color.Success : Color.Error)">
+                    @(context.IsSuccess ? "OK" : "Greska")
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.LastMessage</MudTd>
+            <MudTd>@context.Timestamp.ToString("g")</MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudDivider Class="my-4" />
+    <MudText Typo="Typo.h6">Poslednjih 20 logova</MudText>
+    <MudList T="string" Dense="true">
+        @foreach (var log in logs)
+        {
+            <MudListItem T="string" Text="@log" />
+        }
+    </MudList>
+</MudPaper>
+
+@code {
+    [Inject] private NavigationManager NavManager { get; set; } = default!;
+
+    private List<JobStatus> jobs = [];
+    private List<string> logs = [];
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
+            jobs = await http.GetFromJsonAsync<List<JobStatus>>("/api/monitoring/jobs") ?? [];
+            logs = await http.GetFromJsonAsync<List<string>>("/api/monitoring/logs") ?? [];
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private sealed class JobStatus
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool IsSuccess { get; set; }
+        public string LastMessage { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+    }
+}

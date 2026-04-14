@@ -1,6 +1,7 @@
 ﻿using MathLearning.Admin.Components;
 using MathLearning.Admin.Data;
 using MathLearning.Admin.Services;
+using MathLearning.Application.Content;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -57,12 +58,16 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
 
 builder.Services.AddMudServices();
+builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+var healthChecks = builder.Services.AddHealthChecks();
+healthChecks.AddNpgSql(builder.Configuration.GetConnectionString("AdminIdentity"), name: "admin-db");
 
 var app = builder.Build();
 
@@ -106,6 +111,8 @@ using (var scope = app.Services.CreateScope())
 app.MapRazorComponents<App>()   
     .AddInteractiveServerRenderMode();
 app.MapRazorPages();
+
+app.MapHealthChecks("/healthz");
 
 app.Run();
 
