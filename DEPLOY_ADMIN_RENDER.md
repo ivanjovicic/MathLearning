@@ -4,30 +4,40 @@ Ovaj dokument sadrži korake i preporuke za deploy `MathLearning.Admin` (Server�
 
 ## Kratki pregled
 - `MathLearning.Admin` je Server‑Side Blazor aplikacija i treba da bude deployovana kao zaseban Web Service.
-- Aplikacija na startu pokušava da izvrši EF migracije i (opciono) seed podataka — obezbedite validan DB connection string kao tajnu.
+- Za Render je najstabilnija varijanta Docker-based deploy preko Blueprint-a (`runtime: docker`).
+- Aplikacija na startu pokušava da izvrši EF migracije i (opciono) seed podataka — obezbedite validan DB connection string kao env var / tajnu.
 - Data Protection ključevi se čuvaju u `/app/keys` u kodu; za production koristite Persistent Disk ili deljeno skladište.
 
 ---
 
-## Preporučene komande (Render Web Service)
-- **Build command** (Render → Build Command):
+## Preporučeni Blueprint (`render.yaml`)
 
-```bash
-dotnet publish src/MathLearning.Admin -c Release -o published
+```yaml
+services:
+	- type: web
+		name: mathlearning-admin
+		runtime: docker
+		branch: main
+		dockerfilePath: ./src/MathLearning.Admin/Dockerfile
+		dockerContext: .
+		healthCheckPath: /healthz
+		envVars:
+			- key: ASPNETCORE_ENVIRONMENT
+				value: Production
+			- key: SeedAdmin__Enabled
+				value: "false"
+			- key: SeedContent__Enabled
+				value: "false"
+			- key: ConnectionStrings__AdminIdentity
+				sync: false
 ```
 
-- **Start command** (Render → Start Command):
-
-```bash
-mkdir -p /app/keys && dotnet published/MathLearning.Admin.dll --urls http://0.0.0.0:$PORT
-```
-
-> Napomena: `mkdir -p` i `&&` su bash sintaksa i ispravni su u Render okruženju (Linux). Nemoj koristiti ovu liniju direktno u PowerShell 5.1 (koristi `New-Item` i `;` u PowerShell-u lokalno).
+Admin sada ima poseban Dockerfile u `src/MathLearning.Admin/Dockerfile`, a API koristi root `Dockerfile`.
 
 ---
 
 ## Obavezne environment varijable / Secrets
-U Render dashboardu dodaj `Environment Variable` ili (poželjno) `Secret` sa sledećim ključevima:
+U Blueprint-u koristi `envVars`, a za osetljive vrednosti koristi `sync: false` ili ih ručno unesi u Render Dashboard za postojeće servise.
 
 - `ConnectionStrings__AdminIdentity` — vrednost u key=value formatu (primer za Neon):
 
@@ -38,6 +48,8 @@ Host=ep-spring-glade-agaxudii-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Us
 - `ASPNETCORE_ENVIRONMENT` = `Production`
 - Opcionalno: `SeedAdmin__Enabled` = `true|false` (ako želiš da seed/admin user bude kreiran na prvom startu)
 - Opcionalno: `SeedContent__Enabled` = `true|false`
+
+Napomena: `sync: false` te pita za vrednost samo tokom inicijalnog kreiranja Blueprint-a. Ako servis već postoji, dodaj/izmeni ove env varijable ručno u Render Dashboard-u.
 
 **Važno:** aplikacija očekuje key=value connection string; izbegavaj prosleđivanje prefiksa `psql 'postgresql://...'`. Ako koristite URI formu i dobijate greške, prebacite se na key=value format.
 
@@ -61,20 +73,19 @@ Alternativa: koristiti eksterni key store (Azure Blob, Redis, ili DB) ako ne že
 ---
 
 ## Koraci u Render UI (sažeto)
-1. New -> Web Service -> poveži GitHub/Git repo.
-2. Izaberi branch (npr. `main`).
-3. Build Command: `dotnet publish src/MathLearning.Admin -c Release -o published`
-4. Start Command: `mkdir -p /app/keys && dotnet published/MathLearning.Admin.dll --urls http://0.0.0.0:$PORT`
-5. Dodaj Secret: `ConnectionStrings__AdminIdentity` (key=value string).
-6. Dodaj Persistent Disk i mount path `/app/keys` (ako koristiš više instanci ili želiš da sačuvaš ključeve preko restarta).
-7. Deploy i gledaj Logs (Dashboard -> Logs) za poruke o migracijama / greškama.
+1. New -> Blueprint ili New -> Web Service -> poveži GitHub/Git repo.
+2. Izaberi branch (npr. `main`) i potvrdi da Render čita `render.yaml` iz repo root-a.
+3. Za `mathlearning-admin` Render koristi `runtime: docker`, `dockerfilePath: ./src/MathLearning.Admin/Dockerfile` i `dockerContext: .`.
+4. Tokom inicijalnog Blueprint setup-a unesi vrednost za `ConnectionStrings__AdminIdentity` kada Render traži `sync: false` env var.
+5. Dodaj Persistent Disk i mount path `/app/keys` (ako koristiš više instanci ili želiš da sačuvaš ključeve preko restarta).
+6. Deploy i gledaj Logs (Dashboard -> Logs) za poruke o migracijama / greškama.
 
 ---
 
 ## Tipične greške i rešavanje
 - `Couldn't set postgresql://...` — znači da je prosleđen URI u mestu gde se očekuje key=value; postavi `ConnectionStrings__AdminIdentity` kao key=value.
 - `Host can't be null` — connection string nije postavljen ili nije dostupan procesu (proveri da li si dodao tajnu kao Secret i da li je ime varijable tačno).
-- `The WebRootPath was not found` ili statični fajlovi nedostupni — proveri da li si koristio `dotnet publish` kao build step i startuješ iz `published` foldera (start komanda gore radi to).
+- `The WebRootPath was not found` ili statični fajlovi nedostupni — ovo je rešeno Docker pristupom, jer se aplikacija startuje iz publish output-a unutar image-a.
 - Problemi sa pristupom bazi: proveri da li Neon/DB dozvoljava konekcije sa Render (networking/allowlist), kao i `Ssl Mode` vrednost.
 
 ---

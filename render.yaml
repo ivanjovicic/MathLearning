@@ -1,10 +1,10 @@
 services:
   - type: web
     name: mathlearning-admin
-    env: dotnet
+    runtime: docker
     branch: main
-    buildCommand: dotnet publish src/MathLearning.Admin -c Release -o published
-    startCommand: mkdir -p /app/keys && dotnet published/MathLearning.Admin.dll --urls http://0.0.0.0:$PORT
+    dockerfilePath: ./src/MathLearning.Admin/Dockerfile
+    dockerContext: .
     healthCheckPath: /healthz
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
@@ -13,17 +13,17 @@ services:
         value: "false"
       - key: SeedContent__Enabled
         value: "false"
-    secrets:
-      - ConnectionStrings__AdminIdentity
+      - key: ConnectionStrings__AdminIdentity
+        sync: false
   - type: web
     name: mathlearning-api
-    env: dotnet
+    runtime: docker
     branch: main
-    buildCommand: dotnet publish src/MathLearning.Api -c Release -o published
-    startCommand: dotnet published/MathLearning.Api.dll --urls http://0.0.0.0:$PORT
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-    secrets:
-      - ConnectionStrings__Default
+      - key: ConnectionStrings__Default
+        sync: false

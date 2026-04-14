@@ -14,6 +14,8 @@ COPY src/MathLearning.Api/*.csproj src/MathLearning.Api/
 COPY src/MathLearning.Application/*.csproj src/MathLearning.Application/
 COPY src/MathLearning.Domain/*.csproj src/MathLearning.Domain/
 COPY src/MathLearning.Infrastructure/*.csproj src/MathLearning.Infrastructure/
+COPY src/MathLearning.Services/*.csproj src/MathLearning.Services/
+COPY src/MathLearning.Core/*.csproj src/MathLearning.Core/
 
 RUN dotnet restore src/MathLearning.Api/MathLearning.Api.csproj
 

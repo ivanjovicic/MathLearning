@@ -11,6 +11,12 @@ using MathLearning.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var portEnv = builder.Configuration["PORT"];
+if (!string.IsNullOrWhiteSpace(portEnv) && int.TryParse(portEnv, out var port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo("/app/keys"))
     .SetApplicationName("MathLearningAdmin")
@@ -30,8 +36,6 @@ builder.Services.AddIdentityCore<IdentityUser>(options =>
     .AddEntityFrameworkStores<AdminDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
-
-var isProduction = builder.Environment.IsProduction();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -66,8 +70,7 @@ builder.Services.AddServerSideBlazor();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-var healthChecks = builder.Services.AddHealthChecks();
-healthChecks.AddNpgSql(builder.Configuration.GetConnectionString("AdminIdentity"), name: "admin-db");
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
