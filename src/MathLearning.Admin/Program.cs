@@ -66,6 +66,9 @@ builder.Services.AddServerSideBlazor();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+var healthChecks = builder.Services.AddHealthChecks();
+healthChecks.AddNpgSql(builder.Configuration.GetConnectionString("AdminIdentity"), name: "admin-db");
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -108,6 +111,8 @@ using (var scope = app.Services.CreateScope())
 app.MapRazorComponents<App>()   
     .AddInteractiveServerRenderMode();
 app.MapRazorPages();
+
+app.MapHealthChecks("/healthz");
 
 app.Run();
 

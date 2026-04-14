@@ -13,14 +13,16 @@ namespace MathLearning.Domain.Entities
         public RenderMode RenderMode { get; private set; } = RenderMode.Auto;
         public string? SemanticsAltText { get; private set; }
         public bool IsCorrect { get; private set; }
+        public int Order { get; private set; }
         public List<OptionTranslation> Translations { get; private set; } = new();
 
         private QuestionOption() { }
 
-        public QuestionOption(string text, bool isCorrect)
+        public QuestionOption(string text, bool isCorrect, int order = 0)
         {
             Text = string.IsNullOrWhiteSpace(text) ? throw new ArgumentException("Option text is required") : text;
             IsCorrect = isCorrect;
+            Order = order;
         }
 
         public QuestionOption(
@@ -28,18 +30,20 @@ namespace MathLearning.Domain.Entities
             bool isCorrect,
             ContentFormat textFormat,
             RenderMode renderMode = RenderMode.Auto,
-            string? semanticsAltText = null)
-            : this(text, isCorrect)
+            string? semanticsAltText = null,
+            int order = 0)
+            : this(text, isCorrect, order)
         {
             TextFormat = textFormat;
             RenderMode = renderMode;
             SemanticsAltText = semanticsAltText;
         }
 
-        public void Update(string text, bool isCorrect)
+        public void Update(string text, bool isCorrect, int order = 0)
         {
             Text = string.IsNullOrWhiteSpace(text) ? throw new ArgumentException("Option text is required") : text;
             IsCorrect = isCorrect;
+            Order = order;
         }
 
         public void Update(
@@ -47,9 +51,10 @@ namespace MathLearning.Domain.Entities
             bool isCorrect,
             ContentFormat textFormat,
             RenderMode renderMode = RenderMode.Auto,
-            string? semanticsAltText = null)
+            string? semanticsAltText = null,
+            int order = 0)
         {
-            Update(text, isCorrect);
+            Update(text, isCorrect, order);
             TextFormat = textFormat;
             RenderMode = renderMode;
             SemanticsAltText = semanticsAltText;

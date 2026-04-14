@@ -53,6 +53,9 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
             entity.HasMany(e => e.Steps)
                 .WithOne(x => x.Question)
                 .HasForeignKey(x => x.QuestionId);
+            entity.Property<uint>("xmin")
+                .HasColumnName("xmin")
+                .IsRowVersion();
         });
 
         builder.Entity<QuestionOption>(entity =>
@@ -60,6 +63,7 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.RenderMode).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.SemanticsAltText).HasMaxLength(500);
+            entity.Property(e => e.Order).HasDefaultValue(0).IsRequired();
         });
 
         builder.Entity<QuestionStep>(entity =>

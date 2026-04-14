@@ -145,6 +145,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_Questions_Difficulty");
             entity.HasIndex(e => new { e.SubtopicId, e.Difficulty })
                   .HasDatabaseName("IX_Questions_Subtopic_Difficulty");
+            entity.Property<uint>("xmin")
+                  .HasColumnName("xmin")
+                  .IsRowVersion();
         });
 
         builder.Entity<QuestionOption>(entity =>
@@ -154,6 +157,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.RenderMode).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.SemanticsAltText).HasMaxLength(500);
+            entity.Property(e => e.Order).HasDefaultValue(0).IsRequired();
             entity.HasMany(e => e.Translations)
                   .WithOne(t => t.Option)
                   .HasForeignKey(t => t.OptionId)

@@ -28,7 +28,7 @@
                 Subtopics="@Subtopics"
                 IsSaving="@IsSaving"
                 SaveButtonText="Sačuvaj pitanje"
-                ErrorMessage="@ErrorMessage"
+                ValidationErrors="@ValidationErrors"
                 OnSave="SaveAsync" />
 
 @code {
@@ -36,7 +36,7 @@
     private List<Category> Categories { get; set; } = [];
     private List<Subtopic> Subtopics { get; set; } = [];
     private bool IsSaving { get; set; }
-    private string? ErrorMessage { get; set; }
+    private List<string> ValidationErrors { get; set; } = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -70,8 +70,8 @@
 
     private async Task SaveAsync()
     {
-        ErrorMessage = ValidateModel();
-        if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        ValidationErrors = ValidateModel();
+        if (ValidationErrors.Count > 0)
         {
             return;
         }
@@ -81,33 +81,57 @@
 
         try
         {
-            var question = new Question(
-                Sanitize(Model.Text, Model.TextFormat),
-                Model.Difficulty,
-                Model.CategoryId,
-                Sanitize(Model.Explanation, Model.ExplanationFormat));
-
-            ApplyQuestionFields(question);
-            question.ReplaceOptions(BuildOptions());
-
-            Db.Questions.Add(question);
-            await Db.SaveChangesAsync();
-
-            var steps = BuildSteps(question.Id);
-            if (steps.Count > 0)
+            await using var tx = await Db.Database.BeginTransactionAsync();
+            try
             {
-                question.ReplaceSteps(steps);
+                var question = new Question(
+                    Sanitize(Model.Text, Model.TextFormat),
+                    Model.Difficulty,
+                    Model.CategoryId,
+                    Sanitize(Model.Explanation, Model.ExplanationFormat));
+
+                ApplyQuestionFields(question);
+                question.ReplaceOptions(BuildOptions());
+
+                Db.Questions.Add(question);
                 await Db.SaveChangesAsync();
+
+                var steps = BuildSteps(question.Id);
+                if (steps.Count > 0)
+                {
+                    question.ReplaceSteps(steps);
+                    await Db.SaveChangesAsync();
+                }
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
             }
 
             Snackbar.Add("Pitanje je uspešno dodato.", Severity.Success);
             Nav.NavigateTo("/questions");
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            ValidationErrors = ["Pitanje je izmenjeno od strane drugog korisnika. Osvežite stranicu i ponovite izmene."];
+        }
+        catch (DbUpdateException ex)
+        {
+            Logger.LogError(ex, "Database error saving question");
+            ValidationErrors = ["Greška pri čuvanju u bazu podataka. Pokušajte ponovo."];
+        }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error saving question");
-            ErrorMessage = $"Greška: {ex.Message}";
+            Logger.LogError(ex, "Unexpected error saving question");
+            ValidationErrors = ["Neočekivana greška. Kontaktirajte administratora."];
+        }
+        finally
+        {
             IsSaving = false;
+            StateHasChanged();
         }
     }
 
@@ -140,12 +164,13 @@
     private List<QuestionOption> BuildOptions()
         => Model.Options
             .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .Select(x => new QuestionOption(
+            .Select((x, i) => new QuestionOption(
                 Sanitize(x.Text, x.TextFormat),
                 x.IsCorrect,
                 x.TextFormat,
                 x.RenderMode,
-                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat)))
+                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat),
+                i + 1))
             .ToList();
 
     private List<QuestionStep> BuildSteps(int questionId)
@@ -176,48 +201,8 @@
         return Sanitize(correct, Model.TextFormat);
     }
 
-    private string? ValidateModel()
-    {
-        if (string.IsNullOrWhiteSpace(Model.Text))
-        {
-            return "Tekst pitanja je obavezan.";
-        }
-
-        if (Model.CategoryId <= 0)
-        {
-            return "Izaberite kategoriju.";
-        }
-
-        if (Model.SubtopicId <= 0)
-        {
-            return "Izaberite podtemu.";
-        }
-
-        if (string.Equals(Model.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
-        {
-            var filledOptions = Model.Options.Count(x => !string.IsNullOrWhiteSpace(x.Text));
-            if (filledOptions < 2)
-            {
-                return "Unesite najmanje dve opcije.";
-            }
-
-            if (Model.Options.Any(x => string.IsNullOrWhiteSpace(x.Text)))
-            {
-                return "Sve opcije moraju biti popunjene ili uklonjene.";
-            }
-
-            if (!Model.Options.Any(x => x.IsCorrect))
-            {
-                return "Označite tačan odgovor.";
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(Model.CorrectAnswer))
-        {
-            return "Tačan odgovor je obavezan za open answer pitanje.";
-        }
-
-        return null;
-    }
+    private List<string> ValidateModel()
+        => QuestionEditorValidation.Validate(Model);
 
     private string Sanitize(string? raw, MathLearning.Domain.Enums.ContentFormat format)
         => Sanitizer.NormalizeMathContent(raw, format);

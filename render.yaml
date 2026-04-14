@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: mathlearning-admin
+    env: dotnet
+    branch: main
+    buildCommand: dotnet publish src/MathLearning.Admin -c Release -o published
+    startCommand: mkdir -p /app/keys && dotnet published/MathLearning.Admin.dll --urls http://0.0.0.0:$PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: SeedAdmin__Enabled
+        value: "false"
+      - key: SeedContent__Enabled
+        value: "false"
+    secrets:
+      - ConnectionStrings__AdminIdentity
+  - type: web
+    name: mathlearning-api
+    env: dotnet
+    branch: main
+    buildCommand: dotnet publish src/MathLearning.Api -c Release -o published
+    startCommand: dotnet published/MathLearning.Api.dll --urls http://0.0.0.0:$PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+    secrets:
+      - ConnectionStrings__Default

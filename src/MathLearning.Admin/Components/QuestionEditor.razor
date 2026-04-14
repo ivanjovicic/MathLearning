@@ -44,6 +44,8 @@
                                   Lines="4"
                                   AutoGrow="true"
                                   Immediate="true"
+                                  MaxLength="@QuestionEditorFieldLimits.QuestionTextMaxLength"
+                                  HelperText="@($"{Model.Text?.Length ?? 0} / {QuestionEditorFieldLimits.QuestionTextMaxLength}")"
                                   @bind-Value="Model.Text" />
                 </MudItem>
                 <MudItem xs="12" md="2">
@@ -109,6 +111,8 @@
                                   Lines="4"
                                   AutoGrow="true"
                                   Immediate="true"
+                                  MaxLength="@QuestionEditorFieldLimits.ExplanationMaxLength"
+                                  HelperText="@($"{Model.Explanation?.Length ?? 0} / {QuestionEditorFieldLimits.ExplanationMaxLength}")"
                                   @bind-Value="Model.Explanation" />
                 </MudItem>
                 <MudItem xs="12" md="2">
@@ -218,7 +222,7 @@
 
                         <MudGrid Spacing="2">
                             <MudItem xs="12" md="8">
-                                <MudTextField T="string" Label="Tekst opcije" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" @bind-Value="option.Text" />
+                                <MudTextField T="string" Label="Tekst opcije" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" MaxLength="@QuestionEditorFieldLimits.OptionTextMaxLength" HelperText="@($"{option.Text?.Length ?? 0} / {QuestionEditorFieldLimits.OptionTextMaxLength}")" @bind-Value="option.Text" />
                             </MudItem>
                             <MudItem xs="12" md="2">
                                 <MudSelect T="ContentFormat" Label="Format" @bind-Value="option.TextFormat" Variant="Variant.Outlined">
@@ -259,7 +263,7 @@
         <MudItem xs="12">
             <MudPaper Class="pa-4" Elevation="3">
                 <MudText Typo="Typo.h6" Class="mb-3">Tačan odgovor</MudText>
-                <MudTextField T="string" Label="Tačan odgovor" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" @bind-Value="Model.CorrectAnswer" />
+                <MudTextField T="string" Label="Tačan odgovor" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" MaxLength="@QuestionEditorFieldLimits.CorrectAnswerMaxLength" HelperText="@($"{Model.CorrectAnswer?.Length ?? 0} / {QuestionEditorFieldLimits.CorrectAnswerMaxLength}")" @bind-Value="Model.CorrectAnswer" />
                 @if (_showPreviews)
                 {
                     <MathPreview Content="@Model.CorrectAnswer" Format="@Model.TextFormat" RenderMode="@Model.TextRenderMode" Class="mt-3" />
@@ -298,7 +302,7 @@
 
                     <MudGrid Spacing="2">
                         <MudItem xs="12" md="8">
-                            <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" Immediate="true" @bind-Value="step.Text" />
+                            <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" Immediate="true" MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength" HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")" @bind-Value="step.Text" />
                         </MudItem>
                         <MudItem xs="12" md="2">
                             <MudSelect T="ContentFormat" Label="Format" @bind-Value="step.TextFormat" Variant="Variant.Outlined">
@@ -386,9 +390,16 @@
             </MudButton>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        @if (ValidationErrors?.Count > 0)
         {
-            <MudAlert Severity="Severity.Error" Class="mt-3">@ErrorMessage</MudAlert>
+            <MudAlert Severity="Severity.Error" Class="mt-3">
+                <ul class="mb-0">
+                    @foreach (var error in ValidationErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </MudAlert>
         }
     </MudItem>
 </MudGrid>
@@ -429,7 +440,7 @@
     public string BackHref { get; set; } = "/questions";
 
     [Parameter]
-    public string? ErrorMessage { get; set; }
+    public IReadOnlyList<string> ValidationErrors { get; set; } = [];
 
     [Parameter]
     public EventCallback OnSave { get; set; }

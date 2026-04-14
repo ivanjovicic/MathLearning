@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\MathLearning.Admin\MathLearning.Admin.csproj" />
     <ProjectReference Include="..\..\src\MathLearning.Domain\MathLearning.Domain.csproj" />
     <ProjectReference Include="..\..\src\MathLearning.Application\MathLearning.Application.csproj" />
     <ProjectReference Include="..\..\src\MathLearning.Infrastructure\MathLearning.Infrastructure.csproj" />

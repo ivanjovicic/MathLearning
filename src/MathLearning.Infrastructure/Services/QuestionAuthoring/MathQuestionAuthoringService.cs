@@ -602,8 +602,11 @@ public sealed partial class MathQuestionAuthoringService :
             }
         }
 
-        foreach (var incoming in request.Options)
+        for (var i = 0; i < request.Options.Count; i++)
         {
+            var incoming = request.Options[i];
+            var order = i + 1;
+
             if (incoming.Id.HasValue && existingById.TryGetValue(incoming.Id.Value, out var existing))
             {
                 existing.Update(
@@ -611,7 +614,8 @@ public sealed partial class MathQuestionAuthoringService :
                     incoming.IsCorrect,
                     incoming.TextFormat,
                     incoming.RenderMode,
-                    incoming.SemanticsAltText);
+                    incoming.SemanticsAltText,
+                    order);
                 continue;
             }
 
@@ -620,7 +624,8 @@ public sealed partial class MathQuestionAuthoringService :
                 incoming.IsCorrect,
                 incoming.TextFormat,
                 incoming.RenderMode,
-                incoming.SemanticsAltText));
+                incoming.SemanticsAltText,
+                order));
         }
     }
 

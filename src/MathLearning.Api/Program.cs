@@ -201,18 +201,21 @@ try
                 npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
             .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
 
-    // Hangfire (PostgreSQL)
-    builder.Services.AddHangfire(config => config
-        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-        .UseSimpleAssemblyNameTypeSerializer()
-        .UseRecommendedSerializerSettings()
-        .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
-        {
-            SchemaName = "hangfire",
-            QueuePollInterval = TimeSpan.FromSeconds(15),
-            InvisibilityTimeout = TimeSpan.FromMinutes(5)
-        }));
-    builder.Services.AddHangfireServer();
+    if (!builder.Environment.IsEnvironment("Test"))
+    {
+        // Hangfire (PostgreSQL)
+        builder.Services.AddHangfire(config => config
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
+            {
+                SchemaName = "hangfire",
+                QueuePollInterval = TimeSpan.FromSeconds(15),
+                InvisibilityTimeout = TimeSpan.FromMinutes(5)
+            }));
+        builder.Services.AddHangfireServer();
+    }
 
     // Add Identity (for User management)
     builder.Services.AddIdentityCore<IdentityUser>(options =>
@@ -394,7 +397,7 @@ try
     var userProfileIdentitySchemaReady = false;
 
     // ??? Auto-migrate and seed database on startup (skip during EF design-time tools)
-    if (!EF.IsDesignTime)
+    if (!EF.IsDesignTime && !app.Environment.IsEnvironment("Test"))
     {
         using (var scope = app.Services.CreateScope())
         {
