@@ -165,25 +165,55 @@ async Task SeedAdminAsync(WebApplication app)
     if (!seedAdminEnabled)
     {
         app.Logger.LogInformation("SeedAdmin is disabled. Skipping admin user bootstrap.");
-        return;
-    }
+        try
+        {
+            if (!Uri.TryCreate(configuredApiBaseUrl, UriKind.Absolute, out _))
+            {
+                logger.LogWarning("ApiBaseUrl is not configured as an absolute URL. Admin API calls will fall back to the current host.");
+            }
 
-    var adminUsername = app.Configuration["SeedAdmin:Username"] ?? "admin";
-    var adminEmail = app.Configuration["SeedAdmin:Email"] ?? "admin@mathlearning.com";
-    var adminPassword =
-        app.Configuration["SeedAdmin:Password"]
-        ?? (app.Environment.IsDevelopment() ? "UcimMatu!123" : null);
-    var resetPasswordOnStart = app.Configuration.GetValue<bool>("SeedAdmin:ResetPasswordOnStart");
+            // If the Identity schema is already present (e.g. AspNetRoles table exists),
+            // avoid attempting to apply migrations that create those tables again.
+            var connection = db.Database.GetDbConnection();
+            await connection.OpenAsync();
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                // Use Postgres-specific check for relation existence via to_regclass
+                cmd.CommandText = "SELECT to_regclass('public.\"AspNetRoles\"') IS NOT NULL";
+                var existsObj = await cmd.ExecuteScalarAsync();
+                var hasIdentitySchema = false;
+                if (existsObj is bool b) hasIdentitySchema = b;
+                else if (existsObj != null && existsObj != DBNull.Value)
+                {
+                    var s = existsObj.ToString();
+                    hasIdentitySchema = !string.IsNullOrEmpty(s) && s.ToLowerInvariant() != "f" && s.ToLowerInvariant() != "null";
+                }
 
-    if (string.IsNullOrWhiteSpace(adminPassword))
-    {
-        app.Logger.LogWarning(
-            "SeedAdmin is enabled but SeedAdmin:Password is not configured. Set SeedAdmin__Password to create or reset the admin account.");
-        return;
-    }
+                if (hasIdentitySchema)
+                {
+                    logger.LogInformation("Detected existing Identity schema (AspNetRoles); skipping migrations and seeding.");
+                }
+                else
+                {
+                    logger.LogInformation("Applying database migrations...");
+                    await db.Database.MigrateAsync();
+                    logger.LogInformation("Database migrations applied successfully");
 
-    var adminUser = await userManager.FindByNameAsync(adminUsername);
-    if (adminUser == null)
+                    logger.LogInformation("Seeding database...");
+                    await SeedAdminAsync(app, logger);
+                    logger.LogInformation("Database seeding complete");
+                }
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Database migration/seed failed");
+        }
     {
         adminUser = new IdentityUser
         {
