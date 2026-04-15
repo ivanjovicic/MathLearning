@@ -102,7 +102,7 @@
             {
                 Id = c.Id,
                 Name = c.Name,
-                QuestionCount = categoryQuestionCounts.ContainsKey(c.Id) ? categoryQuestionCounts[c.Id] : 0
+                QuestionCount = categoryQuestionCounts.GetValueOrDefault(c.Id, 0)
             })
             .ToListAsync();
         

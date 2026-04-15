@@ -17,14 +17,13 @@ if (!string.IsNullOrWhiteSpace(portEnv) && int.TryParse(portEnv, out var port))
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
-builder.Services.AddDataProtection()
+var dpBuilder = builder.Services.AddDataProtection()
     .SetApplicationName("MathLearningAdmin")
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 
 if (!builder.Environment.IsDevelopment())
 {
-    builder.Services.AddDataProtection()
-        .PersistKeysToFileSystem(new DirectoryInfo("/app/keys"));
+    dpBuilder.PersistKeysToFileSystem(new DirectoryInfo("/app/keys"));
 }
 
 builder.Services.AddDbContext<AdminDbContext>(options =>

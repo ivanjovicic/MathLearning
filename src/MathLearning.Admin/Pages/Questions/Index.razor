@@ -165,23 +165,7 @@
 
         try
         {
-            var query = Db.Questions
-                .Include(q => q.Category)
-                .Include(q => q.Options)
-                .Include(q => q.Steps)
-                .AsNoTracking()
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(_searchText))
-            {
-                var searchLower = _searchText.ToLower();
-                query = query.Where(q => q.Text.ToLower().Contains(searchLower));
-            }
-
-            if (_selectedCategoryId > 0)
-            {
-                query = query.Where(q => q.CategoryId == _selectedCategoryId);
-            }
+            var query = BuildFilteredQuery();
 
             _totalCount = await query.CountAsync();
             _questions = await query
@@ -209,25 +193,7 @@
 
         try
         {
-            var query = Db.Questions
-                .Include(q => q.Category)
-                .Include(q => q.Options)
-                .Include(q => q.Steps)
-                .AsNoTracking()
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(_searchText))
-            {
-                var searchLower = _searchText.ToLower();
-                query = query.Where(q => q.Text.ToLower().Contains(searchLower));
-            }
-
-            if (_selectedCategoryId > 0)
-            {
-                query = query.Where(q => q.CategoryId == _selectedCategoryId);
-            }
-
-            _questions = await query
+            _questions = await BuildFilteredQuery()
                 .OrderBy(q => q.Id)
                 .Skip((_currentPage - 1) * _pageSize)
                 .Take(_pageSize)
@@ -237,6 +203,29 @@
         {
             _loading = false;
         }
+    }
+
+    private IQueryable<QuestionEntity> BuildFilteredQuery()
+    {
+        var query = Db.Questions
+            .Include(q => q.Category)
+            .Include(q => q.Options)
+            .Include(q => q.Steps)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            var searchLower = _searchText.ToLower();
+            query = query.Where(q => q.Text.ToLower().Contains(searchLower));
+        }
+
+        if (_selectedCategoryId > 0)
+        {
+            query = query.Where(q => q.CategoryId == _selectedCategoryId);
+        }
+
+        return query;
     }
 
     private void ResetSearch()
