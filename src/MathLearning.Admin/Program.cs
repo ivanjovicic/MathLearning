@@ -58,9 +58,10 @@ builder.Services.AddAuthentication(options =>
 })
 .AddCookie(IdentityConstants.ApplicationScheme, options =>
 {
-    options.LoginPath = "/login-page";
+    options.LoginPath = "/login";
     options.LogoutPath = "/logout";
     options.AccessDeniedPath = "/access-denied";
+    options.ReturnUrlParameter = "returnUrl";
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = isProduction ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Lax;
@@ -155,6 +156,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapGet("/health", () => Results.Ok("Healthy"));
+app.MapGet("/favicon.ico", () => Results.NoContent());
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
