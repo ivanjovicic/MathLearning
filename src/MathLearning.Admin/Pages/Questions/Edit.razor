@@ -52,6 +52,7 @@ else
     public int Id { get; set; }
 
     private readonly QuestionEditorModel Model = new();
+    private QuestionEditorHelper? _editorHelper;
     private Question? _question;
     private List<Category> Categories { get; set; } = [];
     private List<Subtopic> Subtopics { get; set; } = [];
@@ -62,10 +63,12 @@ else
     private bool HasUnsavedChanges =>
         !_loading &&
         !IsSaving &&
-        !string.Equals(_initialSnapshot, CreateModelSnapshot(), StringComparison.Ordinal);
+        !string.Equals(_initialSnapshot, _editorHelper?.CreateModelSnapshot(Model), StringComparison.Ordinal);
 
     protected override async Task OnInitializedAsync()
     {
+        _editorHelper = new QuestionEditorHelper(Sanitizer);
+
         Categories = await Db.Categories
             .AsNoTracking()
             .OrderBy(c => c.Name)
@@ -83,76 +86,24 @@ else
             .Include(x => x.Steps)
             .FirstOrDefaultAsync(x => x.Id == Id);
 
-        if (_question is not null)
+        if (_question is not null && _editorHelper is not null)
         {
-            MapQuestionToModel(_question);
+            _editorHelper.MapQuestionToModel(_question, Model);
         }
 
         _loading = false;
         MarkSnapshot();
     }
 
-    private void MapQuestionToModel(Question question)
-    {
-        Model.Type = question.Type;
-        Model.Text = question.Text;
-        Model.TextFormat = question.TextFormat;
-        Model.TextRenderMode = question.TextRenderMode;
-        Model.SemanticsAltText = question.SemanticsAltText;
-        Model.Explanation = question.Explanation;
-        Model.ExplanationFormat = question.ExplanationFormat;
-        Model.ExplanationRenderMode = question.ExplanationRenderMode;
-        Model.HintFormula = question.HintFormula;
-        Model.HintClue = question.HintClue;
-        Model.HintFull = question.HintFull;
-        Model.HintFormat = question.HintFormat;
-        Model.HintRenderMode = question.HintRenderMode;
-        Model.CorrectAnswer = question.CorrectAnswer;
-        Model.CategoryId = question.CategoryId;
-        Model.SubtopicId = question.SubtopicId;
-        Model.Difficulty = question.Difficulty;
-        Model.Options = question.Options
-            .OrderBy(x => x.Order)
-            .Select(x => new QuestionOptionEditorModel
-            {
-                Id = x.Id,
-                Text = x.Text,
-                TextFormat = x.TextFormat,
-                RenderMode = x.RenderMode,
-                SemanticsAltText = x.SemanticsAltText,
-                IsCorrect = x.IsCorrect
-            })
-            .ToList();
-        Model.Steps = question.Steps
-            .OrderBy(x => x.StepIndex)
-            .Select(x => new QuestionStepEditorModel
-            {
-                Id = x.Id,
-                Order = x.StepIndex,
-                Text = x.Text,
-                TextFormat = x.TextFormat,
-                TextRenderMode = x.TextRenderMode,
-                Hint = x.Hint,
-                HintFormat = x.HintFormat,
-                HintRenderMode = x.HintRenderMode,
-                SemanticsAltText = x.SemanticsAltText,
-                Highlight = x.Highlight
-            })
-            .ToList();
-
-        if (Model.Options.Count == 0)
-        {
-            Model.Options = QuestionEditorModel.CreateDefaultOptions();
-            Model.Options[0].IsCorrect = true;
-        }
-    }
-
     private async Task SaveAsync()
     {
-        ValidationErrors = ValidateModel();
-        if (ValidationErrors.Count > 0 || _question is null)
+        if (_editorHelper is null || ValidationErrors.Count > 0 || _question is null)
         {
-            return;
+            ValidationErrors = _editorHelper?.ValidateModel(Model) ?? [];
+            if (ValidationErrors.Count > 0 || _question is null)
+            {
+                return;
+            }
         }
 
         IsSaving = true;
@@ -163,31 +114,13 @@ else
             await using var tx = await Db.Database.BeginTransactionAsync();
             try
             {
-                _question.SetText(Sanitize(Model.Text, Model.TextFormat));
-                _question.SetType(Model.Type);
-                _question.SetCategory(Model.CategoryId);
-                _question.SetSubtopic(Model.SubtopicId);
-                _question.SetDifficulty(Model.Difficulty);
-                _question.SetExplanation(Sanitize(Model.Explanation, Model.ExplanationFormat));
-                _question.SetHintFormula(Sanitize(Model.HintFormula, Model.HintFormat));
-                _question.SetHintClue(Sanitize(Model.HintClue, Model.HintFormat));
-                _question.SetHintFull(Sanitize(Model.HintFull, Model.HintFormat));
-                _question.SetTextFormat(Model.TextFormat);
-                _question.SetExplanationFormat(Model.ExplanationFormat);
-                _question.SetHintFormat(Model.HintFormat);
-                _question.SetTextRenderMode(Model.TextRenderMode);
-                _question.SetExplanationRenderMode(Model.ExplanationRenderMode);
-                _question.SetHintRenderMode(Model.HintRenderMode);
-                _question.SetSemanticsAltText(ResolveSemantics(Model.SemanticsAltText, Model.Text, Model.TextFormat));
-                _question.SetCorrectAnswer(ResolveCorrectAnswer());
-                _question.SetHintDifficulty(Model.Difficulty switch
+                if (_question.Text != Model.Text)
                 {
-                    <= 2 => 1,
-                    3 or 4 => 2,
-                    _ => 3
-                });
+                    _question.SetText(_editorHelper!.Sanitize(Model.Text, Model.TextFormat));
+                }
 
-                _question.ReplaceOptions(BuildOptions());
+                _editorHelper!.ApplyQuestionFields(_question, Model);
+                _question.ReplaceOptions(_editorHelper.BuildOptions(Model));
 
                 if (_question.Steps.Count > 0)
                 {
@@ -197,7 +130,7 @@ else
                 _question.ReplaceSteps([]);
                 await Db.SaveChangesAsync();
 
-                var steps = BuildSteps(_question.Id);
+                var steps = _editorHelper.BuildSteps(_question.Id, Model);
                 if (steps.Count > 0)
                 {
                     _question.ReplaceSteps(steps);
@@ -237,63 +170,9 @@ else
         }
     }
 
-    private List<QuestionOption> BuildOptions()
-        => Model.Options
-            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .Select((x, i) => new QuestionOption(
-                Sanitize(x.Text, x.TextFormat),
-                x.IsCorrect,
-                x.TextFormat,
-                x.RenderMode,
-                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat),
-                i + 1))
-            .ToList();
-
-    private List<QuestionStep> BuildSteps(int questionId)
-        => Model.Steps
-            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .OrderBy(x => x.Order)
-            .Select(x => new QuestionStep(
-                questionId,
-                x.Order,
-                Sanitize(x.Text, x.TextFormat),
-                Sanitize(x.Hint, x.HintFormat),
-                x.Highlight,
-                x.TextFormat,
-                x.HintFormat,
-                x.TextRenderMode,
-                x.HintRenderMode,
-                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat)))
-            .ToList();
-
-    private string? ResolveCorrectAnswer()
-    {
-        if (!string.Equals(Model.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
-        {
-            return Sanitize(Model.CorrectAnswer, Model.TextFormat);
-        }
-
-        var correct = Model.Options.FirstOrDefault(x => x.IsCorrect)?.Text;
-        return Sanitize(correct, Model.TextFormat);
-    }
-
-    private List<string> ValidateModel()
-        => QuestionEditorValidation.Validate(Model);
-
-    private string Sanitize(string? raw, MathLearning.Domain.Enums.ContentFormat format)
-        => Sanitizer.NormalizeMathContent(raw, format);
-
-    private string? ResolveSemantics(string? semanticsAltText, string? raw, MathLearning.Domain.Enums.ContentFormat format)
-        => !string.IsNullOrWhiteSpace(semanticsAltText)
-            ? semanticsAltText.Trim()
-            : Sanitizer.GenerateSemanticsAltText(raw, format);
-
-    private string CreateModelSnapshot()
-        => JsonSerializer.Serialize(Model);
-
     private void MarkSnapshot()
     {
-        _initialSnapshot = CreateModelSnapshot();
+        _initialSnapshot = _editorHelper?.CreateModelSnapshot(Model) ?? string.Empty;
     }
 
     private async Task ConfirmNavigationAsync(LocationChangingContext context)

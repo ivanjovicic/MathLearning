@@ -2,6 +2,8 @@
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using MathLearning.Admin.Data
+@using Microsoft.EntityFrameworkCore
 @using MudBlazor
 
 <PageTitle>Dashboard - MathLearning Admin</PageTitle>
@@ -13,212 +15,200 @@
             Dashboard
         </MudText>
         <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
-            Dobrodosli na MathLearning Admin Panel
+            Dobrodošli na MathLearning Admin Panel
         </MudText>
 
         <MudAlert Severity="Severity.Info" Class="mb-4" Variant="Variant.Filled">
             Ulogovani ste kao: <strong>@context.User.Identity?.Name</strong>
         </MudAlert>
 
-        <MudGrid>
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Color="Color.Primary" />
-                        </div>
-                        <MudText Typo="Typo.h6">Upravljanje Kategorijama</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Dodajte, menjajte ili brisite kategorije pitanja
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/categories" 
-                                   Variant="Variant.Filled" 
-                                   Color="Color.Primary" 
-                                   FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
+        @if (_isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Color="Color.Primary" />
+                                <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled">@_categoryCount</MudChip>
+                            </div>
+                            <MudText Typo="Typo.h6">Upravljanje Kategorijama</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Dodajte, menjajte ili brišite kategorije pitanja
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/categories" 
+                                       Variant="Variant.Filled" 
+                                       Color="Color.Primary" 
+                                       FullWidth="true">
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
 
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.Quiz" Size="Size.Large" Color="Color.Secondary" />
-                        </div>
-                        <MudText Typo="Typo.h6">Upravljanje Pitanjima</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Pregledajte i upravljajte svim pitanjima
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/questions" 
-                                   Variant="Variant.Filled" 
-                                   Color="Color.Secondary" 
-                                   FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.Quiz" Size="Size.Large" Color="Color.Secondary" />
+                                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Filled">@_questionCount</MudChip>
+                            </div>
+                            <MudText Typo="Typo.h6">Upravljanje Pitanjima</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Pregledajte i upravljajte svim pitanjima
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/questions" 
+                                       Variant="Variant.Filled" 
+                                       Color="Color.Secondary" 
+                                       FullWidth="true">
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
 
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Large" Color="Color.Success" />
-                        </div>
-                        <MudText Typo="Typo.h6">Dodaj Novo Pitanje</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Kreirajte novo pitanje sa opcijama
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/questions/new" 
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Large" Color="Color.Success" />
+                            </div>
+                            <MudText Typo="Typo.h6">Dodaj Novo Pitanje</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Kreirajte novo pitanje sa opcijama
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/questions/new" 
+                                       Variant="Variant.Filled" 
+                                       Color="Color.Success" 
+                                       FullWidth="true">
+                                Kreiraj
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.Restore" Size="Size.Large" Color="Color.Error" />
+                            </div>
+                            <MudText Typo="Typo.h6">Resetuj XP korisnika</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Admin alat za resetovanje XP (daily/weekly/monthly) za korisnika
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/admin/reset-xp" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Error" 
+                                   FullWidth="true">
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Size="Size.Large" Color="Color.Info" />
+                            </div>
+                            <MudText Typo="Typo.h6">Pregled XP korisnika</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Prikaz XP, nivoa i streaka za korisnika
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/admin/user-xp" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Info" 
+                                   FullWidth="true">
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.MonitorHeart" Size="Size.Large" Color="Color.Warning" />
+                            </div>
+                            <MudText Typo="Typo.h6">Monitoring servisa</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Status API-ja, Hangfire i metrika
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/admin/monitoring" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Warning" 
+                                   FullWidth="true">
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Large" Color="Color.Success" />
+                            </div>
+                            <MudText Typo="Typo.h6">Ručno dodeli XP</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Admin alat za bonus/korekciju XP korisniku
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/admin/add-xp" 
                                    Variant="Variant.Filled" 
                                    Color="Color.Success" 
                                    FullWidth="true">
-                            Kreiraj
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
 
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.Restore" Size="Size.Large" Color="Color.Error" />
-                        </div>
-                        <MudText Typo="Typo.h6">Resetuj XP korisnika</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Admin alat za resetovanje XP (daily/weekly/monthly) za korisnika
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/admin/reset-xp" 
-                               Variant="Variant.Filled" 
-                               Color="Color.Error" 
-                               FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Size="Size.Large" Color="Color.Info" />
-                        </div>
-                        <MudText Typo="Typo.h6">Pregled XP korisnika</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Prikaz XP, nivoa i streaka za korisnika
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/admin/user-xp" 
-                               Variant="Variant.Filled" 
-                               Color="Color.Info" 
-                               FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.MonitorHeart" Size="Size.Large" Color="Color.Warning" />
-                        </div>
-                        <MudText Typo="Typo.h6">Monitoring servisa</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Status API-ja, Hangfire i metrika
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/admin/monitoring" 
-                               Variant="Variant.Filled" 
-                               Color="Color.Warning" 
-                               FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Large" Color="Color.Success" />
-                        </div>
-                        <MudText Typo="Typo.h6">Ručno dodeli XP</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Admin alat za bonus/korekciju XP korisniku
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/admin/add-xp" 
-                               Variant="Variant.Filled" 
-                               Color="Color.Success" 
-                               FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.BugReport" Size="Size.Large" Color="Color.Dark" />
-                        </div>
-                        <MudText Typo="Typo.h6">Logovi i status poslova</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Pregled logova i statusa XP/Leaderboard/Hangfire poslova
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/admin/logs" 
-                               Variant="Variant.Filled" 
-                               Color="Color.Dark" 
-                               FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="4" Class="pa-4">
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-4">
-                            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Large" Color="Color.Primary" />
-                        </div>
-                        <MudText Typo="Typo.h6">Napredna pretraga logova</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                            Filtriranje, pretraga i stacktrace prikaz
-                        </MudText>
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Href="/admin/logs-advanced" 
-                               Variant="Variant.Filled" 
-                               Color="Color.Primary" 
-                               FullWidth="true">
-                            Otvori
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-        </MudGrid>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" Class="pa-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-4">
+                                <MudIcon Icon="@Icons.Material.Filled.BugReport" Size="Size.Large" Color="Color.Dark" />
+                                <MudChip T="string" Color="Color.Dark" Variant="Variant.Filled">@_bugCount</MudChip>
+                            </div>
+                            <MudText Typo="Typo.h6">Logovi i status poslova</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                Pregled logova i statusa XP/Leaderboard/Hangfire poslova
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="/admin/logs" 
+                                   Variant="Variant.Filled" 
+                                   Color="Color.Dark" 
+                                   FullWidth="true">
+                                Otvori
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        }
     </Authorized>
     <NotAuthorized>
         <MudAlert Severity="Severity.Warning" Class="mt-4">
@@ -226,5 +216,41 @@
         </MudAlert>
     </NotAuthorized>
 </AuthorizeView>
+
+@code {
+    [Inject] private AdminDbContext Db { get; set; } = null!;
+    [Inject] private ILogger<Index> Logger { get; set; } = null!;
+
+    private bool _isLoading = true;
+    private int _categoryCount = 0;
+    private int _questionCount = 0;
+    private int _bugCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            
+            // Load metrics
+            _categoryCount = await Db.Categories.CountAsync();
+            _questionCount = await Db.Questions.CountAsync();
+            
+            // TODO: Load bug count from API when available
+            _bugCount = 0;
+
+            Logger.LogInformation("Dashboard metrics loaded: {Categories} categories, {Questions} questions", 
+                _categoryCount, _questionCount);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dashboard metrics");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
 
 

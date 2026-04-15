@@ -39,12 +39,18 @@
               Dense="true">
         <HeaderContent>
             <MudTh>Naziv</MudTh>
+            <MudTh>Broj pitanja</MudTh>
             <MudTh Style="text-align: right; width: 200px;">Akcije</MudTh>
         </HeaderContent>
 
         <RowTemplate Context="category">
             <MudTd DataLabel="Naziv">
                 <MudText Typo="Typo.body1">@category.Name</MudText>
+            </MudTd>
+            <MudTd DataLabel="Broj pitanja">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                    @(category.QuestionCount > 0 ? category.QuestionCount.ToString() : "0")
+                </MudChip>
             </MudTd>
             <MudTd DataLabel="Akcije" Style="text-align: right;">
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" 
@@ -71,7 +77,7 @@
 </MudPaper>
 
 @code {
-    private List<Category> _categories = new();
+    private List<CategoryViewModel> _categories = new();
     private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
@@ -82,52 +88,91 @@
     private async Task LoadCategories()
     {
         _loading = true;
+        
+        var categoryQuestionCounts = await Db.Questions
+            .AsNoTracking()
+            .GroupBy(q => q.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId, x => x.Count);
+
         _categories = await Db.Categories
+            .AsNoTracking()
             .OrderBy(c => c.Name)
+            .Select(c => new CategoryViewModel
+            {
+                Id = c.Id,
+                Name = c.Name,
+                QuestionCount = categoryQuestionCounts.ContainsKey(c.Id) ? categoryQuestionCounts[c.Id] : 0
+            })
             .ToListAsync();
+        
         _loading = false;
     }
 
-    private async Task DeleteCategoryAsync(Category category)
+    private async Task DeleteCategoryAsync(CategoryViewModel category)
     {
-        var dependentQuestionsCount = await Db.Questions.CountAsync(q => q.CategoryId == category.Id);
-        var dialogParameters = new DialogParameters
+        if (category.QuestionCount > 0)
         {
-            [nameof(ConfirmDialog.Title)] = dependentQuestionsCount > 0 ? "Kategorija ima zavisnosti" : "Potvrda brisanja",
-            [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildCategoryDeleteMessage(category.Name, dependentQuestionsCount),
-            [nameof(ConfirmDialog.ConfirmText)] = dependentQuestionsCount > 0 ? "Razumem" : "Obrisi",
+            var dialogParameters = new DialogParameters
+            {
+                [nameof(ConfirmDialog.Title)] = "Kategorija ima zavisnosti",
+                [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildCategoryDeleteMessage(category.Name, category.QuestionCount),
+                [nameof(ConfirmDialog.ConfirmText)] = "Razumem",
+                [nameof(ConfirmDialog.CancelText)] = "Odustani",
+                [nameof(ConfirmDialog.ConfirmColor)] = Color.Warning
+            };
+            await DialogService.ShowAsync<ConfirmDialog>("Potvrda", dialogParameters, new DialogOptions
+            {
+                CloseButton = true,
+                MaxWidth = MaxWidth.Small
+            });
+            
+            Snackbar.Add("Brisanje kategorije je blokirano dok postoje povezana pitanja.", Severity.Warning);
+            return;
+        }
+
+        var deleteParams = new DialogParameters
+        {
+            [nameof(ConfirmDialog.Title)] = "Potvrda brisanja",
+            [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildCategoryDeleteMessage(category.Name, 0),
+            [nameof(ConfirmDialog.ConfirmText)] = "Obrisi",
             [nameof(ConfirmDialog.CancelText)] = "Odustani",
-            [nameof(ConfirmDialog.ConfirmColor)] = dependentQuestionsCount > 0 ? Color.Warning : Color.Error
+            [nameof(ConfirmDialog.ConfirmColor)] = Color.Error
         };
-        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Potvrda", dialogParameters, new DialogOptions
+        var deleteRef = await DialogService.ShowAsync<ConfirmDialog>("Potvrda", deleteParams, new DialogOptions
         {
             CloseButton = true,
             MaxWidth = MaxWidth.Small
         });
-        var dialogResult = await dialogRef.Result;
-        if (dialogResult?.Canceled ?? true)
+        var deleteResult = await deleteRef.Result;
+        if (deleteResult?.Canceled ?? true)
         {
-            return;
-        }
-
-        if (dependentQuestionsCount > 0)
-        {
-            Snackbar.Add("Brisanje kategorije je blokirano dok postoje povezana pitanja.", Severity.Warning);
             return;
         }
 
         try
         {
-            Db.Categories.Remove(category);
-            await Db.SaveChangesAsync();
-            _categories.Remove(category);
-            
-            Snackbar.Add($"Kategorija '{category.Name}' je obrisana", Severity.Success);
-            StateHasChanged();
+            var categoryEntity = await Db.Categories.FirstOrDefaultAsync(c => c.Id == category.Id);
+            if (categoryEntity != null)
+            {
+                Db.Categories.Remove(categoryEntity);
+                await Db.SaveChangesAsync();
+                _categories.Remove(category);
+                
+                Snackbar.Add($"Kategorija '{category.Name}' je obrisana", Severity.Success);
+                StateHasChanged();
+            }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Greska pri brisanju: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Greška pri brisanju: {ex.Message}", Severity.Error);
         }
+    }
+
+    private class CategoryViewModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int QuestionCount { get; set; }
     }
 }

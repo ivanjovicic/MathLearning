@@ -38,15 +38,18 @@
 
 @code {
     private readonly QuestionEditorModel Model = new();
+    private QuestionEditorHelper? _editorHelper;
     private List<Category> Categories { get; set; } = [];
     private List<Subtopic> Subtopics { get; set; } = [];
     private bool IsSaving { get; set; }
     private List<string> ValidationErrors { get; set; } = [];
     private string _initialSnapshot = string.Empty;
-    private bool HasUnsavedChanges => !IsSaving && !string.Equals(_initialSnapshot, CreateModelSnapshot(), StringComparison.Ordinal);
+    private bool HasUnsavedChanges => !IsSaving && !string.Equals(_initialSnapshot, _editorHelper?.CreateModelSnapshot(Model), StringComparison.Ordinal);
 
     protected override async Task OnInitializedAsync()
     {
+        _editorHelper = new QuestionEditorHelper(Sanitizer);
+
         Categories = await Db.Categories
             .AsNoTracking()
             .OrderBy(c => c.Name)
@@ -79,7 +82,12 @@
 
     private async Task SaveAsync()
     {
-        ValidationErrors = ValidateModel();
+        if (_editorHelper is null)
+        {
+            return;
+        }
+
+        ValidationErrors = _editorHelper.ValidateModel(Model);
         if (ValidationErrors.Count > 0)
         {
             return;
@@ -94,18 +102,18 @@
             try
             {
                 var question = new Question(
-                    Sanitize(Model.Text, Model.TextFormat),
+                    _editorHelper.Sanitize(Model.Text, Model.TextFormat),
                     Model.Difficulty,
                     Model.CategoryId,
-                    Sanitize(Model.Explanation, Model.ExplanationFormat));
+                    _editorHelper.Sanitize(Model.Explanation, Model.ExplanationFormat));
 
-                ApplyQuestionFields(question);
-                question.ReplaceOptions(BuildOptions());
+                _editorHelper.ApplyQuestionFields(question, Model);
+                question.ReplaceOptions(_editorHelper.BuildOptions(Model));
 
                 Db.Questions.Add(question);
                 await Db.SaveChangesAsync();
 
-                var steps = BuildSteps(question.Id);
+                var steps = _editorHelper.BuildSteps(question.Id, Model);
                 if (steps.Count > 0)
                 {
                     question.ReplaceSteps(steps);
@@ -145,89 +153,9 @@
         }
     }
 
-    private void ApplyQuestionFields(Question question)
-    {
-        question.SetType(Model.Type);
-        question.SetCategory(Model.CategoryId);
-        question.SetSubtopic(Model.SubtopicId);
-        question.SetDifficulty(Model.Difficulty);
-        question.SetExplanation(Sanitize(Model.Explanation, Model.ExplanationFormat));
-        question.SetHintFormula(Sanitize(Model.HintFormula, Model.HintFormat));
-        question.SetHintClue(Sanitize(Model.HintClue, Model.HintFormat));
-        question.SetHintFull(Sanitize(Model.HintFull, Model.HintFormat));
-        question.SetTextFormat(Model.TextFormat);
-        question.SetExplanationFormat(Model.ExplanationFormat);
-        question.SetHintFormat(Model.HintFormat);
-        question.SetTextRenderMode(Model.TextRenderMode);
-        question.SetExplanationRenderMode(Model.ExplanationRenderMode);
-        question.SetHintRenderMode(Model.HintRenderMode);
-        question.SetSemanticsAltText(ResolveSemantics(Model.SemanticsAltText, Model.Text, Model.TextFormat));
-        question.SetCorrectAnswer(ResolveCorrectAnswer());
-        question.SetHintDifficulty(Model.Difficulty switch
-        {
-            <= 2 => 1,
-            3 or 4 => 2,
-            _ => 3
-        });
-    }
-
-    private List<QuestionOption> BuildOptions()
-        => Model.Options
-            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .Select((x, i) => new QuestionOption(
-                Sanitize(x.Text, x.TextFormat),
-                x.IsCorrect,
-                x.TextFormat,
-                x.RenderMode,
-                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat),
-                i + 1))
-            .ToList();
-
-    private List<QuestionStep> BuildSteps(int questionId)
-        => Model.Steps
-            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .OrderBy(x => x.Order)
-            .Select(x => new QuestionStep(
-                questionId,
-                x.Order,
-                Sanitize(x.Text, x.TextFormat),
-                Sanitize(x.Hint, x.HintFormat),
-                x.Highlight,
-                x.TextFormat,
-                x.HintFormat,
-                x.TextRenderMode,
-                x.HintRenderMode,
-                ResolveSemantics(x.SemanticsAltText, x.Text, x.TextFormat)))
-            .ToList();
-
-    private string? ResolveCorrectAnswer()
-    {
-        if (!string.Equals(Model.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
-        {
-            return Sanitize(Model.CorrectAnswer, Model.TextFormat);
-        }
-
-        var correct = Model.Options.FirstOrDefault(x => x.IsCorrect)?.Text;
-        return Sanitize(correct, Model.TextFormat);
-    }
-
-    private List<string> ValidateModel()
-        => QuestionEditorValidation.Validate(Model);
-
-    private string Sanitize(string? raw, MathLearning.Domain.Enums.ContentFormat format)
-        => Sanitizer.NormalizeMathContent(raw, format);
-
-    private string? ResolveSemantics(string? semanticsAltText, string? raw, MathLearning.Domain.Enums.ContentFormat format)
-        => !string.IsNullOrWhiteSpace(semanticsAltText)
-            ? semanticsAltText.Trim()
-            : Sanitizer.GenerateSemanticsAltText(raw, format);
-
-    private string CreateModelSnapshot()
-        => JsonSerializer.Serialize(Model);
-
     private void MarkSnapshot()
     {
-        _initialSnapshot = CreateModelSnapshot();
+        _initialSnapshot = _editorHelper?.CreateModelSnapshot(Model) ?? string.Empty;
     }
 
     private async Task ConfirmNavigationAsync(LocationChangingContext context)
