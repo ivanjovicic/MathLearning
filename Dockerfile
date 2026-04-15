@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Smaller runtime by default; override with --build-arg if you hit compatibility issues.
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:8.0-jammy
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:8.0-jammy-chiseled
@@ -55,14 +53,13 @@ ENTRYPOINT ["dotnet", "MathLearning.Api.dll"]
 FROM ${RUNTIME_IMAGE} AS runtime
 WORKDIR /app
 
+# Ultra low-memory defaults (override in environment if needed).
+# Chiseled images often run best with invariant globalization unless ICU is present.
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
-    # Ultra low-memory defaults (override in fly.toml / env if needed)
     DOTNET_GCConserveMemory=1 \
     DOTNET_GCHeapHardLimitPercent=70 \
     DOTNET_GCServer=0 \
-    # Chiseled images often run best with invariant globalization unless ICU is present.
-    # If you need full cultures/sorting, override to 0 and use a runtime image with ICU.
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
 COPY --from=build /app/publish .

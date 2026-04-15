@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:8.0-jammy
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:8.0-jammy-chiseled
 
