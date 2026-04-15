@@ -168,7 +168,11 @@ public class SyncServiceTests
 
     private static SyncService CreateSyncService(ApiDbContext db, bool requireSignatures)
     {
-        var xpTrackingService = new XpTrackingService(db, NullLogger<XpTrackingService>.Instance, null);
+        var xpTrackingService = new XpTrackingService(
+            db,
+            Options.Create(new XpTrackingOptions()),
+            NullLogger<XpTrackingService>.Instance,
+            null);
 
         return new SyncService(
             db,

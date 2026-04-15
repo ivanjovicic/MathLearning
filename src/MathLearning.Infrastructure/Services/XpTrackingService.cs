@@ -1,10 +1,10 @@
-using MathLearning.Domain.Entities;
 using MathLearning.Application.Services;
+using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
-using MathLearning.Infrastructure.Services.Leaderboard;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-<<<<<<< HEAD
+using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace MathLearning.Infrastructure.Services;
 
@@ -12,35 +12,22 @@ public class XpTrackingService : IXpTrackingService
 {
     private const int MaxSingleEventXp = 500;
     private const int MaxXpPerHour = 2000;
+    private const int MaxConcurrencyRetries = 3;
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromHours(1);
 
     private readonly ApiDbContext _db;
-    private readonly ICosmeticRewardService? _cosmeticRewardService;
-=======
-using Microsoft.Extensions.Options;
-using Npgsql;
-
-namespace MathLearning.Infrastructure.Services;
-
-/// <summary>
-/// Helper service for updating user XP across all time periods.
-/// </summary>
-public class XpTrackingService
-{
-    private const int MaxConcurrencyRetries = 3;
-
-    private readonly ApiDbContext _db;
     private readonly XpTrackingOptions _options;
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     private readonly ILogger<XpTrackingService> _logger;
+    private readonly ICosmeticRewardService? _cosmeticRewardService;
 
     public XpTrackingService(
         ApiDbContext db,
-<<<<<<< HEAD
+        IOptions<XpTrackingOptions> options,
         ILogger<XpTrackingService> logger,
         ICosmeticRewardService? cosmeticRewardService = null)
     {
         _db = db;
+        _options = options.Value;
         _logger = logger;
         _cosmeticRewardService = cosmeticRewardService;
     }
@@ -56,11 +43,9 @@ public class XpTrackingService
         var startedAt = DateTime.UtcNow;
         var profile = await _db.UserProfiles.FindAsync([userId], ct);
         if (profile == null)
-        {
             throw new InvalidOperationException($"User profile not found: {userId}");
-        }
 
-        var effectiveSourceType = string.IsNullOrWhiteSpace(sourceType) ? "manual_adjustment" : sourceType;
+        var effectiveSourceType = string.IsNullOrWhiteSpace(sourceType) ? "manual_adjustment" : sourceType.Trim();
         if (!string.IsNullOrWhiteSpace(sourceId))
         {
             var existingTrackedEvent = _db.UserXpEvents.Local.FirstOrDefault(x =>
@@ -68,9 +53,7 @@ public class XpTrackingService
                 x.SourceType == effectiveSourceType &&
                 x.SourceId == sourceId);
             if (existingTrackedEvent is not null)
-            {
                 return profile;
-            }
 
             var existingPersistedEvent = await _db.UserXpEvents
                 .AsNoTracking()
@@ -80,15 +63,12 @@ public class XpTrackingService
                          x.SourceId == sourceId,
                     ct);
             if (existingPersistedEvent)
-            {
                 return profile;
-            }
         }
 
         var now = DateTime.UtcNow;
 
-        // Anti-cheat: spike + hourly rate checks (flag-and-log; XP still awarded)
-        bool isSuspicious = false;
+        var isSuspicious = false;
         string? cheatReason = null;
         if (xpAmount > MaxSingleEventXp)
         {
@@ -112,7 +92,12 @@ public class XpTrackingService
         {
             _logger.LogWarning(
                 "XP anti-cheat triggered. UserId={UserId} SourceType={SourceType} SourceId={SourceId} XpDelta={XpDelta} Reason={Reason}",
-                userId, effectiveSourceType, sourceId, xpAmount, cheatReason);
+                userId,
+                effectiveSourceType,
+                sourceId,
+                xpAmount,
+                cheatReason);
+
             _db.XpCheatLogs.Add(new XpCheatLog
             {
                 UserId = userId,
@@ -126,37 +111,7 @@ public class XpTrackingService
         }
 
         var previousTotalXp = profile.Xp;
-        var previousDailyXp = profile.DailyXp;
-        var previousWeeklyXp = profile.WeeklyXp;
-        var previousMonthlyXp = profile.MonthlyXp;
-
-        if (profile.LastXpResetDate == null)
-        {
-            profile.LastXpResetDate = now;
-        }
-
-        var lastReset = profile.LastXpResetDate.Value;
-        var today = now.Date;
-        var lastResetDate = lastReset.Date;
-
-        var dailyReset = lastResetDate < today;
-        var weeklyReset = SchoolLeaderboardPeriods.StartOfWeekUtc(today) > SchoolLeaderboardPeriods.StartOfWeekUtc(lastResetDate);
-        var monthlyReset = lastReset.Year < today.Year || lastReset.Month < today.Month;
-
-        if (dailyReset)
-        {
-            profile.DailyXp = 0;
-        }
-
-        if (weeklyReset)
-        {
-            profile.WeeklyXp = 0;
-        }
-
-        if (monthlyReset)
-        {
-            profile.MonthlyXp = 0;
-        }
+        ResetExpiredPeriods(profile, now);
 
         profile.Xp = Math.Max(0, profile.Xp + xpAmount);
         profile.DailyXp = Math.Max(0, profile.DailyXp + xpAmount);
@@ -167,7 +122,7 @@ public class XpTrackingService
         profile.UpdatedAt = now;
 
         var effectiveTotalDelta = profile.Xp - previousTotalXp;
-        var xpEvent = new UserXpEvent
+        _db.UserXpEvents.Add(new UserXpEvent
         {
             UserId = userId,
             SchoolId = profile.SchoolId,
@@ -179,15 +134,11 @@ public class XpTrackingService
             IsSuspicious = isSuspicious,
             MetadataJson = metadataJson,
             AwardedAtUtc = now
-        };
-
-        _db.UserXpEvents.Add(xpEvent);
+        });
 
         await _db.SaveChangesAsync(ct);
         if (_cosmeticRewardService is not null)
-        {
             await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
-        }
 
         _logger.LogInformation(
             "XP processed. UserId={UserId} SourceType={SourceType} SourceId={SourceId} XpDelta={XpDelta} EffectiveDelta={EffectiveDelta} ElapsedMs={ElapsedMs}",
@@ -197,47 +148,10 @@ public class XpTrackingService
             xpAmount,
             effectiveTotalDelta,
             Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds, 2));
-=======
-        IOptions<XpTrackingOptions> options,
-        ILogger<XpTrackingService> logger)
-    {
-        _db = db;
-        _options = options.Value;
-        _logger = logger;
-    }
-
-    /// <summary>
-    /// Adds XP to a user and saves changes immediately.
-    /// </summary>
-    public async Task<UserProfile> AddXpAsync(string userId, int xpAmount)
-    {
-        var result = await AddXpWithinTransactionAsync(userId, xpAmount, hintUsed: false, "legacy_add_xp");
-        var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
-        if (profile == null)
-            throw new InvalidOperationException($"User profile not found: {userId}");
-
-        _logger.LogInformation(
-            "Legacy XP update complete. UserId={UserId} RequestedXp={RequestedXp} AwardedXp={AwardedXp} TotalXp={TotalXp} Reason={Reason}",
-            userId,
-            xpAmount,
-            result.AwardedXp,
-            result.TotalXpAfterAward,
-            result.Reason);
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
 
         return profile;
     }
 
-<<<<<<< HEAD
-    public async Task ResetTimeBasedXpAsync(string userId, CancellationToken ct = default)
-    {
-        var startedAt = DateTime.UtcNow;
-        var profile = await _db.UserProfiles.FindAsync([userId], ct);
-=======
-    /// <summary>
-    /// Adds XP inside an existing transaction/context and returns awarded amount/reason.
-    /// This method intentionally does not begin/commit a transaction.
-    /// </summary>
     public async Task<XpAwardResult> AddXpWithinTransactionAsync(
         string userId,
         int requestedXp,
@@ -331,23 +245,14 @@ public class XpTrackingService
         }
     }
 
-    /// <summary>
-    /// Manually resets time-based XP for a specific user (admin function).
-    /// </summary>
-    public async Task ResetTimeBasedXpAsync(string userId)
+    public async Task ResetTimeBasedXpAsync(string userId, CancellationToken ct = default)
     {
-        var profile = await _db.UserProfiles.FindAsync(userId);
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
+        var startedAt = DateTime.UtcNow;
+        var profile = await _db.UserProfiles.FindAsync([userId], ct);
         if (profile == null)
-        {
             throw new InvalidOperationException($"User profile not found: {userId}");
-        }
 
         var now = DateTime.UtcNow;
-        var previousDailyXp = profile.DailyXp;
-        var previousWeeklyXp = profile.WeeklyXp;
-        var previousMonthlyXp = profile.MonthlyXp;
-
         profile.DailyXp = 0;
         profile.WeeklyXp = 0;
         profile.MonthlyXp = 0;
@@ -356,9 +261,7 @@ public class XpTrackingService
 
         await _db.SaveChangesAsync(ct);
         if (_cosmeticRewardService is not null)
-        {
             await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
-        }
 
         _logger.LogInformation(
             "Time-based XP reset processed. UserId={UserId} ElapsedMs={ElapsedMs}",
@@ -457,12 +360,11 @@ public class XpTrackingService
         if (awarded <= 0)
             return (0, "cap_reached");
 
-        return reasons.Count == 0 ? (awarded, "awarded") : (awarded, $"cap_limited:{string.Join(",", reasons)}");
+        return reasons.Count == 0
+            ? (awarded, "awarded")
+            : (awarded, $"cap_limited:{string.Join(',', reasons)}");
     }
 
-    /// <summary>
-    /// Gets the start of the week (Monday) for a given date.
-    /// </summary>
     private static DateTime GetWeekStart(DateTime date)
     {
         var dayOfWeek = (int)date.DayOfWeek;

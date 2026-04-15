@@ -1,7 +1,6 @@
-﻿using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Application.DTOs.Progress;
 using MathLearning.Application.Helpers;
-using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -22,7 +21,7 @@ public static class QuizEndpoints
                        .RequireAuthorization()
                        .WithTags("Quiz");
 
-        // 🎬 START QUIZ
+        // ?? START QUIZ
         group.MapPost("/start", async (
             StartQuizRequest request,
             ApiDbContext db,
@@ -56,7 +55,7 @@ public static class QuizEndpoints
             return Results.Ok(new QuizResponse(quiz.Id, questionDtos));
         });
 
-        // 📦 LEGACY MOBILE QUESTIONS ENDPOINT
+        // ?? LEGACY MOBILE QUESTIONS ENDPOINT
         group.MapGet("/questions", async (
             ApiDbContext db,
             HttpContext ctx,
@@ -96,7 +95,7 @@ public static class QuizEndpoints
             return await BuildLegacyQuestionsResponse(db, ctx, count, subtopicId, topicId);
         });
 
-        // 📝 NEXT QUESTION (adaptive learning)
+        // ?? NEXT QUESTION (adaptive learning)
         group.MapPost("/next-question", async (
             NextQuestionRequest request,
             ApiDbContext db,
@@ -159,25 +158,18 @@ public static class QuizEndpoints
             ));
         });
 
-        // ✍️ SUBMIT ANSWER
+        // ?? SUBMIT ANSWER
         group.MapPost("/answer", async (
             JsonElement request,
             ApiDbContext db,
             HttpContext ctx,
-<<<<<<< HEAD
             MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
-            IQuizAttemptIngestService ingestService,
-            IAnswerPatternAntiCheatService antiCheatService) =>
-=======
             IQuizAttemptIngestService ingestService,
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             ILogger<Program> logger) =>
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            if (!int.TryParse(userId, out var appUserId))
-                return Results.BadRequest("Invalid user id");
             string lang = await ResolveUserLang(db, ctx, userId);
 
             if (!TryGetInt(request, "questionId", out var questionId) || questionId <= 0)
@@ -236,48 +228,14 @@ public static class QuizEndpoints
                         xpTrackingOptions.Value.EnableAntiCheat,
                         ctx.RequestAborted);
 
-<<<<<<< HEAD
-            stat.LastAttemptAt = DateTime.UtcNow;
-
-            await antiCheatService.EvaluateAndTrackAsync(
-                new AntiCheatAnswerObservationInput(
-                    userId,
-                    "quiz_answer",
-                    questionId,
-                    null,
-                    question.SubtopicId,
-                    quizSessionId,
-                    null,
-                    null,
-                    answerText,
-                    isCorrect,
-                    Math.Max(0, timeSpentSeconds) * 1000,
-                    null,
-                    answeredAtUtc),
-                ctx.RequestAborted);
-
-            await db.SaveChangesAsync();
-            await ingestService.IngestAttemptsAsync(
-                userId,
-                [
-                    new QuizAttemptIngestItem(
-                        QuizId: quizSessionId,
-                        QuestionId: questionId,
-                        SubtopicId: question.SubtopicId,
-                        Correct: isCorrect,
-                        TimeSpentMs: Math.Max(0, timeSpentSeconds) * 1000,
-                        CreatedAtUtc: answeredAtUtc)
-                ],
-=======
                     return new SingleAnswerTransactionResult(result);
                 },
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
                 ctx.RequestAborted);
 
             if (processingResult.AttemptResult.IngestItem != null)
             {
                 await ingestService.IngestAttemptsAsync(
-                    appUserId,
+                    userId,
                     [processingResult.AttemptResult.IngestItem],
                     ctx.RequestAborted);
             }
@@ -311,23 +269,17 @@ public static class QuizEndpoints
             ));
         });
 
-        // 📤 OFFLINE BATCH SUBMIT (Improved - Idempotent + Server Validation)
+        // ?? OFFLINE BATCH SUBMIT (Improved - Idempotent + Server Validation)
         group.MapPost("/offline-submit", async (
             OfflineBatchSubmitRequest request,
             ApiDbContext db,
             HttpContext ctx,
             IQuizAttemptIngestService ingestService,
-<<<<<<< HEAD
-            IAnswerPatternAntiCheatService antiCheatService) =>
-=======
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             ILogger<Program> logger) =>
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            if (!int.TryParse(userId, out var appUserId))
-                return Results.BadRequest("Invalid user id");
 
             if (request.Answers == null || !request.Answers.Any())
                 return Results.BadRequest("No answers to import");
@@ -343,139 +295,8 @@ public static class QuizEndpoints
                 ctx.RequestAborted);
 
             if (transactionResult.IngestRows.Count > 0)
-                await ingestService.IngestAttemptsAsync(appUserId, transactionResult.IngestRows, ctx.RequestAborted);
+                await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
 
-<<<<<<< HEAD
-            if (session == null)
-            {
-                session = new QuizSession
-                {
-                    Id = sessionId,
-                    UserId = userId,
-                    StartedAt = request.Answers.Min(a => a.AnsweredAt)
-                };
-                db.QuizSessions.Add(session);
-            }
-
-            int importedCount = 0;
-            var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(request.Answers.Count);
-            
-            // Batch učitaj sva pitanja odjednom (optimizacija)
-            var questionIds = request.Answers.Select(a => a.QuestionId).Distinct().ToList();
-            var questions = await db.Questions
-                .Include(q => q.Options)
-                .Where(q => questionIds.Contains(q.Id))
-                .ToDictionaryAsync(q => q.Id);
-            var ingestRows = new List<QuizAttemptIngestItem>(request.Answers.Count);
-            var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, request.Answers, ctx.RequestAborted);
-
-            // Batch učitaj postojeće statistike
-            var existingStats = await db.UserQuestionStats
-                .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
-                .ToDictionaryAsync(s => s.QuestionId);
-
-            foreach (var answer in request.Answers)
-            {
-                var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
-                if (!existingAnswerKeys.Add(answerKey))
-                    continue;
-
-                if (!questions.TryGetValue(answer.QuestionId, out var question))
-                    continue;
-
-                // 🔐 SERVER-SIDE VALIDATION - Ne veruj IsCorrectOffline od klijenta
-                bool isCorrectServer = question.Type == "multiple_choice"
-                    ? question.Options.Any(o => o.IsCorrect && (
-                        o.Text == answer.Answer ||
-                        (int.TryParse(answer.Answer, out var selectedOptionId) && o.Id == selectedOptionId)))
-                    : question.CorrectAnswer != null && 
-                      question.CorrectAnswer.Trim().Equals(answer.Answer.Trim(), 
-                          StringComparison.OrdinalIgnoreCase);
-
-                // Dodaj odgovor sa server-validiranom tačnošću
-                db.UserAnswers.Add(new UserAnswer
-                {
-                    UserId = userId,
-                    QuestionId = answer.QuestionId,
-                    QuizSessionId = sessionId,
-                    Answer = answer.Answer,
-                    IsCorrect = isCorrectServer, // ⚠️ Koristimo server validaciju, ne klijentovu
-                    TimeSpentSeconds = answer.TimeSpent,
-                    AnsweredAt = answer.AnsweredAt
-                });
-
-                // Ažuriraj statistiku
-                if (!existingStats.TryGetValue(answer.QuestionId, out var stat))
-                {
-                    stat = new UserQuestionStat
-                    {
-                        UserId = userId,
-                        QuestionId = answer.QuestionId,
-                        Attempts = 0,
-                        CorrectAttempts = 0
-                    };
-                    db.UserQuestionStats.Add(stat);
-                    existingStats[answer.QuestionId] = stat;
-                }
-
-                stat.Attempts++;
-                if (isCorrectServer)
-                    stat.CorrectAttempts++;
-
-                if (stat.LastAttemptAt == null || answer.AnsweredAt > stat.LastAttemptAt)
-                    stat.LastAttemptAt = answer.AnsweredAt;
-
-                ingestRows.Add(new QuizAttemptIngestItem(
-                    QuizId: sessionId,
-                    QuestionId: answer.QuestionId,
-                    SubtopicId: question.SubtopicId,
-                    Correct: isCorrectServer,
-                    TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
-                    CreatedAtUtc: answer.AnsweredAt));
-
-                antiCheatInputs.Add(new AntiCheatAnswerObservationInput(
-                    userId,
-                    "quiz_offline_submit",
-                    answer.QuestionId,
-                    null,
-                    question.SubtopicId,
-                    sessionId,
-                    null,
-                    null,
-                    answer.Answer,
-                    isCorrectServer,
-                    Math.Max(0, answer.TimeSpent) * 1000,
-                    null,
-                    answer.AnsweredAt));
-
-                importedCount++;
-            }
-
-            
-            if (request.Answers.Count > 0)
-            {
-                var latestDay = request.Answers
-                    .Max(a => DateOnly.FromDateTime(a.AnsweredAt));
-
-                var profile = await db.UserProfiles
-                    .FirstOrDefaultAsync(p => p.UserId == userId);
-
-                if (profile != null)
-                {
-                    if (profile.LastActivityDay == null || latestDay > profile.LastActivityDay)
-                        profile.LastActivityDay = latestDay;
-
-                    profile.UpdatedAt = DateTime.UtcNow;
-                }
-            }
-
-            await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
-            await db.SaveChangesAsync();
-            await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
-
-            // Izračunaj fresh XP, Level i Streak
-=======
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
             var overview = await CalculateUserOverview(db, userId);
 
             return Results.Ok(new OfflineBatchSubmitResponse(
@@ -486,23 +307,17 @@ public static class QuizEndpoints
             ));
         });
 
-        // 📤 Legacy alias used by mobile app
+        // ?? Legacy alias used by mobile app
         group.MapPost("/batch-submit", async (
             JsonElement payload,
             ApiDbContext db,
             HttpContext ctx,
             IQuizAttemptIngestService ingestService,
-<<<<<<< HEAD
-            IAnswerPatternAntiCheatService antiCheatService) =>
-=======
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             ILogger<Program> logger) =>
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            if (!int.TryParse(userId, out var appUserId))
-                return Results.BadRequest("Invalid user id");
             var answers = new List<OfflineAnswerDto>();
 
             if (payload.TryGetProperty("answers", out var answersNode) &&
@@ -548,118 +363,8 @@ public static class QuizEndpoints
                 xpTrackingOptions.Value.EnableAntiCheat,
                 ctx.RequestAborted);
 
-<<<<<<< HEAD
-            int importedCount = 0;
-            var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(answers.Count);
-            var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
-            var questions = await db.Questions
-                .Include(q => q.Options)
-                .Where(q => questionIds.Contains(q.Id))
-                .ToDictionaryAsync(q => q.Id);
-            var ingestRows = new List<QuizAttemptIngestItem>(answers.Count);
-            var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, answers, ctx.RequestAborted);
-            var existingStats = await db.UserQuestionStats
-                .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
-                .ToDictionaryAsync(s => s.QuestionId);
-
-            foreach (var answer in answers)
-            {
-                var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
-                if (!existingAnswerKeys.Add(answerKey))
-                    continue;
-
-                if (!questions.TryGetValue(answer.QuestionId, out var questionForAnswer))
-                    continue;
-
-                bool isCorrectServer = questionForAnswer.Type == "multiple_choice"
-                    ? questionForAnswer.Options.Any(o => o.IsCorrect && (
-                        o.Text == answer.Answer ||
-                        (int.TryParse(answer.Answer, out var selectedOptionId) && o.Id == selectedOptionId)))
-                    : questionForAnswer.CorrectAnswer != null &&
-                      questionForAnswer.CorrectAnswer.Trim().Equals(answer.Answer.Trim(), StringComparison.OrdinalIgnoreCase);
-
-                db.UserAnswers.Add(new UserAnswer
-                {
-                    UserId = userId,
-                    QuestionId = answer.QuestionId,
-                    QuizSessionId = sessionGuid,
-                    Answer = answer.Answer,
-                    IsCorrect = isCorrectServer,
-                    TimeSpentSeconds = answer.TimeSpent,
-                    AnsweredAt = answer.AnsweredAt
-                });
-
-                if (!existingStats.TryGetValue(answer.QuestionId, out var stat))
-                {
-                    stat = new UserQuestionStat
-                    {
-                        UserId = userId,
-                        QuestionId = answer.QuestionId,
-                        Attempts = 0,
-                        CorrectAttempts = 0
-                    };
-                    db.UserQuestionStats.Add(stat);
-                    existingStats[answer.QuestionId] = stat;
-                }
-
-                stat.Attempts++;
-                if (isCorrectServer)
-                    stat.CorrectAttempts++;
-                if (stat.LastAttemptAt == null || answer.AnsweredAt > stat.LastAttemptAt)
-                    stat.LastAttemptAt = answer.AnsweredAt;
-
-                ingestRows.Add(new QuizAttemptIngestItem(
-                    QuizId: sessionGuid,
-                    QuestionId: answer.QuestionId,
-                    SubtopicId: questionForAnswer.SubtopicId,
-                    Correct: isCorrectServer,
-                    TimeSpentMs: Math.Max(0, answer.TimeSpent) * 1000,
-                    CreatedAtUtc: answer.AnsweredAt));
-
-                antiCheatInputs.Add(new AntiCheatAnswerObservationInput(
-                    userId,
-                    "quiz_batch_submit",
-                    answer.QuestionId,
-                    null,
-                    questionForAnswer.SubtopicId,
-                    sessionGuid,
-                    null,
-                    null,
-                    answer.Answer,
-                    isCorrectServer,
-                    Math.Max(0, answer.TimeSpent) * 1000,
-                    null,
-                    answer.AnsweredAt));
-
-                importedCount++;
-            }
-
-            
-            if (answers.Count > 0)
-            {
-                var latestDay = answers
-                    .Max(a => DateOnly.FromDateTime(a.AnsweredAt));
-
-                var profile = await db.UserProfiles
-                    .FirstOrDefaultAsync(p => p.UserId == userId);
-
-                if (profile != null)
-                {
-                    if (profile.LastActivityDay == null || latestDay > profile.LastActivityDay)
-                        profile.LastActivityDay = latestDay;
-
-                    profile.UpdatedAt = DateTime.UtcNow;
-                }
-            }
-
-            await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
-            await db.SaveChangesAsync();
-            await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
-=======
             if (transactionResult.IngestRows.Count > 0)
-                await ingestService.IngestAttemptsAsync(appUserId, transactionResult.IngestRows, ctx.RequestAborted);
-
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
+                await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
             var overview = await CalculateUserOverview(db, userId);
 
             return Results.Ok(new OfflineBatchSubmitResponse(
@@ -670,7 +375,7 @@ public static class QuizEndpoints
             ));
         });
 
-        // 📚 SRS UPDATE
+        // ?? SRS UPDATE
         group.MapPost("/srs/update", async (
             SrsUpdateDto dto,
             ISrsService srs,
@@ -689,7 +394,7 @@ public static class QuizEndpoints
             });
         });
 
-        // 📅 SRS DAILY
+        // ?? SRS DAILY
         group.MapGet("/srs/daily", async (
             ApiDbContext db,
             HttpContext ctx,
@@ -733,7 +438,7 @@ public static class QuizEndpoints
             return Results.Ok(questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList());
         });
 
-        // 🔀 SRS MIXED (due + random)
+        // ?? SRS MIXED (due + random)
         group.MapGet("/srs/mixed", async (
             ApiDbContext db,
             HttpContext ctx,
@@ -816,7 +521,7 @@ public static class QuizEndpoints
         });
     }
 
-    // 🗺️ Shared helper to map Question entity → QuestionDto with translation + steps
+    // ??? Shared helper to map Question entity ? QuestionDto with translation + steps
     private static QuestionDto MapQuestionDto(Question q, string lang, MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter)
     {
         var options = q.Options
@@ -1313,7 +1018,7 @@ public static class QuizEndpoints
         return false;
     }
 
-    // 📊 Helper za računanje XP, Level i Streak
+    // ?? Helper za racunanje XP, Level i Streak
     private static async Task<(int Xp, int Level, int Streak)> CalculateUserOverview(
         ApiDbContext db, 
         string userId)
@@ -1366,7 +1071,7 @@ public static class QuizEndpoints
     private static string BuildAnswerKey(int questionId, DateTime answeredAt)
         => $"{questionId}:{answeredAt.Ticks}";
 
-    // 🌍 Helper za resolving user language
+    // ?? Helper za resolving user language
     private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
     {
         var cacheKey = $"req:user-settings:{userId}";
@@ -1525,6 +1230,7 @@ public static class QuizEndpoints
         int ImportedCount,
         IReadOnlyList<QuizAttemptIngestItem> IngestRows);
 }
+
 
 
 

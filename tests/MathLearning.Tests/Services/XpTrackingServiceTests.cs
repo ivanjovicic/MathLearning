@@ -1,23 +1,16 @@
 using MathLearning.Domain.Entities;
-<<<<<<< HEAD
-=======
 using MathLearning.Infrastructure.Persistance;
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
 using MathLearning.Infrastructure.Services;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-<<<<<<< HEAD
-=======
 using Microsoft.Extensions.Options;
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
 
 namespace MathLearning.Tests.Services;
 
 public class XpTrackingServiceTests
 {
     [Fact]
-<<<<<<< HEAD
     public async Task AddXpAsync_WritesEventAndDefersSchoolAggregates()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
@@ -36,7 +29,7 @@ public class XpTrackingServiceTests
         profile.LeaderboardOptIn = true;
         await db.SaveChangesAsync();
 
-        var xpTrackingService = new XpTrackingService(db, NullLogger<XpTrackingService>.Instance, null);
+        var xpTrackingService = CreateService(db, new XpTrackingOptions());
 
         await xpTrackingService.AddXpAsync("1", 25, "quiz_completion", "quiz-1");
 
@@ -55,7 +48,7 @@ public class XpTrackingServiceTests
     public async Task AddXpAsync_DoesNotDuplicateWhenSourceIsReplayed()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
-        var xpTrackingService = new XpTrackingService(db, NullLogger<XpTrackingService>.Instance, null);
+        var xpTrackingService = CreateService(db, new XpTrackingOptions());
 
         await xpTrackingService.AddXpAsync("1", 10, "sync_submit_answer", "op-1");
         await xpTrackingService.AddXpAsync("1", 10, "sync_submit_answer", "op-1");
@@ -66,7 +59,9 @@ public class XpTrackingServiceTests
         Assert.Equal(10, profile.Xp);
         Assert.Single(xpEvents);
         Assert.Equal("op-1", xpEvents[0].SourceId);
-=======
+    }
+
+    [Fact]
     public async Task FirstCorrectAnswer_AwardsXp()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
@@ -132,7 +127,8 @@ public class XpTrackingServiceTests
         return new XpTrackingService(
             db,
             Options.Create(options),
-            NullLogger<XpTrackingService>.Instance);
+            NullLogger<XpTrackingService>.Instance,
+            null);
     }
 
     private static async Task<(bool IsFirstTimeCorrect, int AwardedXp, int TotalXp)> AwardCorrectAttemptAsync(
@@ -181,6 +177,5 @@ public class XpTrackingServiceTests
         await db.SaveChangesAsync();
 
         return (isFirstTimeCorrect, award.AwardedXp, award.TotalXpAfterAward);
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     }
 }

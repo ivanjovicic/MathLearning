@@ -340,14 +340,10 @@ try
         builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
     }
 
-<<<<<<< HEAD
-    // ?? XP tracking service
+    // XP tracking and leaderboard aggregation services
     builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
-=======
-    // 📈 XP tracking service
     builder.Services.Configure<XpTrackingOptions>(
         builder.Configuration.GetSection(XpTrackingOptions.SectionName));
->>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     builder.Services.AddScoped<XpTrackingService>();
     builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
     builder.Services.AddScoped<StudentLeaderboardService>();
@@ -1559,3 +1555,4 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
