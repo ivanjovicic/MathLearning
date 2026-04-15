@@ -273,16 +273,16 @@
                                 {
                                     <MudItem xs="12">
                                         <MudDivider Class="my-2" />
-                                        <div class="row">
-                                            <div class="col-6">
+                                        <MudGrid Spacing="2">
+                                            <MudItem xs="12" md="6">
                                                 <MudText Typo="Typo.subtitle2" Class="mb-2">Preview koraka</MudText>
                                                 <MathPreview Content="@step.Text" Format="@step.TextFormat" RenderMode="@step.TextRenderMode" />
-                                            </div>
-                                            <div class="col-6">
+                                            </MudItem>
+                                            <MudItem xs="12" md="6">
                                                 <MudText Typo="Typo.subtitle2" Class="mb-2">Preview hint-a</MudText>
                                                 <MathPreview Content="@step.Hint" Format="@step.HintFormat" RenderMode="@step.HintRenderMode" />
-                                            </div>
-                                        </div>
+                                            </MudItem>
+                                        </MudGrid>
                                     </MudItem>
                                 }
                                 <MudItem xs="12">

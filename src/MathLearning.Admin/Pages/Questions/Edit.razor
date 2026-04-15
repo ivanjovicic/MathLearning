@@ -34,7 +34,7 @@
 }
 else if (_question is null)
 {
-    <MudAlert Severity="Severity.Error">Pitanje nije pronaÄ‘eno.</MudAlert>
+    <MudAlert Severity="Severity.Error">Pitanje nije pronađeno.</MudAlert>
 }
 else
 {
@@ -118,10 +118,10 @@ else
             {
                 if (_question.Text != Model.Text)
                 {
-                    _question.SetText(_editorHelper!.Sanitize(Model.Text, Model.TextFormat));
+                    _question.SetText(_editorHelper.Sanitize(Model.Text, Model.TextFormat));
                 }
 
-                _editorHelper!.ApplyQuestionFields(_question, Model);
+                _editorHelper.ApplyQuestionFields(_question, Model);
                 _question.ReplaceOptions(_editorHelper.BuildOptions(Model));
 
                 if (_question.Steps.Count > 0)
