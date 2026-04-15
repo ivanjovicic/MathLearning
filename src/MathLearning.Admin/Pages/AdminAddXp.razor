@@ -69,7 +69,9 @@
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-                resultMessage = json.GetProperty("message").GetString();
+                resultMessage = json.TryGetProperty("message", out var msgProp)
+                    ? msgProp.GetString()
+                    : "XP ažuriran.";
                 Snackbar.Add("XP je uspešno ažuriran", Severity.Success);
             }
             else

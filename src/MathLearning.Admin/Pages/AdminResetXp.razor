@@ -64,7 +64,9 @@
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-                resultMessage = json.GetProperty("message").GetString();
+                resultMessage = json.TryGetProperty("message", out var msgProp)
+                    ? msgProp.GetString()
+                    : "XP resetovan.";
                 Snackbar.Add("XP je uspešno resetovan", Severity.Success);
             }
             else

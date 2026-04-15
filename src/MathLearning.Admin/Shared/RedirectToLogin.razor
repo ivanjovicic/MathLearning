@@ -3,12 +3,13 @@
 @inject NavigationManager Nav
 @inject ILogger<RedirectToLogin> Logger
 
-<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
-    <div style="text-align: center;">
-        <h3>Redirecting to login...</h3>
-        <p>Please wait...</p>
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
+    <div class="text-center">
+        <MudText Typo="Typo.h5">Redirecting to login...</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">Please wait...</MudText>
+        <MudProgressCircular Indeterminate="true" Class="mt-4" />
     </div>
-</div>
+</MudContainer>
 
 @code {
     protected override void OnAfterRender(bool firstRender)

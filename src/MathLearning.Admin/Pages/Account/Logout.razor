@@ -7,12 +7,13 @@
 @inject NavigationManager Nav
 @inject ILogger<Logout> Logger
 
-<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
-    <div style="text-align: center;">
-        <h3>Odjava u toku...</h3>
-        <p>Molimo sacekajte...</p>
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
+    <div class="text-center">
+        <MudText Typo="Typo.h5">Odjava u toku...</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">Molimo sacekajte...</MudText>
+        <MudProgressCircular Indeterminate="true" Class="mt-4" />
     </div>
-</div>
+</MudContainer>
 
 @code {
     protected override async Task OnInitializedAsync()
