@@ -6,10 +6,18 @@ services:
     dockerfilePath: ./src/MathLearning.Admin/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
+    disk:
+      name: admin-keys
+      mountPath: /app/keys
+      sizeGB: 1
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      - key: ApiBaseUrl
+        value: https://mathlearning-sn6d.onrender.com/
       - key: SeedAdmin__Enabled
+        value: "false"
+      - key: SeedAdmin__ResetPasswordOnStart
         value: "false"
       - key: SeedContent__Enabled
         value: "false"

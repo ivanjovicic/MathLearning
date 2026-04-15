@@ -4,6 +4,7 @@ using MathLearning.Admin.Services;
 using MathLearning.Application.Content;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -91,7 +92,16 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+};
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -113,14 +123,20 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var configuredApiBaseUrl = app.Configuration["ApiBaseUrl"];
     try
     {
+        if (!Uri.TryCreate(configuredApiBaseUrl, UriKind.Absolute, out _))
+        {
+            logger.LogWarning("ApiBaseUrl is not configured as an absolute URL. Admin API calls will fall back to the current host.");
+        }
+
         logger.LogInformation("Applying database migrations...");
         await db.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
 
         logger.LogInformation("Seeding database...");
-        await SeedAdminAsync(app, builder.Environment, logger);
+        await SeedAdminAsync(app, logger);
         logger.LogInformation("Database seeding complete");
     }
     catch (Exception ex)
@@ -136,15 +152,22 @@ app.MapHealthChecks("/healthz");
 
 app.Run();
 
-async Task SeedAdminAsync(WebApplication app, IWebHostEnvironment environment, ILogger logger)
+async Task SeedAdminAsync(WebApplication app, ILogger logger)
 {
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
 
-    // Seed domain data first
-    await DbSeeder.SeedAsync(db);
+    var contentSeedEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("SeedContent:Enabled");
+    if (contentSeedEnabled)
+    {
+        await DbSeeder.SeedAsync(db);
+    }
+    else
+    {
+        logger.LogInformation("Content seeding skipped. Set `SeedContent__Enabled=true` to run DbSeeder on startup.");
+    }
 
     // Create admin role if not exists
     if (!await roleManager.RoleExistsAsync("Admin"))
@@ -152,36 +175,57 @@ async Task SeedAdminAsync(WebApplication app, IWebHostEnvironment environment, I
         await roleManager.CreateAsync(new IdentityRole("Admin"));
     }
 
-    // Seed default admin only in development and only from environment settings.
-    if (!environment.IsDevelopment())
+    var seedAdminEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("SeedAdmin:Enabled");
+    if (!seedAdminEnabled)
     {
-        logger.LogInformation("Skipping development admin seed in non-development environment");
+        logger.LogInformation("Admin seeding skipped. Set `SeedAdmin__Enabled=true` to enable it outside development.");
         return;
     }
 
-    var adminUsername = Environment.GetEnvironmentVariable("ADMIN_SEED_USERNAME");
-    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD");
-    var adminEmail = Environment.GetEnvironmentVariable("ADMIN_SEED_EMAIL");
+    var adminUsername = app.Configuration["SeedAdmin:Username"]
+        ?? Environment.GetEnvironmentVariable("ADMIN_SEED_USERNAME")
+        ?? "admin";
+    var adminPassword = app.Configuration["SeedAdmin:Password"]
+        ?? Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD")
+        ?? (app.Environment.IsDevelopment() ? "UcimMatu!123" : null);
+    var adminEmail = app.Configuration["SeedAdmin:Email"]
+        ?? Environment.GetEnvironmentVariable("ADMIN_SEED_EMAIL")
+        ?? "admin@mathlearning.com";
+    var resetAdminPasswordOnStart =
+        app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("SeedAdmin:ResetPasswordOnStart");
 
-    if (string.IsNullOrWhiteSpace(adminUsername) || string.IsNullOrWhiteSpace(adminPassword))
+    if (string.IsNullOrWhiteSpace(adminPassword))
     {
-        logger.LogInformation("Skipping development admin seed because ADMIN_SEED_USERNAME or ADMIN_SEED_PASSWORD is missing");
+        logger.LogWarning("SeedAdmin enabled but no password was provided. Set `SeedAdmin__Password` to create or reset the admin user.");
         return;
     }
 
-    var normalizedEmail = string.IsNullOrWhiteSpace(adminEmail)
-        ? $"{adminUsername}@localhost"
-        : adminEmail;
+    static async Task EnsurePasswordAsync(UserManager<IdentityUser> userManager, IdentityUser user, string password)
+    {
+        if (await userManager.HasPasswordAsync(user))
+        {
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+            await userManager.ResetPasswordAsync(user, resetToken, password);
+            return;
+        }
+
+        await userManager.AddPasswordAsync(user, password);
+    }
 
     var adminUser = await userManager.FindByNameAsync(adminUsername);
     if (adminUser == null)
     {
-        adminUser = new IdentityUser { UserName = adminUsername, Email = normalizedEmail };
+        adminUser = new IdentityUser
+        {
+            UserName = adminUsername,
+            Email = adminEmail,
+            EmailConfirmed = true
+        };
         var result = await userManager.CreateAsync(adminUser, adminPassword);
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(adminUser, "Admin");
-            logger.LogInformation("Development admin user created successfully");
+            logger.LogInformation("Admin user created successfully");
         }
         else
         {
@@ -190,7 +234,18 @@ async Task SeedAdminAsync(WebApplication app, IWebHostEnvironment environment, I
     }
     else
     {
-        logger.LogInformation("Development admin user already exists");
+        if (!await userManager.IsInRoleAsync(adminUser, "Admin"))
+        {
+            await userManager.AddToRoleAsync(adminUser, "Admin");
+        }
+
+        if (resetAdminPasswordOnStart)
+        {
+            await EnsurePasswordAsync(userManager, adminUser, adminPassword);
+            logger.LogInformation("Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
+        }
+
+        logger.LogInformation("Admin user already exists");
     }
 }
 
