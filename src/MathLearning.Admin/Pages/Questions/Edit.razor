@@ -97,13 +97,15 @@ else
 
     private async Task SaveAsync()
     {
-        if (_editorHelper is null || ValidationErrors.Count > 0 || _question is null)
+        if (_editorHelper is null || _question is null)
         {
-            ValidationErrors = _editorHelper?.ValidateModel(Model) ?? [];
-            if (ValidationErrors.Count > 0 || _question is null)
-            {
-                return;
-            }
+            return;
+        }
+
+        ValidationErrors = _editorHelper.ValidateModel(Model);
+        if (ValidationErrors.Count > 0)
+        {
+            return;
         }
 
         IsSaving = true;
