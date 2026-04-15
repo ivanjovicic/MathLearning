@@ -1,7 +1,9 @@
 @page "/access-denied"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @layout LoginLayout
+@using Microsoft.AspNetCore.Authorization
 @using MudBlazor
+@attribute [AllowAnonymous]
 
 <MudContainer MaxWidth="MaxWidth.Small">
     <MudPaper Class="pa-6" Elevation="3">

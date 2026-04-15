@@ -1,13 +1,15 @@
 ﻿@page "/categories"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
 @using MathLearning.Admin.Data
+@using MathLearning.Admin.Services
 @using MathLearning.Domain.Entities
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @inject AdminDbContext Db
-@inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Kategorije - MathLearning Admin</PageTitle>
 
@@ -49,12 +51,14 @@
                                Color="Color.Primary"
                                Size="Size.Small"
                                Href="@($"/categories/{category.Id}/edit")"
-                               Title="Izmeni kategoriju" />
+                               title="Izmeni kategoriju"
+                               aria-label="Izmeni kategoriju" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" 
                                Color="Color.Error"
                                Size="Size.Small"
-                               OnClick="() => DeleteCategory(category)"
-                               Title="Obrisi kategoriju" />
+                               OnClick="async () => await DeleteCategoryAsync(category)"
+                               title="Obrisi kategoriju"
+                               aria-label="Obrisi kategoriju" />
             </MudTd>
         </RowTemplate>
 
@@ -84,8 +88,34 @@
         _loading = false;
     }
 
-    private async Task DeleteCategory(Category category)
+    private async Task DeleteCategoryAsync(Category category)
     {
+        var dependentQuestionsCount = await Db.Questions.CountAsync(q => q.CategoryId == category.Id);
+        var dialogParameters = new DialogParameters
+        {
+            [nameof(ConfirmDialog.Title)] = dependentQuestionsCount > 0 ? "Kategorija ima zavisnosti" : "Potvrda brisanja",
+            [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildCategoryDeleteMessage(category.Name, dependentQuestionsCount),
+            [nameof(ConfirmDialog.ConfirmText)] = dependentQuestionsCount > 0 ? "Razumem" : "Obrisi",
+            [nameof(ConfirmDialog.CancelText)] = "Odustani",
+            [nameof(ConfirmDialog.ConfirmColor)] = dependentQuestionsCount > 0 ? Color.Warning : Color.Error
+        };
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Potvrda", dialogParameters, new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small
+        });
+        var dialogResult = await dialogRef.Result;
+        if (dialogResult?.Canceled ?? true)
+        {
+            return;
+        }
+
+        if (dependentQuestionsCount > 0)
+        {
+            Snackbar.Add("Brisanje kategorije je blokirano dok postoje povezana pitanja.", Severity.Warning);
+            return;
+        }
+
         try
         {
             Db.Categories.Remove(category);

@@ -1,10 +1,8 @@
 ﻿@page "/"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
 @using MudBlazor
-@inject AuthenticationStateProvider AuthStateProvider
-@inject ILogger<Index> Logger
-@inject NavigationManager Nav
 
 <PageTitle>Dashboard - MathLearning Admin</PageTitle>
 
@@ -229,41 +227,4 @@
     </NotAuthorized>
 </AuthorizeView>
 
-@code {
-    private string authState = "Loading...";
-    private string userName = "Unknown";
-    private bool isAuthenticated = false;
 
-    protected override async Task OnInitializedAsync()
-    {
-        Logger.LogInformation("Index page initializing...");
-        
-        try
-        {
-            var authStateResult = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = authStateResult.User;
-            
-            isAuthenticated = user.Identity?.IsAuthenticated ?? false;
-            userName = user.Identity?.Name ?? "Anonymous";
-            authState = isAuthenticated ? "Authenticated" : "Not Authenticated";
-            
-            Logger.LogInformation("Index - User: {UserName}, Authenticated: {IsAuth}", userName, isAuthenticated);
-
-            if (!user.Identity.IsAuthenticated)
-            {
-                Logger.LogWarning("User not authenticated, redirecting to login-page");
-                // Delay da Blazor završi prerender ciklus
-                await Task.Yield();
-                Nav.NavigateTo("/login-page", forceLoad: true);
-                return;
-            }
-
-            // Auth OK - continue
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error getting auth state in Index");
-            authState = $"Error: {ex.Message}";
-        }
-    }
-}

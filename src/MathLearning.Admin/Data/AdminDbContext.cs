@@ -44,7 +44,8 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasOne(e => e.Category)
                 .WithMany()
-                .HasForeignKey(e => e.CategoryId);
+                .HasForeignKey(e => e.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Subtopic)
                 .WithMany()
                 .HasForeignKey(e => e.SubtopicId);

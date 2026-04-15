@@ -1,6 +1,7 @@
-@page "/admin/add-xp"
+﻿@page "/admin/add-xp"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using System.Net.Http.Json
+@attribute [Authorize]
+@using MathLearning.Admin.Services
 @using System.Text.Json
 @using MudBlazor
 
@@ -33,6 +34,10 @@
 </MudPaper>
 
 @code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+    [Inject] private IDialogService DialogService { get; set; } = default!;
+    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+
     private string userId = string.Empty;
     private int amount = 0;
     private string? resultMessage;
@@ -41,32 +46,46 @@
 
     private async Task AddXp()
     {
+        var amountAction = amount > 0 ? "dodati" : "oduzeti";
+        var confirmMessage = $"Da li ste sigurni da želite da {amountAction} {Math.Abs(amount)} XP korisniku '{userId}'?";
+        
+        var confirmed = await DialogService.ShowMessageBox(
+            "Potvrda",
+            confirmMessage,
+            yesText: "Potvrdi",
+            cancelText: "Otkaži");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
         resultMessage = null;
         errorMessage = null;
         isLoading = true;
         try
         {
-            var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
-            var resp = await http.PostAsJsonAsync($"/api/leaderboard/admin/add-xp/{userId}", new { amount });
+            var resp = await Api.PostAsJsonAsync($"/api/leaderboard/admin/add-xp/{userId}", new { amount });
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
                 resultMessage = json.GetProperty("message").GetString();
+                Snackbar.Add("XP je uspešno ažuriran", Severity.Success);
             }
             else
             {
                 errorMessage = $"Greška: {resp.StatusCode}";
+                Snackbar.Add($"Greška pri ažuriranju XP: {resp.StatusCode}", Severity.Error);
             }
         }
         catch (Exception ex)
         {
             errorMessage = $"Greška: {ex.Message}";
+            Snackbar.Add($"Greška pri ažuriranju XP: {ex.Message}", Severity.Error);
         }
         finally
         {
             isLoading = false;
         }
     }
-
-    [Inject] NavigationManager NavManager { get; set; } = default!;
 }

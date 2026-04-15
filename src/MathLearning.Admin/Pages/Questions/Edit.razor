@@ -1,17 +1,20 @@
-@page "/questions/{Id:int}/edit"
+﻿@page "/questions/{Id:int}/edit"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
 @using MathLearning.Admin.Data
 @using MathLearning.Admin.Models
 @using MathLearning.Application.Content
 @using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
+@using System.Text.Json
 
 @inject AdminDbContext Db
 @inject IMathContentSanitizer Sanitizer
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ILogger<Edit> Logger
+@inject IJSRuntime Js
 
 <PageTitle>Izmeni Pitanje - MathLearning Admin</PageTitle>
 
@@ -23,13 +26,15 @@
     Uređivanje math sadržaja sa preview-em i format metadata poljima
 </MudText>
 
+<NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
 @if (_loading)
 {
     <MudProgressCircular Indeterminate="true" />
 }
 else if (_question is null)
 {
-    <MudAlert Severity="Severity.Error">Pitanje nije pronađeno.</MudAlert>
+    <MudAlert Severity="Severity.Error">Pitanje nije pronaÄ‘eno.</MudAlert>
 }
 else
 {
@@ -53,6 +58,11 @@ else
     private bool _loading = true;
     private bool IsSaving { get; set; }
     private List<string> ValidationErrors { get; set; } = [];
+    private string _initialSnapshot = string.Empty;
+    private bool HasUnsavedChanges =>
+        !_loading &&
+        !IsSaving &&
+        !string.Equals(_initialSnapshot, CreateModelSnapshot(), StringComparison.Ordinal);
 
     protected override async Task OnInitializedAsync()
     {
@@ -79,6 +89,7 @@ else
         }
 
         _loading = false;
+        MarkSnapshot();
     }
 
     private void MapQuestionToModel(Question question)
@@ -202,6 +213,7 @@ else
             }
 
             Snackbar.Add("Pitanje je uspešno izmenjeno.", Severity.Success);
+            MarkSnapshot();
             Nav.NavigateTo("/questions");
         }
         catch (DbUpdateConcurrencyException)
@@ -275,4 +287,26 @@ else
         => !string.IsNullOrWhiteSpace(semanticsAltText)
             ? semanticsAltText.Trim()
             : Sanitizer.GenerateSemanticsAltText(raw, format);
+
+    private string CreateModelSnapshot()
+        => JsonSerializer.Serialize(Model);
+
+    private void MarkSnapshot()
+    {
+        _initialSnapshot = CreateModelSnapshot();
+    }
+
+    private async Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (!HasUnsavedChanges)
+        {
+            return;
+        }
+
+        var shouldLeave = await Js.InvokeAsync<bool>("confirm", "Imate nesacuvane izmene. Da li sigurno zelite da napustite stranicu?");
+        if (!shouldLeave)
+        {
+            context.PreventNavigation();
+        }
+    }
 }

@@ -1,6 +1,8 @@
 ﻿@page "/logout"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
+@attribute [Authorize]
 @inject SignInManager<IdentityUser> SignInManager
 @inject NavigationManager Nav
 @inject ILogger<Logout> Logger
@@ -21,12 +23,12 @@
         {
             await SignInManager.SignOutAsync();
             Logger.LogInformation("User signed out successfully");
-            Nav.NavigateTo("/login-page", forceLoad: true);
+            Nav.NavigateTo("/login", forceLoad: true);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error during logout");
-            Nav.NavigateTo("/login-page", forceLoad: true);
+            Nav.NavigateTo("/login", forceLoad: true);
         }
     }
 }

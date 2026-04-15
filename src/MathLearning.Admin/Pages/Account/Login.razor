@@ -5,11 +5,10 @@
 @using Microsoft.AspNetCore.Identity
 @using MudBlazor
 @using Microsoft.AspNetCore.Components
-@using Microsoft.JSInterop
+@using MathLearning.Admin.Services
 @attribute [AllowAnonymous]
 @inject SignInManager<IdentityUser> SignInManager
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 @inject ILogger<Login> Logger
 
 <PageTitle>Login - MathLearning Admin</PageTitle>
@@ -56,7 +55,7 @@
         </MudButton>
         
         <MudText Typo="Typo.caption" Class="mt-4" Align="Align.Center" Color="Color.Secondary">
-            Podrazumevano: admin / UcimMatu!123
+            Koristite administratorske kredencijale iz konfiguracije okruzenja.
         </MudText>
     </MudPaper>
 </MudContainer>
@@ -107,21 +106,10 @@
 
             if (result.Succeeded)
             {
-                var redirectUrl = string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl;
+                var redirectUrl = ReturnUrlSanitizer.NormalizeLocalReturnUrl(ReturnUrl);
                 Logger.LogInformation("Login successful, redirecting to: {RedirectUrl}", redirectUrl);
-                
-                try
-                {
-                    // Try JavaScript redirect first
-                    await JS.InvokeVoidAsync("eval", $"window.location.href = '{redirectUrl}'");
-                    Logger.LogInformation("JavaScript redirect executed successfully");
-                }
-                catch (Exception jsEx)
-                {
-                    Logger.LogError(jsEx, "JavaScript redirect failed");
-                    ErrorMessage = $"Greška pri preusmeravanju: {jsEx.Message}";
-                    isLoggingIn = false;
-                }
+
+                Nav.NavigateTo(redirectUrl, forceLoad: true);
             }
             else
             {

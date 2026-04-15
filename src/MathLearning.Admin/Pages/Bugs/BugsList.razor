@@ -1,5 +1,7 @@
 ﻿@page "/bugs"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
+@using MathLearning.Admin.Services
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @using MathLearning.Domain.Entities
@@ -7,7 +9,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ILogger<BugsList> Logger
-@inject IHttpClientFactory HttpClientFactory
+@inject AdminApiClient Api
 
 <PageTitle>Bug Reports - MathLearning Admin</PageTitle>
 
@@ -134,9 +136,6 @@ else
 
         try
         {
-            var client = HttpClientFactory.CreateClient();
-            client.BaseAddress = new Uri("https://localhost:7001"); // Adjust based on your API URL
-
             var queryParams = new List<string>
             {
                 $"page={CurrentPage}",
@@ -149,7 +148,7 @@ else
             if (!string.IsNullOrWhiteSpace(SelectedSeverity))
                 queryParams.Add($"severity={SelectedSeverity}");
 
-            var response = await client.GetFromJsonAsync<BugReportsResponse>($"/api/bugs?{string.Join("&", queryParams)}");
+            var response = await Api.GetFromJsonAsync<BugReportsResponse>($"/api/bugs?{string.Join("&", queryParams)}");
 
             if (response != null)
             {

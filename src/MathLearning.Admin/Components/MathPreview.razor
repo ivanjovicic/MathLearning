@@ -1,13 +1,27 @@
 @using MathLearning.Domain.Enums
 @using MathRenderMode = MathLearning.Domain.Enums.RenderMode
+@using MudBlazor
 @inject IJSRuntime Js
 
 <div class="@($"math-preview-shell {Class}")">
+    @if (_isRendering)
+    {
+        <div class="math-preview-loading">
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            <span>Rendering preview...</span>
+        </div>
+    }
     <div @ref="_container" class="math-preview-host"></div>
 </div>
 
 @code {
     private ElementReference _container;
+    private bool _needsRender;
+    private bool _isRendering;
+    private string _previousContent = string.Empty;
+    private ContentFormat _previousFormat = ContentFormat.MarkdownWithMath;
+    private MathRenderMode _previousRenderMode = MathRenderMode.Auto;
+    private string _previousEmptyText = string.Empty;
 
     [Parameter]
     public string? Content { get; set; }
@@ -24,14 +38,51 @@
     [Parameter]
     public string? Class { get; set; }
 
+    protected override void OnParametersSet()
+    {
+        var normalizedContent = Content ?? string.Empty;
+        _needsRender =
+            normalizedContent != _previousContent ||
+            Format != _previousFormat ||
+            RenderMode != _previousRenderMode ||
+            EmptyText != _previousEmptyText;
+
+        _isRendering = _needsRender;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!_needsRender)
+        {
+            return;
+        }
+
+        var normalizedContent = Content ?? string.Empty;
         await Js.InvokeVoidAsync(
             "mathPreview.render",
             _container,
-            Content ?? string.Empty,
+            normalizedContent,
             Format.ToString(),
             RenderMode.ToString(),
             EmptyText);
+
+        _previousContent = normalizedContent;
+        _previousFormat = Format;
+        _previousRenderMode = RenderMode;
+        _previousEmptyText = EmptyText;
+        _needsRender = false;
+        _isRendering = false;
+        StateHasChanged();
     }
 }
+
+<style>
+    .math-preview-loading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(0, 0, 0, 0.64);
+        font-size: 0.875rem;
+        margin-bottom: 8px;
+    }
+</style>

@@ -1,5 +1,6 @@
 ﻿@page "/categories/{Id:int}/edit"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
 @using MathLearning.Admin.Data
 @using MathLearning.Domain.Entities
 @using Microsoft.AspNetCore.Authorization

@@ -43,7 +43,7 @@
                                   Variant="Variant.Outlined"
                                   Lines="4"
                                   AutoGrow="true"
-                                  Immediate="true"
+                                  DebounceInterval="300"
                                   MaxLength="@QuestionEditorFieldLimits.QuestionTextMaxLength"
                                   HelperText="@($"{Model.Text?.Length ?? 0} / {QuestionEditorFieldLimits.QuestionTextMaxLength}")"
                                   @bind-Value="Model.Text" />
@@ -70,7 +70,7 @@
                                   Label="Semantics alt text"
                                   Variant="Variant.Outlined"
                                   HelperText="Opcionalno. Ako ostane prazno, backend generiše čitljiv fallback."
-                                  Immediate="true"
+                                  DebounceInterval="300"
                                   @bind-Value="Model.SemanticsAltText" />
                 </MudItem>
 
@@ -110,7 +110,7 @@
                                   Variant="Variant.Outlined"
                                   Lines="4"
                                   AutoGrow="true"
-                                  Immediate="true"
+                                  DebounceInterval="300"
                                   MaxLength="@QuestionEditorFieldLimits.ExplanationMaxLength"
                                   HelperText="@($"{Model.Explanation?.Length ?? 0} / {QuestionEditorFieldLimits.ExplanationMaxLength}")"
                                   @bind-Value="Model.Explanation" />
@@ -165,7 +165,7 @@
                 <MudItem xs="12" md="4"></MudItem>
 
                 <MudItem xs="12" md="4">
-                    <MudTextField T="string" Label="Hint formula" Variant="Variant.Outlined" Lines="3" AutoGrow="true" Immediate="true" @bind-Value="Model.HintFormula" />
+                    <MudTextField T="string" Label="Hint formula" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" @bind-Value="Model.HintFormula" />
                     @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.HintFormula))
                     {
                         <MathPreview Content="@Model.HintFormula" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" Class="mt-2" />
@@ -173,7 +173,7 @@
                     @RenderWarnings(Model.HintFormula, Model.HintFormat)
                 </MudItem>
                 <MudItem xs="12" md="4">
-                    <MudTextField T="string" Label="Hint clue" Variant="Variant.Outlined" Lines="3" AutoGrow="true" Immediate="true" @bind-Value="Model.HintClue" />
+                    <MudTextField T="string" Label="Hint clue" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" @bind-Value="Model.HintClue" />
                     @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.HintClue))
                     {
                         <MathPreview Content="@Model.HintClue" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" Class="mt-2" />
@@ -181,7 +181,7 @@
                     @RenderWarnings(Model.HintClue, Model.HintFormat)
                 </MudItem>
                 <MudItem xs="12" md="4">
-                    <MudTextField T="string" Label="Hint full" Variant="Variant.Outlined" Lines="3" AutoGrow="true" Immediate="true" @bind-Value="Model.HintFull" />
+                    <MudTextField T="string" Label="Hint full" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" @bind-Value="Model.HintFull" />
                     @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.HintFull))
                     {
                         <MathPreview Content="@Model.HintFull" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" Class="mt-2" />
@@ -222,7 +222,7 @@
 
                         <MudGrid Spacing="2">
                             <MudItem xs="12" md="8">
-                                <MudTextField T="string" Label="Tekst opcije" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" MaxLength="@QuestionEditorFieldLimits.OptionTextMaxLength" HelperText="@($"{option.Text?.Length ?? 0} / {QuestionEditorFieldLimits.OptionTextMaxLength}")" @bind-Value="option.Text" />
+                                <MudTextField T="string" Label="Tekst opcije" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300" MaxLength="@QuestionEditorFieldLimits.OptionTextMaxLength" HelperText="@($"{option.Text?.Length ?? 0} / {QuestionEditorFieldLimits.OptionTextMaxLength}")" @bind-Value="option.Text" />
                             </MudItem>
                             <MudItem xs="12" md="2">
                                 <MudSelect T="ContentFormat" Label="Format" @bind-Value="option.TextFormat" Variant="Variant.Outlined">
@@ -241,7 +241,7 @@
                                 </MudSelect>
                             </MudItem>
                             <MudItem xs="12">
-                                <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" Immediate="true" @bind-Value="option.SemanticsAltText" />
+                                <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300" @bind-Value="option.SemanticsAltText" />
                             </MudItem>
                             @if (_showPreviews)
                             {
@@ -263,7 +263,7 @@
         <MudItem xs="12">
             <MudPaper Class="pa-4" Elevation="3">
                 <MudText Typo="Typo.h6" Class="mb-3">Tačan odgovor</MudText>
-                <MudTextField T="string" Label="Tačan odgovor" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" MaxLength="@QuestionEditorFieldLimits.CorrectAnswerMaxLength" HelperText="@($"{Model.CorrectAnswer?.Length ?? 0} / {QuestionEditorFieldLimits.CorrectAnswerMaxLength}")" @bind-Value="Model.CorrectAnswer" />
+                <MudTextField T="string" Label="Tačan odgovor" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300" MaxLength="@QuestionEditorFieldLimits.CorrectAnswerMaxLength" HelperText="@($"{Model.CorrectAnswer?.Length ?? 0} / {QuestionEditorFieldLimits.CorrectAnswerMaxLength}")" @bind-Value="Model.CorrectAnswer" />
                 @if (_showPreviews)
                 {
                     <MathPreview Content="@Model.CorrectAnswer" Format="@Model.TextFormat" RenderMode="@Model.TextRenderMode" Class="mt-3" />
@@ -302,7 +302,7 @@
 
                     <MudGrid Spacing="2">
                         <MudItem xs="12" md="8">
-                            <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" Immediate="true" MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength" HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")" @bind-Value="step.Text" />
+                            <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength" HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")" @bind-Value="step.Text" />
                         </MudItem>
                         <MudItem xs="12" md="2">
                             <MudSelect T="ContentFormat" Label="Format" @bind-Value="step.TextFormat" Variant="Variant.Outlined">
@@ -321,7 +321,7 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" md="8">
-                            <MudTextField T="string" Label="Hint uz korak" Variant="Variant.Outlined" Lines="2" AutoGrow="true" Immediate="true" @bind-Value="step.Hint" />
+                            <MudTextField T="string" Label="Hint uz korak" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300" @bind-Value="step.Hint" />
                         </MudItem>
                         <MudItem xs="12" md="2">
                             <MudSelect T="ContentFormat" Label="Hint format" @bind-Value="step.HintFormat" Variant="Variant.Outlined">
@@ -340,7 +340,7 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" md="8">
-                            <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" Immediate="true" @bind-Value="step.SemanticsAltText" />
+                            <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300" @bind-Value="step.SemanticsAltText" />
                         </MudItem>
                         <MudItem xs="12" md="4">
                             <MudCheckBox T="bool" @bind-Value="step.Highlight" Label="Istakni korak" />

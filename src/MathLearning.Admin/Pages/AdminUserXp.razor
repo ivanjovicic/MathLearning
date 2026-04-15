@@ -1,6 +1,7 @@
-@page "/admin/user-xp"
+﻿@page "/admin/user-xp"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using System.Net.Http.Json
+@attribute [Authorize]
+@using MathLearning.Admin.Services
 @using MudBlazor
 
 <PageTitle>Pregled XP korisnika</PageTitle>
@@ -50,6 +51,8 @@
 </MudPaper>
 
 @code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+
     private string userId = string.Empty;
     private UserProfileDto? profile;
     private string? errorMessage;
@@ -63,20 +66,19 @@
         isLoading = true;
         try
         {
-            var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
-            var resp = await http.GetAsync($"/api/user/profile/{userId}");
+            var resp = await Api.GetAsync($"/api/user/profile/{userId}");
             if (resp.IsSuccessStatusCode)
             {
                 profile = await resp.Content.ReadFromJsonAsync<UserProfileDto>();
             }
             else
             {
-                errorMessage = $"Greška: {resp.StatusCode}";
+                errorMessage = $"GreÅ¡ka: {resp.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Greška: {ex.Message}";
+            errorMessage = $"GreÅ¡ka: {ex.Message}";
         }
         finally
         {
@@ -95,6 +97,4 @@
         public int WeeklyXp { get; set; }
         public int MonthlyXp { get; set; }
     }
-
-    [Inject] NavigationManager NavManager { get; set; } = default!;
 }

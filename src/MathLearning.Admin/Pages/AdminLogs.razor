@@ -1,6 +1,7 @@
-@page "/admin/logs"
+﻿@page "/admin/logs"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using System.Net.Http.Json
+@attribute [Authorize]
+@using MathLearning.Admin.Services
 
 <PageTitle>Admin Logs</PageTitle>
 
@@ -24,37 +25,51 @@
         <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
     }
 
-    <MudTable T="JobStatus" Dense="true" Class="mt-4" Items="@jobs">
-        <HeaderContent>
-            <MudTh>Job</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh>Poruka</MudTh>
-            <MudTh>Vreme</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.Name</MudTd>
-            <MudTd>
-                <MudChip T="string" Color="@(context.IsSuccess ? Color.Success : Color.Error)">
-                    @(context.IsSuccess ? "OK" : "Greska")
-                </MudChip>
-            </MudTd>
-            <MudTd>@context.LastMessage</MudTd>
-            <MudTd>@context.Timestamp.ToString("g")</MudTd>
-        </RowTemplate>
-    </MudTable>
+    @if (jobs.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">Nema podataka o poslovima.</MudAlert>
+    }
+    else
+    {
+        <MudTable T="JobStatus" Dense="true" Class="mt-4" Items="@jobs">
+            <HeaderContent>
+                <MudTh>Job</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Poruka</MudTh>
+                <MudTh>Vreme</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>
+                    <MudChip T="string" Color="@(context.IsSuccess ? Color.Success : Color.Error)">
+                        @(context.IsSuccess ? "OK" : "Greska")
+                    </MudChip>
+                </MudTd>
+                <MudTd>@context.LastMessage</MudTd>
+                <MudTd>@context.Timestamp.ToString("g")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
 
     <MudDivider Class="my-4" />
     <MudText Typo="Typo.h6">Poslednjih 20 logova</MudText>
-    <MudList T="string" Dense="true">
-        @foreach (var log in logs)
-        {
-            <MudListItem T="string" Text="@log" />
-        }
-    </MudList>
+    @if (logs.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2">Nema log zapisa.</MudAlert>
+    }
+    else
+    {
+        <MudList T="string" Dense="true">
+            @foreach (var log in logs)
+            {
+                <MudListItem T="string" Text="@log" />
+            }
+        </MudList>
+    }
 </MudPaper>
 
 @code {
-    [Inject] private NavigationManager NavManager { get; set; } = default!;
+    [Inject] private AdminApiClient Api { get; set; } = default!;
 
     private List<JobStatus> jobs = [];
     private List<string> logs = [];
@@ -73,9 +88,8 @@
 
         try
         {
-            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
-            jobs = await http.GetFromJsonAsync<List<JobStatus>>("/api/monitoring/jobs") ?? [];
-            logs = await http.GetFromJsonAsync<List<string>>("/api/monitoring/logs") ?? [];
+            jobs = await Api.GetFromJsonAsync<List<JobStatus>>("/api/monitoring/jobs") ?? [];
+            logs = await Api.GetFromJsonAsync<List<string>>("/api/monitoring/logs") ?? [];
         }
         catch (Exception ex)
         {

@@ -32,7 +32,7 @@ public class CustomAuthenticationStateProvider : RevalidatingServerAuthenticatio
         var user = authenticationState.User;
         var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
         
-        _logger.LogInformation("ValidateAuthenticationStateAsync - User: {UserName}, IsAuth: {IsAuth}", 
+        _logger.LogDebug("ValidateAuthenticationStateAsync - User: {UserName}, IsAuth: {IsAuth}", 
             user?.Identity?.Name ?? "null", isAuthenticated);
 
         if (!isAuthenticated)
@@ -45,7 +45,7 @@ public class CustomAuthenticationStateProvider : RevalidatingServerAuthenticatio
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
         var result = await ValidateSecurityStampAsync(userManager, authenticationState.User);
         
-        _logger.LogInformation("Security stamp validation result: {Result}", result);
+        _logger.LogDebug("Security stamp validation executed for {UserName}", user?.Identity?.Name ?? "null");
         
         return result;
     }
@@ -60,7 +60,7 @@ public class CustomAuthenticationStateProvider : RevalidatingServerAuthenticatio
         }
         else if (!userManager.SupportsUserSecurityStamp)
         {
-            _logger.LogInformation("Security stamp not supported, returning true");
+            _logger.LogDebug("Security stamp not supported");
             return true;
         }
         else
@@ -69,8 +69,8 @@ public class CustomAuthenticationStateProvider : RevalidatingServerAuthenticatio
             var userStamp = await userManager.GetSecurityStampAsync(user);
             var isValid = principalStamp == userStamp;
             
-            _logger.LogInformation("Security stamp comparison - Principal: {PrincipalStamp}, User: {UserStamp}, Valid: {IsValid}",
-                principalStamp ?? "null", userStamp ?? "null", isValid);
+            _logger.LogDebug("Security stamp validation completed for {UserName}: {IsValid}", 
+                user.UserName ?? "unknown", isValid);
             
             return isValid;
         }

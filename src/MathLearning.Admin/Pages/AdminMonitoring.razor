@@ -1,6 +1,7 @@
-@page "/admin/monitoring"
+﻿@page "/admin/monitoring"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using System.Net.Http.Json
+@attribute [Authorize]
+@using MathLearning.Admin.Services
 
 <PageTitle>Monitoring</PageTitle>
 
@@ -105,7 +106,7 @@
 </MudPaper>
 
 @code {
-    [Inject] private NavigationManager NavManager { get; set; } = default!;
+    [Inject] private AdminApiClient Api { get; set; } = default!;
 
     private List<ServiceStatus> statuses = [];
     private List<AntiCheatDetectionItem> antiCheatDetections = [];
@@ -125,12 +126,11 @@
 
         try
         {
-            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
-            var health = await http.GetAsync("/health");
-            var hangfire = await http.GetAsync("/hangfire");
-            var metrics = await http.GetAsync("/metrics");
-            antiCheatOverview = await http.GetFromJsonAsync<AntiCheatOverview>("/api/admin/anti-cheat/overview");
-            antiCheatDetections = await http.GetFromJsonAsync<List<AntiCheatDetectionItem>>("/api/admin/anti-cheat/detections?take=10") ?? [];
+            var health = await Api.GetAsync("/health");
+            var hangfire = await Api.GetAsync("/hangfire");
+            var metrics = await Api.GetAsync("/metrics");
+            antiCheatOverview = await Api.GetFromJsonAsync<AntiCheatOverview>("/api/admin/anti-cheat/overview");
+            antiCheatDetections = await Api.GetFromJsonAsync<List<AntiCheatDetectionItem>>("/api/admin/anti-cheat/detections?take=10") ?? [];
 
             statuses =
             [
@@ -156,8 +156,7 @@
 
         try
         {
-            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
-            var response = await http.PostAsync("/api/admin/anti-cheat/ml-review/run?take=25", null);
+            var response = await Api.PostAsync("/api/admin/anti-cheat/ml-review/run?take=25", null);
             response.EnsureSuccessStatusCode();
             await RefreshAsync();
         }

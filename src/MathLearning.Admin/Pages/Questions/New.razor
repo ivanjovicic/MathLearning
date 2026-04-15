@@ -1,17 +1,20 @@
-@page "/questions/new"
+﻿@page "/questions/new"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
 @using MathLearning.Admin.Data
 @using MathLearning.Admin.Models
 @using MathLearning.Application.Content
 @using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
+@using System.Text.Json
 
 @inject AdminDbContext Db
 @inject IMathContentSanitizer Sanitizer
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ILogger<New> Logger
+@inject IJSRuntime Js
 
 <PageTitle>Novo Pitanje - MathLearning Admin</PageTitle>
 
@@ -22,6 +25,8 @@
 <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
     Authoring za math sadržaj sa format metadata i preview-em
 </MudText>
+
+<NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
 
 <QuestionEditor Model="@Model"
                 Categories="@Categories"
@@ -37,6 +42,8 @@
     private List<Subtopic> Subtopics { get; set; } = [];
     private bool IsSaving { get; set; }
     private List<string> ValidationErrors { get; set; } = [];
+    private string _initialSnapshot = string.Empty;
+    private bool HasUnsavedChanges => !IsSaving && !string.Equals(_initialSnapshot, CreateModelSnapshot(), StringComparison.Ordinal);
 
     protected override async Task OnInitializedAsync()
     {
@@ -66,6 +73,8 @@
         {
             Model.Options[0].IsCorrect = true;
         }
+
+        MarkSnapshot();
     }
 
     private async Task SaveAsync()
@@ -112,6 +121,7 @@
             }
 
             Snackbar.Add("Pitanje je uspešno dodato.", Severity.Success);
+            MarkSnapshot();
             Nav.NavigateTo("/questions");
         }
         catch (DbUpdateConcurrencyException)
@@ -211,4 +221,26 @@
         => !string.IsNullOrWhiteSpace(semanticsAltText)
             ? semanticsAltText.Trim()
             : Sanitizer.GenerateSemanticsAltText(raw, format);
+
+    private string CreateModelSnapshot()
+        => JsonSerializer.Serialize(Model);
+
+    private void MarkSnapshot()
+    {
+        _initialSnapshot = CreateModelSnapshot();
+    }
+
+    private async Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (!HasUnsavedChanges)
+        {
+            return;
+        }
+
+        var shouldLeave = await Js.InvokeAsync<bool>("confirm", "Imate nesacuvane izmene. Da li sigurno zelite da napustite stranicu?");
+        if (!shouldLeave)
+        {
+            context.PreventNavigation();
+        }
+    }
 }

@@ -1,6 +1,7 @@
-@page "/admin/logs-advanced"
+﻿@page "/admin/logs-advanced"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
-@using System.Net.Http.Json
+@attribute [Authorize]
+@using MathLearning.Admin.Services
 
 <PageTitle>Advanced Logs</PageTitle>
 
@@ -32,28 +33,35 @@
         <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
     }
 
-    <MudList T="LogEntry" Dense="true" Class="mt-4">
-        @foreach (var log in logs)
-        {
-            <MudListItem T="LogEntry">
-                <ChildContent>
-                    <MudText Typo="Typo.body2">@log.Level - @log.Message</MudText>
-                    @if (!string.IsNullOrWhiteSpace(log.StackTrace))
-                    {
-                        <MudExpansionPanels Class="mt-2">
-                            <MudExpansionPanel Text="Stack trace">
-                                <MudText Color="Color.Error">@log.StackTrace</MudText>
-                            </MudExpansionPanel>
-                        </MudExpansionPanels>
-                    }
-                </ChildContent>
-            </MudListItem>
-        }
-    </MudList>
+    @if (logs.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">Nema logova za zadati filter.</MudAlert>
+    }
+    else
+    {
+        <MudList T="LogEntry" Dense="true" Class="mt-4">
+            @foreach (var log in logs)
+            {
+                <MudListItem T="LogEntry">
+                    <ChildContent>
+                        <MudText Typo="Typo.body2">@log.Level - @log.Message</MudText>
+                        @if (!string.IsNullOrWhiteSpace(log.StackTrace))
+                        {
+                            <MudExpansionPanels Class="mt-2">
+                                <MudExpansionPanel Text="Stack trace">
+                                    <MudText Color="Color.Error">@log.StackTrace</MudText>
+                                </MudExpansionPanel>
+                            </MudExpansionPanels>
+                        }
+                    </ChildContent>
+                </MudListItem>
+            }
+        </MudList>
+    }
 </MudPaper>
 
 @code {
-    [Inject] private NavigationManager NavManager { get; set; } = default!;
+    [Inject] private AdminApiClient Api { get; set; } = default!;
 
     private string search = string.Empty;
     private string level = string.Empty;
@@ -73,9 +81,8 @@
 
         try
         {
-            using var http = new HttpClient { BaseAddress = new Uri(NavManager.BaseUri) };
             var url = $"/api/monitoring/logs-advanced?search={Uri.EscapeDataString(search)}&level={Uri.EscapeDataString(level)}";
-            logs = await http.GetFromJsonAsync<List<LogEntry>>(url) ?? [];
+            logs = await Api.GetFromJsonAsync<List<LogEntry>>(url) ?? [];
         }
         catch (Exception ex)
         {

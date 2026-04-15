@@ -18,9 +18,14 @@ if (!string.IsNullOrWhiteSpace(portEnv) && int.TryParse(portEnv, out var port))
 }
 
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo("/app/keys"))
     .SetApplicationName("MathLearningAdmin")
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo("/app/keys"));
+}
 
 builder.Services.AddDbContext<AdminDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("AdminIdentity")));
@@ -45,26 +50,39 @@ builder.Services.AddAuthentication(options =>
 })
 .AddCookie(IdentityConstants.ApplicationScheme, options =>
 {
-    options.LoginPath = "/login-page";
+    options.LoginPath = "/login";
     options.LogoutPath = "/logout";
     options.AccessDeniedPath = "/access-denied";
-    options.Cookie.SecurePolicy = CookieSecurePolicy.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
 builder.Services.AddAntiforgery(options =>
 {
-    options.Cookie.SecurePolicy = CookieSecurePolicy.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<ForwardAuthCookiesHandler>();
+
+builder.Services.AddHttpClient<AdminApiClient>(client =>
+{
+    var configuredBaseUrl = builder.Configuration["ApiBaseUrl"];
+    if (Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var baseUri))
+    {
+        client.BaseAddress = baseUri;
+    }
+})
+    .AddHttpMessageHandler<ForwardAuthCookiesHandler>();
 
 builder.Services.AddMudServices();
 builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 
-builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 builder.Services.AddRazorComponents()
@@ -82,7 +100,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found");
-//app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 
@@ -95,31 +113,31 @@ app.UseAntiforgery();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
-        Console.WriteLine("Applying database migrations...");
+        logger.LogInformation("Applying database migrations...");
         await db.Database.MigrateAsync();
-        Console.WriteLine("Database migrations applied successfully");
+        logger.LogInformation("Database migrations applied successfully");
 
-        Console.WriteLine("Seeding database...");
-        await SeedAdminAsync(app);
-        Console.WriteLine("Database seeding complete");
+        logger.LogInformation("Seeding database...");
+        await SeedAdminAsync(app, builder.Environment, logger);
+        logger.LogInformation("Database seeding complete");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Database migration/seed failed: {ex.Message}");
+        logger.LogError(ex, "Database migration/seed failed");
     }
 }
 
 app.MapRazorComponents<App>()   
     .AddInteractiveServerRenderMode();
-app.MapRazorPages();
 
 app.MapHealthChecks("/healthz");
 
 app.Run();
 
-async Task SeedAdminAsync(WebApplication app)
+async Task SeedAdminAsync(WebApplication app, IWebHostEnvironment environment, ILogger logger)
 {
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
@@ -135,25 +153,45 @@ async Task SeedAdminAsync(WebApplication app)
         await roleManager.CreateAsync(new IdentityRole("Admin"));
     }
 
-    // Create admin user
-    var adminUser = await userManager.FindByNameAsync("admin");
+    // Seed default admin only in development and only from environment settings.
+    if (!environment.IsDevelopment())
+    {
+        logger.LogInformation("Skipping development admin seed in non-development environment");
+        return;
+    }
+
+    var adminUsername = Environment.GetEnvironmentVariable("ADMIN_SEED_USERNAME");
+    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD");
+    var adminEmail = Environment.GetEnvironmentVariable("ADMIN_SEED_EMAIL");
+
+    if (string.IsNullOrWhiteSpace(adminUsername) || string.IsNullOrWhiteSpace(adminPassword))
+    {
+        logger.LogInformation("Skipping development admin seed because ADMIN_SEED_USERNAME or ADMIN_SEED_PASSWORD is missing");
+        return;
+    }
+
+    var normalizedEmail = string.IsNullOrWhiteSpace(adminEmail)
+        ? $"{adminUsername}@localhost"
+        : adminEmail;
+
+    var adminUser = await userManager.FindByNameAsync(adminUsername);
     if (adminUser == null)
     {
-        adminUser = new IdentityUser { Id = "1", UserName = "admin", Email = "admin@mathlearning.com" };
-        var result = await userManager.CreateAsync(adminUser, "UcimMatu!123");
+        adminUser = new IdentityUser { UserName = adminUsername, Email = normalizedEmail };
+        var result = await userManager.CreateAsync(adminUser, adminPassword);
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(adminUser, "Admin");
-            Console.WriteLine("✓ Admin user created successfully!");
+            logger.LogInformation("Development admin user created successfully");
         }
         else
         {
-            Console.WriteLine("Failed to create admin user: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+            logger.LogError("Failed to create admin user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
         }
     }
     else
     {
-        Console.WriteLine("✓ Admin user already exists.");
+        logger.LogInformation("Development admin user already exists");
     }
 }
 

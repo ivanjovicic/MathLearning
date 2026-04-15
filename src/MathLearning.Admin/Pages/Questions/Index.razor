@@ -1,12 +1,17 @@
 ﻿@page "/questions"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
+@attribute [Authorize]
 @using MathLearning.Admin.Data
+@using MathLearning.Admin.Services
+@using MathLearning.Domain.Entities
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @using QuestionEntity = MathLearning.Domain.Entities.Question
 @inject AdminDbContext Db
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject ILogger<Index> Logger
 
 <PageTitle>Pitanja - MathLearning Admin</PageTitle>
 
@@ -17,6 +22,38 @@
 <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
     Upravljajte pitanjima i odgovorima
 </MudText>
+
+<MudPaper Elevation="4" Class="pa-4 mb-4">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_searchText" 
+                          Placeholder="Pretraži pitanja..." 
+                          Variant="Variant.Outlined"
+                          Clearable="true"
+                          OnClearButtonClick="ResetSearch" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudSelect @bind-Value="_selectedCategoryId" 
+                       Label="Kategorija" 
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var category in _categories)
+                {
+                    <MudSelectItem Value="@category.Id">@category.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudButton OnClick="LoadQuestionsAsync" 
+                       Color="Color.Primary" 
+                       Variant="Variant.Filled"
+                       FullWidth="true">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
+                Pretraži
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
 
 <MudPaper Elevation="4" Class="pa-4">
     <div class="d-flex justify-space-between align-center mb-4">
@@ -29,89 +66,223 @@
         </MudButton>
     </div>
 
-    <MudTable Items="_questions" 
-              Hover="true" 
-              Loading="@_loading" 
-              Dense="true"
-              Elevation="0">
-        <HeaderContent>
-            <MudTh>ID</MudTh>
-            <MudTh>Tekst</MudTh>
-            <MudTh>Kategorija</MudTh>
-            <MudTh>Tezina</MudTh>
-            <MudTh Style="text-align: right; width: 120px;">Akcije</MudTh>
-        </HeaderContent>
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_questions.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            Nema pitanja sa izabranim kriterijumima. Kliknite "Dodaj Pitanje" da kreirate prvo.
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_questions" 
+                  Hover="true" 
+                  Dense="true"
+                  Elevation="0">
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Tekst</MudTh>
+                <MudTh>Kategorija</MudTh>
+                <MudTh>Tezina</MudTh>
+                <MudTh Style="text-align: right; width: 120px;">Akcije</MudTh>
+            </HeaderContent>
 
-        <RowTemplate>
-            <MudTd DataLabel="ID">@context.Id</MudTd>
-            <MudTd DataLabel="Tekst">
-                <MudText Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    @context.Text
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.Id</MudTd>
+                <MudTd DataLabel="Tekst">
+                    <MudText Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        @context.Text
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Kategorija">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                        @context.Category?.Name
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Tezina">
+                    <MudRating ReadOnly="true" SelectedValue="@context.Difficulty" MaxValue="5" Size="Size.Small" />
+                </MudTd>
+                <MudTd DataLabel="Akcije" Style="text-align: right;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                   Color="Color.Primary" 
+                                   Size="Size.Small"
+                                   Href="@($"/questions/{context.Id}/edit")"
+                                   title="Izmeni pitanje"
+                                   aria-label="Izmeni pitanje" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                   Color="Color.Error" 
+                                   Size="Size.Small"
+                                   OnClick="async () => await DeleteQuestionAsync(context)"
+                                   title="Obrisi pitanje"
+                                   aria-label="Obrisi pitanje" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <div class="mt-4 d-flex justify-space-between align-center">
+            <div>
+                <MudText Typo="Typo.body2">
+                    Ukupno: <strong>@_totalCount</strong> pitanja |
+                    Prikazano: <strong>@_questions.Count</strong> pitanja
                 </MudText>
-            </MudTd>
-            <MudTd DataLabel="Kategorija">
-                <MudChip T="string" Size="Size.Small" Color="Color.Primary">
-                    @context.Category?.Name
-                </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Tezina">
-                <MudRating ReadOnly="true" SelectedValue="@context.Difficulty" MaxValue="5" Size="Size.Small" />
-            </MudTd>
-            <MudTd DataLabel="Akcije" Style="text-align: right;">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                               Color="Color.Primary" 
-                               Size="Size.Small"
-                               Href="@($"/questions/{context.Id}/edit")"
-                               Title="Izmeni pitanje" />
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                               Color="Color.Error" 
-                               Size="Size.Small"
-                               OnClick="() => DeleteQuestion(context)"
-                               Title="Obrisi pitanje" />
-            </MudTd>
-        </RowTemplate>
-
-        <NoRecordsContent>
-            <MudAlert Severity="Severity.Info">
-                Nema pitanja. Kliknite "Dodaj Pitanje" da kreirate prvo.
-            </MudAlert>
-        </NoRecordsContent>
-    </MudTable>
+            </div>
+            <MudPagination Count="@_pageCount" 
+                           Selected="@_currentPage" 
+                           SelectedChanged="OnPageChangedAsync" />
+        </div>
+    }
 </MudPaper>
 
 @code {
     private List<QuestionEntity> _questions = new();
+    private List<Category> _categories = new();
     private bool _loading = true;
+    private string _searchText = string.Empty;
+    private int _selectedCategoryId = 0;
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int _totalCount = 0;
+    private int _pageCount => (_totalCount + _pageSize - 1) / _pageSize;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadQuestions();
-    }
-
-    private async Task LoadQuestions()
-    {
-        _loading = true;
-        _questions = await Db.Questions
-            .Include(q => q.Category)
-            .OrderBy(q => q.Id)
+        _categories = await Db.Categories
+            .AsNoTracking()
+            .OrderBy(c => c.Name)
             .ToListAsync();
-        _loading = false;
+        
+        await LoadQuestionsAsync();
     }
 
-    private async Task DeleteQuestion(QuestionEntity question)
+    private async Task LoadQuestionsAsync()
     {
+        _currentPage = 1;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var query = Db.Questions
+                .Include(q => q.Category)
+                .Include(q => q.Options)
+                .Include(q => q.Steps)
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                var searchLower = _searchText.ToLower();
+                query = query.Where(q => q.Text.ToLower().Contains(searchLower));
+            }
+
+            if (_selectedCategoryId > 0)
+            {
+                query = query.Where(q => q.CategoryId == _selectedCategoryId);
+            }
+
+            _totalCount = await query.CountAsync();
+            _questions = await query
+                .OrderBy(q => q.Id)
+                .Skip((_currentPage - 1) * _pageSize)
+                .Take(_pageSize)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading questions");
+            Snackbar.Add("Greška pri učitavanju pitanja", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnPageChangedAsync(int page)
+    {
+        _currentPage = page;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var query = Db.Questions
+                .Include(q => q.Category)
+                .Include(q => q.Options)
+                .Include(q => q.Steps)
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                var searchLower = _searchText.ToLower();
+                query = query.Where(q => q.Text.ToLower().Contains(searchLower));
+            }
+
+            if (_selectedCategoryId > 0)
+            {
+                query = query.Where(q => q.CategoryId == _selectedCategoryId);
+            }
+
+            _questions = await query
+                .OrderBy(q => q.Id)
+                .Skip((_currentPage - 1) * _pageSize)
+                .Take(_pageSize)
+                .ToListAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetSearch()
+    {
+        _searchText = string.Empty;
+        _selectedCategoryId = 0;
+    }
+
+    private async Task DeleteQuestionAsync(QuestionEntity question)
+    {
+        var dialogParameters = new DialogParameters
+        {
+            [nameof(ConfirmDialog.Title)] = "Potvrda brisanja",
+            [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildQuestionDeleteMessage(
+                question.Id,
+                question.Options.Count,
+                question.Steps.Count),
+            [nameof(ConfirmDialog.ConfirmText)] = "Obrisi",
+            [nameof(ConfirmDialog.CancelText)] = "Odustani",
+            [nameof(ConfirmDialog.ConfirmColor)] = Color.Error
+        };
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Potvrda", dialogParameters, new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small
+        });
+        var dialogResult = await dialogRef.Result;
+        if (dialogResult?.Canceled ?? true)
+        {
+            return;
+        }
+
         try
         {
             Db.Questions.Remove(question);
             await Db.SaveChangesAsync();
             _questions.Remove(question);
+            _totalCount--;
             
             Snackbar.Add("Pitanje je obrisano", Severity.Success);
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Greska pri brisanju: {ex.Message}", Severity.Error);
+            Logger.LogError(ex, "Error deleting question");
+            Snackbar.Add($"Greška pri brisanju: {ex.Message}", Severity.Error);
         }
     }
 }
