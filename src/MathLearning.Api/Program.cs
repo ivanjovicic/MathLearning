@@ -127,7 +127,7 @@ try
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
     if (string.IsNullOrWhiteSpace(defaultConnectionString))
     {
-        Log.Error("? ConnectionStrings:Default is not configured. Set Fly secret `ConnectionStrings__Default` (recommended) before deploying.");
+        Log.Error("? ConnectionStrings:Default is not configured. Set deployment env var `ConnectionStrings__Default` before deploying.");
         throw new InvalidOperationException("Missing ConnectionStrings:Default. Configure ConnectionStrings__Default.");
     }
     else
@@ -535,6 +535,14 @@ try
             }
             catch (Exception ex)
             {
+                if (IsPostgresAuthFailure(ex))
+                {
+                    Log.Error(
+                        ex,
+                        "Database startup failed because PostgreSQL rejected the configured credentials for {DbTarget}. Update deployment env var `ConnectionStrings__Default` with the current database password.",
+                        DescribeDbConnection(defaultConnectionString));
+                }
+
                 Log.Warning(ex, "?? Database migration/seed failed. Continuing without it (DB may not be available yet).");
             }
 
@@ -1158,9 +1166,32 @@ static async Task<bool> CanOpenPostgresConnectionAsync(string connectionString, 
     }
     catch (Exception ex)
     {
+        if (IsPostgresAuthFailure(ex))
+        {
+            Log.Error(
+                ex,
+                "Initial PostgreSQL connectivity probe failed because credentials were rejected for {DbTarget}. Update deployment env var `ConnectionStrings__Default` with the correct password.",
+                DescribeDbConnection(connectionString));
+            return false;
+        }
+
         Log.Warning(ex, "Initial PostgreSQL connectivity probe failed for {DbTarget}", DescribeDbConnection(connectionString));
         return false;
     }
+}
+
+static bool IsPostgresAuthFailure(Exception ex)
+{
+    for (Exception? current = ex; current != null; current = current.InnerException)
+    {
+        if (current is PostgresException postgresException &&
+            string.Equals(postgresException.SqlState, PostgresErrorCodes.InvalidPassword, StringComparison.Ordinal))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 static async Task<bool> HasUserProfileIdentitySchemaAsync(ApiDbContext db, CancellationToken ct = default)
