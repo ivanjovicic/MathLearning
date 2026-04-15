@@ -24,6 +24,8 @@ services:
 		envVars:
 			- key: ASPNETCORE_ENVIRONMENT
 				value: Production
+			- key: Database__InitializeOnStartup
+				value: "false"
 			- key: SeedAdmin__Enabled
 				value: "false"
 			- key: SeedContent__Enabled
@@ -46,6 +48,7 @@ Host=ep-spring-glade-agaxudii-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Us
 ```
 
 - `ASPNETCORE_ENVIRONMENT` = `Production`
+- `Database__InitializeOnStartup` = `false` na web servisu. U production-u uključi `true` samo ako namerno želiš da admin web proces izvršava migracije i seed pre prihvatanja saobraćaja.
 - Opcionalno: `SeedAdmin__Enabled` = `true|false` (ako želiš da seed/admin user bude kreiran na prvom startu)
 - Opcionalno: `SeedContent__Enabled` = `true|false`
 
@@ -85,6 +88,7 @@ Alternativa: koristiti eksterni key store (Azure Blob, Redis, ili DB) ako ne že
 ## Tipične greške i rešavanje
 - `Couldn't set postgresql://...` — znači da je prosleđen URI u mestu gde se očekuje key=value; postavi `ConnectionStrings__AdminIdentity` kao key=value.
 - `Host can't be null` — connection string nije postavljen ili nije dostupan procesu (proveri da li si dodao tajnu kao Secret i da li je ime varijable tačno).
+- Health check vraća `404` sa `x-render-routing: no-server` — Render nema zdravu instancu iza hosta. Najčešći uzrok je da se web proces blokira na startup DB migracijama ili da deploy nije uspeo. Ostavite `Database__InitializeOnStartup=false` i migracije pokrenite odvojeno.
 - `The WebRootPath was not found` ili statični fajlovi nedostupni — ovo je rešeno Docker pristupom, jer se aplikacija startuje iz publish output-a unutar image-a.
 - Problemi sa pristupom bazi: proveri da li Neon/DB dozvoljava konekcije sa Render (networking/allowlist), kao i `Ssl Mode` vrednost.
 

@@ -92,6 +92,9 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+var initializeDatabaseOnStartup = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue<bool>("Database:InitializeOnStartup");
+
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
@@ -118,9 +121,10 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
-// Auto-migrate and seed database on startup
-using (var scope = app.Services.CreateScope())
+// Avoid blocking the web process on production database work unless explicitly enabled.
+if (initializeDatabaseOnStartup)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var configuredApiBaseUrl = app.Configuration["ApiBaseUrl"];
@@ -143,6 +147,10 @@ using (var scope = app.Services.CreateScope())
     {
         logger.LogError(ex, "Database migration/seed failed");
     }
+}
+else
+{
+    app.Logger.LogInformation("Startup database initialization skipped. Set `Database__InitializeOnStartup=true` to run migrations and seeding on web startup.");
 }
 
 app.MapRazorComponents<App>()   
