@@ -136,12 +136,19 @@ using (var scope = app.Services.CreateScope())
             identitySchemaExists = exists;
         }
 
-        if (identitySchemaExists)
+        var forceSeed = app.Configuration.GetValue<bool>("SeedAdmin:Force");
+
+        if (identitySchemaExists && !forceSeed)
         {
             app.Logger.LogInformation("Detected existing Identity schema. Skipping automatic admin startup migrations and seeding.");
         }
         else
         {
+            if (identitySchemaExists && forceSeed)
+            {
+                app.Logger.LogInformation("SeedAdmin:Force=true; forcing migrations and seeding despite existing Identity schema.");
+            }
+
             app.Logger.LogInformation("Applying admin database migrations");
             await db.Database.MigrateAsync();
             app.Logger.LogInformation("Admin database migrations applied successfully");
