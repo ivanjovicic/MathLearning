@@ -340,8 +340,14 @@ try
         builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
     }
 
+<<<<<<< HEAD
     // ?? XP tracking service
     builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
+=======
+    // 📈 XP tracking service
+    builder.Services.Configure<XpTrackingOptions>(
+        builder.Configuration.GetSection(XpTrackingOptions.SectionName));
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     builder.Services.AddScoped<XpTrackingService>();
     builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
     builder.Services.AddScoped<StudentLeaderboardService>();

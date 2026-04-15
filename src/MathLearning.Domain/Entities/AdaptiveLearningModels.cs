@@ -2,6 +2,7 @@ namespace MathLearning.Domain.Entities;
 
 public static class AdaptiveDifficultyLevels
 {
+<<<<<<< HEAD
     public const string Easy = "Easy";
     public const string Medium = "Medium";
     public const string Hard = "Hard";
@@ -21,12 +22,18 @@ public static class AdaptiveDifficultyLevels
             _ => Medium
         };
     }
+=======
+    public const string Easy = "easy";
+    public const string Medium = "medium";
+    public const string Hard = "hard";
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
 }
 
 public class UserLearningProfile
 {
     public string UserId { get; set; } = string.Empty;
     public string PreferredDifficulty { get; set; } = AdaptiveDifficultyLevels.Medium;
+<<<<<<< HEAD
 
     public double RollingAccuracy { get; set; }
     public double RollingAverageResponseSeconds { get; set; }
@@ -38,6 +45,9 @@ public class UserLearningProfile
     public DateTime? LastPracticeAt { get; set; }
     public DateTime? LastDifficultyChangeAt { get; set; }
 
+=======
+    public int RollingWindowSize { get; set; } = 20;
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
@@ -45,6 +55,7 @@ public class UserLearningProfile
 public class UserTopicMastery
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+<<<<<<< HEAD
 
     public string UserId { get; set; } = string.Empty;
     public int TopicId { get; set; }
@@ -60,6 +71,13 @@ public class UserTopicMastery
     public DateTime? WeakDetectedAt { get; set; }
     public DateTime? LastPracticedAt { get; set; }
 
+=======
+    public string UserId { get; set; } = string.Empty;
+    public int TopicId { get; set; }
+    public double MasteryScore { get; set; }
+    public string DifficultyLevel { get; set; } = AdaptiveDifficultyLevels.Medium;
+    public bool IsWeak { get; set; }
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -68,12 +86,17 @@ public class UserTopicMastery
 
 public class UserQuestionHistory
 {
+<<<<<<< HEAD
     public long Id { get; set; }
 
+=======
+    public Guid Id { get; set; } = Guid.NewGuid();
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     public string UserId { get; set; } = string.Empty;
     public int QuestionId { get; set; }
     public int TopicId { get; set; }
     public int SubtopicId { get; set; }
+<<<<<<< HEAD
 
     public bool IsCorrect { get; set; }
     public double Confidence { get; set; }
@@ -85,6 +108,11 @@ public class UserQuestionHistory
 
     public Guid? AdaptiveSessionId { get; set; }
     public Guid? AdaptiveSessionItemId { get; set; }
+=======
+    public bool IsCorrect { get; set; }
+    public string DifficultyLevel { get; set; } = AdaptiveDifficultyLevels.Medium;
+    public DateTime AnsweredAt { get; set; } = DateTime.UtcNow;
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
 
     public Question? Question { get; set; }
     public Topic? Topic { get; set; }
@@ -94,6 +122,7 @@ public class UserQuestionHistory
 public class ReviewSchedule
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+<<<<<<< HEAD
 
     public string UserId { get; set; } = string.Empty;
     public int QuestionId { get; set; }
@@ -107,6 +136,14 @@ public class ReviewSchedule
     public DateTime? LastReviewedAt { get; set; }
     public bool? LastWasCorrect { get; set; }
 
+=======
+    public string UserId { get; set; } = string.Empty;
+    public int QuestionId { get; set; }
+    public int TopicId { get; set; }
+    public double EasinessFactor { get; set; } = 2.5d;
+    public int IntervalDays { get; set; } = 1;
+    public DateTime DueAt { get; set; } = DateTime.UtcNow;
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -117,6 +154,7 @@ public class ReviewSchedule
 public class AdaptiveSession
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+<<<<<<< HEAD
 
     public string UserId { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -126,11 +164,20 @@ public class AdaptiveSession
     public string ProfileDifficulty { get; set; } = AdaptiveDifficultyLevels.Medium;
 
     public List<AdaptiveSessionItem> Items { get; set; } = new();
+=======
+    public string UserId { get; set; } = string.Empty;
+    public string ProfileDifficulty { get; set; } = AdaptiveDifficultyLevels.Medium;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(30);
+
+    public List<AdaptiveSessionItem> Items { get; set; } = [];
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
 }
 
 public class AdaptiveSessionItem
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+<<<<<<< HEAD
 
     public Guid AdaptiveSessionId { get; set; }
     public int QuestionId { get; set; }
@@ -148,6 +195,15 @@ public class AdaptiveSessionItem
     public int? ResponseTimeSeconds { get; set; }
     public DateTime? AnsweredAt { get; set; }
 
+=======
+    public Guid AdaptiveSessionId { get; set; }
+    public int QuestionId { get; set; }
+    public int TopicId { get; set; }
+    public int SubtopicId { get; set; }
+    public int Sequence { get; set; }
+    public string SourceType { get; set; } = "adaptive";
+    public string DifficultyLevel { get; set; } = AdaptiveDifficultyLevels.Medium;
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public AdaptiveSession? AdaptiveSession { get; set; }
@@ -155,6 +211,7 @@ public class AdaptiveSessionItem
     public Topic? Topic { get; set; }
     public Subtopic? Subtopic { get; set; }
 }
+<<<<<<< HEAD
 
 public class AdaptiveRecommendation
 {
@@ -222,3 +279,5 @@ public class TopicMastery
     public string Difficulty { get; set; } = AdaptiveDifficultyLevels.Medium;
     public DateTime? LastPracticedAt { get; set; }
 }
+=======
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)

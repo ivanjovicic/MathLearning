@@ -7,6 +7,9 @@ using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Npgsql;
+using System.Data;
 using System.Text.Json;
 
 namespace MathLearning.Api.Endpoints;
@@ -161,11 +164,20 @@ public static class QuizEndpoints
             JsonElement request,
             ApiDbContext db,
             HttpContext ctx,
+<<<<<<< HEAD
             MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             IQuizAttemptIngestService ingestService,
             IAnswerPatternAntiCheatService antiCheatService) =>
+=======
+            IQuizAttemptIngestService ingestService,
+            XpTrackingService xpTrackingService,
+            IOptions<XpTrackingOptions> xpTrackingOptions,
+            ILogger<Program> logger) =>
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
+            if (!int.TryParse(userId, out var appUserId))
+                return Results.BadRequest("Invalid user id");
             string lang = await ResolveUserLang(db, ctx, userId);
 
             if (!TryGetInt(request, "questionId", out var questionId) || questionId <= 0)
@@ -174,6 +186,8 @@ public static class QuizEndpoints
                 return Results.BadRequest("Answer is required");
             if (!TryGetInt(request, "timeSpentSeconds", out var timeSpentSeconds))
                 timeSpentSeconds = 0;
+            var hintUsed = TryGetBool(request, "hintUsed", out var parsedHintUsed) && parsedHintUsed;
+            var clientId = TryGetString(request, "clientId", out var parsedClientId) ? parsedClientId : null;
 
             var question = await db.Questions
                 .AsNoTracking()
@@ -182,18 +196,6 @@ public static class QuizEndpoints
 
             if (question == null)
                 return Results.NotFound("Question not found");
-
-            int.TryParse(answerText, out var selectedOptionId);
-
-            bool isCorrect =
-                question.Type == "multiple_choice"
-                    ? question.Options.Any(o =>
-                        o.IsCorrect && (
-                            o.Text == answerText ||
-                            (selectedOptionId > 0 && o.Id == selectedOptionId)))
-                    : question.CorrectAnswer != null && question.CorrectAnswer.Trim()
-                        .Equals(answerText.Trim(),
-                            StringComparison.OrdinalIgnoreCase);
 
             Guid quizSessionId;
             string? quizIdRaw = null;
@@ -205,55 +207,36 @@ public static class QuizEndpoints
             if (!Guid.TryParse(quizIdRaw, out quizSessionId))
             {
                 quizSessionId = Guid.NewGuid();
-                db.QuizSessions.Add(new QuizSession
-                {
-                    Id = quizSessionId,
-                    UserId = userId,
-                    StartedAt = DateTime.UtcNow
-                });
             }
             var answeredAtUtc = DateTime.UtcNow;
+            var attemptInput = new AnswerAttemptInput(
+                Question: question,
+                QuestionId: questionId,
+                AnswerText: answerText!,
+                TimeSpentSeconds: timeSpentSeconds,
+                AnsweredAtUtc: answeredAtUtc,
+                IsOffline: false,
+                Source: "quiz_answer",
+                ClientId: clientId,
+                HintUsed: hintUsed,
+                QuizSessionId: quizSessionId);
 
-            db.UserAnswers.Add(new UserAnswer
-            {
-                UserId = userId,
-                QuestionId = questionId,
-                QuizSessionId = quizSessionId,
-                Answer = answerText,
-                IsCorrect = isCorrect,
-                TimeSpentSeconds = timeSpentSeconds,
-                AnsweredAt = answeredAtUtc
-            });
-            var profile = await db.UserProfiles
-                .FirstOrDefaultAsync(p => p.UserId == userId);
-
-            if (profile != null)
-            {
-                profile.LastActivityDay = DateOnly.FromDateTime(DateTime.UtcNow);
-                profile.UpdatedAt = DateTime.UtcNow;
-            }
-
-            var stat = await db.UserQuestionStats
-                .FirstOrDefaultAsync(s =>
-                    s.UserId == userId &&
-                    s.QuestionId == questionId);
-
-            if (stat == null)
-            {
-                stat = new UserQuestionStat
+            var processingResult = await ExecuteWithSerializableRetryAsync(
+                db,
+                logger,
+                async () =>
                 {
-                    UserId = userId,
-                    QuestionId = questionId,
-                    Attempts = 0,
-                    CorrectAttempts = 0
-                };
-                db.UserQuestionStats.Add(stat);
-            }
+                    await EnsureQuizSessionAsync(db, userId, quizSessionId, answeredAtUtc, ctx.RequestAborted);
 
-            stat.Attempts++;
-            if (isCorrect)
-                stat.CorrectAttempts++;
+                    var result = await ProcessAnswerAttemptWithinTransactionAsync(
+                        db,
+                        xpTrackingService,
+                        userId,
+                        attemptInput,
+                        xpTrackingOptions.Value.EnableAntiCheat,
+                        ctx.RequestAborted);
 
+<<<<<<< HEAD
             stat.LastAttemptAt = DateTime.UtcNow;
 
             await antiCheatService.EvaluateAndTrackAsync(
@@ -285,12 +268,24 @@ public static class QuizEndpoints
                         TimeSpentMs: Math.Max(0, timeSpentSeconds) * 1000,
                         CreatedAtUtc: answeredAtUtc)
                 ],
+=======
+                    return new SingleAnswerTransactionResult(result);
+                },
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
                 ctx.RequestAborted);
+
+            if (processingResult.AttemptResult.IngestItem != null)
+            {
+                await ingestService.IngestAttemptsAsync(
+                    appUserId,
+                    [processingResult.AttemptResult.IngestItem],
+                    ctx.RequestAborted);
+            }
 
             // Return explanation and steps only on incorrect answer.
             string? explanation = null;
             List<StepExplanationDto>? steps = null;
-            if (!isCorrect)
+            if (!processingResult.AttemptResult.IsCorrect)
             {
                 var questionForFeedback = await db.Questions
                     .AsNoTracking()
@@ -307,9 +302,12 @@ public static class QuizEndpoints
             }
 
             return Results.Ok(new SubmitAnswerResponse(
-                isCorrect,
+                processingResult.AttemptResult.IsCorrect,
                 explanation,
-                steps
+                steps,
+                processingResult.AttemptResult.IsFirstTimeCorrect,
+                processingResult.AttemptResult.AwardedXp,
+                processingResult.AttemptResult.TotalXpAfterAward
             ));
         });
 
@@ -319,23 +317,35 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx,
             IQuizAttemptIngestService ingestService,
+<<<<<<< HEAD
             IAnswerPatternAntiCheatService antiCheatService) =>
+=======
+            XpTrackingService xpTrackingService,
+            IOptions<XpTrackingOptions> xpTrackingOptions,
+            ILogger<Program> logger) =>
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
+            if (!int.TryParse(userId, out var appUserId))
+                return Results.BadRequest("Invalid user id");
 
             if (request.Answers == null || !request.Answers.Any())
                 return Results.BadRequest("No answers to import");
 
-            // Proveri ili kreiraj quiz session
-            Guid sessionId;
-            if (!Guid.TryParse(request.SessionId, out sessionId))
-            {
-                sessionId = Guid.NewGuid();
-            }
+            var transactionResult = await ProcessOfflineBatchAsync(
+                db,
+                xpTrackingService,
+                logger,
+                userId,
+                request.SessionId,
+                request.Answers,
+                xpTrackingOptions.Value.EnableAntiCheat,
+                ctx.RequestAborted);
 
-            var session = await db.QuizSessions
-                .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+            if (transactionResult.IngestRows.Count > 0)
+                await ingestService.IngestAttemptsAsync(appUserId, transactionResult.IngestRows, ctx.RequestAborted);
 
+<<<<<<< HEAD
             if (session == null)
             {
                 session = new QuizSession
@@ -464,10 +474,12 @@ public static class QuizEndpoints
             await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
 
             // Izračunaj fresh XP, Level i Streak
+=======
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
             var overview = await CalculateUserOverview(db, userId);
 
             return Results.Ok(new OfflineBatchSubmitResponse(
-                importedCount,
+                transactionResult.ImportedCount,
                 overview.Xp,
                 overview.Level,
                 overview.Streak
@@ -480,10 +492,17 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx,
             IQuizAttemptIngestService ingestService,
+<<<<<<< HEAD
             IAnswerPatternAntiCheatService antiCheatService) =>
+=======
+            XpTrackingService xpTrackingService,
+            IOptions<XpTrackingOptions> xpTrackingOptions,
+            ILogger<Program> logger) =>
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            var sessionGuid = Guid.NewGuid();
+            if (!int.TryParse(userId, out var appUserId))
+                return Results.BadRequest("Invalid user id");
             var answers = new List<OfflineAnswerDto>();
 
             if (payload.TryGetProperty("answers", out var answersNode) &&
@@ -519,14 +538,17 @@ public static class QuizEndpoints
             if (answers.Count == 0)
                 return Results.BadRequest("No answers to import");
 
-            var session = new QuizSession
-            {
-                Id = sessionGuid,
-                UserId = userId,
-                StartedAt = answers.Min(a => a.AnsweredAt)
-            };
-            db.QuizSessions.Add(session);
+            var transactionResult = await ProcessOfflineBatchAsync(
+                db,
+                xpTrackingService,
+                logger,
+                userId,
+                Guid.NewGuid().ToString(),
+                answers,
+                xpTrackingOptions.Value.EnableAntiCheat,
+                ctx.RequestAborted);
 
+<<<<<<< HEAD
             int importedCount = 0;
             var antiCheatInputs = new List<AntiCheatAnswerObservationInput>(answers.Count);
             var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
@@ -633,10 +655,15 @@ public static class QuizEndpoints
             await antiCheatService.EvaluateAndTrackBatchAsync(antiCheatInputs, ctx.RequestAborted);
             await db.SaveChangesAsync();
             await ingestService.IngestAttemptsAsync(userId, ingestRows, ctx.RequestAborted);
+=======
+            if (transactionResult.IngestRows.Count > 0)
+                await ingestService.IngestAttemptsAsync(appUserId, transactionResult.IngestRows, ctx.RequestAborted);
+
+>>>>>>> b6bd21f (feat: harden XP audit pipeline and transactional quiz processing)
             var overview = await CalculateUserOverview(db, userId);
 
             return Results.Ok(new OfflineBatchSubmitResponse(
-                importedCount,
+                transactionResult.ImportedCount,
                 overview.Xp,
                 overview.Level,
                 overview.Streak
@@ -937,21 +964,360 @@ public static class QuizEndpoints
             .ToList();
     }
 
+    private static async Task<OfflineBatchTransactionResult> ProcessOfflineBatchAsync(
+        ApiDbContext db,
+        XpTrackingService xpTrackingService,
+        ILogger logger,
+        string userId,
+        string sessionIdRaw,
+        IReadOnlyList<OfflineAnswerDto> answers,
+        bool enableAntiCheat,
+        CancellationToken cancellationToken)
+    {
+        return await ExecuteWithSerializableRetryAsync(
+            db,
+            logger,
+            async () =>
+            {
+                Guid sessionId;
+                if (!Guid.TryParse(sessionIdRaw, out sessionId))
+                    sessionId = Guid.NewGuid();
+
+                var session = await db.QuizSessions
+                    .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
+                if (session == null)
+                {
+                    session = new QuizSession
+                    {
+                        Id = sessionId,
+                        UserId = userId,
+                        StartedAt = answers.Min(a => a.AnsweredAt)
+                    };
+                    db.QuizSessions.Add(session);
+                }
+
+                var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
+                var questions = await db.Questions
+                    .Include(q => q.Options)
+                    .Where(q => questionIds.Contains(q.Id))
+                    .ToDictionaryAsync(q => q.Id, cancellationToken);
+
+                var imported = 0;
+                var ingestRows = new List<QuizAttemptIngestItem>(answers.Count);
+
+                foreach (var answer in answers)
+                {
+                    if (!questions.TryGetValue(answer.QuestionId, out var question))
+                        continue;
+
+                    var result = await ProcessAnswerAttemptWithinTransactionAsync(
+                        db,
+                        xpTrackingService,
+                        userId,
+                        new AnswerAttemptInput(
+                            question,
+                            answer.QuestionId,
+                            answer.Answer,
+                            answer.TimeSpent,
+                            answer.AnsweredAt,
+                            true,
+                            "offline_submit",
+                            null,
+                            false,
+                            sessionId),
+                        enableAntiCheat,
+                        cancellationToken);
+
+                    if (!result.WasImported)
+                        continue;
+
+                    imported++;
+                    if (result.IngestItem != null)
+                        ingestRows.Add(result.IngestItem);
+                }
+
+                return new OfflineBatchTransactionResult(imported, ingestRows);
+            },
+            cancellationToken);
+    }
+
+    private static async Task<T> ExecuteWithSerializableRetryAsync<T>(
+        ApiDbContext db,
+        ILogger logger,
+        Func<Task<T>> action,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var result = await action();
+                await db.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch (DbUpdateConcurrencyException ex) when (attempt < maxAttempts)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                logger.LogWarning(
+                    ex,
+                    "Retrying serializable transaction after EF concurrency conflict. Attempt={Attempt}/{MaxAttempts}",
+                    attempt,
+                    maxAttempts);
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SerializationFailure && attempt < maxAttempts)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                logger.LogWarning(
+                    ex,
+                    "Retrying serializable transaction after PostgreSQL serialization failure. Attempt={Attempt}/{MaxAttempts}",
+                    attempt,
+                    maxAttempts);
+            }
+            catch (PostgresException ex) when (
+                ex.SqlState == PostgresErrorCodes.UniqueViolation &&
+                string.Equals(ex.ConstraintName, "UX_UserAnswerAudits_FirstCorrect_PerQuestion", StringComparison.Ordinal) &&
+                attempt < maxAttempts)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                logger.LogWarning(
+                    ex,
+                    "Retrying transaction after first-correct uniqueness conflict. Attempt={Attempt}/{MaxAttempts}",
+                    attempt,
+                    maxAttempts);
+            }
+        }
+
+        throw new InvalidOperationException("Failed to process transaction after max retries.");
+    }
+
+    private static async Task EnsureQuizSessionAsync(
+        ApiDbContext db,
+        string userId,
+        Guid quizSessionId,
+        DateTime startedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var existingSession = await db.QuizSessions
+            .FirstOrDefaultAsync(s => s.Id == quizSessionId && s.UserId == userId, cancellationToken);
+
+        if (existingSession != null)
+            return;
+
+        db.QuizSessions.Add(new QuizSession
+        {
+            Id = quizSessionId,
+            UserId = userId,
+            StartedAt = startedAtUtc
+        });
+    }
+
+    private static async Task<AnswerAttemptResult> ProcessAnswerAttemptWithinTransactionAsync(
+        ApiDbContext db,
+        XpTrackingService xpTrackingService,
+        string userId,
+        AnswerAttemptInput input,
+        bool enableAntiCheat,
+        CancellationToken cancellationToken)
+    {
+        var existingAnswer = await db.UserAnswers.FirstOrDefaultAsync(x =>
+            x.UserId == userId &&
+            x.QuestionId == input.QuestionId &&
+            x.AnsweredAt == input.AnsweredAtUtc, cancellationToken);
+
+        if (existingAnswer != null)
+        {
+            var existingAudit = await db.UserAnswerAudits
+                .Where(a =>
+                    a.UserId == userId &&
+                    a.QuestionId == input.QuestionId &&
+                    a.AnsweredAt == input.AnsweredAtUtc)
+                .OrderByDescending(a => a.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var existingProfileXp = existingAudit?.TotalXpAfterAward ?? await db.UserProfiles
+                .Where(p => p.UserId == userId)
+                .Select(p => p.Xp)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return new AnswerAttemptResult(
+                WasImported: false,
+                IsCorrect: existingAnswer.IsCorrect,
+                IsFirstTimeCorrect: existingAudit?.IsFirstTimeCorrect ?? false,
+                AwardedXp: existingAudit?.AwardedXp ?? 0,
+                TotalXpAfterAward: existingProfileXp,
+                IngestItem: null);
+        }
+
+        var isCorrect = EvaluateAnswerCorrectness(input.Question, input.AnswerText);
+        var stat = await GetOrCreateUserQuestionStatForUpdateAsync(db, userId, input.QuestionId, cancellationToken);
+        var isFirstTimeCorrect = isCorrect && stat.CorrectAttempts == 0;
+
+        stat.Attempts++;
+        if (isCorrect)
+            stat.CorrectAttempts++;
+        if (stat.LastAttemptAt == null || input.AnsweredAtUtc > stat.LastAttemptAt)
+            stat.LastAttemptAt = input.AnsweredAtUtc;
+
+        var profile = await db.UserProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        if (profile == null)
+            throw new InvalidOperationException($"User profile not found: {userId}");
+
+        var activityDay = DateOnly.FromDateTime(input.AnsweredAtUtc);
+        if (profile.LastActivityDay == null || activityDay > profile.LastActivityDay)
+            profile.LastActivityDay = activityDay;
+        profile.UpdatedAt = DateTime.UtcNow;
+
+        var reason = "not_eligible";
+        var requestedXp = 0;
+        if (isCorrect && isFirstTimeCorrect)
+        {
+            requestedXp = 10;
+            reason = "awarded";
+        }
+        else if (isCorrect)
+        {
+            reason = "already_awarded";
+        }
+
+        if (enableAntiCheat && requestedXp > 0 && IsSuspectedCheat(input))
+        {
+            requestedXp = 0;
+            reason = "suspected_cheat";
+        }
+
+        XpAwardResult xpAwardResult;
+        if (requestedXp > 0)
+        {
+            xpAwardResult = await xpTrackingService.AddXpWithinTransactionAsync(
+                userId,
+                requestedXp,
+                input.HintUsed,
+                input.Source,
+                db,
+                cancellationToken);
+            reason = xpAwardResult.Reason;
+        }
+        else
+        {
+            xpAwardResult = new XpAwardResult(0, profile.Xp, reason, 0);
+        }
+
+        db.UserAnswers.Add(new UserAnswer
+        {
+            UserId = userId,
+            QuestionId = input.QuestionId,
+            QuizSessionId = input.QuizSessionId,
+            Answer = input.AnswerText,
+            IsCorrect = isCorrect,
+            TimeSpentSeconds = input.TimeSpentSeconds,
+            AnsweredAt = input.AnsweredAtUtc
+        });
+
+        db.UserAnswerAudits.Add(new UserAnswerAudit
+        {
+            UserId = userId,
+            QuestionId = input.QuestionId,
+            Source = input.Source,
+            IsOffline = input.IsOffline,
+            ClientId = input.ClientId,
+            Answer = input.AnswerText,
+            IsCorrect = isCorrect,
+            IsFirstTimeCorrect = isFirstTimeCorrect,
+            AwardedXp = xpAwardResult.AwardedXp,
+            TotalXpAfterAward = xpAwardResult.TotalXpAfterAward,
+            Reason = reason,
+            AnsweredAt = input.AnsweredAtUtc,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var ingestItem = new QuizAttemptIngestItem(
+            QuizId: input.QuizSessionId,
+            QuestionId: input.QuestionId,
+            SubtopicId: input.Question.SubtopicId,
+            Correct: isCorrect,
+            TimeSpentMs: Math.Max(0, input.TimeSpentSeconds) * 1000,
+            CreatedAtUtc: input.AnsweredAtUtc);
+
+        return new AnswerAttemptResult(
+            WasImported: true,
+            IsCorrect: isCorrect,
+            IsFirstTimeCorrect: isFirstTimeCorrect,
+            AwardedXp: xpAwardResult.AwardedXp,
+            TotalXpAfterAward: xpAwardResult.TotalXpAfterAward,
+            IngestItem: ingestItem);
+    }
+
+    private static async Task<UserQuestionStat> GetOrCreateUserQuestionStatForUpdateAsync(
+        ApiDbContext db,
+        string userId,
+        int questionId,
+        CancellationToken cancellationToken)
+    {
+        var existing = await db.UserQuestionStats
+            .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (existing != null)
+            return existing;
+
+        var created = new UserQuestionStat
+        {
+            UserId = userId,
+            QuestionId = questionId,
+            Attempts = 0,
+            CorrectAttempts = 0
+        };
+
+        db.UserQuestionStats.Add(created);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return created;
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(created).State = EntityState.Detached;
+            return await db.UserQuestionStats
+                .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                .SingleAsync(cancellationToken);
+        }
+    }
+
+    private static bool EvaluateAnswerCorrectness(Question question, string answerText)
+    {
+        int.TryParse(answerText, out var selectedOptionId);
+
+        return question.Type == "multiple_choice"
+            ? question.Options.Any(o =>
+                o.IsCorrect && (
+                    o.Text == answerText ||
+                    (selectedOptionId > 0 && o.Id == selectedOptionId)))
+            : question.CorrectAnswer != null && question.CorrectAnswer.Trim()
+                .Equals(answerText.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSuspectedCheat(AnswerAttemptInput input)
+    {
+        if (!input.IsOffline && input.TimeSpentSeconds <= 0)
+            return true;
+
+        if (input.IsOffline && input.AnsweredAtUtc > DateTime.UtcNow.AddMinutes(2))
+            return true;
+
+        return false;
+    }
+
     // 📊 Helper za računanje XP, Level i Streak
     private static async Task<(int Xp, int Level, int Streak)> CalculateUserOverview(
         ApiDbContext db, 
         string userId)
     {
-        // XP i Level
-        var stats = await db.UserQuestionStats
-            .Where(s => s.UserId == userId)
-            .ToListAsync();
-
-        int totalCorrect = stats.Sum(s => s.CorrectAttempts);
-        int xp = totalCorrect * 10;
-        int level = 1 + (xp / 100);
-
-        // Streak
         var profile = await db.UserProfiles
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
@@ -964,7 +1330,7 @@ public static class QuizEndpoints
         }
 
         int streak = profile?.Streak ?? 0;
-        return (xp, level, streak);
+        return (profile?.Xp ?? 0, profile?.Level ?? 1, streak);
     }
 
     private static async Task<HashSet<string>> LoadExistingAnswerKeysAsync(
@@ -1132,6 +1498,32 @@ public static class QuizEndpoints
 
         return false;
     }
+
+    private sealed record AnswerAttemptInput(
+        Question Question,
+        int QuestionId,
+        string AnswerText,
+        int TimeSpentSeconds,
+        DateTime AnsweredAtUtc,
+        bool IsOffline,
+        string Source,
+        string? ClientId,
+        bool HintUsed,
+        Guid QuizSessionId);
+
+    private sealed record AnswerAttemptResult(
+        bool WasImported,
+        bool IsCorrect,
+        bool IsFirstTimeCorrect,
+        int AwardedXp,
+        int TotalXpAfterAward,
+        QuizAttemptIngestItem? IngestItem);
+
+    private sealed record SingleAnswerTransactionResult(AnswerAttemptResult AttemptResult);
+
+    private sealed record OfflineBatchTransactionResult(
+        int ImportedCount,
+        IReadOnlyList<QuizAttemptIngestItem> IngestRows);
 }
 
 

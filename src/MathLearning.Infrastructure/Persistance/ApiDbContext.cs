@@ -369,6 +369,31 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_UserProfiles_Faculty_Leaderboard");
         });
 
+        builder.Entity<UserAnswerAudit>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired();
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ClientId).HasMaxLength(128);
+            entity.Property(e => e.Answer).IsRequired();
+            entity.Property(e => e.Reason).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.AnsweredAt).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("IX_UserAnswerAudits_UserId");
+            entity.HasIndex(e => e.QuestionId)
+                  .HasDatabaseName("IX_UserAnswerAudits_QuestionId");
+            entity.HasIndex(e => e.CreatedAt)
+                  .HasDatabaseName("IX_UserAnswerAudits_CreatedAt");
+            entity.HasIndex(e => new { e.UserId, e.QuestionId, e.CreatedAt })
+                  .HasDatabaseName("IX_UserAnswerAudits_User_Question_CreatedAt");
+            entity.HasIndex(e => new { e.UserId, e.QuestionId, e.IsFirstTimeCorrect })
+                  .IsUnique()
+                  .HasFilter("\"IsFirstTimeCorrect\" = true")
+                  .HasDatabaseName("UX_UserAnswerAudits_FirstCorrect_PerQuestion");
+        });
+
         builder.Entity<ApplicationLog>(entity =>
         {
             entity.HasKey(e => e.Id);

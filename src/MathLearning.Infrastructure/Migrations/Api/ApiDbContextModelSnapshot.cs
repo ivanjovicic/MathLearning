@@ -3094,10 +3094,36 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("AwardedXp")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsCorrect")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsFirstTimeCorrect")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOffline")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("TotalXpAfterAward")
                         .HasColumnType("integer");
 
                     b.Property<string>("UserId")
@@ -3105,6 +3131,23 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_UserAnswerAudits_CreatedAt");
+
+                    b.HasIndex("QuestionId")
+                        .HasDatabaseName("IX_UserAnswerAudits_QuestionId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_UserAnswerAudits_UserId");
+
+                    b.HasIndex("UserId", "QuestionId", "CreatedAt")
+                        .HasDatabaseName("IX_UserAnswerAudits_User_Question_CreatedAt");
+
+                    b.HasIndex("UserId", "QuestionId", "IsFirstTimeCorrect")
+                        .IsUnique()
+                        .HasFilter("\"IsFirstTimeCorrect\" = true")
+                        .HasDatabaseName("UX_UserAnswerAudits_FirstCorrect_PerQuestion");
 
                     b.ToTable("UserAnswerAudits");
                 });
