@@ -135,6 +135,19 @@ try
         Log.Information("??? DB target ({Environment}): {DbTarget}", builder.Environment.EnvironmentName, DescribeDbConnection(defaultConnectionString));
     }
 
+    if (!builder.Environment.IsDevelopment() &&
+        !builder.Environment.IsEnvironment("Test") &&
+        string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__Default")) &&
+        ConnectionStringTargetsLoopback(defaultConnectionString))
+    {
+        Log.Error(
+            "? ConnectionStrings:Default resolved to a loopback/local fallback in {Environment}: {DbTarget}. Configure deployment env var `ConnectionStrings__Default`.",
+            builder.Environment.EnvironmentName,
+            DescribeDbConnection(defaultConnectionString));
+        throw new InvalidOperationException(
+            "Production deployment is using a local fallback database connection string. Set ConnectionStrings__Default.");
+    }
+
     // OpenTelemetry (minimal tracing)
     var otelServiceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "mathlearning-api";
     var otelServiceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
@@ -201,20 +214,36 @@ try
                 npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
             .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
 
+    var hangfireEnabled = false;
+
     if (!builder.Environment.IsEnvironment("Test"))
     {
-        // Hangfire (PostgreSQL)
-        builder.Services.AddHangfire(config => config
-            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-            .UseSimpleAssemblyNameTypeSerializer()
-            .UseRecommendedSerializerSettings()
-            .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
-            {
-                SchemaName = "hangfire",
-                QueuePollInterval = TimeSpan.FromSeconds(15),
-                InvisibilityTimeout = TimeSpan.FromMinutes(5)
-            }));
-        builder.Services.AddHangfireServer();
+        if (await CanOpenPostgresConnectionAsync(defaultConnectionString))
+        {
+            // Hangfire (PostgreSQL)
+            builder.Services.AddHangfire(config => config
+                .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings()
+                .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
+                {
+                    SchemaName = "hangfire",
+                    QueuePollInterval = TimeSpan.FromSeconds(15),
+                    InvisibilityTimeout = TimeSpan.FromMinutes(5)
+                }));
+            builder.Services.AddHangfireServer();
+            hangfireEnabled = true;
+        }
+        else
+        {
+            builder.Services.AddSingleton<IBackgroundJobClient, DisabledBackgroundJobClient>();
+            Log.Warning(
+                "Skipping Hangfire startup because PostgreSQL is unavailable at startup. Background job enqueue calls will be logged and ignored until the service restarts with a reachable database.");
+        }
+    }
+    else
+    {
+        builder.Services.AddSingleton<IBackgroundJobClient, DisabledBackgroundJobClient>();
     }
 
     // Add Identity (for User management)
@@ -729,7 +758,7 @@ try
     // Map Logging endpoints
     app.MapLoggingEndpoints();
 
-    if (app.Environment.IsDevelopment())
+    if (app.Environment.IsDevelopment() && hangfireEnabled)
     {
         app.UseHangfireDashboard("/hangfire");
     }
@@ -750,7 +779,7 @@ try
 
     Log.Information("? MathLearning API started successfully");
 
-    if (!app.Environment.IsEnvironment("Test") && databaseStartupSucceeded)
+    if (!app.Environment.IsEnvironment("Test") && databaseStartupSucceeded && hangfireEnabled)
     {
         RecurringJob.AddOrUpdate<IPracticeHangfireJobs>(
             "practice-daily-aggregation",
@@ -772,6 +801,10 @@ try
             "anti-cheat-ml-review-sweep",
             job => job.RunMlReviewSweepJob(0),
             "*/5 * * * *");
+    }
+    else if (!app.Environment.IsEnvironment("Test") && !hangfireEnabled)
+    {
+        Log.Warning("Skipping Hangfire recurring job registration because Hangfire is disabled for this process.");
     }
     else if (!app.Environment.IsEnvironment("Test"))
     {
@@ -1080,6 +1113,53 @@ static string DescribeDbConnection(string connectionString)
     catch
     {
         return "<unparseable connection string>";
+    }
+}
+
+static bool ConnectionStringTargetsLoopback(string connectionString)
+{
+    try
+    {
+        var csb = new DbConnectionStringBuilder
+        {
+            ConnectionString = connectionString
+        };
+
+        foreach (var key in new[] { "Host", "Server", "Data Source" })
+        {
+            if (csb.TryGetValue(key, out var value) && value is not null)
+            {
+                var host = value.ToString();
+                if (!string.IsNullOrWhiteSpace(host))
+                    return IsLoopbackHost(host);
+            }
+        }
+    }
+    catch
+    {
+    }
+
+    return false;
+}
+
+static async Task<bool> CanOpenPostgresConnectionAsync(string connectionString, CancellationToken ct = default)
+{
+    try
+    {
+        var csb = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            Timeout = 5,
+            CommandTimeout = 5
+        };
+
+        await using var connection = new NpgsqlConnection(csb.ConnectionString);
+        await connection.OpenAsync(ct);
+        return true;
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Initial PostgreSQL connectivity probe failed for {DbTarget}", DescribeDbConnection(connectionString));
+        return false;
     }
 }
 
