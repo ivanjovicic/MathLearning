@@ -3,6 +3,7 @@
 
 # Build inputs
 !Dockerfile
+!Dockerfile.admin
 !Directory.Build.props
 !src/**
 
