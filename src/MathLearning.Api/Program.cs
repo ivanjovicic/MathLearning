@@ -725,10 +725,10 @@ try
     {
         // TODO: Replace with real job status from Hangfire or background services
         var now = DateTime.UtcNow;
-        return Results.Json(new[]
+            return Results.Json(new[]
         {
-            new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspeÃƒâ€¦Ã‚Â¡an", Timestamp = now.AddMinutes(-30) },
-            new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard aÃƒâ€¦Ã‚Â¾uriran", Timestamp = now.AddMinutes(-10) },
+            new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspešan", Timestamp = now.AddMinutes(-30) },
+            new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard ažuriran", Timestamp = now.AddMinutes(-10) },
             new { Name = "Hangfire Worker", IsSuccess = true, LastMessage = "Svi jobovi OK", Timestamp = now.AddMinutes(-1) }
         });
     });
