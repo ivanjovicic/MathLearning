@@ -1,94 +1,101 @@
-(function () {
-    function escapeHtml(value) {
-        return (value || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#39;");
+function escapeHtml(value) {
+    return (value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function normalizeDelimiters(value) {
+    return (value || "")
+        .replace(/\\\[/g, "$$")
+        .replace(/\\\]/g, "$$")
+        .replace(/\\\(/g, "$")
+        .replace(/\\\)/g, "$");
+}
+
+function stripOuterDelimiters(value) {
+    var trimmed = (value || "").trim();
+    if (trimmed.startsWith("$$") && trimmed.endsWith("$$") && trimmed.length >= 4) {
+        return trimmed.substring(2, trimmed.length - 2);
     }
 
-    function normalizeDelimiters(value) {
-        return (value || "")
-            .replace(/\\\[/g, "$$")
-            .replace(/\\\]/g, "$$")
-            .replace(/\\\(/g, "$")
-            .replace(/\\\)/g, "$");
+    if (trimmed.startsWith("$") && trimmed.endsWith("$") && trimmed.length >= 2) {
+        return trimmed.substring(1, trimmed.length - 1);
     }
 
-    function stripOuterDelimiters(value) {
-        var trimmed = (value || "").trim();
-        if (trimmed.startsWith("$$") && trimmed.endsWith("$$") && trimmed.length >= 4) {
-            return trimmed.substring(2, trimmed.length - 2);
-        }
+    return trimmed;
+}
 
-        if (trimmed.startsWith("$") && trimmed.endsWith("$") && trimmed.length >= 2) {
-            return trimmed.substring(1, trimmed.length - 1);
-        }
+function renderPlainText(container, value) {
+    container.innerHTML = escapeHtml(value).replace(/\n/g, "<br />");
+}
 
-        return trimmed;
+function renderMixed(container, value) {
+    renderPlainText(container, value);
+
+    if (!window.renderMathInElement) {
+        return;
     }
 
-    function renderMixed(container, value) {
-        container.innerHTML = escapeHtml(value).replace(/\n/g, "<br />");
+    window.renderMathInElement(container, {
+        delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "$", right: "$", display: false }
+        ],
+        throwOnError: false
+    });
+}
 
-        if (window.renderMathInElement) {
-            window.renderMathInElement(container, {
-                delimiters: [
-                    { left: "$$", right: "$$", display: true },
-                    { left: "$", right: "$", display: false }
-                ],
-                throwOnError: false
-            });
-        }
+function renderLatex(container, value, renderMode) {
+    if (!window.katex) {
+        renderMixed(container, value);
+        return;
     }
 
-    function renderLatex(container, value, renderMode) {
-        if (!window.katex) {
-            renderMixed(container, value);
+    var expression = stripOuterDelimiters(value);
+    var displayMode = renderMode === "Display";
+    if (renderMode === "Auto") {
+        displayMode = expression.indexOf("\n") >= 0 || expression.length > 48;
+    }
+
+    try {
+        container.innerHTML = window.katex.renderToString(expression, {
+            throwOnError: false,
+            displayMode: displayMode,
+            strict: "ignore"
+        });
+    } catch (error) {
+        renderPlainText(container, value);
+    }
+}
+
+export function render(element, content, format, renderMode, emptyText) {
+    if (!element) {
+        return;
+    }
+
+    var normalized = normalizeDelimiters(content || "");
+    if (!normalized.trim()) {
+        element.textContent = emptyText || "Nema sadržaja za preview.";
+        return;
+    }
+
+    try {
+        if (format === "PlainText") {
+            renderPlainText(element, normalized);
             return;
         }
 
-        var expression = stripOuterDelimiters(value);
-        var displayMode = renderMode === "Display";
-        if (renderMode === "Auto") {
-            displayMode = expression.indexOf("\n") >= 0 || expression.length > 48;
+        if (format === "Latex") {
+            renderLatex(element, normalized, renderMode || "Auto");
+            return;
         }
 
-        try {
-            container.innerHTML = window.katex.renderToString(expression, {
-                throwOnError: false,
-                displayMode: displayMode,
-                strict: "ignore"
-            });
-        } catch (error) {
-            container.innerHTML = escapeHtml(value);
-        }
+        renderMixed(element, normalized);
+    } catch (error) {
+        renderPlainText(element, normalized);
+        console.warn("mathPreview.render fallback activated", error);
     }
-
-    window.mathPreview = {
-        render: function (element, content, format, renderMode, emptyText) {
-            if (!element) {
-                return;
-            }
-
-            var normalized = normalizeDelimiters(content || "");
-            if (!normalized.trim()) {
-                element.textContent = emptyText || "Nema sadržaja za preview.";
-                return;
-            }
-
-            if (format === "PlainText") {
-                element.innerHTML = escapeHtml(normalized).replace(/\n/g, "<br />");
-                return;
-            }
-
-            if (format === "Latex") {
-                renderLatex(element, normalized, renderMode || "Auto");
-                return;
-            }
-
-            renderMixed(element, normalized);
-        }
-    };
-})();
+}

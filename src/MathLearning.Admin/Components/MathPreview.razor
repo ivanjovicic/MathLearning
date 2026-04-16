@@ -1,7 +1,9 @@
 @using MathLearning.Domain.Enums
 @using MathRenderMode = MathLearning.Domain.Enums.RenderMode
 @using MudBlazor
+@implements IAsyncDisposable
 @inject IJSRuntime Js
+@inject ILogger<MathPreview> Logger
 
 <div class="@($"math-preview-shell {Class}")">
     @if (_isRendering)
@@ -22,6 +24,7 @@
     private ContentFormat _previousFormat = ContentFormat.MarkdownWithMath;
     private MathRenderMode _previousRenderMode = MathRenderMode.Auto;
     private string _previousEmptyText = string.Empty;
+    private IJSObjectReference? _module;
 
     [Parameter]
     public string? Content { get; set; }
@@ -58,21 +61,62 @@
         }
 
         var normalizedContent = Content ?? string.Empty;
-        await Js.InvokeVoidAsync(
-            "mathPreview.render",
-            _container,
-            normalizedContent,
-            Format.ToString(),
-            RenderMode.ToString(),
-            EmptyText);
+        try
+        {
+            var module = await GetModuleAsync();
+            await module.InvokeVoidAsync(
+                "render",
+                _container,
+                normalizedContent,
+                Format.ToString(),
+                RenderMode.ToString(),
+                EmptyText);
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Math preview JS interop skipped because the circuit disconnected.");
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Math preview JS rendering failed. The editor will continue without preview.");
+        }
+        catch (TaskCanceledException)
+        {
+            Logger.LogDebug("Math preview JS interop was canceled.");
+        }
+        finally
+        {
+            _previousContent = normalizedContent;
+            _previousFormat = Format;
+            _previousRenderMode = RenderMode;
+            _previousEmptyText = EmptyText;
+            _needsRender = false;
+            _isRendering = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
-        _previousContent = normalizedContent;
-        _previousFormat = Format;
-        _previousRenderMode = RenderMode;
-        _previousEmptyText = EmptyText;
-        _needsRender = false;
-        _isRendering = false;
-        StateHasChanged();
+    private async Task<IJSObjectReference> GetModuleAsync()
+    {
+        _module ??= await Js.InvokeAsync<IJSObjectReference>("import", "./mathPreview.js");
+        return _module;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Math preview JS module dispose skipped because the circuit disconnected.");
+        }
     }
 }
 
