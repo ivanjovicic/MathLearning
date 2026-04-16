@@ -182,8 +182,15 @@ async Task SeedAdminAsync(WebApplication app)
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
 
-    // Seed domain data first
-    await DbSeeder.SeedAsync(db);
+    // Seed domain data first (skip if tables don't exist, e.g., when migrations were skipped)
+    try
+    {
+        await DbSeeder.SeedAsync(db);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Domain data seeding failed (tables may not exist); skipping and continuing with admin user seeding.");
+    }
 
     // Create admin role if not exists
     if (!await roleManager.RoleExistsAsync("Admin"))
