@@ -112,10 +112,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Note: calling UseAntiforgery() here can lead to attempts to modify response headers
-// after the response body has started. Antiforgery should be handled per-endpoint
-// (e.g. via form tokens or filters) rather than a global middleware call.
-// app.UseAntiforgery();
+app.UseAntiforgery();
 
 // Auto-migrate and seed database on startup
 using (var scope = app.Services.CreateScope())
