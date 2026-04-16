@@ -288,6 +288,8 @@ async Task SeedAdminAsync(WebApplication app)
 
         if (resetPasswordOnStart)
         {
+            // Re-fetch to get latest ConcurrencyStamp after any prior updates
+            adminUser = (await userManager.FindByNameAsync(adminUsername))!;
             await EnsurePasswordAsync(userManager, adminUser, adminPassword);
             app.Logger.LogInformation("Admin password reset on startup for '{Username}'", adminUsername);
         }
