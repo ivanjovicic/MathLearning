@@ -1,13 +1,14 @@
 ﻿using MathLearning.Admin.Components;
 using MathLearning.Admin.Data;
 using MathLearning.Admin.Services;
+using MathLearning.Application.Content;
+using MathLearning.Infrastructure.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
-using MathLearning.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,6 +79,7 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
 builder.Services.AddScoped(_ => new HttpClient());
 builder.Services.AddScoped<AdminApiClient>();
+builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 
 builder.Services.AddMudServices();
 
@@ -92,7 +94,28 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error");
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "text/html; charset=utf-8";
+            await context.Response.WriteAsync("""
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MathLearning Admin Error</title>
+</head>
+<body>
+    <h1>Unexpected error</h1>
+    <p>The admin application hit an unexpected error while processing this request.</p>
+</body>
+</html>
+""");
+        });
+    });
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
