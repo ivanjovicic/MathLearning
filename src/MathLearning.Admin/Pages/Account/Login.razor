@@ -2,16 +2,21 @@
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @layout LoginLayout
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Identity
 @using MudBlazor
 @using Microsoft.AspNetCore.Components
 @using MathLearning.Admin.Services
 @attribute [AllowAnonymous]
-@inject SignInManager<IdentityUser> SignInManager
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @inject ILogger<Login> Logger
 
 <PageTitle>Login - MathLearning Admin</PageTitle>
+
+<form id="loginForm" method="post" action="/api/account/login" style="display:none">
+    <input type="hidden" name="username" />
+    <input type="hidden" name="password" />
+    <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
+</form>
 
 <MudContainer MaxWidth="MaxWidth.Small">
     <MudPaper Class="pa-6" Elevation="3">
@@ -65,6 +70,10 @@
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
     string Username = "";
     string Password = "";
     string? ErrorMessage;
@@ -72,7 +81,10 @@
 
     protected override void OnInitialized()
     {
-        Logger.LogInformation("Login page initialized. ReturnUrl: {ReturnUrl}", ReturnUrl);
+        if (!string.IsNullOrEmpty(Error))
+        {
+            ErrorMessage = "Neispravno korisničko ime ili lozinka";
+        }
     }
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
@@ -85,42 +97,26 @@
 
     async Task LoginUser()
     {
-        if (isLoggingIn)
+        if (isLoggingIn) return;
+
+        if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
         {
-            Logger.LogWarning("Login already in progress, ignoring duplicate call");
+            ErrorMessage = "Unesite korisničko ime i lozinku";
             return;
         }
-        
-        Logger.LogInformation("Login attempt started for user: {Username}", Username);
+
         isLoggingIn = true;
         ErrorMessage = null;
         StateHasChanged();
-        
+
         try
         {
-            Logger.LogInformation("Calling SignInManager.PasswordSignInAsync");
-            var result = await SignInManager.PasswordSignInAsync(
-                Username, Password, isPersistent: true, lockoutOnFailure: false);
-
-            Logger.LogInformation("SignIn result: Succeeded={Succeeded}", result.Succeeded);
-
-            if (result.Succeeded)
-            {
-                var redirectUrl = ReturnUrlSanitizer.NormalizeLocalReturnUrl(ReturnUrl);
-                Logger.LogInformation("Login successful, redirecting to: {RedirectUrl}", redirectUrl);
-
-                Nav.NavigateTo(redirectUrl, forceLoad: true);
-            }
-            else
-            {
-                Logger.LogWarning("Login failed for user: {Username}", Username);
-                ErrorMessage = "Neispravno korisničko ime ili lozinka";
-                isLoggingIn = false;
-            }
+            await JS.InvokeVoidAsync("eval", 
+                $"(function(){{ var f=document.getElementById('loginForm'); f.querySelector('input[name=\"username\"]').value={System.Text.Json.JsonSerializer.Serialize(Username)}; f.querySelector('input[name=\"password\"]').value={System.Text.Json.JsonSerializer.Serialize(Password)}; f.submit(); }})()");
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Login error for user: {Username}", Username);
+            Logger.LogError(ex, "Login form submission error");
             ErrorMessage = $"Greška: {ex.Message}";
             isLoggingIn = false;
         }

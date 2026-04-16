@@ -166,6 +166,31 @@ using (var scope = app.Services.CreateScope())
 app.MapGet("/health", () => Results.Ok("Healthy"));
 app.MapGet("/favicon.ico", () => Results.NoContent());
 
+app.MapPost("/api/account/login", async (HttpContext httpContext, SignInManager<IdentityUser> signInManager) =>
+{
+    var form = await httpContext.Request.ReadFormAsync();
+    var username = form["username"].ToString();
+    var password = form["password"].ToString();
+    var returnUrl = form["returnUrl"].ToString();
+
+    if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//"))
+        returnUrl = "/";
+
+    var result = await signInManager.PasswordSignInAsync(username, password, isPersistent: true, lockoutOnFailure: false);
+    if (result.Succeeded)
+    {
+        return Results.Redirect(returnUrl);
+    }
+
+    return Results.Redirect($"/login?error=1&returnUrl={Uri.EscapeDataString(returnUrl)}");
+}).DisableAntiforgery();
+
+app.MapPost("/api/account/logout", async (SignInManager<IdentityUser> signInManager) =>
+{
+    await signInManager.SignOutAsync();
+    return Results.Redirect("/login");
+}).DisableAntiforgery();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapRazorPages();

@@ -1,11 +1,11 @@
 ﻿@page "/logout"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Identity
+@using MudBlazor
 @attribute [Authorize]
-@inject SignInManager<IdentityUser> SignInManager
-@inject NavigationManager Nav
-@inject ILogger<Logout> Logger
+@inject IJSRuntime JS
+
+<form id="logoutForm" method="post" action="/api/account/logout" style="display:none"></form>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
     <div class="text-center">
@@ -16,20 +16,11 @@
 </MudContainer>
 
 @code {
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        Logger.LogInformation("Logging out user...");
-        
-        try
+        if (firstRender)
         {
-            await SignInManager.SignOutAsync();
-            Logger.LogInformation("User signed out successfully");
-            Nav.NavigateTo("/login", forceLoad: true);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error during logout");
-            Nav.NavigateTo("/login", forceLoad: true);
+            await JS.InvokeVoidAsync("eval", "document.getElementById('logoutForm').submit()");
         }
     }
 }
