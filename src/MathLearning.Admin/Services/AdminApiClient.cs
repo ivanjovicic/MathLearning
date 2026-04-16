@@ -1,21 +1,20 @@
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Components;
 
 namespace MathLearning.Admin.Services;
 
 public sealed class AdminApiClient
 {
     private readonly HttpClient httpClient;
-    private readonly NavigationManager navigationManager;
+    private readonly IConfiguration configuration;
     private readonly ILogger<AdminApiClient> logger;
 
     public AdminApiClient(
         HttpClient httpClient,
-        NavigationManager navigationManager,
+        IConfiguration configuration,
         ILogger<AdminApiClient> logger)
     {
         this.httpClient = httpClient;
-        this.navigationManager = navigationManager;
+        this.configuration = configuration;
         this.logger = logger;
     }
 
@@ -56,12 +55,14 @@ public sealed class AdminApiClient
             return;
         }
 
-        if (!Uri.TryCreate(navigationManager.BaseUri, UriKind.Absolute, out var baseUri))
+        var apiBaseUrl = configuration["ApiBaseUrl"];
+        if (!string.IsNullOrWhiteSpace(apiBaseUrl)
+            && Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var baseUri))
         {
-            logger.LogWarning("Unable to resolve admin API base address from NavigationManager.BaseUri: {BaseUri}", navigationManager.BaseUri);
+            httpClient.BaseAddress = baseUri;
             return;
         }
 
-        httpClient.BaseAddress = baseUri;
+        logger.LogWarning("Admin API base address is not configured. Set ApiBaseUrl in configuration.");
     }
 }

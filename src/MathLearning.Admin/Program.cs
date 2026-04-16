@@ -1,7 +1,6 @@
 ﻿using MathLearning.Admin.Components;
 using MathLearning.Admin.Data;
 using MathLearning.Admin.Services;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -77,26 +76,7 @@ builder.Services.AddAntiforgery(options =>
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
-builder.Services.AddScoped(sp =>
-{
-    var navigationManager = sp.GetRequiredService<NavigationManager>();
-    var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
-    Uri? baseAddress = null;
-
-    if (!string.IsNullOrWhiteSpace(apiBaseUrl)
-        && Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var configuredBaseAddress))
-    {
-        baseAddress = configuredBaseAddress;
-    }
-    else if (Uri.TryCreate(navigationManager.BaseUri, UriKind.Absolute, out var currentBaseAddress))
-    {
-        baseAddress = currentBaseAddress;
-    }
-
-    return baseAddress is null
-        ? new HttpClient()
-        : new HttpClient { BaseAddress = baseAddress };
-});
+builder.Services.AddScoped(_ => new HttpClient());
 builder.Services.AddScoped<AdminApiClient>();
 
 builder.Services.AddMudServices();
