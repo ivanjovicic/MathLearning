@@ -12,18 +12,15 @@ namespace MathLearning.Admin.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "PreviousSnapshotJson",
-                table: "Questions",
-                type: "jsonb",
-                nullable: true);
+            migrationBuilder.Sql("""
+ALTER TABLE "Questions"
+ADD COLUMN IF NOT EXISTS "PreviousSnapshotJson" jsonb;
+""");
 
-            migrationBuilder.AddColumn<string>(
-                name: "UpdatedBy",
-                table: "Questions",
-                type: "character varying(256)",
-                maxLength: 256,
-                nullable: true);
+            migrationBuilder.Sql("""
+ALTER TABLE "Questions"
+ADD COLUMN IF NOT EXISTS "UpdatedBy" character varying(256);
+""");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
