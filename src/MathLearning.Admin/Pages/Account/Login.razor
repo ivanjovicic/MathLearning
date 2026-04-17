@@ -1,22 +1,12 @@
-﻿@page "/login"
+@page "/login"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @layout LoginLayout
 @using Microsoft.AspNetCore.Authorization
-@using MudBlazor
 @using Microsoft.AspNetCore.Components
-@using MathLearning.Admin.Services
+@using MudBlazor
 @attribute [AllowAnonymous]
-@inject NavigationManager Nav
-@inject IJSRuntime JS
-@inject ILogger<Login> Logger
 
 <PageTitle>Login - MathLearning Admin</PageTitle>
-
-<form id="loginForm" method="post" action="/api/account/login" style="display:none">
-    <input type="hidden" name="username" />
-    <input type="hidden" name="password" />
-    <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
-</form>
 
 <MudContainer MaxWidth="MaxWidth.Small">
     <MudPaper Class="pa-6" Elevation="3">
@@ -27,38 +17,40 @@
             <MudAlert Severity="Severity.Error" Class="mb-4">@ErrorMessage</MudAlert>
         }
 
-        <MudTextField @bind-Value="Username" 
-                      Label="Korisničko ime" 
-                      Variant="Variant.Outlined"
-                      Class="mb-3"
-                      Required="true"
-                      OnKeyUp="HandleKeyPress" />
+        <form method="post" action="/api/account/login" class="login-form" autocomplete="on">
+            <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
 
-        <MudTextField @bind-Value="Password" 
-                      Label="Lozinka" 
-                      Variant="Variant.Outlined"
-                      InputType="InputType.Password"
-                      Class="mb-4"
-                      Required="true"
-                      OnKeyUp="HandleKeyPress" />
+            <div class="login-field">
+                <label class="login-label" for="username">Korisničko ime</label>
+                <input id="username"
+                       name="username"
+                       class="login-input"
+                       type="text"
+                       autocomplete="username"
+                       spellcheck="false"
+                       required
+                       autofocus />
+            </div>
 
-        <MudButton OnClick="LoginUser" 
-                   Variant="Variant.Filled" 
-                   Color="Color.Primary" 
-                   FullWidth="true"
-                   Size="Size.Large"
-                   Disabled="@isLoggingIn">
-            @if (isLoggingIn)
-            {
-                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
-                <span>Prijavljivanje...</span>
-            }
-            else
-            {
+            <div class="login-field">
+                <label class="login-label" for="password">Lozinka</label>
+                <input id="password"
+                       name="password"
+                       class="login-input"
+                       type="password"
+                       autocomplete="current-password"
+                       required />
+            </div>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large">
                 <span>Prijavi se</span>
-            }
-        </MudButton>
-        
+            </MudButton>
+        </form>
+
         <MudText Typo="Typo.caption" Class="mt-4" Align="Align.Center" Color="Color.Secondary">
             Koristite administratorske kredencijale iz konfiguracije okruzenja.
         </MudText>
@@ -74,10 +66,7 @@
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
-    string Username = "";
-    string Password = "";
-    string? ErrorMessage;
-    bool isLoggingIn = false;
+    private string? ErrorMessage;
 
     protected override void OnInitialized()
     {
@@ -86,39 +75,53 @@
             ErrorMessage = "Neispravno korisničko ime ili lozinka";
         }
     }
-
-    private async Task HandleKeyPress(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await LoginUser();
-        }
-    }
-
-    async Task LoginUser()
-    {
-        if (isLoggingIn) return;
-
-        if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
-        {
-            ErrorMessage = "Unesite korisničko ime i lozinku";
-            return;
-        }
-
-        isLoggingIn = true;
-        ErrorMessage = null;
-        StateHasChanged();
-
-        try
-        {
-            await JS.InvokeVoidAsync("eval", 
-                $"(function(){{ var f=document.getElementById('loginForm'); f.querySelector('input[name=\"username\"]').value={System.Text.Json.JsonSerializer.Serialize(Username)}; f.querySelector('input[name=\"password\"]').value={System.Text.Json.JsonSerializer.Serialize(Password)}; f.submit(); }})()");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Login form submission error");
-            ErrorMessage = $"Greška: {ex.Message}";
-            isLoggingIn = false;
-        }
-    }
 }
+
+<style>
+    .login-form {
+        display: grid;
+        gap: 16px;
+    }
+
+    .login-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .login-label {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: rgba(0, 0, 0, 0.78);
+    }
+
+    .login-input {
+        width: 100%;
+        min-height: 56px;
+        padding: 16px 14px;
+        border: 1px solid rgba(0, 0, 0, 0.23);
+        border-radius: 4px;
+        background: #fff;
+        color: rgba(0, 0, 0, 0.87);
+        font: inherit;
+        line-height: 1.5;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .login-input:hover {
+        border-color: rgba(0, 0, 0, 0.87);
+    }
+
+    .login-input:focus {
+        outline: none;
+        border-color: var(--mud-palette-primary);
+        box-shadow: 0 0 0 1px var(--mud-palette-primary);
+    }
+
+    .login-input:-webkit-autofill,
+    .login-input:-webkit-autofill:hover,
+    .login-input:-webkit-autofill:focus {
+        -webkit-text-fill-color: rgba(0, 0, 0, 0.87);
+        -webkit-box-shadow: 0 0 0 1000px #fff inset;
+        transition: background-color 5000s ease-in-out 0s;
+    }
+</style>

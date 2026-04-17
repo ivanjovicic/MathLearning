@@ -35,7 +35,12 @@ builder.Services.AddDataProtection()
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 
 builder.Services.AddDbContext<AdminDbContext>(options =>
-    options.UseNpgsql(adminConnectionString));
+    options.UseNpgsql(
+        adminConnectionString,
+        npgsql => npgsql.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null)));
 builder.Services.AddIdentityCore<IdentityUser>(options =>
 {
     options.Password.RequireDigit = false;
@@ -139,47 +144,22 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
-// Auto-migrate and seed database on startup
-using (var scope = app.Services.CreateScope())
+var initializeDatabaseOnStartup = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue("Database:InitializeOnStartup", true);
+
+if (initializeDatabaseOnStartup)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
     try
     {
-        await using var connection = db.Database.GetDbConnection();
-        await connection.OpenAsync();
+        app.Logger.LogInformation("Applying admin database migrations");
+        await db.Database.MigrateAsync();
+        app.Logger.LogInformation("Admin database migrations applied successfully");
 
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT to_regclass('public.\"AspNetRoles\"') IS NOT NULL";
-
-        var identitySchemaExists = false;
-        var result = await command.ExecuteScalarAsync();
-        if (result is bool exists)
-        {
-            identitySchemaExists = exists;
-        }
-
-        var forceSeed = app.Configuration.GetValue<bool>("SeedAdmin:Force");
-
-        if (identitySchemaExists && !forceSeed)
-        {
-            app.Logger.LogInformation("Detected existing Identity schema. Skipping automatic admin startup migrations and seeding.");
-        }
-        else if (identitySchemaExists && forceSeed)
-        {
-            app.Logger.LogInformation("SeedAdmin:Force=true; skipping migrations (tables already exist) but running seeding.");
-            await SeedAdminAsync(app);
-            app.Logger.LogInformation("Admin database seeding complete");
-        }
-        else
-        {
-            app.Logger.LogInformation("Applying admin database migrations");
-            await db.Database.MigrateAsync();
-            app.Logger.LogInformation("Admin database migrations applied successfully");
-
-            app.Logger.LogInformation("Seeding admin database");
-            await SeedAdminAsync(app);
-            app.Logger.LogInformation("Admin database seeding complete");
-        }
+        app.Logger.LogInformation("Seeding admin database");
+        await SeedAdminAsync(app);
+        app.Logger.LogInformation("Admin database seeding complete");
     }
     catch (Exception ex)
     {
@@ -187,8 +167,13 @@ using (var scope = app.Services.CreateScope())
         throw;
     }
 }
+else
+{
+    app.Logger.LogInformation("Skipping admin database initialization on startup because Database:InitializeOnStartup is disabled.");
+}
 
 app.MapGet("/health", () => Results.Ok("Healthy"));
+app.MapGet("/healthz", () => Results.Ok("Healthy"));
 app.MapGet("/favicon.ico", () => Results.NoContent());
 
 app.MapPost("/api/account/login", async (HttpContext httpContext, SignInManager<IdentityUser> signInManager) =>

@@ -23,6 +23,11 @@
     Upravljajte pitanjima i odgovorima
 </MudText>
 
+@if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_loadError</MudAlert>
+}
+
 <MudPaper Elevation="4" Class="pa-4 mb-4">
     <MudGrid Spacing="2">
         <MudItem xs="12" md="6">
@@ -145,22 +150,33 @@
     private int _currentPage = 1;
     private int _pageSize = 10;
     private int _totalCount = 0;
+    private string? _loadError;
     private int _pageCount => (_totalCount + _pageSize - 1) / _pageSize;
 
     protected override async Task OnInitializedAsync()
     {
-        _categories = await Db.Categories
-            .AsNoTracking()
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-        
-        await LoadQuestionsAsync();
+        try
+        {
+            _categories = await Db.Categories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+
+            await LoadQuestionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing questions index");
+            _loadError = "Greška pri učitavanju pitanja. Pokušajte ponovo za nekoliko trenutaka.";
+            _loading = false;
+        }
     }
 
     private async Task LoadQuestionsAsync()
     {
         _currentPage = 1;
         _loading = true;
+        _loadError = null;
         StateHasChanged();
 
         try
@@ -177,6 +193,8 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error loading questions");
+            _loadError = "Greška pri učitavanju pitanja. Proverite bazu i pokušajte ponovo.";
+            _questions.Clear();
             Snackbar.Add("Greška pri učitavanju pitanja", Severity.Error);
         }
         finally
@@ -189,6 +207,7 @@
     {
         _currentPage = page;
         _loading = true;
+        _loadError = null;
         StateHasChanged();
 
         try
@@ -198,6 +217,12 @@
                 .Skip((_currentPage - 1) * _pageSize)
                 .Take(_pageSize)
                 .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error changing questions page to {Page}", page);
+            _loadError = "Greška pri učitavanju sledeće stranice pitanja.";
+            Snackbar.Add("Greška pri učitavanju sledeće stranice pitanja", Severity.Error);
         }
         finally
         {

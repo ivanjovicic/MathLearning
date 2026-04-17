@@ -16,7 +16,7 @@ services:
       - key: ApiBaseUrl
         value: https://mathlearning-sn6d.onrender.com/
       - key: Database__InitializeOnStartup
-        value: "false"
+        value: "true"
       - key: SeedAdmin__Enabled
         value: "false"
       - key: SeedAdmin__ResetPasswordOnStart

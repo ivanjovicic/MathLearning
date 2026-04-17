@@ -24,12 +24,12 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<Topic>().ToTable("Topic");
-        builder.Entity<Subtopic>().ToTable("Subtopic");
-        builder.Entity<QuestionTranslation>().ToTable("QuestionTranslation");
-        builder.Entity<QuestionStep>().ToTable("QuestionStep");
-        builder.Entity<QuestionStepTranslation>().ToTable("QuestionStepTranslation");
-        builder.Entity<OptionTranslation>().ToTable("OptionTranslation");
+        builder.Entity<Topic>().ToTable("Topics");
+        builder.Entity<Subtopic>().ToTable("Subtopics");
+        builder.Entity<QuestionTranslation>().ToTable("QuestionTranslations");
+        builder.Entity<QuestionStep>().ToTable("QuestionSteps");
+        builder.Entity<QuestionStepTranslation>().ToTable("QuestionStepTranslations");
+        builder.Entity<OptionTranslation>().ToTable("OptionTranslations");
 
         builder.Entity<Question>(entity =>
         {

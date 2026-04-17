@@ -28,13 +28,20 @@
 
 <NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
 
-<QuestionEditor Model="@Model"
-                Categories="@Categories"
-                Subtopics="@Subtopics"
-                IsSaving="@IsSaving"
-                SaveButtonText="Sačuvaj pitanje"
-                ValidationErrors="@ValidationErrors"
-                OnSave="SaveAsync" />
+@if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <MudAlert Severity="Severity.Error">@_loadError</MudAlert>
+}
+else
+{
+    <QuestionEditor Model="@Model"
+                    Categories="@Categories"
+                    Subtopics="@Subtopics"
+                    IsSaving="@IsSaving"
+                    SaveButtonText="Sačuvaj pitanje"
+                    ValidationErrors="@ValidationErrors"
+                    OnSave="SaveAsync" />
+}
 
 @code {
     private readonly QuestionEditorModel Model = new();
@@ -43,41 +50,50 @@
     private List<Subtopic> Subtopics { get; set; } = [];
     private bool IsSaving { get; set; }
     private List<string> ValidationErrors { get; set; } = [];
+    private string? _loadError;
     private string _initialSnapshot = string.Empty;
     private bool HasUnsavedChanges => !IsSaving && !string.Equals(_initialSnapshot, _editorHelper?.CreateModelSnapshot(Model), StringComparison.Ordinal);
 
     protected override async Task OnInitializedAsync()
     {
-        _editorHelper = new QuestionEditorHelper(Sanitizer);
-
-        Categories = await Db.Categories
-            .AsNoTracking()
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-
-        Subtopics = await Db.Subtopics
-            .AsNoTracking()
-            .Include(x => x.Topic)
-            .OrderBy(x => x.Topic!.Name)
-            .ThenBy(x => x.Name)
-            .ToListAsync();
-
-        if (Categories.Count > 0)
+        try
         {
-            Model.CategoryId = Categories[0].Id;
-        }
+            _editorHelper = new QuestionEditorHelper(Sanitizer);
 
-        if (Subtopics.Count > 0)
+            Categories = await Db.Categories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+
+            Subtopics = await Db.Subtopics
+                .AsNoTracking()
+                .Include(x => x.Topic)
+                .OrderBy(x => x.Topic!.Name)
+                .ThenBy(x => x.Name)
+                .ToListAsync();
+
+            if (Categories.Count > 0)
+            {
+                Model.CategoryId = Categories[0].Id;
+            }
+
+            if (Subtopics.Count > 0)
+            {
+                Model.SubtopicId = Subtopics[0].Id;
+            }
+
+            if (Model.Options.Count > 0)
+            {
+                Model.Options[0].IsCorrect = true;
+            }
+
+            MarkSnapshot();
+        }
+        catch (Exception ex)
         {
-            Model.SubtopicId = Subtopics[0].Id;
+            Logger.LogError(ex, "Error initializing new question page");
+            _loadError = "Greška pri učitavanju podataka za novo pitanje. Pokušajte ponovo za nekoliko trenutaka.";
         }
-
-        if (Model.Options.Count > 0)
-        {
-            Model.Options[0].IsCorrect = true;
-        }
-
-        MarkSnapshot();
     }
 
     private async Task SaveAsync()

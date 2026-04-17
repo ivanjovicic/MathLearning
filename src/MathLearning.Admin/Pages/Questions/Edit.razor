@@ -32,6 +32,10 @@
 {
     <MudProgressCircular Indeterminate="true" />
 }
+else if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <MudAlert Severity="Severity.Error">@_loadError</MudAlert>
+}
 else if (_question is null)
 {
     <MudAlert Severity="Severity.Error">Pitanje nije pronađeno.</MudAlert>
@@ -59,6 +63,7 @@ else
     private bool _loading = true;
     private bool IsSaving { get; set; }
     private List<string> ValidationErrors { get; set; } = [];
+    private string? _loadError;
     private string _initialSnapshot = string.Empty;
     private bool HasUnsavedChanges =>
         !_loading &&
@@ -67,32 +72,43 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _editorHelper = new QuestionEditorHelper(Sanitizer);
-
-        Categories = await Db.Categories
-            .AsNoTracking()
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-
-        Subtopics = await Db.Subtopics
-            .AsNoTracking()
-            .Include(x => x.Topic)
-            .OrderBy(x => x.Topic!.Name)
-            .ThenBy(x => x.Name)
-            .ToListAsync();
-
-        _question = await Db.Questions
-            .Include(x => x.Options)
-            .Include(x => x.Steps)
-            .FirstOrDefaultAsync(x => x.Id == Id);
-
-        if (_question is not null && _editorHelper is not null)
+        try
         {
-            _editorHelper.MapQuestionToModel(_question, Model);
-        }
+            _editorHelper = new QuestionEditorHelper(Sanitizer);
 
-        _loading = false;
-        MarkSnapshot();
+            Categories = await Db.Categories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+
+            Subtopics = await Db.Subtopics
+                .AsNoTracking()
+                .Include(x => x.Topic)
+                .OrderBy(x => x.Topic!.Name)
+                .ThenBy(x => x.Name)
+                .ToListAsync();
+
+            _question = await Db.Questions
+                .Include(x => x.Options)
+                .Include(x => x.Steps)
+                .FirstOrDefaultAsync(x => x.Id == Id);
+
+            if (_question is not null && _editorHelper is not null)
+            {
+                _editorHelper.MapQuestionToModel(_question, Model);
+            }
+
+            MarkSnapshot();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing edit question page {QuestionId}", Id);
+            _loadError = "Greška pri učitavanju pitanja za izmenu. Pokušajte ponovo za nekoliko trenutaka.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private async Task SaveAsync()
