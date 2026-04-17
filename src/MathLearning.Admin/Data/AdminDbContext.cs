@@ -34,6 +34,7 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
         builder.Entity<OptionTranslation>().ToTable("OptionTranslations");
         builder.Entity<BugReport>().ToTable("bug_reports");
         builder.Entity<QuestionDraft>().ToTable("question_drafts");
+        builder.Entity<QuestionDraft>().Ignore(e => e.LatestValidationResult);
 
         builder.Entity<Question>(entity =>
         {
