@@ -105,6 +105,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
             entity.Property(e => e.Type).IsRequired().HasDefaultValue("multiple_choice");
+            entity.Ignore(e => e.CorrectOptionId);
             entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.ExplanationFormat).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.HintFormat).HasConversion<string>().HasMaxLength(32);
@@ -112,6 +113,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.ExplanationRenderMode).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.SemanticsAltText).HasMaxLength(1000);
+            entity.Property(e => e.UpdatedBy).HasMaxLength(256).IsRequired(false);
+            entity.Property(e => e.PreviousSnapshotJson).HasColumnType("jsonb").IsRequired(false);
             entity.HasOne(e => e.Category)
                   .WithMany()
                   .HasForeignKey(e => e.CategoryId)

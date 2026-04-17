@@ -19,6 +19,8 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<Subtopic> Subtopics => Set<Subtopic>();
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
+    public DbSet<BugReport> BugReports => Set<BugReport>();
+    public DbSet<QuestionDraft> QuestionDrafts => Set<QuestionDraft>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -30,6 +32,8 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
         builder.Entity<QuestionStep>().ToTable("QuestionSteps");
         builder.Entity<QuestionStepTranslation>().ToTable("QuestionStepTranslations");
         builder.Entity<OptionTranslation>().ToTable("OptionTranslations");
+        builder.Entity<BugReport>().ToTable("bug_reports");
+        builder.Entity<QuestionDraft>().ToTable("question_drafts");
 
         builder.Entity<Question>(entity =>
         {
@@ -41,6 +45,8 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.SemanticsAltText).HasMaxLength(1000);
             entity.Property(e => e.HintFull).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.UpdatedBy).HasMaxLength(256).IsRequired(false);
+            entity.Property(e => e.PreviousSnapshotJson).HasColumnType("jsonb").IsRequired(false);
 
             entity.HasOne(e => e.Category)
                 .WithMany()
@@ -49,6 +55,10 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
             entity.HasOne(e => e.Subtopic)
                 .WithMany()
                 .HasForeignKey(e => e.SubtopicId);
+            entity.HasOne<QuestionOption>()
+                .WithMany()
+                .HasForeignKey(e => e.CorrectOptionId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.HasMany(e => e.Options)
                 .WithOne();
             entity.HasMany(e => e.Steps)

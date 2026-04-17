@@ -6,404 +6,427 @@
 @inject IMathContentSanitizer Sanitizer
 
 <div class="editor-container">
-    <div class="editor-header mb-4">
-        <div class="editor-toggle">
-            <MudSwitch T="bool" @bind-Value="_showPreviews" Color="Color.Primary">Prikaži preview</MudSwitch>
-        </div>
-    </div>
-
-    <MudTabs Elevation="3" Class="mud-height-full">
-        <!-- TAB 1: Tekst pitanja -->
-        <MudTabPanel Text="Tekst pitanja" Icon="@Icons.Material.Filled.Notes">
-            <MudGrid Spacing="2" Class="pa-4">
-                <MudItem xs="12" md="4">
-                    <MudSelect T="string" Label="Tip pitanja" @bind-Value="Model.Type" Variant="Variant.Outlined">
-                        <MudSelectItem T="string" Value="@("multiple_choice")">Višestruki izbor</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("open_answer")">Otvoren odgovor</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudSelect T="int" Label="Kategorija" @bind-Value="Model.CategoryId" Variant="Variant.Outlined">
-                        @foreach (var category in Categories)
-                        {
-                            <MudSelectItem T="int" Value="@category.Id">@category.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudSelect T="int" Label="Podtema" @bind-Value="Model.SubtopicId" Variant="Variant.Outlined">
-                        @foreach (var subtopic in Subtopics)
-                        {
-                            <MudSelectItem T="int" Value="@subtopic.Id">@FormatSubtopic(subtopic)</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                <MudItem xs="12" md="8">
-                    <MudTextField T="string"
-                                  Label="Tekst pitanja"
-                                  Variant="Variant.Outlined"
-                                  Lines="4"
-                                  AutoGrow="true"
-                                  DebounceInterval="300"
-                                  MaxLength="@QuestionEditorFieldLimits.QuestionTextMaxLength"
-                                  HelperText="@($"{Model.Text?.Length ?? 0} / {QuestionEditorFieldLimits.QuestionTextMaxLength}")"
-                                  @bind-Value="Model.Text" />
-                </MudItem>
-                <MudItem xs="12" md="2">
-                    <MudSelect T="ContentFormat" Label="Format" @bind-Value="Model.TextFormat" Variant="Variant.Outlined">
-                        @foreach (var format in EditorFormats)
-                        {
-                            <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="2">
-                    <MudSelect T="MathRenderMode" Label="Render" @bind-Value="Model.TextRenderMode" Variant="Variant.Outlined">
-                        @foreach (var renderMode in RenderModes)
-                        {
-                            <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                <MudItem xs="12">
-                    <MudTextField T="string"
-                                  Label="Semantics alt text"
-                                  Variant="Variant.Outlined"
-                                  HelperText="Opcionalno. Ako ostane prazno, backend generiše čitljiv fallback."
-                                  DebounceInterval="300"
-                                  @bind-Value="Model.SemanticsAltText" />
-                </MudItem>
-
-                <MudItem xs="12" md="8">
-                    <MudText Typo="Typo.body2" Class="mb-1">Težina</MudText>
-                    <MudSlider T="int" Min="1" Max="5" Step="1" ValueLabel="true" @bind-Value="Model.Difficulty" />
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.body2" Class="mb-1">Izabrana težina</MudText>
-                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled">@($"{Model.Difficulty} / 5")</MudChip>
-                </MudItem>
-
-                @if (_showPreviews)
-                {
-                    <MudItem xs="12">
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Preview pitanja</MudText>
-                        <MathPreview Content="@Model.Text"
-                                     Format="@Model.TextFormat"
-                                     RenderMode="@Model.TextRenderMode"
-                                     Class="mb-2" />
-                    </MudItem>
-                }
-
-                <MudItem xs="12">
-                    @RenderWarnings(Model.Text, Model.TextFormat)
-                </MudItem>
-            </MudGrid>
-        </MudTabPanel>
-
-        <!-- TAB 2: Opcije/Odgovori -->
-        <MudTabPanel Text="Opcije / Odgovori" Icon="@Icons.Material.Filled.ListAlt">
-            <MudGrid Spacing="2" Class="pa-4">
-                @if (IsMultipleChoice)
-                {
-                    <MudItem xs="12">
-                        <div class="editor-header">
-                            <MudText Typo="Typo.h6">Opcije odgovora</MudText>
-                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOption" Disabled="@(Model.Options.Count >= 8)">
-                                Dodaj opciju
-                            </MudButton>
-                        </div>
-                    </MudItem>
-
-                    @for (var i = 0; i < Model.Options.Count; i++)
-                    {
-                        var option = Model.Options[i];
-                        <MudItem xs="12">
-                            <MudPaper Class="pa-3 option-card" Outlined="true">
-                                <div class="editor-header">
-                                    <MudText Typo="Typo.subtitle2">Opcija @(i + 1)</MudText>
-                                    <div class="editor-actions">
-                                        <MudButton Variant="Variant.Text" Color="Color.Success" OnClick="@(() => MarkCorrect(i))">
-                                            @(option.IsCorrect ? "Tačan odgovor" : "Označi kao tačan")
-                                        </MudButton>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                       Color="Color.Error"
-                                                       Disabled="@(Model.Options.Count <= 2)"
-                                                       OnClick="@(() => RemoveOption(i))" />
-                                    </div>
-                                </div>
-
-                                <MudGrid Spacing="2">
-                                    <MudItem xs="12" md="8">
-                                        <MudTextField T="string" Label="Tekst opcije" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300" MaxLength="@QuestionEditorFieldLimits.OptionTextMaxLength" HelperText="@($"{option.Text?.Length ?? 0} / {QuestionEditorFieldLimits.OptionTextMaxLength}")" @bind-Value="option.Text" />
-                                    </MudItem>
-                                    <MudItem xs="12" md="2">
-                                        <MudSelect T="ContentFormat" Label="Format" @bind-Value="option.TextFormat" Variant="Variant.Outlined">
-                                            @foreach (var format in EditorFormats)
-                                            {
-                                                <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
-                                            }
-                                        </MudSelect>
-                                    </MudItem>
-                                    <MudItem xs="12" md="2">
-                                        <MudSelect T="MathRenderMode" Label="Render" @bind-Value="option.RenderMode" Variant="Variant.Outlined">
-                                            @foreach (var renderMode in RenderModes)
-                                            {
-                                                <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
-                                            }
-                                        </MudSelect>
-                                    </MudItem>
-                                    <MudItem xs="12">
-                                        <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300" @bind-Value="option.SemanticsAltText" />
-                                    </MudItem>
-                                    @if (_showPreviews)
-                                    {
-                                        <MudItem xs="12">
-                                            <MudDivider Class="my-2" />
-                                            <MudText Typo="Typo.subtitle2" Class="mt-2 mb-2">Preview opcije</MudText>
-                                            <MathPreview Content="@option.Text" Format="@option.TextFormat" RenderMode="@option.RenderMode" />
-                                        </MudItem>
-                                    }
-                                    <MudItem xs="12">
-                                        @RenderWarnings(option.Text, option.TextFormat)
-                                    </MudItem>
-                                </MudGrid>
-                            </MudPaper>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="8">
+            <MudTabs Elevation="3" Class="mud-height-full" @bind-ActivePanelIndex="_activeTabIndex">
+                <MudTabPanel Text="Tekst pitanja" Icon="@Icons.Material.Filled.Notes">
+                    <MudGrid Spacing="2" Class="pa-4">
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="string" Label="Tip pitanja" @bind-Value="Model.Type" Variant="Variant.Outlined">
+                                <MudSelectItem T="string" Value="@("multiple_choice")">Visestruki izbor</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("open_answer")">Otvoren odgovor</MudSelectItem>
+                            </MudSelect>
                         </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="int" Label="Kategorija" @bind-Value="Model.CategoryId" Variant="Variant.Outlined">
+                                @foreach (var category in Categories)
+                                {
+                                    <MudSelectItem T="int" Value="@category.Id">@category.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="int" Label="Podtema" @bind-Value="Model.SubtopicId" Variant="Variant.Outlined">
+                                @foreach (var subtopic in Subtopics)
+                                {
+                                    <MudSelectItem T="int" Value="@subtopic.Id">@FormatSubtopic(subtopic)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12" md="8">
+                            <MudTextField T="string" Label="Tekst pitanja" Variant="Variant.Outlined" Lines="4" AutoGrow="true" DebounceInterval="300"
+                                          Error="@HasWarnings(Model.Text, Model.TextFormat)"
+                                          ErrorText="@FirstWarning(Model.Text, Model.TextFormat)"
+                                          Class="@WarningFieldClass(Model.Text, Model.TextFormat)"
+                                          MaxLength="@QuestionEditorFieldLimits.QuestionTextMaxLength"
+                                          HelperText="@($"{Model.Text?.Length ?? 0} / {QuestionEditorFieldLimits.QuestionTextMaxLength}")"
+                                          @bind-Value="Model.Text" />
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect T="ContentFormat" Label="Format" @bind-Value="Model.TextFormat" Variant="Variant.Outlined">
+                                @foreach (var format in EditorFormats)
+                                {
+                                    <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect T="MathRenderMode" Label="Render" @bind-Value="Model.TextRenderMode" Variant="Variant.Outlined">
+                                @foreach (var renderMode in RenderModes)
+                                {
+                                    <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12">@RenderWarnings(Model.Text, Model.TextFormat)</MudItem>
+
+                        <MudItem xs="12">
+                            <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300"
+                                          HelperText="Opcionalno. Ako ostane prazno, backend generise citljiv fallback."
+                                          @bind-Value="Model.SemanticsAltText" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="8">
+                            <MudText Typo="Typo.body2" Class="mb-1">Tezina</MudText>
+                            <MudSlider T="int" Min="1" Max="5" Step="1" ValueLabel="true" @bind-Value="Model.Difficulty" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudText Typo="Typo.body2" Class="mb-1">Izabrana tezina</MudText>
+                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled">@($"{Model.Difficulty} / 5")</MudChip>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+                <MudTabPanel Text="Opcije / Odgovori" Icon="@Icons.Material.Filled.ListAlt">
+                    <MudGrid Spacing="2" Class="pa-4">
+                        @if (IsMultipleChoice)
+                        {
+                            <MudItem xs="12">
+                                <div class="editor-header">
+                                    <div class="d-flex align-center gap-2">
+                                        <MudText Typo="Typo.h6">Opcije odgovora</MudText>
+                                        @if (HasDuplicateOptions)
+                                        {
+                                            <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning" Size="Size.Small">Duplikati</MudChip>
+                                        }
+                                    </div>
+                                    <MudTooltip Text="Ctrl+Enter u polju teksta dodaje novu opciju">
+                                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                   OnClick="AddOption" Disabled="@(Model.Options.Count >= 8)">
+                                            Dodaj opciju
+                                        </MudButton>
+                                    </MudTooltip>
+                                </div>
+                            </MudItem>
+
+                            @for (var i = 0; i < Model.Options.Count; i++)
+                            {
+                                var option = Model.Options[i];
+                                var idx = i;
+                                var isDup = IsDuplicateOption(idx);
+                                var cardClass = option.IsCorrect
+                                    ? "pa-3 option-card option-card-correct"
+                                    : (isDup ? "pa-3 option-card option-card-duplicate" : "pa-3 option-card");
+                                <MudItem xs="12">
+                                    <div draggable="true"
+                                         @ondragstart="@(() => _dragFromIndex = idx)"
+                                         @ondragover:preventDefault
+                                         @ondrop="@(() => DropOption(idx))">
+                                        <MudPaper Class="@cardClass" Outlined="true">
+                                            <div class="editor-header">
+                                                <div class="d-flex align-center gap-2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.DragIndicator"
+                                                             Class="option-drag-handle" Size="Size.Small" />
+                                                    @if (option.IsCorrect)
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                                                        <MudText Typo="Typo.subtitle2" Color="Color.Success" Style="font-weight:600">Opcija @(idx + 1) — Tačan odgovor</MudText>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudText Typo="Typo.subtitle2">Opcija @(idx + 1)</MudText>
+                                                    }
+                                                    @if (isDup)
+                                                    {
+                                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small"
+                                                                 Icon="@Icons.Material.Filled.ContentCopy">Duplikat</MudChip>
+                                                    }
+                                                </div>
+                                                <div class="editor-actions">
+                                                    <MudTooltip Text="@(option.IsCorrect ? "Tačan odgovor" : "Označi kao tačan")">
+                                                        <MudIconButton Icon="@(option.IsCorrect ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked)"
+                                                                       Color="@(option.IsCorrect ? Color.Success : Color.Default)"
+                                                                       OnClick="@(() => MarkCorrect(idx))" />
+                                                    </MudTooltip>
+                                                    <MudTooltip Text="Ukloni opciju">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                                                       Disabled="@(Model.Options.Count <= 2)"
+                                                                       OnClick="@(() => RemoveOption(idx))" />
+                                                    </MudTooltip>
+                                                </div>
+                                            </div>
+
+                                            <MudGrid Spacing="2">
+                                                <MudItem xs="12" md="8">
+                                                    <div @onkeydown="@(e => HandleOptionKeyDown(e, idx))">
+                                                        <MudTextField T="string" Label="Tekst opcije" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300"
+                                                                      Error="@HasWarnings(option.Text, option.TextFormat)"
+                                                                      ErrorText="@FirstWarning(option.Text, option.TextFormat)"
+                                                                      Class="@WarningFieldClass(option.Text, option.TextFormat)"
+                                                                      MaxLength="@QuestionEditorFieldLimits.OptionTextMaxLength"
+                                                                      HelperText="@($"{option.Text?.Length ?? 0} / {QuestionEditorFieldLimits.OptionTextMaxLength}")"
+                                                                      @bind-Value="option.Text" />
+                                                    </div>
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudSelect T="ContentFormat" Label="Format" @bind-Value="option.TextFormat" Variant="Variant.Outlined">
+                                                        @foreach (var format in EditorFormats)
+                                                        {
+                                                            <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
+                                                        }
+                                                    </MudSelect>
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudSelect T="MathRenderMode" Label="Render" @bind-Value="option.RenderMode" Variant="Variant.Outlined">
+                                                        @foreach (var renderMode in RenderModes)
+                                                        {
+                                                            <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
+                                                        }
+                                                    </MudSelect>
+                                                </MudItem>
+                                                <MudItem xs="12">@RenderWarnings(option.Text, option.TextFormat)</MudItem>
+                                                <MudItem xs="12">
+                                                    <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300" @bind-Value="option.SemanticsAltText" />
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudPaper>
+                                    </div>
+                                </MudItem>
+                            }
+                        }
+                        else
+                        {
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.h6" Class="mb-3">Tacan odgovor</MudText>
+                                <MudTextField T="string" Label="Tacan odgovor" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300"
+                                              Error="@HasWarnings(Model.CorrectAnswer, Model.TextFormat)"
+                                              ErrorText="@FirstWarning(Model.CorrectAnswer, Model.TextFormat)"
+                                              Class="@WarningFieldClass(Model.CorrectAnswer, Model.TextFormat)"
+                                              MaxLength="@QuestionEditorFieldLimits.CorrectAnswerMaxLength"
+                                              HelperText="@($"{Model.CorrectAnswer?.Length ?? 0} / {QuestionEditorFieldLimits.CorrectAnswerMaxLength}")"
+                                              @bind-Value="Model.CorrectAnswer" />
+                                @RenderWarnings(Model.CorrectAnswer, Model.TextFormat)
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudTabPanel>
+                <MudTabPanel Text="Koraci resenja" Icon="@Icons.Material.Filled.ViewAgenda">
+                    <MudGrid Spacing="2" Class="pa-4">
+                        <MudItem xs="12">
+                            <div class="editor-header">
+                                <MudText Typo="Typo.h6">Koraci resenja</MudText>
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddStep">
+                                    Dodaj korak
+                                </MudButton>
+                            </div>
+                        </MudItem>
+
+                        @if (Model.Steps.Count == 0)
+                        {
+                            <MudItem xs="12">
+                                <MudAlert Severity="Severity.Info">Koraci su opcioni, ali preporuceni za pitanja sa objasnjenjem.</MudAlert>
+                            </MudItem>
+                        }
+
+                        @for (var i = 0; i < Model.Steps.Count; i++)
+                        {
+                            var step = Model.Steps[i];
+                            <MudItem xs="12">
+                                <MudPaper Class="pa-3 step-card" Outlined="true">
+                                    <div class="editor-header">
+                                        <MudText Typo="Typo.subtitle2">Korak @(i + 1)</MudText>
+                                        <div class="editor-actions">
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="@(i == 0)" OnClick="@(() => MoveStep(i, -1))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="@(i == Model.Steps.Count - 1)" OnClick="@(() => MoveStep(i, 1))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveStep(i))" />
+                                        </div>
+                                    </div>
+
+                                    <MudGrid Spacing="2">
+                                        <MudItem xs="12" md="8">
+                                            <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300"
+                                                          Error="@HasWarnings(step.Text, step.TextFormat)"
+                                                          ErrorText="@FirstWarning(step.Text, step.TextFormat)"
+                                                          Class="@WarningFieldClass(step.Text, step.TextFormat)"
+                                                          MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength"
+                                                          HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")"
+                                                          @bind-Value="step.Text" />
+                                        </MudItem>
+                                        <MudItem xs="12" md="2">
+                                            <MudSelect T="ContentFormat" Label="Format" @bind-Value="step.TextFormat" Variant="Variant.Outlined">
+                                                @foreach (var format in EditorFormats)
+                                                {
+                                                    <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </MudItem>
+                                        <MudItem xs="12" md="2">
+                                            <MudSelect T="MathRenderMode" Label="Render" @bind-Value="step.TextRenderMode" Variant="Variant.Outlined">
+                                                @foreach (var renderMode in RenderModes)
+                                                {
+                                                    <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </MudItem>
+                                        <MudItem xs="12" md="8">
+                                            <MudTextField T="string" Label="Hint uz korak" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300"
+                                                          Error="@HasWarnings(step.Hint, step.HintFormat)"
+                                                          ErrorText="@FirstWarning(step.Hint, step.HintFormat)"
+                                                          Class="@WarningFieldClass(step.Hint, step.HintFormat)"
+                                                          @bind-Value="step.Hint" />
+                                        </MudItem>
+                                        <MudItem xs="12" md="2">
+                                            <MudSelect T="ContentFormat" Label="Hint format" @bind-Value="step.HintFormat" Variant="Variant.Outlined">
+                                                @foreach (var format in EditorFormats)
+                                                {
+                                                    <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </MudItem>
+                                        <MudItem xs="12" md="2">
+                                            <MudSelect T="MathRenderMode" Label="Hint render" @bind-Value="step.HintRenderMode" Variant="Variant.Outlined">
+                                                @foreach (var renderMode in RenderModes)
+                                                {
+                                                    <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </MudItem>
+                                        <MudItem xs="12">@RenderWarnings(step.Text, step.TextFormat)@RenderWarnings(step.Hint, step.HintFormat)</MudItem>
+                                        <MudItem xs="12" md="8">
+                                            <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300" @bind-Value="step.SemanticsAltText" />
+                                        </MudItem>
+                                        <MudItem xs="12" md="4">
+                                            <MudCheckBox T="bool" @bind-Value="step.Highlight" Label="Istakni korak" />
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudTabPanel>
+                <MudTabPanel Text="Objasnjenje i hintovi" Icon="@Icons.Material.Filled.Help">
+                    <MudGrid Spacing="2" Class="pa-4">
+                        <MudItem xs="12" md="8">
+                            <MudTextField T="string" Label="Objasnjenje" Variant="Variant.Outlined" Lines="5" AutoGrow="true" DebounceInterval="300"
+                                          Error="@HasWarnings(Model.Explanation, Model.ExplanationFormat)"
+                                          ErrorText="@FirstWarning(Model.Explanation, Model.ExplanationFormat)"
+                                          Class="@WarningFieldClass(Model.Explanation, Model.ExplanationFormat)"
+                                          MaxLength="@QuestionEditorFieldLimits.ExplanationMaxLength"
+                                          HelperText="@($"{Model.Explanation?.Length ?? 0} / {QuestionEditorFieldLimits.ExplanationMaxLength}")"
+                                          @bind-Value="Model.Explanation" />
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect T="ContentFormat" Label="Format" @bind-Value="Model.ExplanationFormat" Variant="Variant.Outlined">
+                                @foreach (var format in EditorFormats)
+                                {
+                                    <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect T="MathRenderMode" Label="Render" @bind-Value="Model.ExplanationRenderMode" Variant="Variant.Outlined">
+                                @foreach (var renderMode in RenderModes)
+                                {
+                                    <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12">@RenderWarnings(Model.Explanation, Model.ExplanationFormat)</MudItem>
+
+                        <MudItem xs="12"><MudDivider /></MudItem>
+                        <MudItem xs="12"><MudText Typo="Typo.h6" Class="mb-3">Hintovi</MudText></MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="ContentFormat" Label="Hint format" @bind-Value="Model.HintFormat" Variant="Variant.Outlined">
+                                @foreach (var format in EditorFormats)
+                                {
+                                    <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="MathRenderMode" Label="Hint render" @bind-Value="Model.HintRenderMode" Variant="Variant.Outlined">
+                                @foreach (var renderMode in RenderModes)
+                                {
+                                    <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="4"></MudItem>
+
+                        <MudItem xs="12" md="4">
+                            <MudTextField T="string" Label="Hint formula" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300"
+                                          Error="@HasWarnings(Model.HintFormula, Model.HintFormat)"
+                                          ErrorText="@FirstWarning(Model.HintFormula, Model.HintFormat)"
+                                          Class="@WarningFieldClass(Model.HintFormula, Model.HintFormat)"
+                                          @bind-Value="Model.HintFormula" />
+                            @RenderWarnings(Model.HintFormula, Model.HintFormat)
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField T="string" Label="Hint clue" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300"
+                                          Error="@HasWarnings(Model.HintClue, Model.HintFormat)"
+                                          ErrorText="@FirstWarning(Model.HintClue, Model.HintFormat)"
+                                          Class="@WarningFieldClass(Model.HintClue, Model.HintFormat)"
+                                          @bind-Value="Model.HintClue" />
+                            @RenderWarnings(Model.HintClue, Model.HintFormat)
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField T="string" Label="Hint full" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300"
+                                          Error="@HasWarnings(Model.HintFull, Model.HintFormat)"
+                                          ErrorText="@FirstWarning(Model.HintFull, Model.HintFormat)"
+                                          Class="@WarningFieldClass(Model.HintFull, Model.HintFormat)"
+                                          @bind-Value="Model.HintFull" />
+                            @RenderWarnings(Model.HintFull, Model.HintFormat)
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+            </MudTabs>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="pa-4 preview-panel" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">Live Preview</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">Preview se osvezava samo kada se sadrzaj promeni.</MudText>
+
+                @if (_activeTabIndex == 0)
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Pitanje</MudText>
+                    <MathPreview Content="@Model.Text" Format="@Model.TextFormat" RenderMode="@Model.TextRenderMode" />
+                }
+                else if (_activeTabIndex == 1)
+                {
+                    @if (IsMultipleChoice)
+                    {
+                        @for (var i = 0; i < Model.Options.Count; i++)
+                        {
+                            <MudText Typo="Typo.caption" Class="mb-1">Opcija @(i + 1)@(Model.Options[i].IsCorrect ? " (tacna)" : string.Empty)</MudText>
+                            <MathPreview Content="@Model.Options[i].Text" Format="@Model.Options[i].TextFormat" RenderMode="@Model.Options[i].RenderMode" Class="mb-2" />
+                        }
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Tacan odgovor</MudText>
+                        <MathPreview Content="@Model.CorrectAnswer" Format="@Model.TextFormat" RenderMode="@Model.TextRenderMode" />
+                    }
+                }
+                else if (_activeTabIndex == 2)
+                {
+                    @if (Model.Steps.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">Dodaj korake da bi se prikazao preview.</MudAlert>
+                    }
+                    else
+                    {
+                        @for (var i = 0; i < Model.Steps.Count; i++)
+                        {
+                            <MudText Typo="Typo.caption" Class="mb-1">Korak @(i + 1)</MudText>
+                            <MathPreview Content="@Model.Steps[i].Text" Format="@Model.Steps[i].TextFormat" RenderMode="@Model.Steps[i].TextRenderMode" Class="mb-2" />
+                        }
                     }
                 }
                 else
                 {
-                    <MudItem xs="12">
-                        <MudText Typo="Typo.h6" Class="mb-3">Tačan odgovor</MudText>
-                        <MudTextField T="string" Label="Tačan odgovor" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300" MaxLength="@QuestionEditorFieldLimits.CorrectAnswerMaxLength" HelperText="@($"{Model.CorrectAnswer?.Length ?? 0} / {QuestionEditorFieldLimits.CorrectAnswerMaxLength}")" @bind-Value="Model.CorrectAnswer" />
-                        @if (_showPreviews)
-                        {
-                            <MudDivider Class="my-3" />
-                            <MudText Typo="Typo.subtitle2" Class="mb-2">Preview odgovora</MudText>
-                            <MathPreview Content="@Model.CorrectAnswer" Format="@Model.TextFormat" RenderMode="@Model.TextRenderMode" />
-                        }
-                        @RenderWarnings(Model.CorrectAnswer, Model.TextFormat)
-                    </MudItem>
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Objasnjenje</MudText>
+                    <MathPreview Content="@Model.Explanation" Format="@Model.ExplanationFormat" RenderMode="@Model.ExplanationRenderMode" Class="mb-3" />
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Hint formula</MudText>
+                    <MathPreview Content="@Model.HintFormula" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" Class="mb-2" />
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Hint clue</MudText>
+                    <MathPreview Content="@Model.HintClue" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" Class="mb-2" />
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Hint full</MudText>
+                    <MathPreview Content="@Model.HintFull" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
                 }
-            </MudGrid>
-        </MudTabPanel>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
-        <!-- TAB 3: Koraci rešenja -->
-        <MudTabPanel Text="Koraci rešenja" Icon="@Icons.Material.Filled.ViewAgenda">
-            <MudGrid Spacing="2" Class="pa-4">
-                <MudItem xs="12">
-                    <div class="editor-header">
-                        <MudText Typo="Typo.h6">Koraci rešenja</MudText>
-                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddStep">
-                            Dodaj korak
-                        </MudButton>
-                    </div>
-                </MudItem>
-
-                @if (Model.Steps.Count == 0)
-                {
-                    <MudItem xs="12">
-                        <MudAlert Severity="Severity.Info">Koraci su opcioni, ali preporučeni za pitanja sa objašnjenjem.</MudAlert>
-                    </MudItem>
-                }
-
-                @for (var i = 0; i < Model.Steps.Count; i++)
-                {
-                    var step = Model.Steps[i];
-                    <MudItem xs="12">
-                        <MudPaper Class="pa-3 step-card" Outlined="true">
-                            <div class="editor-header">
-                                <MudText Typo="Typo.subtitle2">Korak @(i + 1)</MudText>
-                                <div class="editor-actions">
-                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="@(i == 0)" OnClick="@(() => MoveStep(i, -1))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="@(i == Model.Steps.Count - 1)" OnClick="@(() => MoveStep(i, 1))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveStep(i))" />
-                                </div>
-                            </div>
-
-                            <MudGrid Spacing="2">
-                                <MudItem xs="12" md="8">
-                                    <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength" HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")" @bind-Value="step.Text" />
-                                </MudItem>
-                                <MudItem xs="12" md="2">
-                                    <MudSelect T="ContentFormat" Label="Format" @bind-Value="step.TextFormat" Variant="Variant.Outlined">
-                                        @foreach (var format in EditorFormats)
-                                        {
-                                            <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-                                <MudItem xs="12" md="2">
-                                    <MudSelect T="MathRenderMode" Label="Render" @bind-Value="step.TextRenderMode" Variant="Variant.Outlined">
-                                        @foreach (var renderMode in RenderModes)
-                                        {
-                                            <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-                                <MudItem xs="12" md="8">
-                                    <MudTextField T="string" Label="Hint uz korak" Variant="Variant.Outlined" Lines="2" AutoGrow="true" DebounceInterval="300" @bind-Value="step.Hint" />
-                                </MudItem>
-                                <MudItem xs="12" md="2">
-                                    <MudSelect T="ContentFormat" Label="Hint format" @bind-Value="step.HintFormat" Variant="Variant.Outlined">
-                                        @foreach (var format in EditorFormats)
-                                        {
-                                            <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-                                <MudItem xs="12" md="2">
-                                    <MudSelect T="MathRenderMode" Label="Hint render" @bind-Value="step.HintRenderMode" Variant="Variant.Outlined">
-                                        @foreach (var renderMode in RenderModes)
-                                        {
-                                            <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-                                <MudItem xs="12" md="8">
-                                    <MudTextField T="string" Label="Semantics alt text" Variant="Variant.Outlined" DebounceInterval="300" @bind-Value="step.SemanticsAltText" />
-                                </MudItem>
-                                <MudItem xs="12" md="4">
-                                    <MudCheckBox T="bool" @bind-Value="step.Highlight" Label="Istakni korak" />
-                                </MudItem>
-                                @if (_showPreviews)
-                                {
-                                    <MudItem xs="12">
-                                        <MudDivider Class="my-2" />
-                                        <MudGrid Spacing="2">
-                                            <MudItem xs="12" md="6">
-                                                <MudText Typo="Typo.subtitle2" Class="mb-2">Preview koraka</MudText>
-                                                <MathPreview Content="@step.Text" Format="@step.TextFormat" RenderMode="@step.TextRenderMode" />
-                                            </MudItem>
-                                            <MudItem xs="12" md="6">
-                                                <MudText Typo="Typo.subtitle2" Class="mb-2">Preview hint-a</MudText>
-                                                <MathPreview Content="@step.Hint" Format="@step.HintFormat" RenderMode="@step.HintRenderMode" />
-                                            </MudItem>
-                                        </MudGrid>
-                                    </MudItem>
-                                }
-                                <MudItem xs="12">
-                                    @RenderWarnings(step.Text, step.TextFormat)
-                                    @RenderWarnings(step.Hint, step.HintFormat)
-                                </MudItem>
-                            </MudGrid>
-                        </MudPaper>
-                    </MudItem>
-                }
-            </MudGrid>
-        </MudTabPanel>
-
-        <!-- TAB 4: Objašnjenje i hintovi -->
-        <MudTabPanel Text="Objašnjenje i Hintovi" Icon="@Icons.Material.Filled.Help">
-            <MudGrid Spacing="2" Class="pa-4">
-                <MudItem xs="12" md="8">
-                    <MudTextField T="string"
-                                  Label="Objašnjenje"
-                                  Variant="Variant.Outlined"
-                                  Lines="5"
-                                  AutoGrow="true"
-                                  DebounceInterval="300"
-                                  MaxLength="@QuestionEditorFieldLimits.ExplanationMaxLength"
-                                  HelperText="@($"{Model.Explanation?.Length ?? 0} / {QuestionEditorFieldLimits.ExplanationMaxLength}")"
-                                  @bind-Value="Model.Explanation" />
-                </MudItem>
-                <MudItem xs="12" md="2">
-                    <MudSelect T="ContentFormat" Label="Format" @bind-Value="Model.ExplanationFormat" Variant="Variant.Outlined">
-                        @foreach (var format in EditorFormats)
-                        {
-                            <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="2">
-                    <MudSelect T="MathRenderMode" Label="Render" @bind-Value="Model.ExplanationRenderMode" Variant="Variant.Outlined">
-                        @foreach (var renderMode in RenderModes)
-                        {
-                            <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.Explanation))
-                {
-                    <MudItem xs="12">
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Preview objašnjenja</MudText>
-                        <MathPreview Content="@Model.Explanation"
-                                     Format="@Model.ExplanationFormat"
-                                     RenderMode="@Model.ExplanationRenderMode" />
-                    </MudItem>
-                }
-
-                <MudItem xs="12">
-                    @RenderWarnings(Model.Explanation, Model.ExplanationFormat)
-                </MudItem>
-
-                <MudItem xs="12">
-                    <MudDivider />
-                </MudItem>
-
-                <MudItem xs="12">
-                    <MudText Typo="Typo.h6" Class="mb-3">Hintovi (za brz pristup)</MudText>
-                </MudItem>
-
-                <MudItem xs="12" md="4">
-                    <MudSelect T="ContentFormat" Label="Hint format" @bind-Value="Model.HintFormat" Variant="Variant.Outlined">
-                        @foreach (var format in EditorFormats)
-                        {
-                            <MudSelectItem T="ContentFormat" Value="@format">@GetFormatLabel(format)</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudSelect T="MathRenderMode" Label="Hint render" @bind-Value="Model.HintRenderMode" Variant="Variant.Outlined">
-                        @foreach (var renderMode in RenderModes)
-                        {
-                            <MudSelectItem T="MathRenderMode" Value="@renderMode">@renderMode</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                <MudItem xs="12" md="4"></MudItem>
-
-                <MudItem xs="12" md="4">
-                    <MudTextField T="string" Label="Hint formula" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" @bind-Value="Model.HintFormula" />
-                    @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.HintFormula))
-                    {
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.subtitle2" Class="mt-2 mb-2">Preview</MudText>
-                        <MathPreview Content="@Model.HintFormula" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
-                    }
-                    @RenderWarnings(Model.HintFormula, Model.HintFormat)
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudTextField T="string" Label="Hint clue" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" @bind-Value="Model.HintClue" />
-                    @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.HintClue))
-                    {
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.subtitle2" Class="mt-2 mb-2">Preview</MudText>
-                        <MathPreview Content="@Model.HintClue" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
-                    }
-                    @RenderWarnings(Model.HintClue, Model.HintFormat)
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudTextField T="string" Label="Hint full" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300" @bind-Value="Model.HintFull" />
-                    @if (_showPreviews && !string.IsNullOrWhiteSpace(Model.HintFull))
-                    {
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.subtitle2" Class="mt-2 mb-2">Preview</MudText>
-                        <MathPreview Content="@Model.HintFull" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
-                    }
-                    @RenderWarnings(Model.HintFull, Model.HintFormat)
-                </MudItem>
-            </MudGrid>
-        </MudTabPanel>
-    </MudTabs>
-
-    <!-- Save/Cancel and Validation -->
     <MudGrid Spacing="2" Class="mt-4">
         <MudItem xs="12">
             <div class="editor-actions footer-actions">
@@ -415,7 +438,7 @@
                     @if (IsSaving)
                     {
                         <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
-                        <span>Čuvanje...</span>
+                        <span>Cuvanje...</span>
                     }
                     else
                     {
@@ -461,7 +484,9 @@
         MathRenderMode.Display
     ];
 
-    private bool _showPreviews = true;
+    private int _activeTabIndex;
+    private int _dragFromIndex = -1;
+    private bool HasDuplicateOptions => IsMultipleChoice && Enumerable.Range(0, Model.Options.Count).Any(IsDuplicateOption);
 
     [Parameter, EditorRequired]
     public QuestionEditorModel Model { get; set; } = new();
@@ -476,7 +501,7 @@
     public bool IsSaving { get; set; }
 
     [Parameter]
-    public string SaveButtonText { get; set; } = "Sačuvaj pitanje";
+    public string SaveButtonText { get; set; } = "Sacuvaj pitanje";
 
     [Parameter]
     public string BackHref { get; set; } = "/questions";
@@ -489,156 +514,120 @@
 
     private bool IsMultipleChoice => string.Equals(Model.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase);
 
-    private void AddOption()
-    {
-        Model.Options.Add(new QuestionOptionEditorModel());
-    }
+    private void AddOption() => Model.Options.Add(new QuestionOptionEditorModel());
 
     private void RemoveOption(int index)
     {
-        if (index < 0 || index >= Model.Options.Count)
-        {
-            return;
-        }
-
+        if (index < 0 || index >= Model.Options.Count) return;
         Model.Options.RemoveAt(index);
-        if (Model.Options.All(x => !x.IsCorrect) && Model.Options.Count > 0)
-        {
-            Model.Options[0].IsCorrect = true;
-        }
+        if (Model.Options.All(x => !x.IsCorrect) && Model.Options.Count > 0) Model.Options[0].IsCorrect = true;
     }
 
     private void MarkCorrect(int index)
     {
-        for (var i = 0; i < Model.Options.Count; i++)
-        {
-            Model.Options[i].IsCorrect = i == index;
-        }
+        for (var i = 0; i < Model.Options.Count; i++) Model.Options[i].IsCorrect = i == index;
     }
 
-    private void AddStep()
-    {
-        Model.Steps.Add(new QuestionStepEditorModel
-        {
-            Order = Model.Steps.Count + 1
-        });
-    }
+    private void AddStep() => Model.Steps.Add(new QuestionStepEditorModel { Order = Model.Steps.Count + 1 });
 
     private void RemoveStep(int index)
     {
-        if (index < 0 || index >= Model.Steps.Count)
-        {
-            return;
-        }
-
+        if (index < 0 || index >= Model.Steps.Count) return;
         Model.Steps.RemoveAt(index);
         NormalizeStepOrder();
     }
 
     private void MoveStep(int index, int direction)
     {
-        var targetIndex = index + direction;
-        if (index < 0 || index >= Model.Steps.Count || targetIndex < 0 || targetIndex >= Model.Steps.Count)
-        {
-            return;
-        }
-
-        (Model.Steps[index], Model.Steps[targetIndex]) = (Model.Steps[targetIndex], Model.Steps[index]);
+        var target = index + direction;
+        if (index < 0 || index >= Model.Steps.Count || target < 0 || target >= Model.Steps.Count) return;
+        (Model.Steps[index], Model.Steps[target]) = (Model.Steps[target], Model.Steps[index]);
         NormalizeStepOrder();
     }
 
     private void NormalizeStepOrder()
     {
-        for (var i = 0; i < Model.Steps.Count; i++)
+        for (var i = 0; i < Model.Steps.Count; i++) Model.Steps[i].Order = i + 1;
+    }
+
+    private void DropOption(int toIndex)
+    {
+        if (_dragFromIndex < 0 || _dragFromIndex == toIndex) { _dragFromIndex = -1; return; }
+        var item = Model.Options[_dragFromIndex];
+        Model.Options.RemoveAt(_dragFromIndex);
+        Model.Options.Insert(toIndex, item);
+        _dragFromIndex = -1;
+    }
+
+    private bool IsDuplicateOption(int index)
+    {
+        var text = Model.Options[index].Text?.Trim();
+        if (string.IsNullOrEmpty(text)) return false;
+        return Model.Options
+            .Where((_, i) => i != index)
+            .Any(o => string.Equals(o.Text?.Trim(), text, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void HandleOptionKeyDown(KeyboardEventArgs e, int index)
+    {
+        if (e.CtrlKey && e.Key == "Enter" && Model.Options.Count < 8)
         {
-            Model.Steps[i].Order = i + 1;
+            AddOption();
         }
     }
 
-    private IReadOnlyList<string> GetWarnings(string? value, ContentFormat format)
-        => Sanitizer.GetWarnings(value, format);
+    private IReadOnlyList<string> GetWarnings(string? value, ContentFormat format) => Sanitizer.GetWarnings(value, format);
+    private bool HasWarnings(string? value, ContentFormat format) => GetWarnings(value, format).Count > 0;
+    private string? FirstWarning(string? value, ContentFormat format) => GetWarnings(value, format).FirstOrDefault();
+    private string WarningFieldClass(string? value, ContentFormat format) => HasWarnings(value, format) ? "field-with-warning" : string.Empty;
 
-    private string GetFormatLabel(ContentFormat format)
-        => format switch
-        {
-            ContentFormat.PlainText => "Plain text",
-            ContentFormat.Latex => "LaTeX",
-            ContentFormat.MarkdownWithMath => "Markdown + Math",
-            ContentFormat.Html => "HTML",
-            _ => format.ToString()
-        };
+    private string GetFormatLabel(ContentFormat format) => format switch
+    {
+        ContentFormat.PlainText => "Plain text",
+        ContentFormat.Latex => "LaTeX",
+        ContentFormat.MarkdownWithMath => "Markdown + Math",
+        ContentFormat.Html => "HTML",
+        _ => format.ToString()
+    };
 
-    private string FormatSubtopic(Subtopic subtopic)
-        => subtopic.Topic is null ? subtopic.Name : $"{subtopic.Topic.Name} / {subtopic.Name}";
+    private string FormatSubtopic(Subtopic subtopic) => subtopic.Topic is null ? subtopic.Name : $"{subtopic.Topic.Name} / {subtopic.Name}";
 
     private RenderFragment RenderWarnings(string? value, ContentFormat format) => builder =>
     {
         var warnings = GetWarnings(value, format);
-        if (warnings.Count == 0)
-        {
-            return;
-        }
+        if (warnings.Count == 0) return;
 
         builder.OpenComponent<MudAlert>(0);
         builder.AddAttribute(1, "Severity", Severity.Warning);
         builder.AddAttribute(2, "Dense", true);
-        builder.AddAttribute(3, "ChildContent", (RenderFragment)(innerBuilder =>
+        builder.AddAttribute(3, "Class", "inline-warning");
+        builder.AddAttribute(4, "ChildContent", (RenderFragment)(inner =>
         {
-            innerBuilder.OpenElement(0, "ul");
-            innerBuilder.AddAttribute(1, "class", "warning-list");
+            inner.OpenElement(0, "ul");
+            inner.AddAttribute(1, "class", "warning-list");
             for (var i = 0; i < warnings.Count; i++)
             {
-                innerBuilder.OpenElement(2 + i, "li");
-                innerBuilder.AddContent(3 + i, warnings[i]);
-                innerBuilder.CloseElement();
+                inner.OpenElement(2 + i, "li");
+                inner.AddContent(3 + i, warnings[i]);
+                inner.CloseElement();
             }
-            innerBuilder.CloseElement();
+            inner.CloseElement();
         }));
         builder.CloseComponent();
     };
 }
 
 <style>
-    .editor-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 16px;
-    }
-
-    .editor-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .footer-actions {
-        margin-top: 8px;
-    }
-
-    .warning-list {
-        margin: 0;
-        padding-left: 18px;
-    }
-
-    .option-card,
-    .step-card {
-        border: 1px solid rgba(0, 0, 0, 0.08);
-    }
-
-    .math-preview-shell {
-        border: 1px solid rgba(0, 0, 0, 0.12);
-        border-radius: 8px;
-        background: #fafaf8;
-        min-height: 64px;
-        padding: 16px;
-    }
-
-    .math-preview-host {
-        min-height: 32px;
-        white-space: normal;
-        word-break: break-word;
-    }
+    .editor-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .editor-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .footer-actions { margin-top: 8px; }
+    .preview-panel { position: sticky; top: 16px; }
+    .warning-list { margin: 0; padding-left: 18px; }
+    .inline-warning { margin-top: 4px; }
+    .option-card, .step-card { border: 1px solid rgba(0, 0, 0, 0.08); }
+    .field-with-warning .mud-input-control-input-container, .field-with-warning .mud-input-outlined-border { border-color: #f59f00 !important; }
+    .option-card-correct { border-color: #4caf50 !important; background-color: rgba(76, 175, 80, 0.06) !important; }
+    .option-card-duplicate { border-color: #ff9800 !important; background-color: rgba(255, 152, 0, 0.06) !important; }
+    .option-drag-handle { cursor: grab; opacity: 0.45; transition: opacity 0.15s; }
+    .option-drag-handle:hover { opacity: 1; }
 </style>

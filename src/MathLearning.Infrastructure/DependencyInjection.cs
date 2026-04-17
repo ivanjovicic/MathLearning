@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IQuestionPreviewService, QuestionPreviewService>();
         services.AddScoped<IQuestionPublishGuardService, QuestionPublishGuardService>();
         services.AddScoped<IQuestionAutoHintGenerator, NoOpQuestionAutoHintGenerator>();
+        services.AddScoped<IQuestionAuthoringService, QuestionAuthoringService>();
         services.AddScoped<MathQuestionAuthoringService>();
         services.AddScoped<IMathQuestionAuthoringService>(sp => sp.GetRequiredService<MathQuestionAuthoringService>());
         services.AddScoped<IMathQuestionValidationService>(sp => sp.GetRequiredService<MathQuestionAuthoringService>());

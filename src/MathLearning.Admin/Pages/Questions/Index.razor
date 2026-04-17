@@ -49,6 +49,45 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
+            <MudSelect T="string" @bind-Value="_selectedType" 
+                       Label="Tip pitanja" 
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                <MudSelectItem T="string" Value="@("multiple_choice")">Višestruki izbor</MudSelectItem>
+                <MudSelectItem T="string" Value="@("open_answer")">Otvoren odgovor</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudSelect T="int" @bind-Value="_selectedDifficulty"
+                       Label="Težina"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @for (var difficulty = 1; difficulty <= 5; difficulty++)
+                {
+                    <MudSelectItem T="int" Value="@difficulty">@difficulty</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudSelect T="string" @bind-Value="_selectedPublishState"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var status in _publishStates)
+                {
+                    <MudSelectItem T="string" Value="@status">@status</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker Label="Izmenjeno nakon"
+                           Variant="Variant.Outlined"
+                           Date="@_updatedAfterDate"
+                           DateChanged="OnUpdatedAfterDateChangedAsync"
+                           Clearable="true"
+                           Editable="true" />
+        </MudItem>
+        <MudItem xs="12" md="3">
             <MudButton OnClick="LoadQuestionsAsync" 
                        Color="Color.Primary" 
                        Variant="Variant.Filled"
@@ -92,6 +131,7 @@
                 <MudTh>Tekst</MudTh>
                 <MudTh>Kategorija</MudTh>
                 <MudTh>Tezina</MudTh>
+                <MudTh>Poslednja izmena</MudTh>
                 <MudTh Style="text-align: right; width: 120px;">Akcije</MudTh>
             </HeaderContent>
 
@@ -109,6 +149,9 @@
                 </MudTd>
                 <MudTd DataLabel="Tezina">
                     <MudRating ReadOnly="true" SelectedValue="@context.Difficulty" MaxValue="5" Size="Size.Small" />
+                </MudTd>
+                <MudTd DataLabel="Poslednja izmena">
+                    @context.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
                 </MudTd>
                 <MudTd DataLabel="Akcije" Style="text-align: right;">
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" 
@@ -147,10 +190,21 @@
     private bool _loading = true;
     private string _searchText = string.Empty;
     private int _selectedCategoryId = 0;
+    private string _selectedType = string.Empty;
+    private int _selectedDifficulty = 0;
+    private string _selectedPublishState = string.Empty;
+    private DateTime? _updatedAfterDate;
     private int _currentPage = 1;
     private int _pageSize = 10;
     private int _totalCount = 0;
     private string? _loadError;
+    private readonly string[] _publishStates =
+    [
+        QuestionPublishStates.Draft,
+        QuestionPublishStates.Validated,
+        QuestionPublishStates.Published,
+        QuestionPublishStates.Archived
+    ];
     private int _pageCount => (_totalCount + _pageSize - 1) / _pageSize;
 
     protected override async Task OnInitializedAsync()
@@ -250,6 +304,27 @@
             query = query.Where(q => q.CategoryId == _selectedCategoryId);
         }
 
+        if (!string.IsNullOrWhiteSpace(_selectedType))
+        {
+            query = query.Where(q => q.Type == _selectedType);
+        }
+
+        if (_selectedDifficulty > 0)
+        {
+            query = query.Where(q => q.Difficulty == _selectedDifficulty);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedPublishState))
+        {
+            query = query.Where(q => q.PublishState == _selectedPublishState);
+        }
+
+        if (_updatedAfterDate.HasValue)
+        {
+            var updatedAfterUtc = DateTime.SpecifyKind(_updatedAfterDate.Value.Date, DateTimeKind.Utc);
+            query = query.Where(q => q.UpdatedAt >= updatedAfterUtc);
+        }
+
         return query;
     }
 
@@ -257,6 +332,16 @@
     {
         _searchText = string.Empty;
         _selectedCategoryId = 0;
+        _selectedType = string.Empty;
+        _selectedDifficulty = 0;
+        _selectedPublishState = string.Empty;
+        _updatedAfterDate = null;
+    }
+
+    private async Task OnUpdatedAfterDateChangedAsync(DateTime? date)
+    {
+        _updatedAfterDate = date;
+        await LoadQuestionsAsync();
     }
 
     private async Task DeleteQuestionAsync(QuestionEntity question)

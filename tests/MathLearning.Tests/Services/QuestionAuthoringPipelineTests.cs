@@ -1,6 +1,7 @@
 using MathLearning.Application.Content;
 using MathLearning.Application.DTOs.Questions;
 using MathLearning.Application.Services;
+using MathLearning.Application.Validators;
 using MathLearning.Domain.Enums;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -161,6 +162,54 @@ public class QuestionAuthoringPipelineTests
         Assert.Equal("step one", question.Steps.Single().SemanticsAltText);
     }
 
+    [Fact]
+    public async Task AuthoringService_Publish_SanitizesXssPayloadsBeforePersist()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var service = CreateAuthoringService(db);
+        var request = CreateValidRequest(questionId: null) with
+        {
+            Text = @"Koliko je $1+1$?<script>alert('xss')</script>",
+            Explanation = @"<div onclick=""alert(1)"">Objasnjenje</div>",
+            Hints =
+            [
+                new QuestionHintDto("formula", @"$a+b$<script>alert(2)</script>"),
+                new QuestionHintDto("clue", @"<b>Pogledaj</b> sabiranje."),
+                new QuestionHintDto("full", @"<script>alert(3)</script>Rezultat je 2.")
+            ],
+            Options =
+            [
+                new QuestionAuthoringOptionDto(1, @"$2$<script>alert(4)</script>", true),
+                new QuestionAuthoringOptionDto(2, "$3$", false),
+                new QuestionAuthoringOptionDto(3, "$4$", false)
+            ],
+            Steps =
+            [
+                new StepExplanationAuthoringDto(1, @"$1+1=2$<script>alert(5)</script>", "<img src=x onerror=alert(6)>", false)
+            ]
+        };
+
+        var draft = await service.SaveDraftAsync(new SaveQuestionDraftRequest(request), "author-1", CancellationToken.None);
+        var publish = await service.PublishAsync(new PublishQuestionRequest(draft.DraftId), "author-1", CancellationToken.None);
+        var question = await db.Questions
+            .Include(x => x.Options)
+            .Include(x => x.Steps)
+            .SingleAsync(x => x.Id == publish.QuestionId);
+
+        Assert.DoesNotContain("<script", question.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<script", question.Explanation ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<script", question.HintFormula ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<script", question.HintClue ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<script", question.HintFull ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.All(question.Options, option =>
+            Assert.DoesNotContain("<script", option.Text, StringComparison.OrdinalIgnoreCase));
+        Assert.All(question.Steps, step =>
+        {
+            Assert.DoesNotContain("<script", step.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("<script", step.Hint ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
     private static QuestionAuthoringRequest CreateValidRequest(
         int? questionId = 1,
         string questionText = "Koliko je $1+1$?",
@@ -193,6 +242,11 @@ public class QuestionAuthoringPipelineTests
         var cache = new HybridCacheService(
             new MemoryCache(new MemoryCacheOptions { SizeLimit = 1000 }),
             NullLogger<HybridCacheService>.Instance);
+        var sanitizer = new MathContentSanitizer();
+        var sharedAuthoringService = new QuestionAuthoringService(
+            sanitizer,
+            new QuestionAuthoringRequestValidator(),
+            NullLogger<QuestionAuthoringService>.Instance);
 
         return new MathQuestionAuthoringService(
             db,
@@ -207,6 +261,7 @@ public class QuestionAuthoringPipelineTests
             new QuestionPreviewService(),
             new QuestionPublishGuardService(),
             new NoOpQuestionAutoHintGenerator(NullLogger<NoOpQuestionAutoHintGenerator>.Instance),
-            new MathContentSanitizer());
+            sharedAuthoringService,
+            sanitizer);
     }
 }

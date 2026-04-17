@@ -49,7 +49,8 @@ public record QuestionAuthoringRequest(
     RenderMode TextRenderMode = RenderMode.Auto,
     RenderMode ExplanationRenderMode = RenderMode.Auto,
     RenderMode HintRenderMode = RenderMode.Auto,
-    string? SemanticsAltText = null
+    string? SemanticsAltText = null,
+    int? CorrectOptionId = null
 );
 
 public record ValidationIssueDto(

@@ -1,8 +1,12 @@
 ﻿using MathLearning.Admin.Components;
 using MathLearning.Admin.Data;
 using MathLearning.Admin.Services;
+using FluentValidation;
 using MathLearning.Application.Content;
+using MathLearning.Application.DTOs.Questions;
+using MathLearning.Application.Validators;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -85,6 +89,8 @@ builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStat
 builder.Services.AddScoped(_ => new HttpClient());
 builder.Services.AddScoped<AdminApiClient>();
 builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
+builder.Services.AddScoped<IValidator<QuestionAuthoringRequest>, QuestionAuthoringRequestValidator>();
+builder.Services.AddScoped<IQuestionAuthoringService, QuestionAuthoringService>();
 
 builder.Services.AddMudServices();
 

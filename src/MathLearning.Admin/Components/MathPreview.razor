@@ -20,6 +20,9 @@
     private ElementReference _container;
     private bool _needsRender;
     private bool _isRendering;
+    private bool _disposed;
+    private int _renderVersion;
+    private CancellationTokenSource? _renderDebounceCts;
     private string _previousContent = string.Empty;
     private ContentFormat _previousFormat = ContentFormat.MarkdownWithMath;
     private MathRenderMode _previousRenderMode = MathRenderMode.Auto;
@@ -41,6 +44,9 @@
     [Parameter]
     public string? Class { get; set; }
 
+    [Parameter]
+    public int DebounceIntervalMs { get; set; } = 220;
+
     protected override void OnParametersSet()
     {
         var normalizedContent = Content ?? string.Empty;
@@ -50,12 +56,39 @@
             RenderMode != _previousRenderMode ||
             EmptyText != _previousEmptyText;
 
-        _isRendering = _needsRender;
+        if (_needsRender)
+        {
+            _renderVersion++;
+            _isRendering = true;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_needsRender)
+        if (!_needsRender || _disposed)
+        {
+            return;
+        }
+
+        var version = _renderVersion;
+        _renderDebounceCts?.Cancel();
+        _renderDebounceCts?.Dispose();
+        _renderDebounceCts = new CancellationTokenSource();
+        var token = _renderDebounceCts.Token;
+
+        try
+        {
+            if (DebounceIntervalMs > 0)
+            {
+                await Task.Delay(DebounceIntervalMs, token);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        if (_disposed || token.IsCancellationRequested || version != _renderVersion || !_needsRender)
         {
             return;
         }
@@ -72,6 +105,11 @@
                 RenderMode.ToString(),
                 EmptyText);
         }
+        catch (TaskCanceledException)
+        {
+            Logger.LogDebug("Math preview render canceled.");
+            return;
+        }
         catch (JSDisconnectedException)
         {
             Logger.LogDebug("Math preview JS interop skipped because the circuit disconnected.");
@@ -80,10 +118,6 @@
         {
             Logger.LogWarning(ex, "Math preview JS rendering failed. The editor will continue without preview.");
         }
-        catch (TaskCanceledException)
-        {
-            Logger.LogDebug("Math preview JS interop was canceled.");
-        }
         finally
         {
             _previousContent = normalizedContent;
@@ -91,8 +125,11 @@
             _previousRenderMode = RenderMode;
             _previousEmptyText = EmptyText;
             _needsRender = false;
-            _isRendering = false;
-            await InvokeAsync(StateHasChanged);
+            if (_isRendering)
+            {
+                _isRendering = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
@@ -104,6 +141,11 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
+        _renderDebounceCts?.Cancel();
+        _renderDebounceCts?.Dispose();
+        _renderDebounceCts = null;
+
         if (_module is null)
         {
             return;

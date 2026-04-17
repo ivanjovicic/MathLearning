@@ -61,6 +61,9 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
             entity.Property(e => e.Type).IsRequired().HasDefaultValue("multiple_choice");
+            entity.Ignore(e => e.CorrectOptionId);
+            entity.Property(e => e.UpdatedBy).HasMaxLength(256).IsRequired(false);
+            entity.Property(e => e.PreviousSnapshotJson).HasColumnType("jsonb").IsRequired(false);
             entity.HasOne(e => e.Category)
                   .WithMany()
                   .HasForeignKey(e => e.CategoryId)

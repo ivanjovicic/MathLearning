@@ -30,6 +30,7 @@ public sealed partial class MathQuestionAuthoringService :
     private readonly IQuestionPreviewService previewService;
     private readonly IQuestionPublishGuardService publishGuard;
     private readonly IQuestionAutoHintGenerator autoHintGenerator;
+    private readonly IQuestionAuthoringService questionAuthoringService;
     private readonly IMathContentSanitizer sanitizer;
 
     public MathQuestionAuthoringService(
@@ -45,6 +46,7 @@ public sealed partial class MathQuestionAuthoringService :
         IQuestionPreviewService previewService,
         IQuestionPublishGuardService publishGuard,
         IQuestionAutoHintGenerator autoHintGenerator,
+        IQuestionAuthoringService questionAuthoringService,
         IMathContentSanitizer sanitizer)
     {
         this.db = db;
@@ -59,6 +61,7 @@ public sealed partial class MathQuestionAuthoringService :
         this.previewService = previewService;
         this.publishGuard = publishGuard;
         this.autoHintGenerator = autoHintGenerator;
+        this.questionAuthoringService = questionAuthoringService;
         this.sanitizer = sanitizer;
     }
 
@@ -203,23 +206,23 @@ public sealed partial class MathQuestionAuthoringService :
         try
         {
             var question = await LoadQuestionForPublishAsync(draft.QuestionId, cancellationToken);
-            var isNewQuestion = question is null;
             if (question is null)
             {
-                question = CreateQuestionFromRequest(pipeline.EffectiveRequest);
-                db.Questions.Add(question);
-                await db.SaveChangesAsync(cancellationToken);
+                var createResult = await questionAuthoringService.CreateQuestionAsync(
+                    db,
+                    pipeline.EffectiveRequest,
+                    actorUserId,
+                    cancellationToken);
+                question = createResult.Question;
             }
             else
             {
-                ApplyQuestionFields(question, pipeline.EffectiveRequest);
-                SyncQuestionOptions(question, pipeline.EffectiveRequest);
-                SyncQuestionSteps(question, pipeline.EffectiveRequest);
-            }
-
-            if (isNewQuestion)
-            {
-                AddNewQuestionSteps(question, pipeline.EffectiveRequest);
+                await questionAuthoringService.UpdateQuestionAsync(
+                    db,
+                    question,
+                    pipeline.EffectiveRequest,
+                    actorUserId,
+                    cancellationToken);
             }
 
             var previousVersion = await db.QuestionVersions
@@ -543,160 +546,6 @@ public sealed partial class MathQuestionAuthoringService :
         });
     }
 
-    private Question CreateQuestionFromRequest(QuestionAuthoringRequest request)
-    {
-        var question = new Question(request.Text, request.Difficulty, request.CategoryId, request.Explanation);
-        ApplyQuestionFields(question, request);
-        question.ReplaceOptions(request.Options.Select(x => new QuestionOption(
-            x.Text,
-            x.IsCorrect,
-            x.TextFormat,
-            x.RenderMode,
-            x.SemanticsAltText)).ToList());
-        return question;
-    }
-
-    private void ApplyQuestionFields(Question question, QuestionAuthoringRequest request)
-    {
-        question.SetText(request.Text);
-        question.SetType(request.Type);
-        question.SetCorrectAnswer(string.IsNullOrWhiteSpace(request.CorrectAnswer)
-            ? request.Options.FirstOrDefault(x => x.IsCorrect)?.Text
-            : request.CorrectAnswer);
-        question.SetExplanation(request.Explanation);
-        question.SetDifficulty(request.Difficulty);
-        question.SetCategory(request.CategoryId);
-        question.SetSubtopic(request.SubtopicId);
-        question.SetHintFormula(ResolveHint(request.Hints, "formula", "light"));
-        question.SetHintClue(ResolveHint(request.Hints, "clue", "medium"));
-        question.SetHintFull(ResolveHint(request.Hints, "full"));
-        question.SetTextFormat(request.TextFormat);
-        question.SetExplanationFormat(request.ExplanationFormat);
-        question.SetHintFormat(request.HintFormat);
-        question.SetTextRenderMode(request.TextRenderMode);
-        question.SetExplanationRenderMode(request.ExplanationRenderMode);
-        question.SetHintRenderMode(request.HintRenderMode);
-        question.SetSemanticsAltText(!string.IsNullOrWhiteSpace(request.SemanticsAltText)
-            ? request.SemanticsAltText
-            : sanitizer.GenerateSemanticsAltText(request.Text, request.TextFormat));
-        question.SetHintDifficulty(request.Difficulty switch
-        {
-            <= 2 => 1,
-            3 or 4 => 2,
-            _ => 3
-        });
-    }
-
-    private void SyncQuestionOptions(Question question, QuestionAuthoringRequest request)
-    {
-        var existingById = question.Options.ToDictionary(x => x.Id);
-        var incomingIds = request.Options.Where(x => x.Id.HasValue).Select(x => x.Id!.Value).ToHashSet();
-
-        var toRemove = question.Options.Where(x => x.Id != 0 && !incomingIds.Contains(x.Id)).ToList();
-        if (toRemove.Count > 0)
-        {
-            db.Options.RemoveRange(toRemove);
-            foreach (var option in toRemove)
-            {
-                question.Options.Remove(option);
-            }
-        }
-
-        for (var i = 0; i < request.Options.Count; i++)
-        {
-            var incoming = request.Options[i];
-            var order = i + 1;
-
-            if (incoming.Id.HasValue && existingById.TryGetValue(incoming.Id.Value, out var existing))
-            {
-                existing.Update(
-                    incoming.Text,
-                    incoming.IsCorrect,
-                    incoming.TextFormat,
-                    incoming.RenderMode,
-                    incoming.SemanticsAltText,
-                    order);
-                continue;
-            }
-
-            question.Options.Add(new QuestionOption(
-                incoming.Text,
-                incoming.IsCorrect,
-                incoming.TextFormat,
-                incoming.RenderMode,
-                incoming.SemanticsAltText,
-                order));
-        }
-    }
-
-    private void SyncQuestionSteps(Question question, QuestionAuthoringRequest request)
-    {
-        var orderedSteps = request.Steps.OrderBy(x => x.Order).ToArray();
-        var existingByOrder = question.Steps.ToDictionary(x => x.StepIndex);
-        var incomingOrders = orderedSteps.Select(x => x.Order).ToHashSet();
-
-        var toRemove = question.Steps.Where(x => !incomingOrders.Contains(x.StepIndex)).ToList();
-        if (toRemove.Count > 0)
-        {
-            db.QuestionSteps.RemoveRange(toRemove);
-            foreach (var step in toRemove)
-            {
-                question.Steps.Remove(step);
-            }
-        }
-
-        foreach (var incoming in orderedSteps)
-        {
-            if (existingByOrder.TryGetValue(incoming.Order, out var existing))
-            {
-                existing.SetText(incoming.Text);
-                existing.SetHint(incoming.Hint);
-                existing.SetHighlight(incoming.Highlight);
-                existing.SetStepIndex(incoming.Order);
-                existing.SetTextFormat(incoming.TextFormat);
-                existing.SetHintFormat(incoming.HintFormat);
-                existing.SetTextRenderMode(incoming.TextRenderMode);
-                existing.SetHintRenderMode(incoming.HintRenderMode);
-                existing.SetSemanticsAltText(incoming.SemanticsAltText);
-                continue;
-            }
-
-            var step = new QuestionStep(
-                question.Id,
-                incoming.Order,
-                incoming.Text,
-                incoming.Hint,
-                incoming.Highlight,
-                incoming.TextFormat,
-                incoming.HintFormat,
-                incoming.TextRenderMode,
-                incoming.HintRenderMode,
-                incoming.SemanticsAltText);
-            question.Steps.Add(step);
-            db.QuestionSteps.Add(step);
-        }
-    }
-
-    private void AddNewQuestionSteps(Question question, QuestionAuthoringRequest request)
-    {
-        foreach (var incoming in request.Steps.OrderBy(x => x.Order))
-        {
-            var step = new QuestionStep(
-                question.Id,
-                incoming.Order,
-                incoming.Text,
-                incoming.Hint,
-                incoming.Highlight,
-                incoming.TextFormat,
-                incoming.HintFormat,
-                incoming.TextRenderMode,
-                incoming.HintRenderMode,
-                incoming.SemanticsAltText);
-            question.Steps.Add(step);
-            db.QuestionSteps.Add(step);
-        }
-    }
-
     private async Task<Question?> LoadQuestionForPublishAsync(int? questionId, CancellationToken cancellationToken)
     {
         if (!questionId.HasValue)
@@ -715,6 +564,11 @@ public sealed partial class MathQuestionAuthoringService :
 
     private async Task<QuestionDraft> CreateDraftFromQuestionAsync(Question question, string? actorUserId, CancellationToken cancellationToken)
     {
+        var resolvedCorrectOptionId = question.CorrectOptionId
+            ?? question.Options
+                .OrderBy(x => x.Order)
+                .FirstOrDefault(x => x.IsCorrect)?.Id;
+
         var request = new QuestionAuthoringRequest(
             question.Id,
             question.Text,
@@ -726,7 +580,13 @@ public sealed partial class MathQuestionAuthoringService :
             question.SubtopicId,
             question.Options
                 .OrderBy(x => x.Id)
-                .Select(x => new QuestionAuthoringOptionDto(x.Id, x.Text, x.IsCorrect, x.TextFormat, x.RenderMode, x.SemanticsAltText))
+                .Select(x => new QuestionAuthoringOptionDto(
+                    x.Id,
+                    x.Text,
+                    resolvedCorrectOptionId.HasValue ? x.Id == resolvedCorrectOptionId.Value : x.IsCorrect,
+                    x.TextFormat,
+                    x.RenderMode,
+                    x.SemanticsAltText))
                 .ToArray(),
             BuildHints(question),
             question.Steps
@@ -750,7 +610,8 @@ public sealed partial class MathQuestionAuthoringService :
             question.TextRenderMode,
             question.ExplanationRenderMode,
             question.HintRenderMode,
-            question.SemanticsAltText);
+            question.SemanticsAltText,
+            resolvedCorrectOptionId);
 
         var pipeline = await RunPipelineAsync(request, cancellationToken);
         var latestDraft = await db.QuestionDrafts
@@ -789,9 +650,6 @@ public sealed partial class MathQuestionAuthoringService :
         return draft;
     }
 
-    private static string? ResolveHint(IReadOnlyList<QuestionHintDto> hints, params string[] keys)
-        => hints.FirstOrDefault(x => keys.Any(key => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)))?.Text;
-
     private static QuestionHintDto[] BuildHints(Question question)
     {
         var hints = new List<QuestionHintDto>();
@@ -814,51 +672,7 @@ public sealed partial class MathQuestionAuthoringService :
     }
 
     private QuestionAuthoringRequest SanitizeRequest(QuestionAuthoringRequest request)
-    {
-        var sanitizedHints = request.Hints
-            .Select(hint => hint with
-            {
-                Text = sanitizer.NormalizeMathContent(hint.Text, request.HintFormat),
-                SemanticsAltText = string.IsNullOrWhiteSpace(hint.SemanticsAltText)
-                    ? sanitizer.GenerateSemanticsAltText(hint.Text, request.HintFormat)
-                    : hint.SemanticsAltText
-            })
-            .ToArray();
-
-        var sanitizedOptions = request.Options
-            .Select(option => option with
-            {
-                Text = sanitizer.NormalizeMathContent(option.Text, option.TextFormat),
-                SemanticsAltText = string.IsNullOrWhiteSpace(option.SemanticsAltText)
-                    ? sanitizer.GenerateSemanticsAltText(option.Text, option.TextFormat)
-                    : option.SemanticsAltText
-            })
-            .ToArray();
-
-        var sanitizedSteps = request.Steps
-            .Select(step => step with
-            {
-                Text = sanitizer.NormalizeMathContent(step.Text, step.TextFormat),
-                Hint = sanitizer.NormalizeMathContent(step.Hint, step.HintFormat),
-                SemanticsAltText = string.IsNullOrWhiteSpace(step.SemanticsAltText)
-                    ? sanitizer.GenerateSemanticsAltText(step.Text, step.TextFormat)
-                    : step.SemanticsAltText
-            })
-            .ToArray();
-
-        return request with
-        {
-            Text = sanitizer.NormalizeMathContent(request.Text, request.TextFormat),
-            CorrectAnswer = sanitizer.NormalizeMathContent(request.CorrectAnswer, request.TextFormat),
-            Explanation = sanitizer.NormalizeMathContent(request.Explanation, request.ExplanationFormat),
-            Hints = sanitizedHints,
-            Options = sanitizedOptions,
-            Steps = sanitizedSteps,
-            SemanticsAltText = string.IsNullOrWhiteSpace(request.SemanticsAltText)
-                ? sanitizer.GenerateSemanticsAltText(request.Text, request.TextFormat)
-                : request.SemanticsAltText
-        };
-    }
+        => QuestionAuthoringRequestSanitizer.Sanitize(request, sanitizer);
 
     private static QuestionAuthoringRequest DeserializeDraft(QuestionDraft draft)
         => JsonSerializer.Deserialize<QuestionAuthoringRequest>(draft.ContentJson, QuestionAuthoringContentSupport.JsonOptions)

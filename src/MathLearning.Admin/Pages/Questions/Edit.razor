@@ -1,9 +1,11 @@
 ﻿@page "/questions/{Id:int}/edit"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @attribute [Authorize]
+@implements IAsyncDisposable
 @using MathLearning.Admin.Data
 @using MathLearning.Admin.Models
 @using MathLearning.Application.Content
+@using MathLearning.Infrastructure.Services.QuestionAuthoring
 @using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
@@ -15,6 +17,7 @@
 @inject ISnackbar Snackbar
 @inject ILogger<Edit> Logger
 @inject IJSRuntime Js
+@inject IQuestionAuthoringService QuestionAuthoringService
 
 <PageTitle>Izmeni Pitanje - MathLearning Admin</PageTitle>
 
@@ -27,6 +30,11 @@
 </MudText>
 
 <NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
+@if (!string.IsNullOrWhiteSpace(_autosaveStatus))
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@_autosaveStatus</MudText>
+}
 
 @if (_loading)
 {
@@ -42,6 +50,15 @@ else if (_question is null)
 }
 else
 {
+    <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mb-3">
+        Poslednja izmena:
+        @_question.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+        @if (!string.IsNullOrWhiteSpace(_question.UpdatedBy))
+        {
+            <span>od @_question.UpdatedBy</span>
+        }
+    </MudAlert>
+
     <QuestionEditor Model="@Model"
                     Categories="@Categories"
                     Subtopics="@Subtopics"
@@ -55,7 +72,7 @@ else
     [Parameter]
     public int Id { get; set; }
 
-    private readonly QuestionEditorModel Model = new();
+    private QuestionEditorModel Model = new();
     private QuestionEditorHelper? _editorHelper;
     private Question? _question;
     private List<Category> Categories { get; set; } = [];
@@ -65,6 +82,10 @@ else
     private List<string> ValidationErrors { get; set; } = [];
     private string? _loadError;
     private string _initialSnapshot = string.Empty;
+    private IJSObjectReference? _autosaveModule;
+    private System.Timers.Timer? _autosaveTimer;
+    private string _lastAutosavedSnapshot = string.Empty;
+    private string? _autosaveStatus;
     private bool HasUnsavedChanges =>
         !_loading &&
         !IsSaving &&
@@ -111,6 +132,92 @@ else
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var draftKey = $"question-editor-draft-{Id}";
+
+        try
+        {
+            _autosaveModule = await Js.InvokeAsync<IJSObjectReference>("import", "./autosave.js");
+
+            var draft = await _autosaveModule.InvokeAsync<string?>("loadDraft", draftKey);
+            if (!string.IsNullOrEmpty(draft))
+            {
+                var shouldRestore = await Js.InvokeAsync<bool>("confirm", "Pronađen je nesačuvan draft. Da li želite da ga učitate?");
+                if (shouldRestore)
+                {
+                    try
+                    {
+                        var restored = JsonSerializer.Deserialize<QuestionEditorModel>(draft);
+                        if (restored is not null)
+                        {
+                            Model = restored;
+                            MarkSnapshot();
+                            _lastAutosavedSnapshot = _initialSnapshot;
+                            _autosaveStatus = $"Draft učitan u {DateTime.Now:HH:mm:ss}.";
+                            StateHasChanged();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to restore autosave draft for question {QuestionId}", Id);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to initialize autosave module for question {QuestionId}", Id);
+        }
+
+        StartAutosaveTimer(draftKey);
+    }
+
+    private void StartAutosaveTimer(string draftKey)
+    {
+        _autosaveTimer = new System.Timers.Timer(TimeSpan.FromSeconds(8));
+        _autosaveTimer.Elapsed += (_, _) => InvokeAsync(() => AutosaveAsync(draftKey));
+        _autosaveTimer.AutoReset = true;
+        _autosaveTimer.Start();
+    }
+
+    private async Task AutosaveAsync(string draftKey)
+    {
+        if (IsSaving || _autosaveModule is null || _editorHelper is null) return;
+
+        var currentSnapshot = _editorHelper.CreateModelSnapshot(Model);
+        if (string.Equals(currentSnapshot, _lastAutosavedSnapshot, StringComparison.Ordinal)) return;
+
+        try
+        {
+            await _autosaveModule.InvokeVoidAsync("saveDraft", draftKey, currentSnapshot);
+            _lastAutosavedSnapshot = currentSnapshot;
+            _autosaveStatus = $"Automatski sačuvano u {DateTime.Now:HH:mm:ss}.";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Autosave failed for question {QuestionId}", Id);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_autosaveTimer is not null)
+        {
+            _autosaveTimer.Stop();
+            _autosaveTimer.Dispose();
+        }
+
+        if (_autosaveModule is not null)
+        {
+            try { await _autosaveModule.DisposeAsync(); }
+            catch { /* Ignore JS disposal errors */ }
+        }
+    }
+
     private async Task SaveAsync()
     {
         if (_editorHelper is null || _question is null)
@@ -132,29 +239,8 @@ else
             await using var tx = await Db.Database.BeginTransactionAsync();
             try
             {
-                if (_question.Text != Model.Text)
-                {
-                    _question.SetText(_editorHelper.Sanitize(Model.Text, Model.TextFormat));
-                }
-
-                _editorHelper.ApplyQuestionFields(_question, Model);
-                _question.ReplaceOptions(_editorHelper.BuildOptions(Model));
-
-                if (_question.Steps.Count > 0)
-                {
-                    Db.QuestionSteps.RemoveRange(_question.Steps);
-                }
-
-                _question.ReplaceSteps([]);
-                await Db.SaveChangesAsync();
-
-                var steps = _editorHelper.BuildSteps(_question.Id, Model);
-                if (steps.Count > 0)
-                {
-                    _question.ReplaceSteps(steps);
-                }
-
-                await Db.SaveChangesAsync();
+                var request = _editorHelper.ToAuthoringRequest(Model, _question.Id);
+                await QuestionAuthoringService.UpdateQuestionAsync(Db, _question, request, "admin_ui", CancellationToken.None);
                 await tx.CommitAsync();
             }
             catch
@@ -165,6 +251,14 @@ else
 
             Snackbar.Add("Pitanje je uspešno izmenjeno.", Severity.Success);
             MarkSnapshot();
+
+            var draftKey = $"question-editor-draft-{Id}";
+            if (_autosaveModule is not null)
+            {
+                try { await _autosaveModule.InvokeVoidAsync("clearDraft", draftKey); }
+                catch { /* Ignore */ }
+            }
+
             Nav.NavigateTo("/questions");
         }
         catch (DbUpdateConcurrencyException)
@@ -175,6 +269,15 @@ else
         {
             Logger.LogError(ex, "Database error saving question {QuestionId}", Id);
             ValidationErrors = ["Greška pri čuvanju u bazu podataka. Pokušajte ponovo."];
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            Logger.LogWarning(ex, "Validation error saving question {QuestionId}", Id);
+            ValidationErrors = ex.Errors
+                .Select(x => x.ErrorMessage)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToList();
         }
         catch (Exception ex)
         {

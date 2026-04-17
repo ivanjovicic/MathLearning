@@ -10,6 +10,7 @@ namespace MathLearning.Domain.Entities
         public int Id { get; private set; }
         public string Text { get; private set; } = "";
         public string Type { get; private set; } = "multiple_choice";
+        public int? CorrectOptionId { get; private set; }
         public string? CorrectAnswer { get; private set; }
         public string? Explanation { get; private set; }
         public ContentFormat TextFormat { get; private set; } = ContentFormat.MarkdownWithMath;
@@ -41,6 +42,8 @@ namespace MathLearning.Domain.Entities
         public Guid? CurrentDraftId { get; private set; }
         public string? PublishedByUserId { get; private set; }
         public DateTime? PublishedAtUtc { get; private set; }
+        public string? UpdatedBy { get; private set; }
+        public string? PreviousSnapshotJson { get; private set; }
 
         public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
@@ -64,12 +67,41 @@ namespace MathLearning.Domain.Entities
         public void SetType(string type)
         {
             Type = string.IsNullOrWhiteSpace(type) ? "multiple_choice" : type;
+            if (IsOpenAnswerType())
+            {
+                CorrectOptionId = null;
+            }
             Touch();
         }
 
         public void SetCorrectAnswer(string? correctAnswer)
         {
             CorrectAnswer = correctAnswer;
+            if (IsOpenAnswerType())
+            {
+                CorrectOptionId = null;
+            }
+            Touch();
+        }
+
+        public void SetCorrectOptionId(int? correctOptionId)
+        {
+            if (correctOptionId.HasValue && correctOptionId.Value <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(correctOptionId), "Correct option id must be positive.");
+            }
+
+            CorrectOptionId = correctOptionId;
+
+            if (IsMultipleChoiceType() && correctOptionId.HasValue)
+            {
+                var optionText = Options.FirstOrDefault(x => x.Id == correctOptionId.Value)?.Text;
+                if (!string.IsNullOrWhiteSpace(optionText))
+                {
+                    CorrectAnswer = optionText;
+                }
+            }
+
             Touch();
         }
 
@@ -143,6 +175,7 @@ namespace MathLearning.Domain.Entities
         public void ReplaceOptions(IEnumerable<QuestionOption> options)
         {
             Options = options.ToList();
+            SyncCorrectOptionFromOptions();
             Touch();
         }
 
@@ -206,6 +239,59 @@ namespace MathLearning.Domain.Entities
             CurrentVersionNumber = Math.Max(0, versionNumber);
             Touch();
         }
+
+        public void SetUpdatedBy(string? updatedBy)
+        {
+            UpdatedBy = string.IsNullOrWhiteSpace(updatedBy) ? null : updatedBy.Trim();
+            Touch();
+        }
+
+        public void SetPreviousSnapshotJson(string? previousSnapshotJson)
+        {
+            PreviousSnapshotJson = previousSnapshotJson;
+            Touch();
+        }
+
+        public void SyncCorrectOptionFromOptions()
+        {
+            if (!IsMultipleChoiceType())
+            {
+                CorrectOptionId = null;
+                return;
+            }
+
+            var correctOption = Options
+                .OrderBy(x => x.Order)
+                .FirstOrDefault(x => x.IsCorrect);
+
+            if (correctOption is null)
+            {
+                CorrectOptionId = null;
+                return;
+            }
+
+            CorrectOptionId = correctOption.Id > 0 ? correctOption.Id : null;
+            CorrectAnswer = correctOption.Text;
+        }
+
+        public void EnsureAnswerInvariant()
+        {
+            if (IsMultipleChoiceType() && !CorrectOptionId.HasValue)
+            {
+                throw new InvalidOperationException("Multiple choice question requires CorrectOptionId.");
+            }
+
+            if (IsOpenAnswerType() && string.IsNullOrWhiteSpace(CorrectAnswer))
+            {
+                throw new InvalidOperationException("Open answer question requires CorrectAnswer.");
+            }
+        }
+
+        private bool IsMultipleChoiceType()
+            => string.Equals(Type, "multiple_choice", StringComparison.OrdinalIgnoreCase);
+
+        private bool IsOpenAnswerType()
+            => string.Equals(Type, "open_answer", StringComparison.OrdinalIgnoreCase);
 
         private void Touch() => UpdatedAt = DateTime.UtcNow;
     }

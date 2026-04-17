@@ -28,6 +28,33 @@
         }
         else
         {
+            <MudGrid Spacing="2" Class="mb-4">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="1" Class="pa-4">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Ukupno pitanja</MudText>
+                        <MudText Typo="Typo.h4">@_questionCount</MudText>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="1" Class="pa-4">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Ukupno kategorija</MudText>
+                        <MudText Typo="Typo.h4">@_categoryCount</MudText>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="1" Class="pa-4">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Otvoreni bugovi</MudText>
+                        <MudText Typo="Typo.h4">@_openBugCount</MudText>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="1" Class="pa-4">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Draft pitanja</MudText>
+                        <MudText Typo="Typo.h4">@_draftCount</MudText>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+
             <MudGrid>
                 <MudItem xs="12" sm="6" md="4">
                     <MudCard Elevation="4" Class="pa-4">
@@ -190,7 +217,7 @@
                         <MudCardContent>
                             <div class="d-flex justify-space-between align-center mb-4">
                                 <MudIcon Icon="@Icons.Material.Filled.BugReport" Size="Size.Large" Color="Color.Dark" />
-                                <MudChip T="string" Color="Color.Dark" Variant="Variant.Filled">@_bugCount</MudChip>
+                                <MudChip T="string" Color="Color.Dark" Variant="Variant.Filled">@_openBugCount</MudChip>
                             </div>
                             <MudText Typo="Typo.h6">Logovi i status poslova</MudText>
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
@@ -224,7 +251,8 @@
     private bool _isLoading = true;
     private int _categoryCount = 0;
     private int _questionCount = 0;
-    private int _bugCount = 0;
+    private int _openBugCount = 0;
+    private int _draftCount = 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -233,14 +261,21 @@
             _isLoading = true;
             
             // Load metrics
-            _categoryCount = await Db.Categories.CountAsync();
-            _questionCount = await Db.Questions.CountAsync();
-            
-            // TODO: Load bug count from API when available
-            _bugCount = 0;
+            _categoryCount = await Db.Categories.AsNoTracking().CountAsync();
+            _questionCount = await Db.Questions.AsNoTracking().CountAsync();
+            _openBugCount = await TryCountAsync(
+                () => Db.BugReports.AsNoTracking().CountAsync(b => b.Status == "open"),
+                "open bugs");
+            _draftCount = await TryCountAsync(
+                () => Db.QuestionDrafts.AsNoTracking().CountAsync(),
+                "question drafts");
 
-            Logger.LogInformation("Dashboard metrics loaded: {Categories} categories, {Questions} questions", 
-                _categoryCount, _questionCount);
+            Logger.LogInformation(
+                "Dashboard metrics loaded: {Categories} categories, {Questions} questions, {OpenBugs} open bugs, {Drafts} drafts",
+                _categoryCount,
+                _questionCount,
+                _openBugCount,
+                _draftCount);
         }
         catch (Exception ex)
         {
@@ -249,6 +284,19 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task<int> TryCountAsync(Func<Task<int>> countOperation, string metricName)
+    {
+        try
+        {
+            return await countOperation();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Dashboard metric '{MetricName}' is unavailable.", metricName);
+            return 0;
         }
     }
 }
