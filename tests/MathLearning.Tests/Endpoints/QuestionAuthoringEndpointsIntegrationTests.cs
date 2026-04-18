@@ -119,6 +119,42 @@ public class QuestionAuthoringEndpointsIntegrationTests : IClassFixture<CustomWe
     }
 
     [Fact]
+    public async Task SaveDraft_ThenPublish_OpenAnswer_ReturnsPublishedQuestion()
+    {
+        var request = new QuestionAuthoringRequest(
+            null,
+            "Izračunaj 2 + 3",
+            "open_answer",
+            "5",
+            "Saberi brojeve.",
+            2,
+            1,
+            1,
+            [],
+            [],
+            [new StepExplanationAuthoringDto(1, "2 + 3 = 5", null, false)],
+            "open-answer integration");
+
+        var saveResponse = await client.PostAsJsonAsync(
+            "/api/questions/save-draft",
+            new SaveQuestionDraftRequest(request, "open answer"));
+
+        saveResponse.EnsureSuccessStatusCode();
+        var savePayload = await saveResponse.Content.ReadFromJsonAsync<SaveQuestionDraftResponse>();
+        Assert.NotNull(savePayload);
+
+        var publishResponse = await client.PostAsJsonAsync(
+            "/api/questions/publish",
+            new PublishQuestionRequest(savePayload.DraftId, "open answer publish"));
+
+        publishResponse.EnsureSuccessStatusCode();
+        var publishPayload = await publishResponse.Content.ReadFromJsonAsync<PublishQuestionResponse>();
+        Assert.NotNull(publishPayload);
+        Assert.True(publishPayload.Published);
+        Assert.Equal("published", publishPayload.PublishState);
+    }
+
+    [Fact]
     public async Task Preview_SanitizesXssPayload_InSafePreviewFields()
     {
         var maliciousRequest = CreateValidRequest() with

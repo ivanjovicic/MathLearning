@@ -136,11 +136,13 @@
                                                     <MudTooltip Text="@(option.IsCorrect ? "Tačan odgovor" : "Označi kao tačan")">
                                                         <MudIconButton Icon="@(option.IsCorrect ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked)"
                                                                        Color="@(option.IsCorrect ? Color.Success : Color.Default)"
+                                                                       title="Označi tačan odgovor"
                                                                        OnClick="@(() => MarkCorrect(idx))" />
                                                     </MudTooltip>
                                                     <MudTooltip Text="Ukloni opciju">
                                                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
                                                                        Disabled="@(Model.Options.Count <= 2)"
+                                                                       title="Ukloni opciju"
                                                                        OnClick="@(() => RemoveOption(idx))" />
                                                     </MudTooltip>
                                                 </div>
@@ -226,21 +228,23 @@
                                     <div class="editor-header">
                                         <MudText Typo="Typo.subtitle2">Korak @(i + 1)</MudText>
                                         <div class="editor-actions">
-                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="@(i == 0)" OnClick="@(() => MoveStep(i, -1))" />
-                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="@(i == Model.Steps.Count - 1)" OnClick="@(() => MoveStep(i, 1))" />
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveStep(i))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="@(i == 0)" title="Pomeri korak gore" OnClick="@(() => MoveStep(i, -1))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="@(i == Model.Steps.Count - 1)" title="Pomeri korak dole" OnClick="@(() => MoveStep(i, 1))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" title="Ukloni korak" OnClick="@(() => RemoveStep(i))" />
                                         </div>
                                     </div>
 
                                     <MudGrid Spacing="2">
                                         <MudItem xs="12" md="8">
-                                            <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300"
-                                                          Error="@HasWarnings(step.Text, step.TextFormat)"
-                                                          ErrorText="@FirstWarning(step.Text, step.TextFormat)"
-                                                          Class="@WarningFieldClass(step.Text, step.TextFormat)"
-                                                          MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength"
-                                                          HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")"
-                                                          @bind-Value="step.Text" />
+                                            <div @onkeydown="HandleStepKeyDown">
+                                                <MudTextField T="string" Label="Tekst koraka" Variant="Variant.Outlined" Lines="3" AutoGrow="true" DebounceInterval="300"
+                                                              Error="@HasWarnings(step.Text, step.TextFormat)"
+                                                              ErrorText="@FirstWarning(step.Text, step.TextFormat)"
+                                                              Class="@WarningFieldClass(step.Text, step.TextFormat)"
+                                                              MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength"
+                                                              HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength}")"
+                                                              @bind-Value="step.Text" />
+                                            </div>
                                         </MudItem>
                                         <MudItem xs="12" md="2">
                                             <MudSelect T="ContentFormat" Label="Format" @bind-Value="step.TextFormat" Variant="Variant.Outlined">
@@ -573,6 +577,14 @@
         if (e.CtrlKey && e.Key == "Enter" && Model.Options.Count < 8)
         {
             AddOption();
+        }
+    }
+
+    private void HandleStepKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "Enter")
+        {
+            AddStep();
         }
     }
 

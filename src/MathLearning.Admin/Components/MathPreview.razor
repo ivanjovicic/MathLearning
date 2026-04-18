@@ -4,6 +4,7 @@
 @implements IAsyncDisposable
 @inject IJSRuntime Js
 @inject ILogger<MathPreview> Logger
+@inject MathLearning.Application.Content.IMathContentSanitizer Sanitizer
 
 <div class="@($"math-preview-shell {Class}")">
     @if (_isRendering)
@@ -49,7 +50,7 @@
 
     protected override void OnParametersSet()
     {
-        var normalizedContent = Content ?? string.Empty;
+        var normalizedContent = Sanitizer.NormalizeMathContent(Content, Format);
         _needsRender =
             normalizedContent != _previousContent ||
             Format != _previousFormat ||
@@ -93,7 +94,7 @@
             return;
         }
 
-        var normalizedContent = Content ?? string.Empty;
+        var normalizedContent = Sanitizer.NormalizeMathContent(Content, Format);
         try
         {
             var module = await GetModuleAsync();

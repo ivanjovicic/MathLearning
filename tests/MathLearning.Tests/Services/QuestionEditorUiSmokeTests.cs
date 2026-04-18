@@ -45,6 +45,28 @@ public class QuestionEditorUiSmokeTests
     }
 
     [Fact]
+    public void MarkCorrect_LeavesExactlyOneCorrectOption()
+    {
+        var model = new QuestionEditorModel
+        {
+            Options =
+            [
+                new QuestionOptionEditorModel { Text = "A", IsCorrect = true },
+                new QuestionOptionEditorModel { Text = "B", IsCorrect = false },
+                new QuestionOptionEditorModel { Text = "C", IsCorrect = false }
+            ]
+        };
+
+        var editor = CreateEditorComponent(model);
+        Invoke(editor, "MarkCorrect", 2);
+
+        Assert.False(model.Options[0].IsCorrect);
+        Assert.False(model.Options[1].IsCorrect);
+        Assert.True(model.Options[2].IsCorrect);
+        Assert.Equal(1, model.Options.Count(x => x.IsCorrect));
+    }
+
+    [Fact]
     public void PreviewToggle_SourceContainsExpectedTabBindingAndBranches()
     {
         var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Components", "QuestionEditor.razor");

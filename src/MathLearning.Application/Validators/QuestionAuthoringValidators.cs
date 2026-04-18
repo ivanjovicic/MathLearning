@@ -5,16 +5,23 @@ namespace MathLearning.Application.Validators;
 
 public sealed class QuestionAuthoringRequestValidator : AbstractValidator<QuestionAuthoringRequest>
 {
+    private const int QuestionTextMinLength = 4;
+    private const int ExplanationMaxLength = 3000;
     private const int CorrectAnswerMaxLength = 2000;
 
     public QuestionAuthoringRequestValidator()
     {
         RuleFor(x => x.Text)
             .NotEmpty()
+            .Must(text => text.Trim().Length >= QuestionTextMinLength)
+            .WithMessage($"Question text must be at least {QuestionTextMinLength} characters long.")
             .MaximumLength(4000);
 
         RuleFor(x => x.Type)
             .NotEmpty()
+            .Must(type => string.Equals(type, "multiple_choice", StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(type, "open_answer", StringComparison.OrdinalIgnoreCase))
+            .WithMessage("Question type must be either multiple_choice or open_answer.")
             .MaximumLength(64);
 
         RuleFor(x => x.Difficulty)
@@ -35,6 +42,10 @@ public sealed class QuestionAuthoringRequestValidator : AbstractValidator<Questi
         RuleFor(x => x.SemanticsAltText)
             .MaximumLength(1000)
             .When(x => !string.IsNullOrWhiteSpace(x.SemanticsAltText));
+
+        RuleFor(x => x.Explanation)
+            .MaximumLength(ExplanationMaxLength)
+            .When(x => !string.IsNullOrWhiteSpace(x.Explanation));
 
         RuleForEach(x => x.Options)
             .SetValidator(new QuestionAuthoringOptionDtoValidator());
@@ -83,7 +94,7 @@ public sealed class QuestionAuthoringRequestValidator : AbstractValidator<Questi
 
         var normalizedOptions = request.Options
             .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .Select(x => x.Text.Trim().ToLowerInvariant())
+            .Select(x => NormalizeOptionText(x.Text))
             .ToArray();
 
         if (normalizedOptions.Length != normalizedOptions.Distinct().Count())
@@ -138,6 +149,13 @@ public sealed class QuestionAuthoringRequestValidator : AbstractValidator<Questi
             context.AddFailure(nameof(QuestionAuthoringRequest.CorrectAnswer), $"CorrectAnswer cannot exceed {CorrectAnswerMaxLength} characters.");
         }
     }
+
+    private static string NormalizeOptionText(string value)
+        => string.Join(
+            ' ',
+            value.Trim()
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .ToLowerInvariant();
 
     private static void ValidateStepOrder(IReadOnlyList<StepExplanationAuthoringDto> steps, ValidationContext<QuestionAuthoringRequest> context)
     {

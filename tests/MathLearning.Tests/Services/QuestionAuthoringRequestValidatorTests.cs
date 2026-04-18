@@ -26,6 +26,24 @@ public class QuestionAuthoringRequestValidatorTests
     }
 
     [Fact]
+    public void MultipleChoice_RejectsDuplicateOptions_WhenWhitespaceOnlyDiffers()
+    {
+        var request = CreateValidMultipleChoiceRequest() with
+        {
+            Options =
+            [
+                new QuestionAuthoringOptionDto(1, "Tacan odgovor", true),
+                new QuestionAuthoringOptionDto(2, "  tacan   odgovor  ", false)
+            ]
+        };
+
+        var result = validator.Validate(request);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(QuestionAuthoringRequest.Options));
+    }
+
+    [Fact]
     public void MultipleChoice_RejectsZeroCorrectOption()
     {
         var request = CreateValidMultipleChoiceRequest() with
@@ -126,6 +144,20 @@ public class QuestionAuthoringRequestValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(QuestionAuthoringRequest.CorrectAnswer));
+    }
+
+    [Fact]
+    public void Question_RejectsTooShortText()
+    {
+        var request = CreateValidMultipleChoiceRequest() with
+        {
+            Text = "abc"
+        };
+
+        var result = validator.Validate(request);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(QuestionAuthoringRequest.Text));
     }
 
     [Fact]

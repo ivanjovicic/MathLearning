@@ -61,7 +61,6 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
             entity.Property(e => e.Type).IsRequired().HasDefaultValue("multiple_choice");
-            entity.Ignore(e => e.CorrectOptionId);
             entity.Property(e => e.UpdatedBy).HasMaxLength(256).IsRequired(false);
             entity.Property(e => e.PreviousSnapshotJson).HasColumnType("jsonb").IsRequired(false);
             entity.HasOne(e => e.Category)
@@ -72,6 +71,10 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(e => e.SubtopicId)
                   .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<QuestionOption>()
+                  .WithMany()
+                  .HasForeignKey(e => e.CorrectOptionId)
+                  .OnDelete(DeleteBehavior.SetNull);
             entity.HasMany(e => e.Options)
                   .WithOne()
                   .OnDelete(DeleteBehavior.Cascade);

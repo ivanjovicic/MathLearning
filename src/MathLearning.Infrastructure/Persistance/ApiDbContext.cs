@@ -105,7 +105,6 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Text).IsRequired();
             entity.Property(e => e.Type).IsRequired().HasDefaultValue("multiple_choice");
-            entity.Ignore(e => e.CorrectOptionId);
             entity.Property(e => e.TextFormat).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.ExplanationFormat).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.HintFormat).HasConversion<string>().HasMaxLength(32);
@@ -123,6 +122,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .WithMany()
                   .HasForeignKey(e => e.SubtopicId)
                   .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<QuestionOption>()
+                  .WithMany()
+                  .HasForeignKey(e => e.CorrectOptionId)
+                  .OnDelete(DeleteBehavior.SetNull);
             entity.HasMany(e => e.Options)
                   .WithOne()
                   .OnDelete(DeleteBehavior.Cascade);

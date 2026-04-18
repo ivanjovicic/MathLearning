@@ -152,6 +152,10 @@
                 </MudTd>
                 <MudTd DataLabel="Poslednja izmena">
                     @context.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    @if (!string.IsNullOrWhiteSpace(context.UpdatedBy))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">autor: @context.UpdatedBy</MudText>
+                    }
                 </MudTd>
                 <MudTd DataLabel="Akcije" Style="text-align: right;">
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" 

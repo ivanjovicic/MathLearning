@@ -579,7 +579,8 @@ public sealed partial class MathQuestionAuthoringService :
             question.CategoryId,
             question.SubtopicId,
             question.Options
-                .OrderBy(x => x.Id)
+                .OrderBy(x => x.Order)
+                .ThenBy(x => x.Id)
                 .Select(x => new QuestionAuthoringOptionDto(
                     x.Id,
                     x.Text,

@@ -25,6 +25,7 @@ using Npgsql;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
+using Microsoft.Extensions.Logging;
 using Serilog.Events;
 using Serilog.Formatting.Json;
 using StackExchange.Redis;
@@ -46,7 +47,8 @@ var isDevelopment = string.Equals(startupEnvironment, "Development", StringCompa
 var loggerConfig = new LoggerConfiguration()
     .MinimumLevel.Is(isDevelopment ? LogEventLevel.Information : LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+    // TEMPORARY TRIAGE: increase EF Core log level in Development to capture SQL/params
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", isDevelopment ? LogEventLevel.Information : LogEventLevel.Warning)
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
     .Enrich.WithMachineName()
@@ -201,18 +203,41 @@ try
     builder.Services.AddSingleton<PerformanceDbCommandInterceptor>();
 
     // Add ApiDbContext (kombinuje Identity i sve entitete)
+    // TEMPORARY TRIAGE LOGGING: enable detailed EF/Npgsql logging in Development only.
     builder.Services.AddDbContext<ApiDbContext>((sp, options) =>
+    {
         options.UseNpgsql(
                 defaultConnectionString,
-                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
-            .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
+                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+        options.AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>());
+
+        if (isDevelopment)
+        {
+            // Show parameter values and detailed EF errors to help triage SQL failures.
+            options.EnableDetailedErrors();
+            options.EnableSensitiveDataLogging();
+            // Log EF SQL commands and other messages via Serilog at Information level.
+            options.LogTo(s => Log.Debug("EF: {Message}", s), Microsoft.Extensions.Logging.LogLevel.Information);
+        }
+    });
 
     // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
+    // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
+    // TEMPORARY TRIAGE: mirror EF logging settings for AppDbContext in Development.
     builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+    {
         options.UseNpgsql(
                 defaultConnectionString,
-                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
-            .AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>()));
+                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+        options.AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>());
+
+        if (isDevelopment)
+        {
+            options.EnableDetailedErrors();
+            options.EnableSensitiveDataLogging();
+            options.LogTo(s => Log.Debug("EF: {Message}", s), Microsoft.Extensions.Logging.LogLevel.Information);
+        }
+    });
 
     var hangfireEnabled = false;
 
@@ -436,6 +461,28 @@ try
             try
             {
                 Log.Information("??? Applying database migrations...");
+
+                // TEMPORARY TRIAGE: enumerate pending migrations in Development to aid diagnosis
+                if (isDevelopment)
+                {
+                    try
+                    {
+                        var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+                        if (pending.Length > 0)
+                        {
+                            Log.Information("TEMPORARY TRIAGE: Pending migrations: {Migrations}", string.Join(", ", pending));
+                        }
+                        else
+                        {
+                            Log.Information("TEMPORARY TRIAGE: No pending migrations.");
+                        }
+                    }
+                    catch (Exception pendingEx)
+                    {
+                        Log.Warning(pendingEx, "TEMPORARY TRIAGE: Could not enumerate pending migrations");
+                    }
+                }
+
                 await db.Database.MigrateAsync();
                 Log.Information("? Database migrations applied successfully");
                 databaseStartupSucceeded = true;
@@ -459,16 +506,27 @@ try
                     ");
                     Log.Information("? RefreshToken column length verified");
                 }
-                catch (Exception fixEx)
+                catch (Exception ex)
                 {
-                    Log.Warning(fixEx, "?? Could not verify/fix RefreshToken column length");
-                }
+                    // TEMPORARY TRIAGE: log extra Postgres details in Development to help pinpoint failing SQL
+                    if (isDevelopment && ex is PostgresException pgEx)
+                    {
+                        Log.Error(pgEx, "TEMPORARY TRIAGE: PostgresException during DB startup. SqlState={SqlState} Table={TableName} Constraint={ConstraintName} Detail={Detail} Hint={Hint} Position={Position}", pgEx.SqlState, pgEx.TableName, pgEx.ConstraintName, pgEx.Detail, pgEx.Hint, pgEx.Position);
+                    }
 
-                // 🎨 Seed default cosmetic items (only if table is empty — tables are created by EF migration)
+                    if (IsPostgresAuthFailure(ex))
+                    {
+                        Log.Error(
+                            ex,
+                            "Database startup failed because PostgreSQL rejected the configured credentials for {DbTarget}. Update deployment env var `ConnectionStrings__Default` with the current database password.",
+                            DescribeDbConnection(defaultConnectionString));
+                    }
+
+                    Log.Warning(ex, "?? Database migration/seed failed. Continuing without it (DB may not be available yet).");
+                }
                 try
                 {
                     var cosmeticCountBefore = await db.CosmeticItems.CountAsync();
-
                     await db.Database.ExecuteSqlRawAsync(@"
                         INSERT INTO cosmetic_items (""Key"", ""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""IsDefault"", ""ReleaseDate"")
                         VALUES
