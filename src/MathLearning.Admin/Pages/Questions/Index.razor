@@ -7,7 +7,6 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
-@using QuestionEntity = MathLearning.Domain.Entities.Question
 @inject AdminDbContext Db
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -130,6 +129,7 @@
                 <MudTh>ID</MudTh>
                 <MudTh>Tekst</MudTh>
                 <MudTh>Kategorija</MudTh>
+                <MudTh>Stanje</MudTh>
                 <MudTh>Tezina</MudTh>
                 <MudTh>Poslednja izmena</MudTh>
                 <MudTh Style="text-align: right; width: 120px;">Akcije</MudTh>
@@ -146,6 +146,19 @@
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary">
                         @context.Category?.Name
                     </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Stanje">
+                    <div class="d-flex flex-column gap-1">
+                        <MudChip T="string" Size="Size.Small" Color="@GetPublishStateColor(context.PublishState)" Variant="Variant.Filled">
+                            @GetPublishStateLabel(context.PublishState)
+                        </MudChip>
+                        @if (!string.IsNullOrWhiteSpace(context.ValidationStatus))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="@GetValidationStatusColor(context.ValidationStatus)" Variant="Variant.Outlined">
+                                @GetValidationStatusLabel(context.ValidationStatus)
+                            </MudChip>
+                        }
+                    </div>
                 </MudTd>
                 <MudTd DataLabel="Tezina">
                     <MudRating ReadOnly="true" SelectedValue="@context.Difficulty" MaxValue="5" Size="Size.Small" />
@@ -189,7 +202,7 @@
 </MudPaper>
 
 @code {
-    private List<QuestionEntity> _questions = new();
+    private List<QuestionListItem> _questions = new();
     private List<Category> _categories = new();
     private bool _loading = true;
     private string _searchText = string.Empty;
@@ -288,14 +301,29 @@
         }
     }
 
-    private IQueryable<QuestionEntity> BuildFilteredQuery()
+    private IQueryable<QuestionListItem> BuildFilteredQuery()
     {
-        var query = Db.Questions
-            .Include(q => q.Category)
-            .Include(q => q.Options)
-            .Include(q => q.Steps)
-            .AsNoTracking()
-            .AsQueryable();
+        var query =
+            from question in Db.Questions.AsNoTracking()
+            join category in Db.Categories.AsNoTracking() on question.CategoryId equals category.Id into categoryJoin
+            from category in categoryJoin.DefaultIfEmpty()
+            join draft in Db.QuestionDrafts.AsNoTracking() on question.CurrentDraftId equals draft.Id into draftJoin
+            from currentDraft in draftJoin.DefaultIfEmpty()
+            select new QuestionListItem
+            {
+                Id = question.Id,
+                Text = question.Text,
+                Difficulty = question.Difficulty,
+                UpdatedAt = question.UpdatedAt,
+                UpdatedBy = question.UpdatedBy,
+                Category = category,
+                CategoryId = question.CategoryId,
+                Type = question.Type,
+                PublishState = question.PublishState,
+                ValidationStatus = currentDraft != null ? currentDraft.ValidationStatus : null,
+                OptionCount = Db.Options.Count(option => EF.Property<int>(option, "QuestionId") == question.Id),
+                StepCount = Db.QuestionSteps.Count(step => step.QuestionId == question.Id)
+            };
 
         if (!string.IsNullOrWhiteSpace(_searchText))
         {
@@ -348,15 +376,15 @@
         await LoadQuestionsAsync();
     }
 
-    private async Task DeleteQuestionAsync(QuestionEntity question)
+    private async Task DeleteQuestionAsync(QuestionListItem question)
     {
         var dialogParameters = new DialogParameters
         {
             [nameof(ConfirmDialog.Title)] = "Potvrda brisanja",
             [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildQuestionDeleteMessage(
                 question.Id,
-                question.Options.Count,
-                question.Steps.Count),
+                question.OptionCount,
+                question.StepCount),
             [nameof(ConfirmDialog.ConfirmText)] = "Obrisi",
             [nameof(ConfirmDialog.CancelText)] = "Odustani",
             [nameof(ConfirmDialog.ConfirmColor)] = Color.Error
@@ -374,7 +402,16 @@
 
         try
         {
-            Db.Questions.Remove(question);
+            var entity = await Db.Questions.FirstOrDefaultAsync(x => x.Id == question.Id);
+            if (entity is null)
+            {
+                Snackbar.Add("Pitanje više ne postoji.", Severity.Warning);
+                _questions.Remove(question);
+                _totalCount = Math.Max(0, _totalCount - 1);
+                return;
+            }
+
+            Db.Questions.Remove(entity);
             await Db.SaveChangesAsync();
             _questions.Remove(question);
             _totalCount--;
@@ -387,5 +424,53 @@
             Logger.LogError(ex, "Error deleting question");
             Snackbar.Add($"Greška pri brisanju: {ex.Message}", Severity.Error);
         }
+    }
+
+    private static Color GetPublishStateColor(string publishState) => publishState switch
+    {
+        QuestionPublishStates.Published => Color.Success,
+        QuestionPublishStates.Validated => Color.Info,
+        QuestionPublishStates.Archived => Color.Secondary,
+        _ => Color.Warning
+    };
+
+    private static string GetPublishStateLabel(string publishState) => publishState switch
+    {
+        QuestionPublishStates.Published => "Objavljeno",
+        QuestionPublishStates.Validated => "Validirano",
+        QuestionPublishStates.Archived => "Arhivirano",
+        _ => "Draft"
+    };
+
+    private static Color GetValidationStatusColor(string validationStatus) => validationStatus switch
+    {
+        QuestionValidationStatuses.Passed => Color.Success,
+        QuestionValidationStatuses.PassedWithWarnings => Color.Warning,
+        QuestionValidationStatuses.Failed => Color.Error,
+        _ => Color.Info
+    };
+
+    private static string GetValidationStatusLabel(string validationStatus) => validationStatus switch
+    {
+        QuestionValidationStatuses.Passed => "Bez grešaka",
+        QuestionValidationStatuses.PassedWithWarnings => "Upozorenja",
+        QuestionValidationStatuses.Failed => "Problematično",
+        _ => "Na čekanju"
+    };
+
+    private sealed class QuestionListItem
+    {
+        public int Id { get; init; }
+        public string Text { get; init; } = string.Empty;
+        public int Difficulty { get; init; }
+        public DateTime UpdatedAt { get; init; }
+        public string? UpdatedBy { get; init; }
+        public Category? Category { get; init; }
+        public int CategoryId { get; init; }
+        public string Type { get; init; } = string.Empty;
+        public string PublishState { get; init; } = QuestionPublishStates.Draft;
+        public string? ValidationStatus { get; init; }
+        public int OptionCount { get; init; }
+        public int StepCount { get; init; }
     }
 }

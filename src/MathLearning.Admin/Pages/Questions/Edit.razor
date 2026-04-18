@@ -59,6 +59,14 @@ else
         }
     </MudAlert>
 
+    <MudAlert Severity="@GetValidationAlertSeverity()" Dense="true" Variant="Variant.Outlined" Class="mb-3">
+        Status pitanja: <strong>@GetPublishStateLabel(_question.PublishState)</strong>
+        @if (!string.IsNullOrWhiteSpace(_currentDraftValidationStatus))
+        {
+            <span> | Validacija: <strong>@GetValidationStatusLabel(_currentDraftValidationStatus)</strong></span>
+        }
+    </MudAlert>
+
     <QuestionEditor Model="@Model"
                     Categories="@Categories"
                     Subtopics="@Subtopics"
@@ -81,6 +89,7 @@ else
     private bool IsSaving { get; set; }
     private List<string> ValidationErrors { get; set; } = [];
     private string? _loadError;
+    private string? _currentDraftValidationStatus;
     private string _initialSnapshot = string.Empty;
     private IJSObjectReference? _autosaveModule;
     private System.Timers.Timer? _autosaveTimer;
@@ -117,6 +126,14 @@ else
             if (_question is not null && _editorHelper is not null)
             {
                 _editorHelper.MapQuestionToModel(_question, Model);
+                if (_question.CurrentDraftId.HasValue)
+                {
+                    _currentDraftValidationStatus = await Db.QuestionDrafts
+                        .AsNoTracking()
+                        .Where(x => x.Id == _question.CurrentDraftId.Value)
+                        .Select(x => x.ValidationStatus)
+                        .FirstOrDefaultAsync();
+                }
             }
 
             MarkSnapshot();
@@ -250,6 +267,13 @@ else
             }
 
             Snackbar.Add("Pitanje je uspešno izmenjeno.", Severity.Success);
+            _currentDraftValidationStatus = _question.CurrentDraftId.HasValue
+                ? await Db.QuestionDrafts
+                    .AsNoTracking()
+                    .Where(x => x.Id == _question.CurrentDraftId.Value)
+                    .Select(x => x.ValidationStatus)
+                    .FirstOrDefaultAsync()
+                : _currentDraftValidationStatus;
             MarkSnapshot();
 
             var draftKey = $"question-editor-draft-{Id}";
@@ -309,4 +333,29 @@ else
             context.PreventNavigation();
         }
     }
+
+    private Severity GetValidationAlertSeverity()
+        => _currentDraftValidationStatus switch
+        {
+            QuestionValidationStatuses.Failed => Severity.Error,
+            QuestionValidationStatuses.PassedWithWarnings => Severity.Warning,
+            QuestionValidationStatuses.Passed => Severity.Success,
+            _ => Severity.Info
+        };
+
+    private static string GetPublishStateLabel(string publishState) => publishState switch
+    {
+        QuestionPublishStates.Published => "Objavljeno",
+        QuestionPublishStates.Validated => "Validirano",
+        QuestionPublishStates.Archived => "Arhivirano",
+        _ => "Draft"
+    };
+
+    private static string GetValidationStatusLabel(string validationStatus) => validationStatus switch
+    {
+        QuestionValidationStatuses.Passed => "Bez grešaka",
+        QuestionValidationStatuses.PassedWithWarnings => "Upozorenja",
+        QuestionValidationStatuses.Failed => "Problematično",
+        _ => "Na čekanju"
+    };
 }

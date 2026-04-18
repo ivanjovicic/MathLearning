@@ -79,6 +79,46 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("Live Preview", content, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void NewQuestionPage_SourceContainsAutosaveAndNavigationProtection()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Pages", "Questions", "New.razor");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("<NavigationLock", content, StringComparison.Ordinal);
+        Assert.Contains("loadDraft", content, StringComparison.Ordinal);
+        Assert.Contains("saveDraft", content, StringComparison.Ordinal);
+        Assert.Contains("clearDraft", content, StringComparison.Ordinal);
+        Assert.Contains("ConfirmNavigationAsync", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditQuestionPage_SourceContainsAutosaveRestoreAndNavigationProtection()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Pages", "Questions", "Edit.razor");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("<NavigationLock", content, StringComparison.Ordinal);
+        Assert.Contains("loadDraft", content, StringComparison.Ordinal);
+        Assert.Contains("saveDraft", content, StringComparison.Ordinal);
+        Assert.Contains("clearDraft", content, StringComparison.Ordinal);
+        Assert.Contains("ConfirmNavigationAsync", content, StringComparison.Ordinal);
+        Assert.Contains("Validacija:", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuestionsIndex_SourceShowsStatusSignalsAndAvoidsHeavyIncludes()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Pages", "Questions", "Index.razor");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("ValidationStatus", content, StringComparison.Ordinal);
+        Assert.Contains("GetValidationStatusLabel", content, StringComparison.Ordinal);
+        Assert.Contains("GetPublishStateLabel", content, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Include(q => q.Options)", content, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Include(q => q.Steps)", content, StringComparison.Ordinal);
+    }
+
     private static object CreateEditorComponent(QuestionEditorModel model)
     {
         var editorType = Type.GetType("MathLearning.Admin.Components.QuestionEditor, MathLearning.Admin");
