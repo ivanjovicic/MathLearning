@@ -88,7 +88,7 @@ export function render(element, content, format, renderMode, emptyText) {
             return;
         }
 
-        if (format === "Latex") {
+        if (format === "Latex" || format === "LaTeX") {
             renderLatex(element, normalized, renderMode || "Auto");
             return;
         }

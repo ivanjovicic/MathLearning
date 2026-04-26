@@ -67,16 +67,18 @@ public class QuestionEditorUiSmokeTests
     }
 
     [Fact]
-    public void PreviewToggle_SourceContainsExpectedTabBindingAndBranches()
+    public void PreviewPanel_SourceContainsStudentPreviewForAuthoringFields()
     {
         var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Components", "QuestionEditor.razor");
         var content = File.ReadAllText(filePath);
 
         Assert.Contains("@bind-ActivePanelIndex=\"_activeTabIndex\"", content, StringComparison.Ordinal);
-        Assert.Contains("if (_activeTabIndex == 0)", content, StringComparison.Ordinal);
-        Assert.Contains("else if (_activeTabIndex == 1)", content, StringComparison.Ordinal);
-        Assert.Contains("else if (_activeTabIndex == 2)", content, StringComparison.Ordinal);
-        Assert.Contains("Live Preview", content, StringComparison.Ordinal);
+        Assert.Contains("Preview", content, StringComparison.Ordinal);
+        Assert.Contains("<MathPreview Content=\"@Model.Text\"", content, StringComparison.Ordinal);
+        Assert.Contains("<MathPreview Content=\"@opt.Text\"", content, StringComparison.Ordinal);
+        Assert.Contains("<MathPreview Content=\"@Model.Explanation\"", content, StringComparison.Ordinal);
+        Assert.Contains("<MathPreview Content=\"@Model.Steps[i].Text\"", content, StringComparison.Ordinal);
+        Assert.Contains("<MathPreview Content=\"@Model.HintFormula\"", content, StringComparison.Ordinal);
     }
 
     [Fact]

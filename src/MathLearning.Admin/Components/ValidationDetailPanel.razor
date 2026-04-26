@@ -1,0 +1,160 @@
+@using MathLearning.Application.DTOs.Questions
+@using MudBlazor
+
+@if (Result is null)
+{
+    return;
+}
+
+<MudCard Outlined="true" Class="mt-4">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@SummaryIcon" Color="@SummaryColor" Size="Size.Medium" />
+                <div>
+                    <MudText Typo="Typo.h6">Rezultati validacije</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @Result.Summary.ErrorCount grešaka · @Result.Summary.WarningCount upozorenja
+                        @if (Result.Difficulty.Score > 0)
+                        {
+                            <span> · Procenjena težina: <strong>@Result.Difficulty.Score/5</strong> (@Result.Difficulty.Band)</span>
+                        }
+                    </MudText>
+                </div>
+                <MudSpacer />
+                <MudChip T="string" Color="@SummaryColor" Variant="Variant.Filled" Size="Size.Small">
+                    @GetStatusLabel(Result.Summary.Status)
+                </MudChip>
+            </div>
+        </CardHeaderContent>
+    </MudCardHeader>
+
+    @if (Result.Summary.Issues.Count > 0)
+    {
+        <MudCardContent Class="pt-0">
+            @* Errors *@
+            @{ var errors = Result.Summary.Issues.Where(i => i.Severity == "error").ToList(); }
+            @if (errors.Count > 0)
+            {
+                <MudText Typo="Typo.overline" Color="Color.Error" Class="mt-2 d-block">Greške (@errors.Count)</MudText>
+                @foreach (var issue in errors)
+                {
+                    @IssueRow(issue)
+                }
+            }
+
+            @* Warnings *@
+            @{ var warnings = Result.Summary.Issues.Where(i => i.Severity == "warning").ToList(); }
+            @if (warnings.Count > 0)
+            {
+                <MudText Typo="Typo.overline" Color="Color.Warning" Class="mt-3 d-block">Upozorenja (@warnings.Count)</MudText>
+                @foreach (var issue in warnings)
+                {
+                    @IssueRow(issue)
+                }
+            }
+
+            @* Info *@
+            @{ var infos = Result.Summary.Issues.Where(i => i.Severity is not "error" and not "warning").ToList(); }
+            @if (infos.Count > 0)
+            {
+                <MudText Typo="Typo.overline" Color="Color.Info" Class="mt-3 d-block">Informacije (@infos.Count)</MudText>
+                @foreach (var issue in infos)
+                {
+                    @IssueRow(issue)
+                }
+            }
+        </MudCardContent>
+    }
+    else
+    {
+        <MudCardContent Class="pt-0">
+            <MudAlert Severity="Severity.Success" Dense="true" NoIcon="false">
+                Sve validacije su prošle. Pitanje je spremno za objavljivanje.
+            </MudAlert>
+        </MudCardContent>
+    }
+
+    @if (Result.Difficulty.Signals.Count > 0)
+    {
+        <MudCardContent Class="pt-0">
+            <MudExpansionPanel Text="Signali za procenu težine" Dense="true">
+                <MudChipSet T="string" Class="gap-1">
+                    @foreach (var signal in Result.Difficulty.Signals)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@signal</MudChip>
+                    }
+                </MudChipSet>
+            </MudExpansionPanel>
+        </MudCardContent>
+    }
+</MudCard>
+
+@* Inline row component *@
+@code {
+    private RenderFragment<ValidationIssueDto> IssueRow => issue =>
+        @<div class="validation-issue-row">
+            <div class="d-flex align-start gap-2 py-1">
+                <MudIcon Icon="@GetIssueIcon(issue.Severity)" Color="@GetIssueColor(issue.Severity)"
+                         Size="Size.Small" Class="mt-1 flex-shrink-0" />
+                <div class="flex-grow-1">
+                    <div class="d-flex align-center gap-2 flex-wrap">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="my-0">@issue.Stage</MudChip>
+                        @if (!string.IsNullOrWhiteSpace(issue.FieldPath))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="font-monospace">@issue.FieldPath</MudText>
+                        }
+                    </div>
+                    <MudText Typo="Typo.body2">@issue.Message</MudText>
+                    @if (!string.IsNullOrWhiteSpace(issue.Suggestion))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            <MudIcon Icon="@Icons.Material.Filled.TipsAndUpdates" Size="Size.Small" Class="mr-1" Style="vertical-align:middle" />
+                            @issue.Suggestion
+                        </MudText>
+                    }
+                </div>
+            </div>
+        </div>;
+
+    [Parameter, EditorRequired]
+    public ValidateQuestionResponse? Result { get; set; }
+
+    private Color SummaryColor => Result?.Summary.Status switch
+    {
+        "passed" => Color.Success,
+        "passed_with_warnings" => Color.Warning,
+        "failed" => Color.Error,
+        _ => Color.Info
+    };
+
+    private string SummaryIcon => Result?.Summary.Status switch
+    {
+        "passed" => Icons.Material.Filled.CheckCircle,
+        "passed_with_warnings" => Icons.Material.Filled.Warning,
+        "failed" => Icons.Material.Filled.Cancel,
+        _ => Icons.Material.Filled.HourglassEmpty
+    };
+
+    private static string GetStatusLabel(string status) => status switch
+    {
+        "passed" => "Prošlo",
+        "passed_with_warnings" => "Upozorenja",
+        "failed" => "Neuspešno",
+        _ => "Čeka"
+    };
+
+    private static Color GetIssueColor(string severity) => severity switch
+    {
+        "error" => Color.Error,
+        "warning" => Color.Warning,
+        _ => Color.Info
+    };
+
+    private static string GetIssueIcon(string severity) => severity switch
+    {
+        "error" => Icons.Material.Filled.Error,
+        "warning" => Icons.Material.Filled.Warning,
+        _ => Icons.Material.Filled.Info
+    };
+}

@@ -58,3 +58,187 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* ───────────────────────────────────────────────────────────
+   MathInputHelper toolbar
+─────────────────────────────────────────────────────────── */
+.math-input-helper {
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 8px;
+    background: #f8f9fa;
+    padding: 8px 12px 10px;
+    margin-bottom: 16px;
+}
+
+.math-helper-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.math-helper-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+}
+
+.math-helper-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.math-helper-group-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(0,0,0,0.5);
+    margin-bottom: 2px;
+}
+
+.math-helper-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.math-helper-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid rgba(0,0,0,0.18);
+    border-radius: 4px;
+    background: #ffffff;
+    font-family: 'KaTeX_Main', 'Latin Modern', 'Times New Roman', serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    user-select: none;
+    color: #1a1a2e;
+}
+
+.math-helper-btn:hover {
+    background: #e3f2fd;
+    border-color: #1976d2;
+    box-shadow: 0 1px 4px rgba(25,118,210,0.15);
+}
+
+.math-helper-btn:active {
+    background: #bbdefb;
+    transform: scale(0.96);
+}
+
+/* ───────────────────────────────────────────────────────────
+   Question list — rendered math preview cell
+─────────────────────────────────────────────────────────── */
+.question-list-preview {
+    max-width: 420px;
+}
+
+.question-list-math .math-preview-shell {
+    min-height: unset;
+    padding: 4px 0;
+    border: none;
+    background: transparent;
+}
+
+.question-list-math .math-preview-host {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 420px;
+}
+
+/* ───────────────────────────────────────────────────────────
+   QuestionEditor — full student preview panel
+─────────────────────────────────────────────────────────── */
+.preview-panel {
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+}
+
+.preview-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.preview-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.preview-option-correct {
+    border-color: #4caf50;
+    background: #f1f8e9;
+}
+
+.preview-option-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.preview-step {
+    padding: 4px 0 4px 8px;
+    border-left: 3px solid rgba(0,0,0,0.1);
+    margin-bottom: 8px;
+}
+
+.preview-hint {
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+.preview-hint-light {
+    background: #e3f2fd;
+    border-left: 3px solid #2196f3;
+}
+
+.preview-hint-medium {
+    background: #fff8e1;
+    border-left: 3px solid #ffc107;
+}
+
+.preview-hint-full {
+    background: #e8f5e9;
+    border-left: 3px solid #4caf50;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Field warnings (format mismatch etc.)
+─────────────────────────────────────────────────────────── */
+.field-with-warning .mud-input-outlined-border {
+    border-color: #ff9800 !important;
+}
+
+/* ───────────────────────────────────────────────────────────
+   ValidationDetailPanel — issue rows
+─────────────────────────────────────────────────────────── */
+.validation-issue-row {
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    padding: 2px 0;
+}
+
+.validation-issue-row:last-child {
+    border-bottom: none;
+}
+
+.font-monospace {
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 0.75rem;
+}

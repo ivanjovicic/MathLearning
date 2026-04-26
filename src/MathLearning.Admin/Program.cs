@@ -4,6 +4,7 @@ using MathLearning.Admin.Services;
 using FluentValidation;
 using MathLearning.Application.Content;
 using MathLearning.Application.DTOs.Questions;
+using MathLearning.Application.Services;
 using MathLearning.Application.Validators;
 using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.QuestionAuthoring;
@@ -91,6 +92,17 @@ builder.Services.AddScoped<AdminApiClient>();
 builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 builder.Services.AddScoped<IValidator<QuestionAuthoringRequest>, QuestionAuthoringRequestValidator>();
 builder.Services.AddScoped<IQuestionAuthoringService, QuestionAuthoringService>();
+
+// Stateless validation stage services (no ApiDbContext required)
+builder.Services.AddScoped<IMathContentLinter, MathContentLinter>();
+builder.Services.AddScoped<ILatexValidationService, LatexValidationService>();
+builder.Services.AddScoped<IMathNormalizationService, MathNormalizationService>();
+builder.Services.AddScoped<IMathEquivalenceService, MathEquivalenceService>();
+builder.Services.AddScoped<IStepExplanationValidationService, StepExplanationValidationService>();
+builder.Services.AddScoped<IDifficultyEstimationService, DifficultyEstimationService>();
+builder.Services.AddScoped<IQuestionPreviewService, QuestionPreviewService>();
+builder.Services.AddScoped<IQuestionPublishGuardService, QuestionPublishGuardService>();
+builder.Services.AddScoped<AdminQuestionValidationOrchestrator>();
 
 builder.Services.AddMudServices();
 

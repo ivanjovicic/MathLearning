@@ -136,13 +136,13 @@ public class QuestionAuthoringPipelineTests
         {
             Text = "$1+1$",
             CorrectAnswer = @"$\frac{1}{2}$",
-            TextFormat = ContentFormat.Latex,
+            TextFormat = ContentFormat.LaTeX,
             TextRenderMode = RenderMode.Display,
             SemanticsAltText = "one plus one equals two",
             Options =
             [
-                new QuestionAuthoringOptionDto(1, @"$\frac{1}{2}$", true, ContentFormat.Latex, RenderMode.Inline, "one half"),
-                new QuestionAuthoringOptionDto(2, @"$\frac{1}{3}$", false, ContentFormat.Latex, RenderMode.Inline, "one third")
+                new QuestionAuthoringOptionDto(1, @"$\frac{1}{2}$", true, ContentFormat.LaTeX, RenderMode.Inline, "one half"),
+                new QuestionAuthoringOptionDto(2, @"$\frac{1}{3}$", false, ContentFormat.LaTeX, RenderMode.Inline, "one third")
             ],
             Steps =
             [
@@ -155,10 +155,10 @@ public class QuestionAuthoringPipelineTests
 
         var question = await db.Questions.Include(x => x.Options).Include(x => x.Steps).SingleAsync(x => x.Id == publish.QuestionId);
 
-        Assert.Equal(ContentFormat.Latex, question.TextFormat);
+        Assert.Equal(ContentFormat.LaTeX, question.TextFormat);
         Assert.Equal(RenderMode.Display, question.TextRenderMode);
         Assert.Equal("one plus one equals two", question.SemanticsAltText);
-        Assert.All(question.Options, option => Assert.Equal(ContentFormat.Latex, option.TextFormat));
+        Assert.All(question.Options, option => Assert.Equal(ContentFormat.LaTeX, option.TextFormat));
         Assert.Equal("step one", question.Steps.Single().SemanticsAltText);
     }
 

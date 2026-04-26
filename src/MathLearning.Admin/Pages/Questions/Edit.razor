@@ -4,7 +4,9 @@
 @implements IAsyncDisposable
 @using MathLearning.Admin.Data
 @using MathLearning.Admin.Models
+@using MathLearning.Admin.Services
 @using MathLearning.Application.Content
+@using MathLearning.Application.DTOs.Questions
 @using MathLearning.Infrastructure.Services.QuestionAuthoring
 @using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
@@ -18,6 +20,8 @@
 @inject ILogger<Edit> Logger
 @inject IJSRuntime Js
 @inject IQuestionAuthoringService QuestionAuthoringService
+@inject AdminQuestionValidationOrchestrator ValidationOrchestrator
+@inject IDialogService DialogService
 
 <PageTitle>Izmeni Pitanje - MathLearning Admin</PageTitle>
 
@@ -59,13 +63,40 @@ else
         }
     </MudAlert>
 
-    <MudAlert Severity="@GetValidationAlertSeverity()" Dense="true" Variant="Variant.Outlined" Class="mb-3">
-        Status pitanja: <strong>@GetPublishStateLabel(_question.PublishState)</strong>
-        @if (!string.IsNullOrWhiteSpace(_currentDraftValidationStatus))
+    <div class="d-flex align-center gap-2 mb-3 flex-wrap">
+        <MudAlert Severity="@GetValidationAlertSeverity()" Dense="true" Variant="Variant.Outlined" Class="mb-0 flex-grow-1">
+            Status: <strong>@GetPublishStateLabel(_question.PublishState)</strong>
+            @if (!string.IsNullOrWhiteSpace(_currentDraftValidationStatus))
+            {
+                <span> | Validacija: <strong>@GetValidationStatusLabel(_currentDraftValidationStatus)</strong></span>
+            }
+        </MudAlert>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                   OnClick="RunValidationAsync"
+                   Disabled="@(_isValidating || IsSaving)"
+                   Size="Size.Small">
+            @if (_isValidating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+            }
+            Validiraj
+        </MudButton>
+        @if (_question.PublishState is not QuestionPublishStates.Published)
         {
-            <span> | Validacija: <strong>@GetValidationStatusLabel(_currentDraftValidationStatus)</strong></span>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Publish"
+                       OnClick="PublishAsync"
+                       Disabled="@(!CanPublish || IsSaving)"
+                       Size="Size.Small">
+                Objavi
+            </MudButton>
         }
-    </MudAlert>
+    </div>
+
+    <ValidationDetailPanel Result="@_validationResult" />
 
     <QuestionEditor Model="@Model"
                     Categories="@Categories"
@@ -95,6 +126,11 @@ else
     private System.Timers.Timer? _autosaveTimer;
     private string _lastAutosavedSnapshot = string.Empty;
     private string? _autosaveStatus;
+    private ValidateQuestionResponse? _validationResult;
+    private bool _isValidating;
+    private bool CanPublish =>
+        _validationResult?.Summary.CanPublish == true ||
+        _currentDraftValidationStatus is QuestionValidationStatuses.Passed or QuestionValidationStatuses.PassedWithWarnings;
     private bool HasUnsavedChanges =>
         !_loading &&
         !IsSaving &&
@@ -162,8 +198,12 @@ else
             var draft = await _autosaveModule.InvokeAsync<string?>("loadDraft", draftKey);
             if (!string.IsNullOrEmpty(draft))
             {
-                var shouldRestore = await Js.InvokeAsync<bool>("confirm", "Pronađen je nesačuvan draft. Da li želite da ga učitate?");
-                if (shouldRestore)
+                var shouldRestore = await DialogService.ShowMessageBox(
+                    "Nesačuvan draft",
+                    "Pronađen je nesačuvan draft. Da li želite da ga učitate?",
+                    yesText: "Učitaj draft",
+                    noText: "Odbaci");
+                if (shouldRestore == true)
                 {
                     try
                     {
@@ -217,6 +257,7 @@ else
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Autosave failed for question {QuestionId}", Id);
+            Snackbar.Add("Auto-čuvanje nije uspelo.", Severity.Warning);
         }
     }
 
@@ -327,10 +368,86 @@ else
             return;
         }
 
-        var shouldLeave = await Js.InvokeAsync<bool>("confirm", "Imate nesacuvane izmene. Da li sigurno zelite da napustite stranicu?");
-        if (!shouldLeave)
+        var result = await DialogService.ShowMessageBox(
+            "Nesačuvane izmene",
+            "Imate nesačuvane izmene. Da li sigurno želite da napustite stranicu?",
+            yesText: "Napusti",
+            noText: "Ostani");
+        if (result != true)
         {
             context.PreventNavigation();
+        }
+    }
+
+    private async Task RunValidationAsync()
+    {
+        if (_editorHelper is null) return;
+        _isValidating = true;
+        _validationResult = null;
+        StateHasChanged();
+        try
+        {
+            var request = _editorHelper.ToAuthoringRequest(Model, Id);
+            _validationResult = await ValidationOrchestrator.ValidateAsync(request);
+            _currentDraftValidationStatus = _validationResult.Summary.Status;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Validation failed for question {QuestionId}", Id);
+            Snackbar.Add("Greška pri validaciji pitanja.", Severity.Error);
+        }
+        finally
+        {
+            _isValidating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        if (_question is null) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Objavljivanje pitanja",
+            "Da li sigurno želite da objavite ovo pitanje? Postaje vidljivo studentima.",
+            yesText: "Objavi",
+            noText: "Otkaži");
+        if (confirm != true) return;
+
+        IsSaving = true;
+        StateHasChanged();
+        try
+        {
+            _question.SetPublishState(QuestionPublishStates.Published, "admin_ui", DateTime.UtcNow);
+            if (_question.CurrentDraftId.HasValue)
+            {
+                var draft = await Db.QuestionDrafts
+                    .FirstOrDefaultAsync(x => x.Id == _question.CurrentDraftId.Value);
+                if (draft is not null)
+                {
+                    draft.PublishState = QuestionPublishStates.Published;
+                    draft.UpdatedAtUtc = DateTime.UtcNow;
+                }
+            }
+            await Db.SaveChangesAsync();
+            _currentDraftValidationStatus = _question.CurrentDraftId.HasValue
+                ? await Db.QuestionDrafts.AsNoTracking()
+                    .Where(x => x.Id == _question.CurrentDraftId.Value)
+                    .Select(x => x.ValidationStatus)
+                    .FirstOrDefaultAsync()
+                : _currentDraftValidationStatus;
+            Snackbar.Add("Pitanje je uspešno objavljeno.", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to publish question {QuestionId}", Id);
+            Snackbar.Add("Greška pri objavljivanju pitanja.", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
         }
     }
 

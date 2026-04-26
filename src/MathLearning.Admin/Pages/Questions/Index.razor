@@ -138,9 +138,13 @@
             <RowTemplate>
                 <MudTd DataLabel="ID">@context.Id</MudTd>
                 <MudTd DataLabel="Tekst">
-                    <MudText Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        @context.Text
-                    </MudText>
+                    <div class="question-list-preview">
+                        <MathPreview Content="@context.Text"
+                                     Format="@context.TextFormat"
+                                     RenderMode="@context.TextRenderMode"
+                                     EmptyText="(nema teksta)"
+                                     Class="question-list-math" />
+                    </div>
                 </MudTd>
                 <MudTd DataLabel="Kategorija">
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary">
@@ -313,6 +317,8 @@
             {
                 Id = question.Id,
                 Text = question.Text,
+                TextFormat = question.TextFormat,
+                TextRenderMode = question.TextRenderMode,
                 Difficulty = question.Difficulty,
                 UpdatedAt = question.UpdatedAt,
                 UpdatedBy = question.UpdatedBy,
@@ -462,6 +468,8 @@
     {
         public int Id { get; init; }
         public string Text { get; init; } = string.Empty;
+        public MathLearning.Domain.Enums.ContentFormat TextFormat { get; init; } = MathLearning.Domain.Enums.ContentFormat.MarkdownWithMath;
+        public MathLearning.Domain.Enums.RenderMode TextRenderMode { get; init; } = MathLearning.Domain.Enums.RenderMode.Auto;
         public int Difficulty { get; init; }
         public DateTime UpdatedAt { get; init; }
         public string? UpdatedBy { get; init; }

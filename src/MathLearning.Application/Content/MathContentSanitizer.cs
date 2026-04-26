@@ -17,6 +17,7 @@ public sealed class MathContentSanitizer : IMathContentSanitizer
     private static readonly Regex EventAttributeRegex = new(@"\son[a-z]+\s*=\s*(['""]).*?\1", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex MultiWhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex UnsupportedLatexRegex = new(@"\\(htmlClass|href|includegraphics|write|input|catcode|openout|read)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex MathInPlainTextRegex = new(@"\$[^$\n]+\$|\$\$[^$]+\$\$|\\frac|\\sqrt|\\int|\\sum|\\lim|\\alpha|\\beta|\\gamma|\\theta|\\pi|\\infty|\\\[|\\\(", RegexOptions.Compiled);
 
     public string NormalizeMathContent(string? raw, ContentFormat format)
     {
@@ -71,6 +72,11 @@ public sealed class MathContentSanitizer : IMathContentSanitizer
         if (format == ContentFormat.Html && HtmlRegex.IsMatch(raw))
         {
             warnings.Add("HTML content will be sanitized before rendering.");
+        }
+
+        if (format == ContentFormat.PlainText && MathInPlainTextRegex.IsMatch(raw))
+        {
+            warnings.Add("Otkrivena matematička notacija u polju sa PlainText formatom — promenite format na 'MarkdownWithMath' da bi se jednačine renderovale.");
         }
 
         if (raw.Contains(@"\frac", StringComparison.Ordinal) && !raw.Contains('{'))

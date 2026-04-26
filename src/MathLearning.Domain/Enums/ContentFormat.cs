@@ -6,7 +6,9 @@ namespace MathLearning.Domain.Enums;
 public enum ContentFormat
 {
     PlainText = 0,
-    Latex = 1,
+    LaTeX = 1,
+    [Obsolete("Use LaTeX. This alias is kept for existing persisted values and callers.")]
+    Latex = LaTeX,
     MarkdownWithMath = 2,
     Html = 3
 }
