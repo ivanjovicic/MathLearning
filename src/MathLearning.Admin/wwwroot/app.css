@@ -242,3 +242,316 @@ h1:focus {
     font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
     font-size: 0.75rem;
 }
+
+.question-editor {
+    padding-bottom: 88px;
+}
+
+.question-editor-grid {
+    align-items: flex-start;
+}
+
+.editor-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.editor-section {
+    border-radius: 8px;
+}
+
+.editor-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.editor-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.editor-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.editor-field-actions {
+    display: flex;
+    align-items: center;
+}
+
+.editor-difficulty-chip {
+    display: flex;
+    align-items: center;
+}
+
+.editor-inline-field {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.editor-inline-field-input {
+    flex: 1 1 auto;
+}
+
+.editor-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.editor-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    border: 1px dashed rgba(0,0,0,0.22);
+    border-radius: 8px;
+    background: #fafafa;
+    flex-wrap: wrap;
+}
+
+.option-drop-zone {
+    min-width: 0;
+}
+
+.option-card,
+.step-card {
+    padding: 14px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.option-card-correct {
+    border-color: #4caf50;
+    background: #f3fbf4;
+}
+
+.option-card-duplicate,
+.step-card-empty {
+    border-color: #ff9800;
+    background: #fff8ec;
+}
+
+.option-card-header,
+.step-card-header,
+.preview-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.option-title,
+.step-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.option-drag-handle {
+    cursor: grab;
+    color: rgba(0,0,0,0.42);
+    flex: 0 0 auto;
+}
+
+.step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #e3f2fd;
+    color: #0d47a1;
+    font-weight: 700;
+    flex: 0 0 auto;
+}
+
+.preview-step-hint {
+    margin-top: 6px;
+    padding-left: 10px;
+    border-left: 2px solid rgba(0,0,0,0.12);
+}
+
+.selected-preview {
+    border-left: 3px solid #1976d2;
+    background: #f5f9ff;
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+
+.warning-list {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.inline-warning {
+    margin-top: 6px;
+}
+
+.editor-save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px 8px 0 0;
+    background: #fff;
+}
+
+.editor-save-summary {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.editor-save-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.editor-preview-panel {
+    top: 84px;
+}
+
+@media (max-width: 960px) {
+    .question-editor {
+        padding-bottom: 136px;
+    }
+
+    .preview-panel {
+        position: static;
+        max-height: none;
+    }
+
+    .editor-section-header,
+    .option-card-header,
+    .step-card-header,
+    .preview-header {
+        align-items: stretch;
+    }
+
+    .editor-action-row,
+    .editor-field-actions {
+        justify-content: flex-start;
+    }
+
+    .editor-save-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .editor-save-actions {
+        justify-content: stretch;
+    }
+
+    .editor-save-actions .mud-button-root {
+        flex: 1 1 auto;
+    }
+}
+
+@media (max-width: 600px) {
+    .editor-inline-field {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .editor-empty-state {
+        align-items: stretch;
+    }
+}
+
+/* ───────────────────────────────────────────────────────────
+   LaTeX help collapsible panel
+─────────────────────────────────────────────────────────── */
+.latex-help-panel {
+    border-color: rgba(33, 150, 243, 0.25) !important;
+    background: #f0f7ff;
+    cursor: default;
+}
+
+.latex-help-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.latex-help-header:hover .mud-typography {
+    color: #1565c0;
+}
+
+.latex-help-content {
+    border-top: 1px solid rgba(33, 150, 243, 0.15);
+    padding-top: 10px;
+}
+
+.latex-examples-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 24px;
+}
+
+.latex-example-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.latex-example-label {
+    font-size: 0.75rem;
+    color: rgba(0, 0, 0, 0.55);
+    min-width: 90px;
+}
+
+.latex-code {
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 0.78rem;
+    background: #e8eaf6;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #311b92;
+    white-space: nowrap;
+}
+
+/* Tooltip info icons next to section titles and labels */
+.editor-info-icon {
+    cursor: help;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.editor-info-icon:hover {
+    opacity: 1;
+}
+
+.editor-label-with-tooltip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
