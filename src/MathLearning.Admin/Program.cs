@@ -27,15 +27,8 @@ var adminConnectionString = builder.Configuration.GetConnectionString("AdminIden
     ?? throw new InvalidOperationException(
         "Missing ConnectionStrings:AdminIdentity. Configure ConnectionStrings__AdminIdentity before starting MathLearning.Admin.");
 
-var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"]
-    ?? (builder.Environment.IsDevelopment()
-        ? Path.Combine(builder.Environment.ContentRootPath, "keys")
-        : "/tmp/mathlearning-admin-keys");
-
-Directory.CreateDirectory(dataProtectionKeysPath);
-
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .PersistKeysToDbContext<AdminDbContext>()
     .SetApplicationName("MathLearningAdmin")
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 
