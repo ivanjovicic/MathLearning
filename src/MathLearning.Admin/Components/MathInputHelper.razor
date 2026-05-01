@@ -6,11 +6,11 @@
     <div class="math-helper-header">
         <MudIcon Icon="@Icons.Material.Filled.Functions" Size="Size.Small" Class="mr-1" />
         <MudText Typo="Typo.caption" Style="font-weight:600">LaTeX brzi unos</MudText>
-        <MudTooltip Text="Kliknite na simbol da ga ubacite na poziciju kursora u fokusiranom polju. Ctrl+M obavija selektovani tekst u $…$.">
+        <MudTooltip Text="Kliknite na simbol da ga ubacite na poziciju kursora u fokusiranom polju. Ctrl+M obavija selektovani tekst u $...$.">
             <MudIconButton Icon="@Icons.Material.Filled.Help" Size="Size.Small" Color="Color.Secondary" />
         </MudTooltip>
         <MudSpacer />
-        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">Ctrl+M → obavij selekciju u $…$</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">Ctrl+M -> obavij selekciju u $...$</MudText>
     </div>
 
     <div class="math-helper-grid">
@@ -46,15 +46,15 @@
             new(@"\frac", @"\frac{{}}{}", @"\frac{brojnik}{nazivnik}"),
             new(@"\sqrt", @"\sqrt{{}}", @"\sqrt{izraz}"),
             new(@"\sqrt[n]", @"\sqrt[{}]{}", @"\sqrt[n]{izraz}"),
-            new("x²", "{}^{2}", "Kvadrat"),
-            new("xⁿ", "{}^{{}}", "Stepen"),
-            new("xₙ", "{}_{{}}",  "Indeks"),
+            new("x^2", "{}^{2}", "Kvadrat"),
+            new("x^n", "{}^{{}}", "Stepen"),
+            new("x_n", "{}_{{}}",  "Indeks"),
         ]),
         new("Integrali i sume", [
-            new(@"\int", @"\int_{{}}}^{{}} {}", @"\int_{donja}^{gornja} izraz"),
-            new(@"\iint", @"\iint_{{}}", @"Dvostruki integral"),
+            new(@"\int", @"\int_{{}}^{{}} {}", @"\int_{donja}^{gornja} izraz"),
+            new(@"\iint", @"\iint_{{}}", "Dvostruki integral"),
             new(@"\sum", @"\sum_{{{}}}^{{}} {}", @"\sum_{i=0}^{n} izraz"),
-            new(@"\prod", @"\prod_{{{}}}^{{}} {}", @"Proizvod"),
+            new(@"\prod", @"\prod_{{{}}}^{{}} {}", "Proizvod"),
             new(@"\lim", @"\lim_{{{}}} {}", @"\lim_{x \to 0} izraz"),
         ]),
         new("Funkcije", [
@@ -65,48 +65,48 @@
             new("log", @"\log_{{{}}}({})", "Logaritam"),
         ]),
         new("Granice i relacije", [
-            new("≤", @"\leq", "Manje ili jednako"),
-            new("≥", @"\geq", "Veće ili jednako"),
-            new("≠", @"\neq", "Nije jednako"),
-            new("≈", @"\approx", "Priblizno"),
-            new("∞", @"\infty", "Beskonacno"),
-            new("±", @"\pm", "Plus-minus"),
-            new("→", @"\to", "Strelica desno"),
-            new("⟺", @"\iff", "Ekvivalencija"),
+            new("<=", @"\leq", "Manje ili jednako"),
+            new(">=", @"\geq", "Vece ili jednako"),
+            new("!=", @"\neq", "Nije jednako"),
+            new("~=", @"\approx", "Priblizno"),
+            new("inf", @"\infty", "Beskonacno"),
+            new("+-", @"\pm", "Plus-minus"),
+            new("->", @"\to", "Strelica desno"),
+            new("<->", @"\iff", "Ekvivalencija"),
         ]),
-        new("Grčka slova", [
-            new("α", @"\alpha", "Alpha"),
-            new("β", @"\beta", "Beta"),
-            new("γ", @"\gamma", "Gamma"),
-            new("δ", @"\delta", "Delta"),
-            new("θ", @"\theta", "Theta"),
-            new("λ", @"\lambda", "Lambda"),
-            new("μ", @"\mu", "Mu"),
-            new("π", @"\pi", "Pi"),
-            new("σ", @"\sigma", "Sigma"),
-            new("Σ", @"\Sigma", "Sigma (veliko)"),
-            new("φ", @"\varphi", "Phi"),
-            new("ω", @"\omega", "Omega"),
+        new("Grcka slova", [
+            new("alpha", @"\alpha", "Alpha"),
+            new("beta", @"\beta", "Beta"),
+            new("gamma", @"\gamma", "Gamma"),
+            new("delta", @"\delta", "Delta"),
+            new("theta", @"\theta", "Theta"),
+            new("lambda", @"\lambda", "Lambda"),
+            new("mu", @"\mu", "Mu"),
+            new("pi", @"\pi", "Pi"),
+            new("sigma", @"\sigma", "Sigma"),
+            new("Sigma", @"\Sigma", "Sigma veliko"),
+            new("phi", @"\varphi", "Phi"),
+            new("omega", @"\omega", "Omega"),
         ]),
         new("Operatori", [
-            new("·", @"\cdot", "Tacka mnozenja"),
-            new("×", @"\times", "Puta"),
-            new("÷", @"\div", "Deljeno"),
-            new("∈", @"\in", "Element skupa"),
-            new("∉", @"\notin", "Nije element"),
-            new("⊂", @"\subset", "Podskup"),
-            new("∪", @"\cup", "Unija"),
-            new("∩", @"\cap", "Presek"),
-            new("∀", @"\forall", "Za svako"),
-            new("∃", @"\exists", "Postoji"),
+            new("*", @"\cdot", "Tacka mnozenja"),
+            new("x", @"\times", "Puta"),
+            new("/", @"\div", "Deljeno"),
+            new("in", @"\in", "Element skupa"),
+            new("notin", @"\notin", "Nije element"),
+            new("subset", @"\subset", "Podskup"),
+            new("cup", @"\cup", "Unija"),
+            new("cap", @"\cap", "Presek"),
+            new("forall", @"\forall", "Za svako"),
+            new("exists", @"\exists", "Postoji"),
         ]),
-        new("Omotači", [
-            new("$…$", "${}$", "Inline matematika"),
-            new("$$…$$", "$${}$$", "Display matematika (blok)"),
-            new("(…)", @"\left( {} \right)", "Zagrade"),
-            new("[…]", @"\left[ {} \right]", "Uglaste zagrade"),
-            new("|…|", @"\left| {} \right|", "Apsolutna vrednost"),
-            new("‖…‖", @"\left\| {} \right\|", "Norma"),
+        new("Omotaci", [
+            new("$...$", "${}$", "Inline matematika"),
+            new("$$...$$", "$${}$$", "Display matematika (blok)"),
+            new("(...)", @"\left( {} \right)", "Zagrade"),
+            new("[...]", @"\left[ {} \right]", "Uglaste zagrade"),
+            new("|...|", @"\left| {} \right|", "Apsolutna vrednost"),
+            new("||...||", @"\left\| {} \right\|", "Norma"),
         ]),
     ];
 
@@ -120,7 +120,7 @@
         }
         catch (Exception)
         {
-            // JS not available during prerender — ignore
+            // JS not available during prerender.
         }
     }
 
@@ -133,7 +133,7 @@
         }
         catch (Exception)
         {
-            // Ignore — focus may not be on a text field
+            // Focus may not be on a text field.
         }
     }
 

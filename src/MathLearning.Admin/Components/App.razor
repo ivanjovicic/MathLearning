@@ -11,14 +11,15 @@
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="lib/katex/katex.min.css" rel="stylesheet" />
+    <link href="app.css" rel="stylesheet" />
     <HeadOutlet @rendermode="@RenderMode.InteractiveServer" />
 </head>
 <body>
-    <MudThemeProvider />
-    <MudPopoverProvider />
-    <MudDialogProvider />
-    <MudSnackbarProvider />
-    
+    <MudThemeProvider @rendermode="@RenderMode.InteractiveServer" />
+    <MudPopoverProvider @rendermode="@RenderMode.InteractiveServer" />
+    <MudDialogProvider @rendermode="@RenderMode.InteractiveServer" />
+    <MudSnackbarProvider @rendermode="@RenderMode.InteractiveServer" />
+
     <CascadingAuthenticationState>
         <Router AppAssembly="@typeof(App).Assembly">
             <Found Context="routeData">

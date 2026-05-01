@@ -20,7 +20,7 @@ public sealed class AdminApiClient
 
     public async Task<T?> GetFromJsonAsync<T>(string requestUri, CancellationToken cancellationToken = default)
     {
-        EnsureBaseAddress();
+        EnsureUsableRequestUri(requestUri);
         return await httpClient.GetFromJsonAsync<T>(requestUri, cancellationToken);
     }
 
@@ -29,7 +29,7 @@ public sealed class AdminApiClient
         HttpContent? content = null,
         CancellationToken cancellationToken = default)
     {
-        EnsureBaseAddress();
+        EnsureUsableRequestUri(requestUri);
         return await httpClient.PostAsync(requestUri, content, cancellationToken);
     }
 
@@ -38,31 +38,34 @@ public sealed class AdminApiClient
         T value,
         CancellationToken cancellationToken = default)
     {
-        EnsureBaseAddress();
+        EnsureUsableRequestUri(requestUri);
         return await httpClient.PostAsJsonAsync(requestUri, value, cancellationToken);
     }
 
     public async Task<HttpResponseMessage> GetAsync(string requestUri, CancellationToken cancellationToken = default)
     {
-        EnsureBaseAddress();
+        EnsureUsableRequestUri(requestUri);
         return await httpClient.GetAsync(requestUri, cancellationToken);
     }
 
-    private void EnsureBaseAddress()
+    private void EnsureUsableRequestUri(string requestUri)
     {
+        if (Uri.TryCreate(requestUri, UriKind.Absolute, out _))
+        {
+            return;
+        }
+
         if (httpClient.BaseAddress is not null)
         {
             return;
         }
 
-        var apiBaseUrl = configuration["ApiBaseUrl"];
-        if (!string.IsNullOrWhiteSpace(apiBaseUrl)
-            && Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var baseUri))
-        {
-            httpClient.BaseAddress = baseUri;
-            return;
-        }
+        var configuredValue = configuration["ApiBaseUrl"];
+        logger.LogError(
+            "Admin API base address is not configured or invalid. ApiBaseUrl={ApiBaseUrl}",
+            configuredValue);
 
-        logger.LogWarning("Admin API base address is not configured. Set ApiBaseUrl in configuration.");
+        throw new InvalidOperationException(
+            "Admin API base URL nije konfigurisan. Podesite ApiBaseUrl, npr. http://localhost:5180 za lokalni MathLearning.Api.");
     }
 }

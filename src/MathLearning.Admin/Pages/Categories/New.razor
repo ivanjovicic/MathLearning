@@ -4,8 +4,9 @@
 @using MathLearning.Admin.Data
 @using MathLearning.Domain.Entities
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 @using MudBlazor
-@inject AdminDbContext Db
+@inject IDbContextFactory<AdminDbContext> DbFactory
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
@@ -74,9 +75,10 @@
 
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
             var category = new Category(CategoryName.Trim());
-            Db.Categories.Add(category);
-            await Db.SaveChangesAsync();
+            db.Categories.Add(category);
+            await db.SaveChangesAsync();
 
             Snackbar.Add($"Kategorija '{CategoryName}' je uspesno dodata!", Severity.Success);
             Nav.NavigateTo("/categories");

@@ -30,8 +30,8 @@ public class AdminQuestionValidationTests
         Assert.Contains(errors, error => error.Contains("najmanje 4 karaktera", StringComparison.Ordinal));
         Assert.Contains(errors, error => error.Contains("kategoriju", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(errors, error => error.Contains("podtemu", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(errors, error => error.Contains("Označite tačan odgovor.", StringComparison.Ordinal));
-        Assert.Contains(errors, error => error.Contains("identičan tekst", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errors, error => error.Contains("Oznacite tacan odgovor.", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("identican tekst", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class AdminQuestionValidationTests
 
         var errors = QuestionEditorValidation.Validate(model);
 
-        Assert.Contains(errors, error => error == "Označite tačan odgovor.");
+        Assert.Contains(errors, error => error == "Oznaceni tacan odgovor mora biti popunjena opcija.");
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class AdminQuestionValidationTests
 
         var errors = QuestionEditorValidation.Validate(model);
 
-        Assert.Contains(errors, error => error.Contains("samo jedan tačan odgovor", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errors, error => error.Contains("samo jedan tacan odgovor", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -100,10 +100,10 @@ public class AdminQuestionValidationTests
 
         var errors = QuestionEditorValidation.Validate(model);
 
-        Assert.Contains(errors, error => error.Contains("Tekst pitanja ne može imati više od", StringComparison.Ordinal));
-        Assert.Contains(errors, error => error.Contains("Objašnjenje ne može imati više od", StringComparison.Ordinal));
-        Assert.Contains(errors, error => error.Contains("Tekst opcije ne može imati više od", StringComparison.Ordinal));
-        Assert.Contains(errors, error => error.Contains("Tekst koraka ne može imati više od", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("Tekst pitanja ne moze imati vise od", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("Objasnjenje ne moze imati vise od", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("Tekst opcije ne moze imati vise od", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("Tekst koraka 1 ne moze imati vise od", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class AdminQuestionValidationTests
 
         var missingAnswerErrors = QuestionEditorValidation.Validate(missingAnswerModel);
 
-        Assert.Contains(missingAnswerErrors, error => error.Contains("Tačan odgovor je obavezan", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(missingAnswerErrors, error => error.Contains("Tacan odgovor je obavezan", StringComparison.OrdinalIgnoreCase));
 
         var tooLongAnswerModel = new QuestionEditorModel
         {
@@ -133,7 +133,34 @@ public class AdminQuestionValidationTests
 
         var tooLongAnswerErrors = QuestionEditorValidation.Validate(tooLongAnswerModel);
 
-        Assert.Contains(tooLongAnswerErrors, error => error.Contains("Tačan odgovor ne može imati više od", StringComparison.Ordinal));
+        Assert.Contains(tooLongAnswerErrors, error => error.Contains("Tacan odgovor ne moze imati vise od", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_StepsRequireTextAndSequentialOrder()
+    {
+        var model = new QuestionEditorModel
+        {
+            Type = "multiple_choice",
+            Text = "Pitanje",
+            CategoryId = 1,
+            SubtopicId = 1,
+            Options =
+            [
+                new() { Text = "Opcija A", IsCorrect = true },
+                new() { Text = "Opcija B", IsCorrect = false }
+            ],
+            Steps =
+            [
+                new() { Order = 1, Text = "Prvi korak" },
+                new() { Order = 3, Text = string.Empty }
+            ]
+        };
+
+        var errors = QuestionEditorValidation.Validate(model);
+
+        Assert.Contains(errors, error => error == "Korak 2 mora imati tekst ili ga uklonite.");
+        Assert.Contains(errors, error => error.Contains("Redosled koraka mora biti sekvencijalan", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -154,8 +181,8 @@ public class AdminQuestionValidationTests
     {
         var options = new List<QuestionOptionEditorModel>
         {
-            new() { Text = "  Tačno  " },
-            new() { Text = "tačno" }
+            new() { Text = "  Tacno  " },
+            new() { Text = "tacno" }
         };
 
         Assert.True(QuestionEditorValidation.HasDuplicateOptionTexts(options));
@@ -167,7 +194,7 @@ public class AdminQuestionValidationTests
         var model = new QuestionEditorModel
         {
             Type = "multiple_choice",
-            Text = "Šta je 2+2?",
+            Text = "Sta je 2+2?",
             CategoryId = 1,
             SubtopicId = 1,
             Options =

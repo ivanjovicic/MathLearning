@@ -13,7 +13,7 @@
 @using MudBlazor
 @using System.Text.Json
 
-@inject AdminDbContext Db
+@inject IDbContextFactory<AdminDbContext> DbFactory
 @inject IMathContentSanitizer Sanitizer
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
@@ -142,19 +142,22 @@ else
         {
             _editorHelper = new QuestionEditorHelper(Sanitizer);
 
-            Categories = await Db.Categories
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            Categories = await db.Categories
                 .AsNoTracking()
                 .OrderBy(c => c.Name)
                 .ToListAsync();
 
-            Subtopics = await Db.Subtopics
+            Subtopics = await db.Subtopics
                 .AsNoTracking()
                 .Include(x => x.Topic)
                 .OrderBy(x => x.Topic!.Name)
                 .ThenBy(x => x.Name)
                 .ToListAsync();
 
-            _question = await Db.Questions
+            _question = await db.Questions
+                .AsNoTracking()
                 .Include(x => x.Options)
                 .Include(x => x.Steps)
                 .FirstOrDefaultAsync(x => x.Id == Id);
@@ -164,7 +167,7 @@ else
                 _editorHelper.MapQuestionToModel(_question, Model);
                 if (_question.CurrentDraftId.HasValue)
                 {
-                    _currentDraftValidationStatus = await Db.QuestionDrafts
+                    _currentDraftValidationStatus = await db.QuestionDrafts
                         .AsNoTracking()
                         .Where(x => x.Id == _question.CurrentDraftId.Value)
                         .Select(x => x.ValidationStatus)
@@ -294,12 +297,24 @@ else
 
         try
         {
-            await using var tx = await Db.Database.BeginTransactionAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await using var tx = await db.Database.BeginTransactionAsync();
             try
             {
+                var question = await db.Questions
+                    .Include(x => x.Options)
+                    .Include(x => x.Steps)
+                    .FirstOrDefaultAsync(x => x.Id == Id);
+                if (question is null)
+                {
+                    ValidationErrors = ["Pitanje nije pronađeno. Osvežite listu i pokušajte ponovo."];
+                    return;
+                }
+
                 var request = _editorHelper.ToAuthoringRequest(Model, _question.Id);
-                await QuestionAuthoringService.UpdateQuestionAsync(Db, _question, request, "admin_ui", CancellationToken.None);
+                await QuestionAuthoringService.UpdateQuestionAsync(db, question, request, "admin_ui", CancellationToken.None);
                 await tx.CommitAsync();
+                _question = question;
             }
             catch
             {
@@ -309,7 +324,7 @@ else
 
             Snackbar.Add("Pitanje je uspešno izmenjeno.", Severity.Success);
             _currentDraftValidationStatus = _question.CurrentDraftId.HasValue
-                ? await Db.QuestionDrafts
+                ? await db.QuestionDrafts
                     .AsNoTracking()
                     .Where(x => x.Id == _question.CurrentDraftId.Value)
                     .Select(x => x.ValidationStatus)
@@ -418,21 +433,30 @@ else
         StateHasChanged();
         try
         {
-            _question.SetPublishState(QuestionPublishStates.Published, "admin_ui", DateTime.UtcNow);
-            if (_question.CurrentDraftId.HasValue)
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var question = await db.Questions.FirstOrDefaultAsync(x => x.Id == Id);
+            if (question is null)
             {
-                var draft = await Db.QuestionDrafts
-                    .FirstOrDefaultAsync(x => x.Id == _question.CurrentDraftId.Value);
+                Snackbar.Add("Pitanje nije pronađeno.", Severity.Warning);
+                return;
+            }
+
+            question.SetPublishState(QuestionPublishStates.Published, "admin_ui", DateTime.UtcNow);
+            if (question.CurrentDraftId.HasValue)
+            {
+                var draft = await db.QuestionDrafts
+                    .FirstOrDefaultAsync(x => x.Id == question.CurrentDraftId.Value);
                 if (draft is not null)
                 {
                     draft.PublishState = QuestionPublishStates.Published;
                     draft.UpdatedAtUtc = DateTime.UtcNow;
                 }
             }
-            await Db.SaveChangesAsync();
-            _currentDraftValidationStatus = _question.CurrentDraftId.HasValue
-                ? await Db.QuestionDrafts.AsNoTracking()
-                    .Where(x => x.Id == _question.CurrentDraftId.Value)
+            await db.SaveChangesAsync();
+            _question = question;
+            _currentDraftValidationStatus = question.CurrentDraftId.HasValue
+                ? await db.QuestionDrafts.AsNoTracking()
+                    .Where(x => x.Id == question.CurrentDraftId.Value)
                     .Select(x => x.ValidationStatus)
                     .FirstOrDefaultAsync()
                 : _currentDraftValidationStatus;

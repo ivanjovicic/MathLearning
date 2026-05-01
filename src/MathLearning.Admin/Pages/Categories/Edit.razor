@@ -6,7 +6,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
-@inject AdminDbContext Db
+@inject IDbContextFactory<AdminDbContext> DbFactory
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
@@ -81,7 +81,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _category = await Db.Categories.FindAsync(Id);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _category = await db.Categories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == Id);
         
         if (_category != null)
         {
@@ -108,8 +111,17 @@ else
 
         try
         {
-            _category.Rename(CategoryName.Trim());
-            await Db.SaveChangesAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var category = await db.Categories.FirstOrDefaultAsync(x => x.Id == Id);
+            if (category is null)
+            {
+                ErrorMessage = "Kategorija nije pronađena.";
+                IsSaving = false;
+                return;
+            }
+
+            category.Rename(CategoryName.Trim());
+            await db.SaveChangesAsync();
 
             Snackbar.Add($"Kategorija je uspesno izmenjena!", Severity.Success);
             Nav.NavigateTo("/categories");

@@ -67,17 +67,43 @@ public class QuestionEditorUiSmokeTests
     }
 
     [Fact]
+    public void MoveOption_ReordersOptionsAndKeepsCorrectFlag()
+    {
+        var model = new QuestionEditorModel
+        {
+            Options =
+            [
+                new QuestionOptionEditorModel { Text = "A", IsCorrect = true },
+                new QuestionOptionEditorModel { Text = "B", IsCorrect = false },
+                new QuestionOptionEditorModel { Text = "C", IsCorrect = false }
+            ]
+        };
+
+        var editor = CreateEditorComponent(model);
+        Invoke(editor, "MoveOption", 0, 1);
+
+        Assert.Equal(["B", "A", "C"], model.Options.Select(x => x.Text).ToArray());
+        Assert.True(model.Options[1].IsCorrect);
+        Assert.Equal(1, model.Options.Count(x => x.IsCorrect));
+    }
+
+    [Fact]
     public void PreviewPanel_SourceContainsStudentPreviewForAuthoringFields()
     {
         var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Components", "QuestionEditor.razor");
         var content = File.ReadAllText(filePath);
 
-        Assert.Contains("@bind-ActivePanelIndex=\"_activeTabIndex\"", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("@bind-ActivePanelIndex", content, StringComparison.Ordinal);
+        Assert.Contains("Osnovno pitanje", content, StringComparison.Ordinal);
+        Assert.Contains("Odgovori i tacan odgovor", content, StringComparison.Ordinal);
+        Assert.Contains("Koraci resavanja", content, StringComparison.Ordinal);
+        Assert.Contains("Live preview", content, StringComparison.Ordinal);
+        Assert.Contains("editor-save-bar", content, StringComparison.Ordinal);
         Assert.Contains("Preview", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@Model.Text\"", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@opt.Text\"", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@Model.Explanation\"", content, StringComparison.Ordinal);
-        Assert.Contains("<MathPreview Content=\"@Model.Steps[i].Text\"", content, StringComparison.Ordinal);
+        Assert.Contains("<MathPreview Content=\"@step.Text\"", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@Model.HintFormula\"", content, StringComparison.Ordinal);
     }
 

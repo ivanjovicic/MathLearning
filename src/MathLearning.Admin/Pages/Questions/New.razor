@@ -12,7 +12,7 @@
 @using MudBlazor
 @using System.Text.Json
 
-@inject AdminDbContext Db
+@inject IDbContextFactory<AdminDbContext> DbFactory
 @inject IMathContentSanitizer Sanitizer
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
@@ -76,12 +76,14 @@ else
         {
             _editorHelper = new QuestionEditorHelper(Sanitizer);
 
-            Categories = await Db.Categories
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            Categories = await db.Categories
                 .AsNoTracking()
                 .OrderBy(c => c.Name)
                 .ToListAsync();
 
-            Subtopics = await Db.Subtopics
+            Subtopics = await db.Subtopics
                 .AsNoTracking()
                 .Include(x => x.Topic)
                 .OrderBy(x => x.Topic!.Name)
@@ -219,11 +221,12 @@ else
 
         try
         {
-            await using var tx = await Db.Database.BeginTransactionAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await using var tx = await db.Database.BeginTransactionAsync();
             try
             {
                 var request = _editorHelper.ToAuthoringRequest(Model);
-                await QuestionAuthoringService.CreateQuestionAsync(Db, request, "admin_ui", CancellationToken.None);
+                await QuestionAuthoringService.CreateQuestionAsync(db, request, "admin_ui", CancellationToken.None);
 
                 await tx.CommitAsync();
             }

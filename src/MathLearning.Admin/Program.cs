@@ -39,13 +39,18 @@ builder.Services.AddDataProtection()
     .SetApplicationName("MathLearningAdmin")
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 
-builder.Services.AddDbContext<AdminDbContext>(options =>
+void ConfigureAdminDbContext(DbContextOptionsBuilder options)
+{
     options.UseNpgsql(
         adminConnectionString,
         npgsql => npgsql.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
-            errorCodesToAdd: null)));
+            errorCodesToAdd: null));
+}
+
+builder.Services.AddDbContext<AdminDbContext>(ConfigureAdminDbContext);
+builder.Services.AddDbContextFactory<AdminDbContext>(ConfigureAdminDbContext, ServiceLifetime.Scoped);
 builder.Services.AddIdentityCore<IdentityUser>(options =>
 {
     options.Password.RequireDigit = false;
@@ -87,8 +92,19 @@ builder.Services.AddAntiforgery(options =>
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
-builder.Services.AddScoped(_ => new HttpClient());
-builder.Services.AddScoped<AdminApiClient>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<ForwardAuthCookiesHandler>();
+builder.Services.AddHttpClient<AdminApiClient>((serviceProvider, httpClient) =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var apiBaseUrl = configuration["ApiBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(apiBaseUrl)
+        && Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var baseUri))
+    {
+        httpClient.BaseAddress = baseUri;
+    }
+})
+    .AddHttpMessageHandler<ForwardAuthCookiesHandler>();
 builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 builder.Services.AddScoped<IValidator<QuestionAuthoringRequest>, QuestionAuthoringRequestValidator>();
 builder.Services.AddScoped<IQuestionAuthoringService, QuestionAuthoringService>();
@@ -336,4 +352,3 @@ static async Task EnsurePasswordAsync(UserManager<IdentityUser> userManager, Ide
             "Failed to reset admin password: " + string.Join(", ", resetResult.Errors.Select(e => e.Description)));
     }
 }
-

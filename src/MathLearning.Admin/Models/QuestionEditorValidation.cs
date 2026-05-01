@@ -30,12 +30,12 @@ public static class QuestionEditorValidation
 
         if ((model.Text?.Length ?? 0) > QuestionEditorFieldLimits.QuestionTextMaxLength)
         {
-            errors.Add($"Tekst pitanja ne može imati više od {QuestionEditorFieldLimits.QuestionTextMaxLength} karaktera.");
+            errors.Add($"Tekst pitanja ne moze imati vise od {QuestionEditorFieldLimits.QuestionTextMaxLength} karaktera.");
         }
 
         if ((model.Explanation?.Length ?? 0) > QuestionEditorFieldLimits.ExplanationMaxLength)
         {
-            errors.Add($"Objašnjenje ne može imati više od {QuestionEditorFieldLimits.ExplanationMaxLength} karaktera.");
+            errors.Add($"Objasnjenje ne moze imati vise od {QuestionEditorFieldLimits.ExplanationMaxLength} karaktera.");
         }
 
         if (model.CategoryId <= 0)
@@ -52,17 +52,17 @@ public static class QuestionEditorValidation
         {
             ValidateMultipleChoice(model, errors);
         }
-        else if (string.IsNullOrWhiteSpace(model.CorrectAnswer))
+        else if (string.Equals(model.Type, "open_answer", StringComparison.OrdinalIgnoreCase))
         {
-            errors.Add("Tačan odgovor je obavezan za open answer pitanje.");
+            ValidateOpenAnswer(model, errors);
         }
-        else if (model.CorrectAnswer.Length > QuestionEditorFieldLimits.CorrectAnswerMaxLength)
+        else
         {
-            errors.Add($"Tačan odgovor ne može imati više od {QuestionEditorFieldLimits.CorrectAnswerMaxLength} karaktera.");
+            errors.Add("Izaberite tip pitanja.");
         }
 
         ValidateOptionLengths(model, errors);
-        ValidateStepLengths(model, errors);
+        ValidateSteps(model, errors);
 
         return errors;
     }
@@ -73,7 +73,7 @@ public static class QuestionEditorValidation
 
         var normalizedOptions = options
             .Where(option => !string.IsNullOrWhiteSpace(option.Text))
-            .Select(option => option.Text.Trim().ToLowerInvariant())
+            .Select(option => NormalizeOptionText(option.Text))
             .ToList();
 
         return normalizedOptions.Count != normalizedOptions.Distinct().Count();
@@ -95,19 +95,36 @@ public static class QuestionEditorValidation
             errors.Add("Sve opcije moraju biti popunjene ili uklonjene.");
         }
 
-        var correctFilledOptions = filledOptions.Count(option => option.IsCorrect);
-        if (correctFilledOptions == 0)
+        var correctOptions = model.Options.Where(option => option.IsCorrect).ToList();
+        if (correctOptions.Count == 0)
         {
-            errors.Add("Označite tačan odgovor.");
+            errors.Add("Oznacite tacan odgovor.");
         }
-        else if (correctFilledOptions > 1)
+        else if (correctOptions.Count > 1)
         {
-            errors.Add("Multiple choice pitanje može imati samo jedan tačan odgovor.");
+            errors.Add("Multiple choice pitanje moze imati samo jedan tacan odgovor.");
+        }
+
+        if (correctOptions.Any(option => string.IsNullOrWhiteSpace(option.Text)))
+        {
+            errors.Add("Oznaceni tacan odgovor mora biti popunjena opcija.");
         }
 
         if (HasDuplicateOptionTexts(model.Options))
         {
-            errors.Add("Opcije ne smeju imati identičan tekst.");
+            errors.Add("Opcije ne smeju imati identican tekst.");
+        }
+    }
+
+    private static void ValidateOpenAnswer(QuestionEditorModel model, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(model.CorrectAnswer))
+        {
+            errors.Add("Tacan odgovor je obavezan za open answer pitanje.");
+        }
+        else if (model.CorrectAnswer.Length > QuestionEditorFieldLimits.CorrectAnswerMaxLength)
+        {
+            errors.Add($"Tacan odgovor ne moze imati vise od {QuestionEditorFieldLimits.CorrectAnswerMaxLength} karaktera.");
         }
     }
 
@@ -115,15 +132,49 @@ public static class QuestionEditorValidation
     {
         if (model.Options.Any(option => (option.Text?.Length ?? 0) > QuestionEditorFieldLimits.OptionTextMaxLength))
         {
-            errors.Add($"Tekst opcije ne može imati više od {QuestionEditorFieldLimits.OptionTextMaxLength} karaktera.");
+            errors.Add($"Tekst opcije ne moze imati vise od {QuestionEditorFieldLimits.OptionTextMaxLength} karaktera.");
         }
     }
 
-    private static void ValidateStepLengths(QuestionEditorModel model, List<string> errors)
+    private static void ValidateSteps(QuestionEditorModel model, List<string> errors)
     {
-        if (model.Steps.Any(step => (step.Text?.Length ?? 0) > QuestionEditorFieldLimits.StepTextMaxLength))
+        for (var i = 0; i < model.Steps.Count; i++)
         {
-            errors.Add($"Tekst koraka ne može imati više od {QuestionEditorFieldLimits.StepTextMaxLength} karaktera.");
+            var step = model.Steps[i];
+            if (string.IsNullOrWhiteSpace(step.Text))
+            {
+                errors.Add($"Korak {i + 1} mora imati tekst ili ga uklonite.");
+            }
+
+            if ((step.Text?.Length ?? 0) > QuestionEditorFieldLimits.StepTextMaxLength)
+            {
+                errors.Add($"Tekst koraka {i + 1} ne moze imati vise od {QuestionEditorFieldLimits.StepTextMaxLength} karaktera.");
+            }
+        }
+
+        if (model.Steps.Count == 0)
+        {
+            return;
+        }
+
+        var orderedStepNumbers = model.Steps
+            .Select(step => step.Order)
+            .Order()
+            .ToArray();
+
+        for (var i = 0; i < orderedStepNumbers.Length; i++)
+        {
+            if (orderedStepNumbers[i] != i + 1)
+            {
+                errors.Add("Redosled koraka mora biti sekvencijalan (1..N).");
+                break;
+            }
         }
     }
+
+    private static string NormalizeOptionText(string value)
+        => string.Join(
+            ' ',
+            value.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .ToLowerInvariant();
 }

@@ -7,7 +7,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
-@inject AdminDbContext Db
+@inject IDbContextFactory<AdminDbContext> DbFactory
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject ILogger<Index> Logger
@@ -232,7 +232,9 @@
     {
         try
         {
-            _categories = await Db.Categories
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            _categories = await db.Categories
                 .AsNoTracking()
                 .OrderBy(c => c.Name)
                 .ToListAsync();
@@ -256,7 +258,8 @@
 
         try
         {
-            var query = BuildFilteredQuery();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var query = BuildFilteredQuery(db);
 
             _totalCount = await query.CountAsync();
             _questions = await query
@@ -287,7 +290,8 @@
 
         try
         {
-            _questions = await BuildFilteredQuery()
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _questions = await BuildFilteredQuery(db)
                 .OrderBy(q => q.Id)
                 .Skip((_currentPage - 1) * _pageSize)
                 .Take(_pageSize)
@@ -305,13 +309,13 @@
         }
     }
 
-    private IQueryable<QuestionListItem> BuildFilteredQuery()
+    private IQueryable<QuestionListItem> BuildFilteredQuery(AdminDbContext db)
     {
         var query =
-            from question in Db.Questions.AsNoTracking()
-            join category in Db.Categories.AsNoTracking() on question.CategoryId equals category.Id into categoryJoin
+            from question in db.Questions.AsNoTracking()
+            join category in db.Categories.AsNoTracking() on question.CategoryId equals category.Id into categoryJoin
             from category in categoryJoin.DefaultIfEmpty()
-            join draft in Db.QuestionDrafts.AsNoTracking() on question.CurrentDraftId equals draft.Id into draftJoin
+            join draft in db.QuestionDrafts.AsNoTracking() on question.CurrentDraftId equals draft.Id into draftJoin
             from currentDraft in draftJoin.DefaultIfEmpty()
             select new QuestionListItem
             {
@@ -327,8 +331,8 @@
                 Type = question.Type,
                 PublishState = question.PublishState,
                 ValidationStatus = currentDraft != null ? currentDraft.ValidationStatus : null,
-                OptionCount = Db.Options.Count(option => EF.Property<int>(option, "QuestionId") == question.Id),
-                StepCount = Db.QuestionSteps.Count(step => step.QuestionId == question.Id)
+                OptionCount = db.Options.Count(option => EF.Property<int>(option, "QuestionId") == question.Id),
+                StepCount = db.QuestionSteps.Count(step => step.QuestionId == question.Id)
             };
 
         if (!string.IsNullOrWhiteSpace(_searchText))
@@ -408,7 +412,8 @@
 
         try
         {
-            var entity = await Db.Questions.FirstOrDefaultAsync(x => x.Id == question.Id);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var entity = await db.Questions.FirstOrDefaultAsync(x => x.Id == question.Id);
             if (entity is null)
             {
                 Snackbar.Add("Pitanje više ne postoji.", Severity.Warning);
@@ -417,8 +422,8 @@
                 return;
             }
 
-            Db.Questions.Remove(entity);
-            await Db.SaveChangesAsync();
+            db.Questions.Remove(entity);
+            await db.SaveChangesAsync();
             _questions.Remove(question);
             _totalCount--;
             

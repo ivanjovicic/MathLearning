@@ -7,7 +7,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
-@inject AdminDbContext Db
+@inject IDbContextFactory<AdminDbContext> DbFactory
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -88,14 +88,15 @@
     private async Task LoadCategories()
     {
         _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
         
-        var categoryQuestionCounts = await Db.Questions
+        var categoryQuestionCounts = await db.Questions
             .AsNoTracking()
             .GroupBy(q => q.CategoryId)
             .Select(g => new { CategoryId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.CategoryId, x => x.Count);
 
-        _categories = await Db.Categories
+        _categories = await db.Categories
             .AsNoTracking()
             .OrderBy(c => c.Name)
             .Select(c => new CategoryViewModel
@@ -152,11 +153,12 @@
 
         try
         {
-            var categoryEntity = await Db.Categories.FirstOrDefaultAsync(c => c.Id == category.Id);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var categoryEntity = await db.Categories.FirstOrDefaultAsync(c => c.Id == category.Id);
             if (categoryEntity != null)
             {
-                Db.Categories.Remove(categoryEntity);
-                await Db.SaveChangesAsync();
+                db.Categories.Remove(categoryEntity);
+                await db.SaveChangesAsync();
                 _categories.Remove(category);
                 
                 Snackbar.Add($"Kategorija '{category.Name}' je obrisana", Severity.Success);

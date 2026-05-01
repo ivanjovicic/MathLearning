@@ -245,7 +245,7 @@
 </AuthorizeView>
 
 @code {
-    [Inject] private AdminDbContext Db { get; set; } = null!;
+    [Inject] private IDbContextFactory<AdminDbContext> DbFactory { get; set; } = null!;
     [Inject] private ILogger<Index> Logger { get; set; } = null!;
 
     private bool _isLoading = true;
@@ -259,15 +259,16 @@
         try
         {
             _isLoading = true;
+            await using var db = await DbFactory.CreateDbContextAsync();
             
             // Load metrics
-            _categoryCount = await Db.Categories.AsNoTracking().CountAsync();
-            _questionCount = await Db.Questions.AsNoTracking().CountAsync();
+            _categoryCount = await db.Categories.AsNoTracking().CountAsync();
+            _questionCount = await db.Questions.AsNoTracking().CountAsync();
             _openBugCount = await TryCountAsync(
-                () => Db.BugReports.AsNoTracking().CountAsync(b => b.Status == "open"),
+                () => db.BugReports.AsNoTracking().CountAsync(b => b.Status == "open"),
                 "open bugs");
             _draftCount = await TryCountAsync(
-                () => Db.QuestionDrafts.AsNoTracking().CountAsync(),
+                () => db.QuestionDrafts.AsNoTracking().CountAsync(),
                 "question drafts");
 
             Logger.LogInformation(
