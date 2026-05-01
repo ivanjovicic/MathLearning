@@ -47,6 +47,8 @@ namespace MathLearning.Domain.Entities
 
         public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
+        public bool IsDeleted { get; private set; }
+        public DateTime? DeletedAt { get; private set; }
 
         private Question() { }
 
@@ -249,6 +251,20 @@ namespace MathLearning.Domain.Entities
         public void SetPreviousSnapshotJson(string? previousSnapshotJson)
         {
             PreviousSnapshotJson = previousSnapshotJson;
+            Touch();
+        }
+
+        public void SoftDelete()
+        {
+            IsDeleted = true;
+            DeletedAt = DateTime.UtcNow;
+            Touch();
+        }
+
+        public void Restore()
+        {
+            IsDeleted = false;
+            DeletedAt = null;
             Touch();
         }
 

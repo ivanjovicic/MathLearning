@@ -23,15 +23,25 @@
 @inject AdminQuestionValidationOrchestrator ValidationOrchestrator
 @inject IDialogService DialogService
 
-<PageTitle>Izmeni Pitanje - MathLearning Admin</PageTitle>
+<PageTitle>Izmeni Pitanje #@Id - MathLearning Admin</PageTitle>
 
-<MudText Typo="Typo.h3" Class="mb-2">
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-2 pa-0" />
+<MudText Typo="Typo.h3" Class="mb-1">
     <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
-    Izmeni Pitanje
+    Pitanje #@Id
 </MudText>
-<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
-    Uređivanje math sadržaja sa preview-em i format metadata poljima
-</MudText>
+@if (!_loading && _question is not null)
+{
+    <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-4">
+        @TruncateText(_question.Text, 100)
+    </MudText>
+}
+else
+{
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+        Uređivanje math sadržaja sa preview-em i format metadata poljima
+    </MudText>
+}
 
 <NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
 
@@ -118,6 +128,18 @@ else
     private List<Subtopic> Subtopics { get; set; } = [];
     private bool _loading = true;
     private bool IsSaving { get; set; }
+
+    private List<BreadcrumbItem> _breadcrumbs =>
+    [
+        new BreadcrumbItem("Pitanja", href: "/questions"),
+        new BreadcrumbItem($"#{Id}", href: null, disabled: true)
+    ];
+
+    private static string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        return text.Length <= maxLength ? text : text[..maxLength] + "…";
+    }
     private List<string> ValidationErrors { get; set; } = [];
     private string? _loadError;
     private string? _currentDraftValidationStatus;

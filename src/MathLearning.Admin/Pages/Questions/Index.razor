@@ -6,6 +6,7 @@
 @using MathLearning.Domain.Entities
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@using MathLearning.Admin.Components.Dialogs
 @using MudBlazor
 @inject IDbContextFactory<AdminDbContext> DbFactory
 @inject ISnackbar Snackbar
@@ -33,8 +34,10 @@
             <MudTextField @bind-Value="_searchText" 
                           Placeholder="Pretraži pitanja..." 
                           Variant="Variant.Outlined"
+                          DebounceInterval="400"
+                          TextChanged="OnSearchTextChangedAsync"
                           Clearable="true"
-                          OnClearButtonClick="ResetSearch" />
+                          OnClearButtonClick="ResetSearchAndReloadAsync" />
         </MudItem>
         <MudItem xs="12" md="3">
             <MudSelect @bind-Value="_selectedCategoryId" 
@@ -57,13 +60,13 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect T="int" @bind-Value="_selectedDifficulty"
+            <MudSelect T="int?" @bind-Value="_selectedDifficulty"
                        Label="Težina"
                        Variant="Variant.Outlined"
                        Clearable="true">
                 @for (var difficulty = 1; difficulty <= 5; difficulty++)
                 {
-                    <MudSelectItem T="int" Value="@difficulty">@difficulty</MudSelectItem>
+                    <MudSelectItem T="int?" Value="@((int?)difficulty)">@difficulty</MudSelectItem>
                 }
             </MudSelect>
         </MudItem>
@@ -126,13 +129,14 @@
                   Dense="true"
                   Elevation="0">
             <HeaderContent>
-                <MudTh>ID</MudTh>
+        <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.Id)">ID</MudTableSortLabel></MudTh>
                 <MudTh>Tekst</MudTh>
+                <MudTh>Tip</MudTh>
                 <MudTh>Kategorija</MudTh>
-                <MudTh>Stanje</MudTh>
-                <MudTh>Tezina</MudTh>
-                <MudTh>Poslednja izmena</MudTh>
-                <MudTh Style="text-align: right; width: 120px;">Akcije</MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.PublishState)">Stanje</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.Difficulty)">Tezina</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.UpdatedAt)" InitialDirection="SortDirection.Descending">Poslednja izmena</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align: right; width: 140px;">Akcije</MudTh>
             </HeaderContent>
 
             <RowTemplate>
@@ -145,6 +149,15 @@
                                      EmptyText="(nema teksta)"
                                      Class="question-list-math" />
                     </div>
+                </MudTd>
+                <MudTd DataLabel="Tip">
+                    <MudTooltip Text="@(context.Type == "multiple_choice" ? "Višestruki izbor" : "Otvoren odgovor")">
+                        <MudIcon Icon="@(context.Type == "multiple_choice"
+                                        ? Icons.Material.Filled.FormatListBulleted
+                                        : Icons.Material.Filled.TextFields)"
+                                 Size="Size.Small"
+                                 Color="@(context.Type == "multiple_choice" ? Color.Primary : Color.Secondary)" />
+                    </MudTooltip>
                 </MudTd>
                 <MudTd DataLabel="Kategorija">
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary">
@@ -174,13 +187,20 @@
                         <MudText Typo="Typo.caption" Color="Color.Secondary">autor: @context.UpdatedBy</MudText>
                     }
                 </MudTd>
-                <MudTd DataLabel="Akcije" Style="text-align: right;">
+                <MudTd DataLabel="Akcije" Style="text-align: right; white-space: nowrap;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Color="Color.Default"
+                                   Size="Size.Small"
+                                   OnClick="async () => await ShowPreviewAsync(context)"
+                                   title="Brzi pregled"
+                                   aria-label="Brzi pregled" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" 
                                    Color="Color.Primary" 
                                    Size="Size.Small"
                                    Href="@($"/questions/{context.Id}/edit")"
                                    title="Izmeni pitanje"
                                    aria-label="Izmeni pitanje" />
+                    <span style="display:inline-block; width:6px;"></span>
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" 
                                    Color="Color.Error" 
                                    Size="Size.Small"
@@ -191,12 +211,19 @@
             </RowTemplate>
         </MudTable>
 
-        <div class="mt-4 d-flex justify-space-between align-center">
-            <div>
+        <div class="mt-4 d-flex justify-space-between align-center flex-wrap gap-2">
+            <div class="d-flex align-center gap-3">
                 <MudText Typo="Typo.body2">
                     Ukupno: <strong>@_totalCount</strong> pitanja |
                     Prikazano: <strong>@_questions.Count</strong> pitanja
                 </MudText>
+                <MudSelect T="int" Value="_pageSize" ValueChanged="OnPageSizeChangedAsync"
+                           Dense="true" Variant="Variant.Outlined" Style="width:80px;"
+                           Label="Po str.">
+                    <MudSelectItem T="int" Value="10">10</MudSelectItem>
+                    <MudSelectItem T="int" Value="25">25</MudSelectItem>
+                    <MudSelectItem T="int" Value="50">50</MudSelectItem>
+                </MudSelect>
             </div>
             <MudPagination Count="@_pageCount" 
                            Selected="@_currentPage" 
@@ -212,7 +239,7 @@
     private string _searchText = string.Empty;
     private int _selectedCategoryId = 0;
     private string _selectedType = string.Empty;
-    private int _selectedDifficulty = 0;
+    private int? _selectedDifficulty;
     private string _selectedPublishState = string.Empty;
     private DateTime? _updatedAfterDate;
     private int _currentPage = 1;
@@ -313,6 +340,7 @@
     {
         var query =
             from question in db.Questions.AsNoTracking()
+            where !question.IsDeleted
             join category in db.Categories.AsNoTracking() on question.CategoryId equals category.Id into categoryJoin
             from category in categoryJoin.DefaultIfEmpty()
             join draft in db.QuestionDrafts.AsNoTracking() on question.CurrentDraftId equals draft.Id into draftJoin
@@ -331,14 +359,13 @@
                 Type = question.Type,
                 PublishState = question.PublishState,
                 ValidationStatus = currentDraft != null ? currentDraft.ValidationStatus : null,
-                OptionCount = db.Options.Count(option => EF.Property<int>(option, "QuestionId") == question.Id),
-                StepCount = db.QuestionSteps.Count(step => step.QuestionId == question.Id)
+                OptionCount = 0,
+                StepCount = 0
             };
 
         if (!string.IsNullOrWhiteSpace(_searchText))
         {
-            var searchLower = _searchText.ToLower();
-            query = query.Where(q => q.Text.ToLower().Contains(searchLower));
+            query = query.Where(q => EF.Functions.ILike(q.Text, $"%{_searchText}%"));
         }
 
         if (_selectedCategoryId > 0)
@@ -351,9 +378,9 @@
             query = query.Where(q => q.Type == _selectedType);
         }
 
-        if (_selectedDifficulty > 0)
+        if (_selectedDifficulty.HasValue)
         {
-            query = query.Where(q => q.Difficulty == _selectedDifficulty);
+            query = query.Where(q => q.Difficulty == _selectedDifficulty.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(_selectedPublishState))
@@ -375,9 +402,28 @@
         _searchText = string.Empty;
         _selectedCategoryId = 0;
         _selectedType = string.Empty;
-        _selectedDifficulty = 0;
+        _selectedDifficulty = null;
         _selectedPublishState = string.Empty;
         _updatedAfterDate = null;
+    }
+
+    private async Task ResetSearchAndReloadAsync()
+    {
+        ResetSearch();
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnSearchTextChangedAsync(string value)
+    {
+        _searchText = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnPageSizeChangedAsync(int newSize)
+    {
+        _pageSize = newSize;
+        _currentPage = 1;
+        await LoadQuestionsAsync();
     }
 
     private async Task OnUpdatedAfterDateChangedAsync(DateTime? date)
@@ -388,13 +434,27 @@
 
     private async Task DeleteQuestionAsync(QuestionListItem question)
     {
+        // Fetch actual counts lazily — only needed for the confirm dialog message
+        int optionCount = 0;
+        int stepCount = 0;
+        try
+        {
+            await using var dbCounts = await DbFactory.CreateDbContextAsync();
+            optionCount = await dbCounts.Options.CountAsync(o => EF.Property<int>(o, "QuestionId") == question.Id);
+            stepCount = await dbCounts.QuestionSteps.CountAsync(s => s.QuestionId == question.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not fetch option/step counts for question {Id}", question.Id);
+        }
+
         var dialogParameters = new DialogParameters
         {
             [nameof(ConfirmDialog.Title)] = "Potvrda brisanja",
             [nameof(ConfirmDialog.Message)] = DeleteImpactFormatter.BuildQuestionDeleteMessage(
                 question.Id,
-                question.OptionCount,
-                question.StepCount),
+                optionCount,
+                stepCount),
             [nameof(ConfirmDialog.ConfirmText)] = "Obrisi",
             [nameof(ConfirmDialog.CancelText)] = "Odustani",
             [nameof(ConfirmDialog.ConfirmColor)] = Color.Error
@@ -422,12 +482,19 @@
                 return;
             }
 
-            db.Questions.Remove(entity);
+            entity.SoftDelete();
             await db.SaveChangesAsync();
             _questions.Remove(question);
             _totalCount--;
-            
-            Snackbar.Add("Pitanje je obrisano", Severity.Success);
+
+            var deletedId = question.Id;
+            Snackbar.Add("Pitanje je obrisano", Severity.Success, config =>
+            {
+                config.Action = "Poništi";
+                config.ActionColor = Color.Warning;
+                config.OnClick = async _ => await UndoDeleteAsync(deletedId);
+                config.VisibleStateDuration = 6000;
+            });
             StateHasChanged();
         }
         catch (Exception ex)
@@ -435,6 +502,42 @@
             Logger.LogError(ex, "Error deleting question");
             Snackbar.Add($"Greška pri brisanju: {ex.Message}", Severity.Error);
         }
+    }
+
+    private async Task UndoDeleteAsync(int questionId)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var entity = await db.Questions.FirstOrDefaultAsync(x => x.Id == questionId);
+            if (entity is null)
+            {
+                Snackbar.Add("Nije moguće poništiti — pitanje nije pronađeno.", Severity.Warning);
+                return;
+            }
+
+            entity.Restore();
+            await db.SaveChangesAsync();
+            Snackbar.Add("Brisanje poništeno", Severity.Success);
+            await LoadQuestionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error restoring question {QuestionId}", questionId);
+            Snackbar.Add($"Greška pri poništavanju: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ShowPreviewAsync(QuestionListItem question)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(QuestionPreviewDialog.QuestionId)] = question.Id
+        };
+        await DialogService.ShowAsync<QuestionPreviewDialog>(
+            $"Pregled pitanja #{question.Id}",
+            parameters,
+            new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true });
     }
 
     private static Color GetPublishStateColor(string publishState) => publishState switch

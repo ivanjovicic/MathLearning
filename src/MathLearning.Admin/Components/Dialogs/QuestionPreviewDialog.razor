@@ -1,0 +1,142 @@
+@using MathLearning.Admin.Data
+@using MathLearning.Domain.Entities
+@using MathLearning.Domain.Enums
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@inject IDbContextFactory<AdminDbContext> DbFactory
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Class="ma-4" />
+        }
+        else if (_question is null)
+        {
+            <MudAlert Severity="Severity.Error">Pitanje nije pronađeno.</MudAlert>
+        }
+        else
+        {
+            <div class="d-flex gap-2 mb-3 flex-wrap">
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                    ID: @_question.Id
+                </MudChip>
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(_question.Type == "multiple_choice" ? Color.Primary : Color.Secondary)"
+                         Variant="Variant.Outlined">
+                    @(_question.Type == "multiple_choice" ? "Višestruki izbor" : "Otvoren odgovor")
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                    Težina: @_question.Difficulty / 5
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                    @_question.PublishState
+                </MudChip>
+            </div>
+
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">Tekst pitanja</MudText>
+            <MudPaper Outlined="true" Class="pa-3 mb-4">
+                <MathPreview Content="@_question.Text"
+                             Format="@_question.TextFormat"
+                             RenderMode="@_question.TextRenderMode"
+                             EmptyText="(nema teksta)" />
+            </MudPaper>
+
+            @if (_question.Type == "multiple_choice" && _options.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">Odgovori</MudText>
+                <MudList T="string" Dense="true">
+                    @foreach (var option in _options)
+                    {
+                        <MudListItem T="string">
+                            <div class="d-flex align-center gap-2">
+                                @if (option.IsCorrect)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                             Color="Color.Success"
+                                             Size="Size.Small" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.RadioButtonUnchecked"
+                                             Color="Color.Default"
+                                             Size="Size.Small" />
+                                }
+                                <MathPreview Content="@option.Text"
+                                             Format="@option.TextFormat"
+                                             RenderMode="@option.RenderMode" />
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+            else if (_question.Type == "open_answer" && !string.IsNullOrWhiteSpace(_question.CorrectAnswer))
+            {
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">Tačan odgovor</MudText>
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    <MathPreview Content="@_question.CorrectAnswer"
+                                 Format="@_question.TextFormat"
+                                 RenderMode="@_question.TextRenderMode" />
+                </MudPaper>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_question.Explanation))
+            {
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1 mt-3">Objašnjenje</MudText>
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MathPreview Content="@_question.Explanation"
+                                 Format="@_question.ExplanationFormat"
+                                 RenderMode="@_question.ExplanationRenderMode" />
+                </MudPaper>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_question is not null)
+        {
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit"
+                       Href="@($"/questions/{_question.Id}/edit")"
+                       OnClick="() => MudDialog.Close()">
+                Izmeni
+            </MudButton>
+        }
+        <MudButton Variant="Variant.Text" OnClick="() => MudDialog.Close()">Zatvori</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int QuestionId { get; set; }
+
+    private Question? _question;
+    private List<QuestionOption> _options = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _question = await db.Questions
+                .AsNoTracking()
+                .Include(q => q.Options)
+                .FirstOrDefaultAsync(q => q.Id == QuestionId);
+
+            if (_question is not null)
+            {
+                _options = _question.Options
+                    .OrderBy(o => o.Order)
+                    .ToList();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -48,6 +48,9 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.HintFull).HasColumnType("TEXT").IsRequired(false);
             entity.Property(e => e.UpdatedBy).HasMaxLength(256).IsRequired(false);
             entity.Property(e => e.PreviousSnapshotJson).HasColumnType("jsonb").IsRequired(false);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.DeletedAt).IsRequired(false);
+            entity.HasIndex(e => e.IsDeleted);
 
             entity.HasOne(e => e.Category)
                 .WithMany()
