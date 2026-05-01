@@ -58,7 +58,7 @@ public class LocalScreenshotStorageService : IScreenshotStorageService
         }
     }
 
-    public async Task<bool> DeleteScreenshotAsync(string url)
+    public Task<bool> DeleteScreenshotAsync(string url)
     {
         try
         {
@@ -68,14 +68,14 @@ public class LocalScreenshotStorageService : IScreenshotStorageService
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
-                return true;
+                return Task.FromResult(true);
             }
 
-            return false;
+            return Task.FromResult(false);
         }
         catch
         {
-            return false;
+            return Task.FromResult(false);
         }
     }
 
