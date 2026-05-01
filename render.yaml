@@ -8,15 +8,17 @@ services:
     healthCheckPath: /healthz
     disk:
       name: admin-keys
-      mountPath: /app/keys
+      mountPath: /var/data
       sizeGB: 1
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
       - key: ApiBaseUrl
         value: https://mathlearning-sn6d.onrender.com/
+      - key: DataProtection__KeysPath
+        value: /var/data/keys
       - key: Database__InitializeOnStartup
-        value: "true"
+        value: "false"
       - key: SeedAdmin__Enabled
         value: "false"
       - key: SeedAdmin__ResetPasswordOnStart

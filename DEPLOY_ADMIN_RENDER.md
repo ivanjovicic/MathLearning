@@ -5,8 +5,8 @@ Ovaj dokument sadrži korake i preporuke za deploy `MathLearning.Admin` (Server�
 ## Kratki pregled
 - `MathLearning.Admin` je Server‑Side Blazor aplikacija i treba da bude deployovana kao zaseban Web Service.
 - Za Render je najstabilnija varijanta Docker-based deploy preko Blueprint-a (`runtime: docker`).
-- Aplikacija na startu pokušava da izvrši EF migracije i (opciono) seed podataka — obezbedite validan DB connection string kao env var / tajnu.
-- Data Protection ključevi se čuvaju u `/app/keys` u kodu; za production koristite Persistent Disk ili deljeno skladište.
+- Aplikacija može da izvrši EF migracije i (opciono) seed podataka na startu, ali za production web servis preporučeno je da to bude isključeno i pokrenuto odvojeno.
+- Data Protection ključevi se čuvaju u `/var/data/keys`; za production koristite Persistent Disk ili deljeno skladište.
 
 ---
 
@@ -24,6 +24,8 @@ services:
 		envVars:
 			- key: ASPNETCORE_ENVIRONMENT
 				value: Production
+			- key: DataProtection__KeysPath
+				value: /var/data/keys
 			- key: Database__InitializeOnStartup
 				value: "false"
 			- key: SeedAdmin__Enabled
@@ -59,11 +61,11 @@ Napomena: `sync: false` te pita za vrednost samo tokom inicijalnog kreiranja Blu
 ---
 
 ## Persistent Data Protection Keys
-Server‑Side Blazor + Identity koristi DataProtection ključeve (u kodu su podešeni da se čuvaju u `/app/keys`). Ako pokrećete više instanci, morate obezbediti deljeni storage za te ključeve.
+Server‑Side Blazor + Identity koristi DataProtection ključeve (u kodu su podešeni da se čuvaju u `/var/data/keys`). Ako pokrećete više instanci, morate obezbediti deljeni storage za te ključeve.
 
 Preporuka na Render:
 1. U Service settings -> Disks -> `Add Persistent Disk`.
-2. Mount Path: `/app/keys`.
+2. Mount Path: `/var/data`.
 3. Deploy.
 
 Alternativa: koristiti eksterni key store (Azure Blob, Redis, ili DB) ako ne želite persistent disk.
@@ -80,7 +82,7 @@ Alternativa: koristiti eksterni key store (Azure Blob, Redis, ili DB) ako ne že
 2. Izaberi branch (npr. `main`) i potvrdi da Render čita `render.yaml` iz repo root-a.
 3. Za `mathlearning-admin` Render koristi `runtime: docker`, `dockerfilePath: ./src/MathLearning.Admin/Dockerfile` i `dockerContext: .`.
 4. Tokom inicijalnog Blueprint setup-a unesi vrednost za `ConnectionStrings__AdminIdentity` kada Render traži `sync: false` env var.
-5. Dodaj Persistent Disk i mount path `/app/keys` (ako koristiš više instanci ili želiš da sačuvaš ključeve preko restarta).
+5. Dodaj Persistent Disk i mount path `/var/data` (ako koristiš više instanci ili želiš da sačuvaš ključeve preko restarta).
 6. Deploy i gledaj Logs (Dashboard -> Logs) za poruke o migracijama / greškama.
 
 ---
