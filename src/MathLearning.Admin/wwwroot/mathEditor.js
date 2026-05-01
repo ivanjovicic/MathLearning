@@ -8,9 +8,12 @@
  */
 
 let _ctrlMHandler = null;
+let _focusInHandler = null;
+let _lastFocusedField = null;
 
 /**
- * Inserts a LaTeX template at the cursor position of the currently focused textarea/input.
+ * Inserts a LaTeX template at the cursor position of the currently focused textarea/input,
+ * or the last known focused field if focus has moved to a toolbar button.
  * The first `{}` in the template is replaced by any currently selected text.
  * After insertion the cursor is placed inside the first `{}` position (or after the text).
  *
@@ -18,10 +21,11 @@ let _ctrlMHandler = null;
  * @returns {boolean} true if insertion succeeded
  */
 export function insertLatexAtCursor(template) {
-    const el = document.activeElement;
-    if (!el || (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT')) {
-        return false;
-    }
+    const active = document.activeElement;
+    const el = (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT'))
+        ? active
+        : _lastFocusedField;
+    if (!el) return false;
 
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
@@ -68,6 +72,16 @@ export function insertLatexAtCursor(template) {
 export function registerCtrlM(dotNetRef) {
     if (_ctrlMHandler) return; // already registered
 
+    // Track the last focused text field so toolbar buttons can insert even after stealing focus
+    if (!_focusInHandler) {
+        _focusInHandler = (e) => {
+            if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
+                _lastFocusedField = e.target;
+            }
+        };
+        document.addEventListener('focusin', _focusInHandler);
+    }
+
     _ctrlMHandler = (e) => {
         if (!e.ctrlKey || e.key !== 'm') return;
         const el = document.activeElement;
@@ -113,4 +127,9 @@ export function unregisterCtrlM() {
         document.removeEventListener('keydown', _ctrlMHandler);
         _ctrlMHandler = null;
     }
+    if (_focusInHandler) {
+        document.removeEventListener('focusin', _focusInHandler);
+        _focusInHandler = null;
+    }
+    _lastFocusedField = null;
 }
