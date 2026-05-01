@@ -8,7 +8,7 @@
 @inject IMathContentSanitizer Sanitizer
 
 <div class="question-editor">
-    <MathInputHelper />
+    <MathInputHelper Inserted="ApplyLatexInsert" />
 
     <MudPaper Class="latex-help-panel mb-3 pa-3" Outlined="true">
         <div class="latex-help-header" @onclick="() => _latexHelpExpanded = !_latexHelpExpanded">
@@ -117,6 +117,7 @@
                                               Class="@WarningFieldClass(Model.Text, Model.TextFormat)"
                                               MaxLength="@QuestionEditorFieldLimits.QuestionTextMaxLength"
                                               HelperText="@($"{Model.Text?.Length ?? 0} / {QuestionEditorFieldLimits.QuestionTextMaxLength} - pitanje treba da bude dovoljno jasno da odgovor nije puko pogadjanje")"
+                                              @attributes="LatexInputAttributes(QuestionTextLatexFieldId, isDefault: true)"
                                               @bind-Value="Model.Text" />
                                 @RenderFieldGuidance(Model.Text, Model.TextFormat)
                             </MudItem>
@@ -290,6 +291,7 @@
                                                                       Class="@WarningFieldClass(option.Text, option.TextFormat)"
                                                                       MaxLength="@QuestionEditorFieldLimits.OptionTextMaxLength"
                                                                       HelperText="@($"{option.Text?.Length ?? 0} / {QuestionEditorFieldLimits.OptionTextMaxLength} - Ctrl+Enter dodaje sledeci odgovor")"
+                                                                      @attributes="LatexInputAttributes(OptionTextLatexFieldId(idx))"
                                                                       @bind-Value="option.Text" />
                                                     </div>
                                                     @RenderFieldGuidance(option.Text, option.TextFormat)
@@ -366,6 +368,7 @@
                                                   Class="@WarningFieldClass(Model.CorrectAnswer, Model.TextFormat)"
                                                   MaxLength="@QuestionEditorFieldLimits.CorrectAnswerMaxLength"
                                                   HelperText="@($"{Model.CorrectAnswer?.Length ?? 0} / {QuestionEditorFieldLimits.CorrectAnswerMaxLength} - broj, izraz ili LaTeX formula")"
+                                                  @attributes="LatexInputAttributes(CorrectAnswerLatexFieldId)"
                                                   @bind-Value="Model.CorrectAnswer" />
                                     @RenderFieldGuidance(Model.CorrectAnswer, Model.TextFormat)
                                 </MudItem>
@@ -487,6 +490,7 @@
                                                                   Class="@WarningFieldClass(step.Text, step.TextFormat)"
                                                                   MaxLength="@QuestionEditorFieldLimits.StepTextMaxLength"
                                                                   HelperText="@($"{step.Text?.Length ?? 0} / {QuestionEditorFieldLimits.StepTextMaxLength} - primer: Oduzmemo 3 sa obe strane")"
+                                                                  @attributes="LatexInputAttributes(StepTextLatexFieldId(idx))"
                                                                   @bind-Value="step.Text" />
                                                 </div>
                                                 @RenderFieldGuidance(step.Text, step.TextFormat)
@@ -522,6 +526,7 @@
                                                               Error="@FieldHasError(step.Hint, step.HintFormat)"
                                                               ErrorText="@FirstFieldError(step.Hint, step.HintFormat)"
                                                               Class="@WarningFieldClass(step.Hint, step.HintFormat)"
+                                                              @attributes="LatexInputAttributes(StepHintLatexFieldId(idx))"
                                                               @bind-Value="step.Hint" />
                                                 @RenderFieldGuidance(step.Hint, step.HintFormat)
                                             </MudItem>
@@ -644,6 +649,7 @@
                                               Class="@WarningFieldClass(Model.Explanation, Model.ExplanationFormat)"
                                               MaxLength="@QuestionEditorFieldLimits.ExplanationMaxLength"
                                               HelperText="@($"{Model.Explanation?.Length ?? 0} / {QuestionEditorFieldLimits.ExplanationMaxLength} - koristi za komentar posle resavanja, ne za hint pre resavanja")"
+                                              @attributes="LatexInputAttributes(ExplanationLatexFieldId)"
                                               @bind-Value="Model.Explanation" />
                                 @RenderFieldGuidance(Model.Explanation, Model.ExplanationFormat)
                             </MudItem>
@@ -684,6 +690,7 @@
                                               ErrorText="@FirstFieldError(Model.HintFormula, Model.HintFormat)"
                                               Class="@WarningFieldClass(Model.HintFormula, Model.HintFormat)"
                                               HelperText="Koristi kada zelis pomoc bez otkrivanja resenja. Ne koristi za kompletno objasnjenje."
+                                              @attributes="LatexInputAttributes(HintFormulaLatexFieldId)"
                                               @bind-Value="Model.HintFormula" />
                                 @if (string.IsNullOrWhiteSpace(Model.HintFormula))
                                 {
@@ -705,6 +712,7 @@
                                               ErrorText="@FirstFieldError(Model.HintClue, Model.HintFormat)"
                                               Class="@WarningFieldClass(Model.HintClue, Model.HintFormat)"
                                               HelperText="Koristi za pristup ili ideju. Ne koristi ako vec otkriva konacan odgovor."
+                                              @attributes="LatexInputAttributes(HintClueLatexFieldId)"
                                               @bind-Value="Model.HintClue" />
                                 @RenderFieldGuidance(Model.HintClue, Model.HintFormat)
                             </MudItem>
@@ -720,6 +728,7 @@
                                               ErrorText="@FirstFieldError(Model.HintFull, Model.HintFormat)"
                                               Class="@WarningFieldClass(Model.HintFull, Model.HintFormat)"
                                               HelperText="Koristi kao poslednju pomoc. Ako imas detaljne korake, nemoj ih duplirati ovde."
+                                              @attributes="LatexInputAttributes(HintFullLatexFieldId)"
                                               @bind-Value="Model.HintFull" />
                                 @RenderFieldGuidance(Model.HintFull, Model.HintFormat)
                             </MudItem>
@@ -973,6 +982,13 @@
         MathRenderMode.Display
     ];
 
+    private const string QuestionTextLatexFieldId = "question.text";
+    private const string CorrectAnswerLatexFieldId = "question.correctAnswer";
+    private const string ExplanationLatexFieldId = "question.explanation";
+    private const string HintFormulaLatexFieldId = "question.hintFormula";
+    private const string HintClueLatexFieldId = "question.hintClue";
+    private const string HintFullLatexFieldId = "question.hintFull";
+
     private EditorStage _currentStage = EditorStage.Question;
     private bool _latexHelpExpanded;
     private int _dragFromIndex = -1;
@@ -1033,6 +1049,153 @@
     private string StepStateText => Model.Steps.Count == 0 ? "Koraci opcionalni" : $"{Model.Steps.Count} koraka";
     private Color FormStatusColor => IsFormReady ? Color.Success : Color.Warning;
     private string FormStatusText => IsFormReady ? "Ready" : "Incomplete";
+
+    private static IReadOnlyDictionary<string, object> LatexInputAttributes(string fieldId, bool isDefault = false)
+    {
+        var attributes = new Dictionary<string, object>
+        {
+            ["data-latex-field"] = fieldId
+        };
+
+        if (isDefault)
+        {
+            attributes["data-latex-default"] = "true";
+        }
+
+        return attributes;
+    }
+
+    private static string OptionTextLatexFieldId(int index) => $"option:{index}:text";
+
+    private static string StepTextLatexFieldId(int index) => $"step:{index}:text";
+
+    private static string StepHintLatexFieldId(int index) => $"step:{index}:hint";
+
+    private void ApplyLatexInsert(LatexInsertResult result)
+    {
+        ApplyLatexInsertCore(result);
+        StateHasChanged();
+    }
+
+    private void ApplyLatexInsertCore(LatexInsertResult result)
+    {
+        if (!result.Succeeded || string.IsNullOrWhiteSpace(result.FieldId) || result.Value is null)
+        {
+            return;
+        }
+
+        ApplyLatexInsertToModel(result.FieldId, result.Value);
+        RefreshLatexInsertPreview(result.FieldId);
+    }
+
+    private void ApplyLatexInsertToModel(string fieldId, string value)
+    {
+        switch (fieldId)
+        {
+            case QuestionTextLatexFieldId:
+                Model.Text = value;
+                return;
+            case CorrectAnswerLatexFieldId:
+                Model.CorrectAnswer = value;
+                return;
+            case ExplanationLatexFieldId:
+                Model.Explanation = value;
+                return;
+            case HintFormulaLatexFieldId:
+                Model.HintFormula = value;
+                return;
+            case HintClueLatexFieldId:
+                Model.HintClue = value;
+                return;
+            case HintFullLatexFieldId:
+                Model.HintFull = value;
+                return;
+        }
+
+        if (TryParseIndexedLatexField(fieldId, "option", "text", out var optionIndex)
+            && optionIndex >= 0
+            && optionIndex < Model.Options.Count)
+        {
+            Model.Options[optionIndex].Text = value;
+            return;
+        }
+
+        if (TryParseIndexedLatexField(fieldId, "step", "text", out var stepTextIndex)
+            && stepTextIndex >= 0
+            && stepTextIndex < Model.Steps.Count)
+        {
+            Model.Steps[stepTextIndex].Text = value;
+            return;
+        }
+
+        if (TryParseIndexedLatexField(fieldId, "step", "hint", out var stepHintIndex)
+            && stepHintIndex >= 0
+            && stepHintIndex < Model.Steps.Count)
+        {
+            Model.Steps[stepHintIndex].Hint = value;
+        }
+    }
+
+    private void RefreshLatexInsertPreview(string fieldId)
+    {
+        switch (fieldId)
+        {
+            case QuestionTextLatexFieldId:
+                PreviewField("Tekst pitanja", Model.Text, Model.TextFormat, Model.TextRenderMode);
+                return;
+            case CorrectAnswerLatexFieldId:
+                PreviewField("Tacan odgovor", Model.CorrectAnswer, Model.TextFormat, Model.TextRenderMode);
+                return;
+            case ExplanationLatexFieldId:
+                PreviewField("Objasnjenje", Model.Explanation, Model.ExplanationFormat, Model.ExplanationRenderMode);
+                return;
+            case HintFormulaLatexFieldId:
+                PreviewField("Lagani hint", Model.HintFormula, Model.HintFormat, Model.HintRenderMode);
+                return;
+            case HintClueLatexFieldId:
+                PreviewField("Naputak", Model.HintClue, Model.HintFormat, Model.HintRenderMode);
+                return;
+            case HintFullLatexFieldId:
+                PreviewField("Potpuno resenje", Model.HintFull, Model.HintFormat, Model.HintRenderMode);
+                return;
+        }
+
+        if (TryParseIndexedLatexField(fieldId, "option", "text", out var optionIndex)
+            && optionIndex >= 0
+            && optionIndex < Model.Options.Count)
+        {
+            var option = Model.Options[optionIndex];
+            PreviewField($"Odgovor {optionIndex + 1}", option.Text, option.TextFormat, option.RenderMode);
+            return;
+        }
+
+        if (TryParseIndexedLatexField(fieldId, "step", "text", out var stepTextIndex)
+            && stepTextIndex >= 0
+            && stepTextIndex < Model.Steps.Count)
+        {
+            var step = Model.Steps[stepTextIndex];
+            PreviewField($"Korak {stepTextIndex + 1}", step.Text, step.TextFormat, step.TextRenderMode);
+            return;
+        }
+
+        if (TryParseIndexedLatexField(fieldId, "step", "hint", out var stepHintIndex)
+            && stepHintIndex >= 0
+            && stepHintIndex < Model.Steps.Count)
+        {
+            var step = Model.Steps[stepHintIndex];
+            PreviewField($"Napomena u koraku {stepHintIndex + 1}", step.Hint, step.HintFormat, step.HintRenderMode);
+        }
+    }
+
+    private static bool TryParseIndexedLatexField(string fieldId, string prefix, string suffix, out int index)
+    {
+        index = -1;
+        var parts = fieldId.Split(':');
+        return parts.Length == 3
+               && string.Equals(parts[0], prefix, StringComparison.Ordinal)
+               && string.Equals(parts[2], suffix, StringComparison.Ordinal)
+               && int.TryParse(parts[1], out index);
+    }
 
     private void ToggleOptionAdv(int idx)
     {

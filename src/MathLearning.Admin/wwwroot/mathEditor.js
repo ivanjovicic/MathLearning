@@ -9,7 +9,96 @@
 
 let _ctrlMHandler = null;
 let _focusInHandler = null;
+let _selectionHandler = null;
 let _lastFocusedField = null;
+let _lastSelection = null;
+
+const textFieldSelector = [
+    'textarea[data-latex-field]',
+    'input[data-latex-field]',
+    '[data-latex-field] textarea',
+    '[data-latex-field] input'
+].join(', ');
+
+function isTextField(el) {
+    return !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT');
+}
+
+function getFieldHost(el) {
+    if (!el) return null;
+    if (el.hasAttribute?.('data-latex-field')) return el;
+    return el.closest?.('[data-latex-field]') ?? null;
+}
+
+function getFieldId(el) {
+    return getFieldHost(el)?.getAttribute('data-latex-field') ?? null;
+}
+
+function isLatexTextField(el) {
+    return isTextField(el) && !!getFieldId(el);
+}
+
+function rememberField(el) {
+    if (!isLatexTextField(el)) return;
+
+    _lastFocusedField = el;
+    _lastSelection = {
+        el,
+        start: el.selectionStart ?? el.value.length,
+        end: el.selectionEnd ?? el.value.length
+    };
+}
+
+function getFallbackField() {
+    return document.querySelector('textarea[data-latex-default="true"], input[data-latex-default="true"], [data-latex-default="true"] textarea, [data-latex-default="true"] input')
+        || document.querySelector(textFieldSelector);
+}
+
+function getTargetField() {
+    const active = document.activeElement;
+    if (isLatexTextField(active)) {
+        rememberField(active);
+        return active;
+    }
+
+    if (isLatexTextField(_lastFocusedField) && document.contains(_lastFocusedField)) {
+        return _lastFocusedField;
+    }
+
+    return getFallbackField();
+}
+
+function setNativeValue(el, value) {
+    const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    if (setter) {
+        setter.call(el, value);
+    } else {
+        el.value = value;
+    }
+}
+
+function notifyValueChanged(el) {
+    el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: null
+    }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function failure() {
+    return {
+        succeeded: false,
+        fieldId: null,
+        value: null,
+        selectionStart: 0,
+        selectionEnd: 0,
+        usedFallback: false
+    };
+}
 
 /**
  * Inserts a LaTeX template at the cursor position of the currently focused textarea/input,
@@ -21,14 +110,13 @@ let _lastFocusedField = null;
  * @returns {boolean} true if insertion succeeded
  */
 export function insertLatexAtCursor(template) {
-    const active = document.activeElement;
-    const el = (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT'))
-        ? active
-        : _lastFocusedField;
-    if (!el) return false;
+    const el = getTargetField();
+    if (!el) return failure();
 
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? el.value.length;
+    const hadRememberedFocus = isLatexTextField(_lastFocusedField) && document.contains(_lastFocusedField);
+    const useRememberedSelection = _lastSelection?.el === el;
+    const start = useRememberedSelection ? _lastSelection.start : (el.selectionStart ?? el.value.length);
+    const end = useRememberedSelection ? _lastSelection.end : (el.selectionEnd ?? el.value.length);
     const selected = el.value.substring(start, end);
 
     // Replace first {} placeholder with any selected text
@@ -39,28 +127,24 @@ export function insertLatexAtCursor(template) {
 
     const newValue = el.value.substring(0, start) + toInsert + el.value.substring(end);
 
-    // Use native setter so JS framework event listeners fire correctly
-    const proto = el.tagName === 'TEXTAREA'
-        ? window.HTMLTextAreaElement.prototype
-        : window.HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-    if (setter) {
-        setter.call(el, newValue);
-    } else {
-        el.value = newValue;
-    }
+    setNativeValue(el, newValue);
 
     // Fire events so Blazor picks up the new value
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    notifyValueChanged(el);
 
-    // Place cursor at the first {} placeholder position inside the inserted text,
-    // so the author can immediately type the argument.
-    const placeholderIndex = toInsert.indexOf('{}');
-    const cursorPos = start + (placeholderIndex >= 0 ? placeholderIndex : toInsert.length);
+    const cursorPos = start + toInsert.length;
+    el.focus({ preventScroll: true });
     el.setSelectionRange(cursorPos, cursorPos);
-    el.focus();
-    return true;
+    rememberField(el);
+
+    return {
+        succeeded: true,
+        fieldId: getFieldId(el),
+        value: el.value,
+        selectionStart: cursorPos,
+        selectionEnd: cursorPos,
+        usedFallback: !hadRememberedFocus
+    };
 }
 
 /**
@@ -75,17 +159,25 @@ export function registerCtrlM(dotNetRef) {
     // Track the last focused text field so toolbar buttons can insert even after stealing focus
     if (!_focusInHandler) {
         _focusInHandler = (e) => {
-            if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
-                _lastFocusedField = e.target;
-            }
+            rememberField(e.target);
         };
         document.addEventListener('focusin', _focusInHandler);
+    }
+
+    if (!_selectionHandler) {
+        _selectionHandler = (e) => {
+            rememberField(e.target);
+        };
+        document.addEventListener('keyup', _selectionHandler, true);
+        document.addEventListener('mouseup', _selectionHandler, true);
+        document.addEventListener('select', _selectionHandler, true);
+        document.addEventListener('input', _selectionHandler, true);
     }
 
     _ctrlMHandler = (e) => {
         if (!e.ctrlKey || e.key !== 'm') return;
         const el = document.activeElement;
-        if (!el || (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT')) return;
+        if (!isLatexTextField(el)) return;
 
         e.preventDefault();
 
@@ -93,27 +185,18 @@ export function registerCtrlM(dotNetRef) {
         const end = el.selectionEnd ?? 0;
         const selected = el.value.substring(start, end);
         const useDisplay = selected.includes('\n');
-        const wrapped = useDisplay ? `$$${selected}$$` : `$${selected}$`;
-        insertLatexAtCursor(wrapped.replace(selected, selected || ''));
-
-        // Re-apply since insertLatexAtCursor replaces {} not the selected text directly
-        // Simpler: do the wrapping inline here
         const before = el.value.substring(0, start);
         const after = el.value.substring(end);
         const newValue = before + (useDisplay ? `$$${selected}$$` : `$${selected}$`) + after;
 
-        const proto = el.tagName === 'TEXTAREA'
-            ? window.HTMLTextAreaElement.prototype
-            : window.HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        if (setter) { setter.call(el, newValue); } else { el.value = newValue; }
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+        setNativeValue(el, newValue);
+        notifyValueChanged(el);
 
         const newCursor = start + (useDisplay ? 2 : 1);
         const newEnd = newCursor + selected.length;
+        el.focus({ preventScroll: true });
         el.setSelectionRange(newCursor, newEnd);
-        el.focus();
+        rememberField(el);
     };
 
     document.addEventListener('keydown', _ctrlMHandler);
@@ -131,5 +214,13 @@ export function unregisterCtrlM() {
         document.removeEventListener('focusin', _focusInHandler);
         _focusInHandler = null;
     }
+    if (_selectionHandler) {
+        document.removeEventListener('keyup', _selectionHandler, true);
+        document.removeEventListener('mouseup', _selectionHandler, true);
+        document.removeEventListener('select', _selectionHandler, true);
+        document.removeEventListener('input', _selectionHandler, true);
+        _selectionHandler = null;
+    }
     _lastFocusedField = null;
+    _lastSelection = null;
 }

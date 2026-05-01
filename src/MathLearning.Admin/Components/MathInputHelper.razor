@@ -1,3 +1,4 @@
+@using MathLearning.Admin.Models
 @using MudBlazor
 @implements IAsyncDisposable
 @inject IJSRuntime Js
@@ -36,6 +37,9 @@
 
 @code {
     private IJSObjectReference? _module;
+
+    [Parameter]
+    public EventCallback<LatexInsertResult> Inserted { get; set; }
 
     private record SymbolDef(string Display, string Template, string Tooltip);
     private record SymbolGroup(string Label, SymbolDef[] Symbols);
@@ -115,7 +119,7 @@
         if (!firstRender) return;
         try
         {
-            _module = await Js.InvokeAsync<IJSObjectReference>("import", "./mathEditor.js");
+            _module = await Js.InvokeAsync<IJSObjectReference>("import", "/mathEditor.js");
             await _module.InvokeVoidAsync("registerCtrlM", DotNetObjectReference.Create(this));
         }
         catch (Exception)
@@ -129,7 +133,11 @@
         if (_module is null) return;
         try
         {
-            await _module.InvokeAsync<bool>("insertLatexAtCursor", template);
+            var result = await _module.InvokeAsync<LatexInsertResult?>("insertLatexAtCursor", template);
+            if (result?.Succeeded == true)
+            {
+                await Inserted.InvokeAsync(result);
+            }
         }
         catch (Exception)
         {
