@@ -164,6 +164,28 @@ public class AdminQuestionValidationTests
     }
 
     [Fact]
+    public void Validate_RejectsBlankLatexDelimiters()
+    {
+        var model = new QuestionEditorModel
+        {
+            Type = "multiple_choice",
+            Text = "Resi $ $",
+            CategoryId = 1,
+            SubtopicId = 1,
+            Options =
+            [
+                new() { Text = "A", IsCorrect = true },
+                new() { Text = "$$", IsCorrect = false }
+            ]
+        };
+
+        var errors = QuestionEditorValidation.Validate(model);
+
+        Assert.Contains(errors, error => error.Contains("Tekst pitanja: prazna LaTeX formula", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("Opcija 2: prazna LaTeX formula", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void DuplicateDetection_IgnoresEmptyOptions()
     {
         var options = new List<QuestionOptionEditorModel>
@@ -181,8 +203,8 @@ public class AdminQuestionValidationTests
     {
         var options = new List<QuestionOptionEditorModel>
         {
-            new() { Text = "  Tacno  " },
-            new() { Text = "tacno" }
+            new() { Text = "  Tacno   resenje  " },
+            new() { Text = "tacno resenje" }
         };
 
         Assert.True(QuestionEditorValidation.HasDuplicateOptionTexts(options));

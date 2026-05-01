@@ -25,6 +25,16 @@ public class QuestionEditorUiSmokeTests
     }
 
     [Fact]
+    public void DefaultModel_StartsWithTwoOptionsAndFirstCorrectPlaceholder()
+    {
+        var model = new QuestionEditorModel();
+
+        Assert.Equal(2, model.Options.Count);
+        Assert.True(model.Options[0].IsCorrect);
+        Assert.False(model.Options[1].IsCorrect);
+    }
+
+    [Fact]
     public void MoveStep_ReordersAndNormalizesStepOrder()
     {
         var model = new QuestionEditorModel
@@ -88,6 +98,24 @@ public class QuestionEditorUiSmokeTests
     }
 
     [Fact]
+    public void DuplicateOptionCheck_MatchesServerNormalization()
+    {
+        var model = new QuestionEditorModel
+        {
+            Options =
+            [
+                new QuestionOptionEditorModel { Text = "  x   + 1 ", IsCorrect = true },
+                new QuestionOptionEditorModel { Text = "x + 1", IsCorrect = false }
+            ]
+        };
+
+        var editor = CreateEditorComponent(model);
+
+        Assert.True((bool)Invoke(editor, "IsDuplicateOption", 0)!);
+        Assert.True((bool)Invoke(editor, "IsDuplicateOption", 1)!);
+    }
+
+    [Fact]
     public void PreviewPanel_SourceContainsStudentPreviewForAuthoringFields()
     {
         var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Components", "QuestionEditor.razor");
@@ -97,7 +125,9 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("Osnovno pitanje", content, StringComparison.Ordinal);
         Assert.Contains("Odgovori i tacan odgovor", content, StringComparison.Ordinal);
         Assert.Contains("Koraci resavanja", content, StringComparison.Ordinal);
-        Assert.Contains("Live preview", content, StringComparison.Ordinal);
+        Assert.Contains("Quiz preview", content, StringComparison.Ordinal);
+        Assert.Contains("editor-stepper", content, StringComparison.Ordinal);
+        Assert.Contains("wizard-step-locked", content, StringComparison.Ordinal);
         Assert.Contains("editor-save-bar", content, StringComparison.Ordinal);
         Assert.Contains("Preview", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@Model.Text\"", content, StringComparison.Ordinal);
@@ -162,11 +192,11 @@ public class QuestionEditorUiSmokeTests
         return editor!;
     }
 
-    private static void Invoke(object instance, string methodName, params object[] args)
+    private static object? Invoke(object instance, string methodName, params object[] args)
     {
         var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        method!.Invoke(instance, args);
+        return method!.Invoke(instance, args);
     }
 
     private static string FindRepositoryRoot()

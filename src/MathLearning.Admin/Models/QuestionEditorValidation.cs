@@ -8,6 +8,8 @@ public static class QuestionEditorFieldLimits
     public const int CorrectAnswerMaxLength = 2000;
     public const int OptionTextMaxLength = 1000;
     public const int StepTextMaxLength = 2000;
+    public const int StepHintMaxLength = 1000;
+    public const int HintTextMaxLength = 2000;
 }
 
 public static class QuestionEditorValidation
@@ -36,6 +38,19 @@ public static class QuestionEditorValidation
         if ((model.Explanation?.Length ?? 0) > QuestionEditorFieldLimits.ExplanationMaxLength)
         {
             errors.Add($"Objasnjenje ne moze imati vise od {QuestionEditorFieldLimits.ExplanationMaxLength} karaktera.");
+        }
+
+        ValidateMathContent("Tekst pitanja", model.Text, errors);
+        ValidateMathContent("Objasnjenje", model.Explanation, errors);
+        ValidateMathContent("Lagani hint", model.HintFormula, errors);
+        ValidateMathContent("Naputak", model.HintClue, errors);
+        ValidateMathContent("Potpuno resenje", model.HintFull, errors);
+
+        if ((model.HintFormula?.Length ?? 0) > QuestionEditorFieldLimits.HintTextMaxLength ||
+            (model.HintClue?.Length ?? 0) > QuestionEditorFieldLimits.HintTextMaxLength ||
+            (model.HintFull?.Length ?? 0) > QuestionEditorFieldLimits.HintTextMaxLength)
+        {
+            errors.Add($"Hint ne moze imati vise od {QuestionEditorFieldLimits.HintTextMaxLength} karaktera.");
         }
 
         if (model.CategoryId <= 0)
@@ -134,6 +149,11 @@ public static class QuestionEditorValidation
         {
             errors.Add($"Tekst opcije ne moze imati vise od {QuestionEditorFieldLimits.OptionTextMaxLength} karaktera.");
         }
+
+        for (var i = 0; i < model.Options.Count; i++)
+        {
+            ValidateMathContent($"Opcija {i + 1}", model.Options[i].Text, errors);
+        }
     }
 
     private static void ValidateSteps(QuestionEditorModel model, List<string> errors)
@@ -150,6 +170,14 @@ public static class QuestionEditorValidation
             {
                 errors.Add($"Tekst koraka {i + 1} ne moze imati vise od {QuestionEditorFieldLimits.StepTextMaxLength} karaktera.");
             }
+
+            if ((step.Hint?.Length ?? 0) > QuestionEditorFieldLimits.StepHintMaxLength)
+            {
+                errors.Add($"Napomena u koraku {i + 1} ne moze imati vise od {QuestionEditorFieldLimits.StepHintMaxLength} karaktera.");
+            }
+
+            ValidateMathContent($"Korak {i + 1}", step.Text, errors);
+            ValidateMathContent($"Napomena u koraku {i + 1}", step.Hint, errors);
         }
 
         if (model.Steps.Count == 0)
@@ -172,9 +200,23 @@ public static class QuestionEditorValidation
         }
     }
 
-    private static string NormalizeOptionText(string value)
+    public static string NormalizeOptionText(string value)
         => string.Join(
             ' ',
             value.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
             .ToLowerInvariant();
+
+    private static void ValidateMathContent(string fieldName, string? value, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(value, @"\$\s*\$") ||
+            System.Text.RegularExpressions.Regex.IsMatch(value, @"\$\$\s*\$\$"))
+        {
+            errors.Add($"{fieldName}: prazna LaTeX formula ce se prikazati kao blank.");
+        }
+    }
 }

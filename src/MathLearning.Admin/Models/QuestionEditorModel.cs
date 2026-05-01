@@ -25,7 +25,7 @@ public sealed class QuestionEditorModel
     public List<QuestionStepEditorModel> Steps { get; set; } = [];
 
     public static List<QuestionOptionEditorModel> CreateDefaultOptions()
-        => [new(), new(), new(), new()];
+        => [new() { IsCorrect = true }, new()];
 }
 
 public sealed class QuestionOptionEditorModel
