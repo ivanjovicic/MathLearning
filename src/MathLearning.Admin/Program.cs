@@ -222,23 +222,32 @@ else
 app.MapGet("/health", () => Results.Ok("Healthy"));
 app.MapGet("/healthz", () => Results.Ok("Healthy"));
 app.MapGet("/favicon.ico", () => Results.NoContent());
+app.MapGet("/login", RenderLoginPage).AllowAnonymous();
+app.MapGet("/login-page", RenderLoginPage).AllowAnonymous();
 
-app.MapPost("/api/account/login", async (HttpContext httpContext, SignInManager<IdentityUser> signInManager) =>
+app.MapPost("/api/account/login", async (
+    HttpContext httpContext,
+    SignInManager<IdentityUser> signInManager,
+    ILoggerFactory loggerFactory) =>
 {
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    var logger = loggerFactory.CreateLogger("MathLearning.Admin.Login");
     var form = await httpContext.Request.ReadFormAsync();
-    var username = form["username"].ToString();
+    var username = form["username"].ToString().Trim();
     var password = form["password"].ToString();
     var returnUrl = form["returnUrl"].ToString();
 
-    if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//"))
-        returnUrl = "/";
+    returnUrl = ReturnUrlSanitizer.NormalizeLocalReturnUrl(returnUrl);
 
     var result = await signInManager.PasswordSignInAsync(username, password, isPersistent: true, lockoutOnFailure: false);
+    stopwatch.Stop();
     if (result.Succeeded)
     {
+        logger.LogInformation("Admin login succeeded for {Username} in {ElapsedMs} ms", username, stopwatch.ElapsedMilliseconds);
         return Results.Redirect(returnUrl);
     }
 
+    logger.LogWarning("Admin login failed for {Username} in {ElapsedMs} ms", username, stopwatch.ElapsedMilliseconds);
     return Results.Redirect($"/login?error=1&returnUrl={Uri.EscapeDataString(returnUrl)}");
 }).DisableAntiforgery();
 
@@ -365,3 +374,186 @@ static async Task EnsurePasswordAsync(UserManager<IdentityUser> userManager, Ide
             "Failed to reset admin password: " + string.Join(", ", resetResult.Errors.Select(e => e.Description)));
     }
 }
+
+static IResult RenderLoginPage(HttpContext httpContext)
+{
+    var returnUrl = ReturnUrlSanitizer.NormalizeLocalReturnUrl(httpContext.Request.Query["returnUrl"].ToString());
+    if (httpContext.User.Identity?.IsAuthenticated == true)
+    {
+        if (returnUrl.Equals("/login", StringComparison.OrdinalIgnoreCase)
+            || returnUrl.StartsWith("/login?", StringComparison.OrdinalIgnoreCase)
+            || returnUrl.Equals("/login-page", StringComparison.OrdinalIgnoreCase)
+            || returnUrl.StartsWith("/login-page?", StringComparison.OrdinalIgnoreCase))
+        {
+            returnUrl = "/";
+        }
+
+        return Results.Redirect(returnUrl);
+    }
+
+    httpContext.Response.Headers.CacheControl = "no-store";
+    httpContext.Response.Headers.Pragma = "no-cache";
+
+    var hasError = !string.IsNullOrWhiteSpace(httpContext.Request.Query["error"].ToString());
+    var encodedReturnUrl = HtmlEncode(returnUrl);
+    var errorMarkup = hasError
+        ? """<div class="alert" role="alert">Neispravno korisnicko ime ili lozinka.</div>"""
+        : string.Empty;
+
+    var html = $$"""
+<!doctype html>
+<html lang="sr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - MathLearning Admin</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --primary: #594ae2;
+            --primary-dark: #4035a8;
+            --text: rgba(0, 0, 0, 0.87);
+            --muted: rgba(0, 0, 0, 0.62);
+            --border: rgba(0, 0, 0, 0.20);
+            --danger: #c62828;
+        }
+        * { box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text);
+            font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        main {
+            width: min(100%, 420px);
+            padding: 32px;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+        }
+        h1 {
+            margin: 0 0 20px;
+            font-size: 2rem;
+            font-weight: 500;
+        }
+        form {
+            display: grid;
+            gap: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.78);
+        }
+        input {
+            width: 100%;
+            min-height: 52px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: #fff;
+            color: var(--text);
+            font: inherit;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+        .password-field {
+            position: relative;
+        }
+        .password-field input {
+            padding-right: 52px;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            width: 36px;
+            height: 36px;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 0.78rem;
+        }
+        .toggle-password:hover,
+        .toggle-password:focus-visible {
+            background: rgba(0, 0, 0, 0.06);
+            color: var(--text);
+            outline: none;
+        }
+        .submit {
+            width: 100%;
+            min-height: 48px;
+            border: 0;
+            border-radius: 4px;
+            background: var(--primary);
+            color: #fff;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .submit:hover,
+        .submit:focus-visible {
+            background: var(--primary-dark);
+            outline: none;
+        }
+        .alert {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 4px;
+            background: #ffebee;
+            color: var(--danger);
+        }
+        .caption {
+            margin: 18px 0 0;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Prijava</h1>
+        {{errorMarkup}}
+        <form method="post" action="/api/account/login" autocomplete="on">
+            <input type="hidden" name="returnUrl" value="{{encodedReturnUrl}}">
+            <div>
+                <label for="username">Korisnicko ime</label>
+                <input id="username" name="username" type="text" autocomplete="username" spellcheck="false" required autofocus>
+            </div>
+            <div class="password-field">
+                <label for="password">Lozinka</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+                <button id="toggle-password" class="toggle-password" type="button" aria-label="Prikazi lozinku">Prikazi</button>
+            </div>
+            <button class="submit" type="submit">Prijavi se</button>
+        </form>
+        <p class="caption">Koristite administratorske kredencijale iz konfiguracije okruzenja.</p>
+    </main>
+    <script>
+        document.getElementById('toggle-password')?.addEventListener('click', function () {
+            const input = document.getElementById('password');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            this.textContent = show ? 'Sakrij' : 'Prikazi';
+            this.setAttribute('aria-label', show ? 'Sakrij lozinku' : 'Prikazi lozinku');
+        });
+    </script>
+</body>
+</html>
+""";
+
+    return Results.Content(html, "text/html; charset=utf-8");
+}
+
+static string HtmlEncode(string? value) => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);

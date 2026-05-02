@@ -55,6 +55,22 @@ public class AdminUiHardeningTests
     }
 
     [Fact]
+    public void Program_UsesLightweightStaticLoginRoutes()
+    {
+        var root = FindRepositoryRoot();
+        var programPath = Path.Combine(root, "src", "MathLearning.Admin", "Program.cs");
+        var program = File.ReadAllText(programPath);
+
+        Assert.Contains("app.MapGet(\"/login\", RenderLoginPage)", program, StringComparison.Ordinal);
+        Assert.Contains("app.MapGet(\"/login-page\", RenderLoginPage)", program, StringComparison.Ordinal);
+        Assert.Contains("action=\"/api/account/login\"", program, StringComparison.Ordinal);
+        Assert.Contains("CacheControl = \"no-store\"", program, StringComparison.Ordinal);
+
+        var loginComponentPath = Path.Combine(root, "src", "MathLearning.Admin", "Pages", "Account", "Login.razor");
+        Assert.False(File.Exists(loginComponentPath), "Login must stay a lightweight endpoint, not an InteractiveServer Blazor component.");
+    }
+
+    [Fact]
     public void QuestionEditorValidation_RequiresSingleCorrectOptionForMultipleChoice()
     {
         var model = new QuestionEditorModel

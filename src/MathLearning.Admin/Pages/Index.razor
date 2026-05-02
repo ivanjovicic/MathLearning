@@ -256,23 +256,34 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             _isLoading = true;
-            await using var db = await DbFactory.CreateDbContextAsync();
-            
-            // Load metrics
-            _categoryCount = await db.Categories.AsNoTracking().CountAsync();
-            _questionCount = await db.Questions.AsNoTracking().CountAsync();
-            _openBugCount = await TryCountAsync(
-                () => db.BugReports.AsNoTracking().CountAsync(b => b.Status == "open"),
+
+            var categoryCountTask = TryCountAsync(
+                db => db.Categories.AsNoTracking().CountAsync(),
+                "categories");
+            var questionCountTask = TryCountAsync(
+                db => db.Questions.AsNoTracking().CountAsync(),
+                "questions");
+            var openBugCountTask = TryCountAsync(
+                db => db.BugReports.AsNoTracking().CountAsync(b => b.Status == "open"),
                 "open bugs");
-            _draftCount = await TryCountAsync(
-                () => db.QuestionDrafts.AsNoTracking().CountAsync(),
+            var draftCountTask = TryCountAsync(
+                db => db.QuestionDrafts.AsNoTracking().CountAsync(),
                 "question drafts");
 
+            await Task.WhenAll(categoryCountTask, questionCountTask, openBugCountTask, draftCountTask);
+
+            _categoryCount = categoryCountTask.Result;
+            _questionCount = questionCountTask.Result;
+            _openBugCount = openBugCountTask.Result;
+            _draftCount = draftCountTask.Result;
+
             Logger.LogInformation(
-                "Dashboard metrics loaded: {Categories} categories, {Questions} questions, {OpenBugs} open bugs, {Drafts} drafts",
+                "Dashboard metrics loaded in {ElapsedMs} ms: {Categories} categories, {Questions} questions, {OpenBugs} open bugs, {Drafts} drafts",
+                stopwatch.ElapsedMilliseconds,
                 _categoryCount,
                 _questionCount,
                 _openBugCount,
@@ -284,15 +295,17 @@
         }
         finally
         {
+            stopwatch.Stop();
             _isLoading = false;
         }
     }
 
-    private async Task<int> TryCountAsync(Func<Task<int>> countOperation, string metricName)
+    private async Task<int> TryCountAsync(Func<AdminDbContext, Task<int>> countOperation, string metricName)
     {
         try
         {
-            return await countOperation();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            return await countOperation(db);
         }
         catch (Exception ex)
         {

@@ -20,8 +20,8 @@ Create a new **Web Service** from the same Git repository with these settings:
 After deploy, the admin UI will be available at:
 
 - `/` for the dashboard
-- `/login-page` for the standard login page
-- `/login` for the Blazor login route
+- `/login` for the lightweight login page
+- `/login-page` as an alias for the same lightweight login page
 
 ## Required environment variables
 
@@ -75,4 +75,4 @@ Default username if not overridden:
 
 - `admin`
 
-Open the deployed admin service root URL or `/login-page` and sign in with the configured credentials.
+Open the deployed admin service root URL or `/login` and sign in with the configured credentials.
