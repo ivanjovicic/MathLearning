@@ -27,10 +27,21 @@ var adminConnectionString = builder.Configuration.GetConnectionString("AdminIden
     ?? throw new InvalidOperationException(
         "Missing ConnectionStrings:AdminIdentity. Configure ConnectionStrings__AdminIdentity before starting MathLearning.Admin.");
 
-builder.Services.AddDataProtection()
-    .PersistKeysToDbContext<AdminDbContext>()
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+var dataProtectionBuilder = builder.Services.AddDataProtection()
     .SetApplicationName("MathLearningAdmin")
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    var dataProtectionKeysDirectory = new DirectoryInfo(dataProtectionKeysPath);
+    dataProtectionKeysDirectory.Create();
+    dataProtectionBuilder.PersistKeysToFileSystem(dataProtectionKeysDirectory);
+}
+else
+{
+    dataProtectionBuilder.PersistKeysToDbContext<AdminDbContext>();
+}
 
 void ConfigureAdminDbContext(DbContextOptionsBuilder options)
 {
@@ -122,6 +133,15 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    app.Logger.LogInformation("Data Protection keys are persisted to file system path {Path}", dataProtectionKeysPath);
+}
+else
+{
+    app.Logger.LogInformation("Data Protection keys are persisted to AdminDbContext table DataProtectionKeys");
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

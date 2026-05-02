@@ -44,6 +44,17 @@ public class AdminUiHardeningTests
     }
 
     [Fact]
+    public void Program_UsesConfiguredDataProtectionKeysPathBeforeDatabaseFallback()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Program.cs");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("DataProtection:KeysPath", content, StringComparison.Ordinal);
+        Assert.Contains("PersistKeysToFileSystem", content, StringComparison.Ordinal);
+        Assert.Contains("PersistKeysToDbContext<AdminDbContext>", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuestionEditorValidation_RequiresSingleCorrectOptionForMultipleChoice()
     {
         var model = new QuestionEditorModel

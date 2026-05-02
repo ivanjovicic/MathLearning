@@ -48,6 +48,14 @@ Attach a persistent disk to the admin service and mount it at:
 
 This keeps ASP.NET Data Protection keys stable across deploys and restarts, so existing auth cookies do not break every time the service restarts.
 
+`MathLearning.Admin` uses `DataProtection__KeysPath` when it is configured. If you omit it, the app falls back to the admin database key table (`DataProtectionKeys`) and migrations must be applied before the first request.
+
+If Render logs show `relation "DataProtectionKeys" does not exist`, check that:
+
+- `DataProtection__KeysPath=/var/data/keys` is set on the admin service
+- the persistent disk is mounted at `/var/data`
+- the service was redeployed after changing environment variables
+
 ## Database recommendation
 
 Use a dedicated Postgres database for admin identity, for example `mathlearning_admin`.
