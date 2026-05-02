@@ -5,6 +5,7 @@
 !Dockerfile
 !Dockerfile.admin
 !Directory.Build.props
+!src/
 !src/**
 
 # Never send build outputs
