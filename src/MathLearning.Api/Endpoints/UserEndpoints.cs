@@ -85,7 +85,7 @@ public static class UserEndpoints
             });
         });
         legacyGroup.MapGet("/daily-hints", GetDailyHints);
-legacyGroup.MapGet("/hints/daily", GetDailyHints);
+        legacyGroup.MapGet("/hints/daily", GetDailyHints);
 
         group.MapGet("/profile", async (
             ApiDbContext db,
@@ -454,9 +454,12 @@ legacyGroup.MapGet("/hints/daily", GetDailyHints);
         });
     }
 
-static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ctx)
+private static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ctx)
 {
-    string userId = ctx.User.FindFirst("userId")!.Value;
+    var userId = ctx.User.FindFirst("userId")?.Value;
+    if (string.IsNullOrWhiteSpace(userId))
+        return Results.Unauthorized();
+
     var today = DateTime.UtcNow.Date;
     var tomorrow = today.AddDays(1);
 
@@ -466,13 +469,12 @@ static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ctx)
         .CountAsync();
 
     const int dailyLimit = 10;
-    var remaining = Math.Max(0, dailyLimit - usedToday);
 
     return Results.Ok(new
     {
         usedToday,
         dailyLimit,
-        remaining
+        remaining = Math.Max(0, dailyLimit - usedToday)
     });
 }
 
