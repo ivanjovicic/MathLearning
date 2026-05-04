@@ -71,6 +71,7 @@ public static class UserEndpoints
                     xp = 0,
                     streak = 0
                 });
+
             }
 
             return Results.Ok(new
@@ -83,30 +84,8 @@ public static class UserEndpoints
                 streak = profile.Streak
             });
         });
-
-        legacyGroup.MapGet("/daily-hints", async (
-            ApiDbContext db,
-            HttpContext ctx) =>
-        {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-            var today = DateTime.UtcNow.Date;
-            var tomorrow = today.AddDays(1);
-
-            var usedToday = await db.UserHints
-                .AsNoTracking()
-                .Where(h => h.UserId == userId && h.UsedAt >= today && h.UsedAt < tomorrow)
-                .CountAsync();
-
-            const int dailyLimit = 10;
-            var remaining = Math.Max(0, dailyLimit - usedToday);
-
-            return Results.Ok(new
-            {
-                usedToday,
-                dailyLimit,
-                remaining
-            });
-        });
+        legacyGroup.MapGet("/daily-hints", GetDailyHints);
+legacyGroup.MapGet("/hints/daily", GetDailyHints);
 
         group.MapGet("/profile", async (
             ApiDbContext db,
@@ -474,6 +453,28 @@ public static class UserEndpoints
             return Results.File(File.OpenRead(filePath), contentType);
         });
     }
+
+static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ctx)
+{
+    string userId = ctx.User.FindFirst("userId")!.Value;
+    var today = DateTime.UtcNow.Date;
+    var tomorrow = today.AddDays(1);
+
+    var usedToday = await db.UserHints
+        .AsNoTracking()
+        .Where(h => h.UserId == userId && h.UsedAt >= today && h.UsedAt < tomorrow)
+        .CountAsync();
+
+    const int dailyLimit = 10;
+    var remaining = Math.Max(0, dailyLimit - usedToday);
+
+    return Results.Ok(new
+    {
+        usedToday,
+        dailyLimit,
+        remaining
+    });
+}
 
     private static async Task<Dictionary<string, AvatarAppearanceDto>> LoadAppearanceMapAsync(ApiDbContext db, IEnumerable<string> userIds)
     {

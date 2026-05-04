@@ -17,31 +17,44 @@ ALTER TABLE "Questions"
 ADD COLUMN IF NOT EXISTS "CorrectOptionId" integer NULL;
 """);
 
-                migrationBuilder.Sql("""
+    migrationBuilder.Sql("""
 UPDATE "Questions" q
 SET "CorrectOptionId" = (
-        SELECT o."Id"
-        FROM "Options" o
-        WHERE o."QuestionId" = q."Id"
-            AND q."CorrectAnswer" IS NOT NULL
-            AND o."Text" = q."CorrectAnswer"
-        ORDER BY o."Id"
-        LIMIT 1
+    SELECT o."Id"
+    FROM "Options" o
+    WHERE o."QuestionId" = q."Id"
+      AND q."CorrectAnswer" IS NOT NULL
+      AND o."Text" = q."CorrectAnswer"
+    ORDER BY o."Id"
+    LIMIT 1
 )
-WHERE q."CorrectOptionId" IS NULL;
+WHERE q."CorrectOptionId" IS NULL
+  AND q."CorrectAnswer" IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM "Options" o
+      WHERE o."QuestionId" = q."Id"
+        AND o."Text" = q."CorrectAnswer"
+  );
 """);
 
-                migrationBuilder.Sql("""
+        migrationBuilder.Sql("""
 UPDATE "Questions" q
 SET "CorrectOptionId" = (
-        SELECT o."Id"
-        FROM "Options" o
-        WHERE o."QuestionId" = q."Id"
-            AND o."IsCorrect" = TRUE
-        ORDER BY o."Id"
-        LIMIT 1
+    SELECT o."Id"
+    FROM "Options" o
+    WHERE o."QuestionId" = q."Id"
+      AND o."IsCorrect" = TRUE
+    ORDER BY o."Id"
+    LIMIT 1
 )
-WHERE q."CorrectOptionId" IS NULL;
+WHERE q."CorrectOptionId" IS NULL
+  AND EXISTS (
+      SELECT 1
+      FROM "Options" o
+      WHERE o."QuestionId" = q."Id"
+        AND o."IsCorrect" = TRUE
+  );
 """);
 
         migrationBuilder.Sql("""

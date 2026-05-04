@@ -1556,6 +1556,9 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<string>("CorrectAnswer")
                         .HasColumnType("text");
 
+                    b.Property<int?>("CorrectOptionId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1605,6 +1608,9 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<string>("PreviousSnapshotJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("PublishState")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1649,9 +1655,21 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("CorrectOptionId");
 
                     b.HasIndex("CurrentDraftId")
                         .HasDatabaseName("IX_Questions_CurrentDraftId");
@@ -3146,8 +3164,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.HasIndex("UserId", "QuestionId", "IsFirstTimeCorrect")
                         .IsUnique()
-                        .HasFilter("\"IsFirstTimeCorrect\" = true")
-                        .HasDatabaseName("UX_UserAnswerAudits_FirstCorrect_PerQuestion");
+                        .HasDatabaseName("UX_UserAnswerAudits_FirstCorrect_PerQuestion")
+                        .HasFilter("\"IsFirstTimeCorrect\" = true");
 
                     b.ToTable("UserAnswerAudits");
                 });
@@ -4525,6 +4543,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("MathLearning.Domain.Entities.QuestionOption", null)
+                        .WithMany()
+                        .HasForeignKey("CorrectOptionId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("MathLearning.Domain.Entities.Subtopic", "Subtopic")
                         .WithMany()

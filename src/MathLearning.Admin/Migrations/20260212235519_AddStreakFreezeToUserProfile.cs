@@ -1,5 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -11,40 +10,26 @@ namespace MathLearning.Admin.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "StreakFreezeCount",
-                table: "UserProfiles",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+            migrationBuilder.Sql("""
+DO $$
+BEGIN
+    IF to_regclass('public."UserProfiles"') IS NULL THEN
+        RETURN;
+    END IF;
 
-            migrationBuilder.AddColumn<DateOnly>(
-                name: "LastActivityDay",
-                table: "UserProfiles",
-                type: "date",
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateOnly>(
-                name: "LastStreakDay",
-                table: "UserProfiles",
-                type: "date",
-                nullable: true);
+    ALTER TABLE "UserProfiles"
+        ADD COLUMN IF NOT EXISTS "StreakFreezeCount" integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS "LastActivityDay" date NULL,
+        ADD COLUMN IF NOT EXISTS "LastStreakDay" date NULL;
+END
+$$;
+""");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "StreakFreezeCount",
-                table: "UserProfiles");
-
-            migrationBuilder.DropColumn(
-                name: "LastActivityDay",
-                table: "UserProfiles");
-
-            migrationBuilder.DropColumn(
-                name: "LastStreakDay",
-                table: "UserProfiles");
+            // Non-destructive: UserProfiles is owned by the API migration stream.
         }
     }
 }
