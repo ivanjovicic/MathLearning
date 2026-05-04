@@ -1,0 +1,486 @@
+openapi: 3.0.3
+info:
+  title: MathLearning API (partial)
+  version: "1.0.0"
+  description: >-
+    Partial OpenAPI 3.0 spec generated from the project's endpoint mappings
+    (extracted 2026-05-04). This is not exhaustive — verify types and add
+    missing paths/schemas as needed.
+servers:
+  - url: http://localhost:5180
+    description: Development server (local)
+
+# Require Bearer JWT by default; anonymous endpoints override with security: []
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required: [username, password]
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+        userId:
+          type: string
+        username:
+          type: string
+
+    MobileRegisterRequest:
+      type: object
+      properties:
+        username: { type: string }
+        email: { type: string, format: email }
+        password: { type: string }
+        displayName: { type: string }
+      required: [username, email, password]
+
+    TokenRequest:
+      type: object
+      properties:
+        refreshToken: { type: string }
+      required: [refreshToken]
+
+    RevokeTokenRequest:
+      type: object
+      properties:
+        refreshToken: { type: string }
+      required: [refreshToken]
+
+    UserProfileDto:
+      type: object
+      properties:
+        userId: { type: string }
+        username: { type: string }
+        displayName: { type: string, nullable: true }
+        coins: { type: integer }
+        level: { type: integer }
+        xp: { type: integer }
+        streak: { type: integer }
+        avatarUrl: { type: string, nullable: true }
+        appearance:
+          type: object
+          properties:
+            skinId: { type: integer, nullable: true }
+            hairId: { type: integer, nullable: true }
+            clothingId: { type: integer, nullable: true }
+
+    UserSettingsDto:
+      type: object
+      properties:
+        userId: { type: string }
+        language: { type: string }
+        theme: { type: string }
+        hintsEnabled: { type: boolean }
+        soundEnabled: { type: boolean }
+        vibrationEnabled: { type: boolean }
+        dailyNotificationEnabled: { type: boolean }
+        dailyNotificationTime: { type: string }
+
+    OptionDto:
+      type: object
+      properties:
+        id: { type: integer }
+        text: { type: string }
+        textFormat: { type: string, nullable: true }
+        renderMode: { type: string, nullable: true }
+        semanticsAltText: { type: string, nullable: true }
+
+    QuestionDto:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        text: { type: string }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/OptionDto'
+        correctAnswerId: { type: integer }
+        difficulty: { type: integer }
+        hintLight: { type: string, nullable: true }
+        hintMedium: { type: string, nullable: true }
+        hintFull: { type: string, nullable: true }
+        explanation: { type: string, nullable: true }
+
+    StartQuizRequest:
+      type: object
+      properties:
+        subtopicId: { type: integer }
+        questionCount: { type: integer }
+      required: [subtopicId, questionCount]
+
+    QuizResponse:
+      type: object
+      properties:
+        quizId: { type: string, format: uuid }
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionDto'
+
+    SubmitAnswerRequest:
+      type: object
+      properties:
+        questionId: { type: integer }
+        answer:
+          oneOf:
+            - type: string
+            - type: integer
+        timeSpentSeconds: { type: integer }
+        hintUsed: { type: boolean }
+        quizId: { type: string, format: uuid, nullable: true }
+        sessionId: { type: string, nullable: true }
+        clientId: { type: string, nullable: true }
+      required: [questionId, answer]
+
+    SubmitAnswerResponse:
+      type: object
+      properties:
+        isCorrect: { type: boolean }
+        explanation: { type: string, nullable: true }
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              text: { type: string }
+              hint: { type: string, nullable: true }
+        isFirstTimeCorrect: { type: boolean }
+        awardedXp: { type: integer }
+        totalXpAfterAward: { type: integer }
+
+    SyncRequestDto:
+      type: object
+      additionalProperties: true
+
+    RegisterSyncDeviceRequest:
+      type: object
+      properties:
+        deviceId: { type: string }
+        deviceName: { type: string }
+        platform: { type: string }
+      required: [deviceId]
+
+    HealthReadyResponse:
+      type: object
+      properties:
+        status: { type: string }
+        db: { type: string }
+        data:
+          type: object
+          properties:
+            questions: { type: integer }
+            categories: { type: integer }
+            users: { type: integer }
+        schema: { type: object }
+        timestamp: { type: string, format: date-time }
+
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login (username/password)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: TokenResponse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Unauthorized
+
+  /auth/mobile/register:
+    post:
+      tags: [Authentication]
+      summary: Mobile registration
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRegisterRequest'
+      responses:
+        '200':
+          description: MobileRegisterResponse (Token + Profile)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: TokenResponse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke a refresh token (logout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeTokenRequest'
+      responses:
+        '200':
+          description: Logged out
+
+  /api/health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness including schema and counts
+      security: []
+      responses:
+        '200':
+          description: Ready summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReadyResponse'
+
+  /api/users/profile:
+    get:
+      tags: [Users]
+      summary: Get current user's profile
+      responses:
+        '200':
+          description: UserProfileDto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileDto'
+    put:
+      tags: [Users]
+      summary: Update current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+      responses:
+        '200':
+          description: Updated UserProfileDto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileDto'
+
+  /api/users/stats:
+    get:
+      tags: [Users]
+      summary: Get user's profile + stats
+      responses:
+        '200':
+          description: profile + stats
+
+  /api/questions:
+    get:
+      tags: [Questions]
+      summary: List questions
+      parameters:
+        - name: lang
+          in: query
+          schema: { type: string }
+        - name: subtopicId
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Array of QuestionDto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QuestionDto'
+
+  /api/questions/{id}:
+    get:
+      tags: [Questions]
+      summary: Get single question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: QuestionDto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionDto'
+        '404':
+          description: Not found
+
+  /api/quiz/start:
+    post:
+      tags: [Quiz]
+      summary: Start a quiz session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartQuizRequest'
+      responses:
+        '200':
+          description: QuizResponse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizResponse'
+
+  /api/quiz/answer:
+    post:
+      tags: [Quiz]
+      summary: Submit an answer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitAnswerRequest'
+      responses:
+        '200':
+          description: SubmitAnswerResponse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitAnswerResponse'
+
+  /api/sync:
+    post:
+      tags: [Sync]
+      summary: Sync client payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequestDto'
+      responses:
+        '200':
+          description: SyncResponseDto (implementation-defined)
+
+  /api/devices/register:
+    post:
+      tags: [Sync]
+      summary: Register sync device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterSyncDeviceRequest'
+      responses:
+        '200':
+          description: Device registration info
+
+  /api/offline/bundle:
+    get:
+      tags: [Sync]
+      summary: Get offline bundle
+      parameters:
+        - name: subtopicId
+          in: query
+          schema: { type: integer }
+        - name: questionCount
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        '200':
+          description: Offline bundle (implementation-defined)
+
+  /api/hints/questions/{id}/formula:
+    get:
+      tags: [Hints]
+      summary: Get formula hint for question (charges coins)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: { formula, available, cost, remainingCoins }
+
+  /api/coins/balance:
+    get:
+      tags: [Coins]
+      summary: Get coin balance for current user
+      responses:
+        '200':
+          description: coin balance summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coins: { type: integer }
+                  totalEarned: { type: integer }
+                  totalSpent: { type: integer }
+                  level: { type: integer }
+                  xp: { type: integer }
+
+  /metrics:
+    get:
+      tags: [Monitoring]
+      summary: Metrics endpoint
+      security: []
+      responses:
+        '200':
+          description: metrics text/plain or json
+
+
+# End of partial OpenAPI
