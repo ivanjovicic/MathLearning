@@ -195,6 +195,1321 @@ components:
         schema: { type: object }
         timestamp: { type: string, format: date-time }
 
+    ApiResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+        error: { type: string, nullable: true }
+        errorCode: { type: string, nullable: true }
+        errorDetails:
+          type: object
+        isRateLimited: { type: boolean }
+        retryAfterSeconds: { type: integer, nullable: true }
+        traceId: { type: string, nullable: true }
+        timestampUtc: { type: string, format: date-time }
+
+    # Adaptive DTOs
+    AdaptiveSessionItemDto:
+      type: object
+      properties:
+        adaptiveSessionItemId: { type: string, format: uuid }
+        questionId: { type: integer }
+        topicId: { type: integer }
+        subtopicId: { type: integer }
+        sourceType: { type: string }
+        difficultyLevel: { type: string }
+        sequence: { type: integer }
+
+    AdaptiveSessionDto:
+      type: object
+      properties:
+        adaptiveSessionId: { type: string, format: uuid }
+        createdAtUtc: { type: string, format: date-time }
+        expiresAtUtc: { type: string, format: date-time }
+        profileDifficulty: { type: string }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdaptiveSessionItemDto'
+
+    AdaptivePathPayload:
+      type: object
+      properties:
+        recommendations:
+          type: array
+          items: { type: object }
+        dueReviews:
+          type: array
+          items: { type: object }
+        generatedAtUtc: { type: string, format: date-time }
+
+    AdaptivePathResponse:
+      type: object
+      properties:
+        payload:
+          $ref: '#/components/schemas/AdaptivePathPayload'
+        servedFromCache: { type: boolean }
+        isStale: { type: boolean }
+        fallbackReason: { type: string, nullable: true }
+        cachedAtUtc: { type: string, format: date-time, nullable: true }
+
+    AdaptiveRecommendationsPayload:
+      type: object
+      properties:
+        recommendations:
+          type: array
+          items: { type: object }
+        generatedAtUtc: { type: string, format: date-time }
+
+    AdaptiveRecommendationsResponse:
+      type: object
+      properties:
+        payload:
+          $ref: '#/components/schemas/AdaptiveRecommendationsPayload'
+        servedFromCache: { type: boolean }
+        isStale: { type: boolean }
+        fallbackReason: { type: string, nullable: true }
+        cachedAtUtc: { type: string, format: date-time, nullable: true }
+
+    # Analytics DTOs
+    WeakTopicDto:
+      type: object
+      properties:
+        topicId: { type: integer }
+        topicName: { type: string }
+        accuracy: { type: number }
+        weaknessLevel: { type: string }
+        confidence: { type: number }
+        weaknessScore: { type: number }
+        lastAttempt: { type: string, format: date-time }
+        totalQuestions: { type: integer }
+
+    WeakSubtopicDto:
+      type: object
+      properties:
+        subtopicId: { type: integer }
+        subtopicName: { type: string }
+        topicId: { type: integer }
+        topicName: { type: string }
+        accuracy: { type: number }
+        weaknessLevel: { type: string }
+        confidence: { type: number }
+        weaknessScore: { type: number }
+        lastAttempt: { type: string, format: date-time }
+        totalQuestions: { type: integer }
+
+    PracticeRecommendationDto:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        topicId: { type: integer }
+        subtopicId: { type: integer, nullable: true }
+        reason: { type: string }
+        priority: { type: number }
+
+    PracticeRecommendationsResponse:
+      type: object
+      properties:
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PracticeRecommendationDto'
+        page: { type: integer }
+        pageSize: { type: integer }
+        returned: { type: integer }
+
+    # AntiCheat DTOs
+    AntiCheatAnswerObservationInput:
+      type: object
+      properties:
+        userId: { type: string }
+        sourceType: { type: string }
+        questionId: { type: integer }
+        topicId: { type: integer, nullable: true }
+        subtopicId: { type: integer, nullable: true }
+        sessionId: { type: string, format: uuid, nullable: true }
+        deviceId: { type: string, nullable: true }
+        clientSequence: { type: integer, nullable: true }
+        answer: { type: string, nullable: true }
+        isCorrect: { type: boolean }
+        responseTimeMs: { type: integer }
+        confidence: { type: number, nullable: true }
+        answeredAtUtc: { type: string, format: date-time }
+        metadataJson: { type: string, nullable: true }
+
+    AntiCheatMlPromptDto:
+      type: object
+      properties:
+        promptVersion: { type: string }
+        systemPrompt: { type: string }
+        userPrompt: { type: string }
+        payloadJson: { type: string }
+
+    AntiCheatDetectionResultDto:
+      type: object
+      properties:
+        isSuspicious: { type: boolean }
+        riskScore: { type: integer }
+        severity: { type: string }
+        decision: { type: string }
+        reasonSummary: { type: string }
+        signals:
+          type: array
+          items: { type: string }
+        prompt:
+          $ref: '#/components/schemas/AntiCheatMlPromptDto'
+
+    AntiCheatOverviewDto:
+      type: object
+      properties:
+        pendingCount: { type: integer }
+        highSeverityCount: { type: integer }
+        criticalSeverityCount: { type: integer }
+        confirmedCount: { type: integer }
+        falsePositiveCount: { type: integer }
+        last24HoursCount: { type: integer }
+        mlQueuedCount: { type: integer }
+        mlFailedCount: { type: integer }
+        mlCompletedCount: { type: integer }
+
+    AntiCheatDetectionItemDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string }
+        sourceType: { type: string }
+        questionId: { type: integer }
+        topicId: { type: integer, nullable: true }
+        subtopicId: { type: integer, nullable: true }
+        sessionId: { type: string, format: uuid, nullable: true }
+        deviceId: { type: string, nullable: true }
+        clientSequence: { type: integer, nullable: true }
+        answeredAtUtc: { type: string, format: date-time }
+        responseTimeMs: { type: integer }
+        isCorrect: { type: boolean }
+        confidence: { type: number, nullable: true }
+        riskScore: { type: integer }
+        severity: { type: string }
+        decision: { type: string }
+        reasonSummary: { type: string }
+        reviewStatus: { type: string }
+        detectedAtUtc: { type: string, format: date-time }
+        reviewedAtUtc: { type: string, format: date-time, nullable: true }
+        signalsJson: { type: string }
+        promptVersion: { type: string }
+        mlReviewStatus: { type: string }
+        mlReviewAttempts: { type: integer }
+        mlModelName: { type: string, nullable: true }
+        mlReviewedAtUtc: { type: string, format: date-time, nullable: true }
+        mlLastError: { type: string, nullable: true }
+        mlReviewOutputJson: { type: string, nullable: true }
+
+    ReviewAntiCheatDetectionRequest:
+      type: object
+      properties:
+        reviewStatus: { type: string }
+        notes: { type: string, nullable: true }
+      required: [reviewStatus]
+
+    # Bugs
+    BugReportRequest:
+      type: object
+      properties:
+        screen: { type: string }
+        description: { type: string }
+        stepsToReproduce: { type: string, nullable: true }
+        severity: { type: string }
+        platform: { type: string }
+        locale: { type: string }
+        appVersion: { type: string }
+        screenshotBase64: { type: string, nullable: true }
+      required: [screen, description, severity, platform, locale, appVersion]
+
+    BugReportDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        userId: { type: string }
+        usernameSnapshot: { type: string }
+        screen: { type: string }
+        description: { type: string }
+        stepsToReproduce: { type: string, nullable: true }
+        severity: { type: string }
+        platform: { type: string }
+        locale: { type: string }
+        appVersion: { type: string }
+        screenshotUrl: { type: string, nullable: true }
+        status: { type: string }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        assignee: { type: string, nullable: true }
+
+    UpdateBugStatusRequest:
+      type: object
+      properties:
+        status: { type: string }
+        assignee: { type: string, nullable: true }
+      required: [status]
+
+    BugReportsResponse:
+      type: object
+      properties:
+        bugs:
+          type: array
+          items:
+            $ref: '#/components/schemas/BugReportDto'
+        totalCount: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    # Cosmetics
+    CosmeticCatalogItemDto:
+      type: object
+      properties:
+        id: { type: integer }
+        key: { type: string }
+        name: { type: string }
+        category: { type: string }
+        rarity: { type: string }
+        assetPath: { type: string }
+        previewAssetPath: { type: string, nullable: true }
+        unlockType: { type: string }
+        unlockCondition: { type: string, nullable: true }
+        unlockConditionJson: { type: string, nullable: true }
+        coinPrice: { type: integer, nullable: true }
+        seasonId: { type: integer, nullable: true }
+        isDefault: { type: boolean }
+        isOwned: { type: boolean }
+        isEquipped: { type: boolean }
+        isActive: { type: boolean }
+        isHidden: { type: boolean }
+        assetVersion: { type: string }
+
+    CosmeticCatalogResponseDto:
+      type: object
+      properties:
+        catalogVersion: { type: string }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CosmeticCatalogItemDto'
+
+    InventoryItemDto:
+      type: object
+      properties:
+        cosmeticItemId: { type: integer }
+        key: { type: string }
+        name: { type: string }
+        category: { type: string }
+        rarity: { type: string }
+        assetPath: { type: string }
+        previewAssetPath: { type: string, nullable: true }
+        source: { type: string }
+        sourceRef: { type: string, nullable: true }
+        grantReason: { type: string, nullable: true }
+        unlockedAt: { type: string, format: date-time }
+        isEquipped: { type: boolean }
+        isRevoked: { type: boolean }
+
+    CosmeticInventoryResponseDto:
+      type: object
+      properties:
+        userId: { type: string }
+        ownedCount: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItemDto'
+        equipped:
+          $ref: '#/components/schemas/AvatarConfigDto'
+
+    AvatarConfigDto:
+      type: object
+      properties:
+        skinId: { type: integer, nullable: true }
+        hairId: { type: integer, nullable: true }
+        clothingId: { type: integer, nullable: true }
+        accessoryId: { type: integer, nullable: true }
+        emojiId: { type: integer, nullable: true }
+        frameId: { type: integer, nullable: true }
+        backgroundId: { type: integer, nullable: true }
+        effectId: { type: integer, nullable: true }
+        leaderboardDecorationId: { type: integer, nullable: true }
+        version: { type: integer }
+
+    AvatarAppearanceDto:
+      type: object
+      properties:
+        equipped:
+          $ref: '#/components/schemas/AvatarConfigDto'
+        skinAsset: { type: string, nullable: true }
+        hairAsset: { type: string, nullable: true }
+        clothingAsset: { type: string, nullable: true }
+        accessoryAsset: { type: string, nullable: true }
+        emojiAsset: { type: string, nullable: true }
+        frameAsset: { type: string, nullable: true }
+        backgroundAsset: { type: string, nullable: true }
+        effectAsset: { type: string, nullable: true }
+        leaderboardDecorationAsset: { type: string, nullable: true }
+
+    UpdateAvatarConfigRequest:
+      type: object
+      properties:
+        skinId: { type: integer, nullable: true }
+        hairId: { type: integer, nullable: true }
+        clothingId: { type: integer, nullable: true }
+        accessoryId: { type: integer, nullable: true }
+        emojiId: { type: integer, nullable: true }
+        frameId: { type: integer, nullable: true }
+        backgroundId: { type: integer, nullable: true }
+        effectId: { type: integer, nullable: true }
+        leaderboardDecorationId: { type: integer, nullable: true }
+
+    EquipCosmeticRequest:
+      type: object
+      properties:
+        slot: { type: string }
+        cosmeticItemId: { type: integer, nullable: true }
+
+    EquipCosmeticBatchChangeDto:
+      type: object
+      properties:
+        slot: { type: string }
+        cosmeticItemId: { type: integer, nullable: true }
+
+    EquipCosmeticBatchRequest:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquipCosmeticBatchChangeDto'
+
+    PurchaseCosmeticRequest:
+      type: object
+      properties:
+        cosmeticItemId: { type: integer }
+      required: [cosmeticItemId]
+
+    PurchaseCosmeticResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        remainingCoins: { type: integer }
+
+    CosmeticSeasonDto:
+      type: object
+      properties:
+        id: { type: integer }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        theme: { type: string, nullable: true }
+        themeAssetPath: { type: string, nullable: true }
+        status: { type: string }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+        isActive: { type: boolean }
+        itemCount: { type: integer }
+
+    RewardTrackTierDto:
+      type: object
+      properties:
+        id: { type: integer }
+        tier: { type: integer }
+        xpRequired: { type: integer }
+        trackType: { type: string }
+        rewardType: { type: string }
+        rewardPayloadJson: { type: string }
+        isUnlocked: { type: boolean }
+        isClaimed: { type: boolean }
+        canClaim: { type: boolean }
+
+    RewardTrackResponseDto:
+      type: object
+      properties:
+        seasonId: { type: integer }
+        trackType: { type: string }
+        currentXp: { type: integer }
+        currentTier: { type: integer }
+        claimableTierCount: { type: integer }
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardTrackTierDto'
+
+    CosmeticUnlockResultDto:
+      type: object
+      properties:
+        cosmeticItemId: { type: integer }
+        key: { type: string }
+        name: { type: string }
+        category: { type: string }
+        rarity: { type: string }
+        sourceType: { type: string }
+        sourceRef: { type: string }
+        unlockedAtUtc: { type: string, format: date-time }
+
+    CosmeticRewardSourceRequest:
+      type: object
+      properties:
+        userId: { type: string }
+        sourceType: { type: string }
+        sourceRef: { type: string }
+        payloadJson: { type: string, nullable: true }
+
+    ClaimRewardTrackTierRequest:
+      type: object
+      properties:
+        seasonId: { type: integer, nullable: true }
+        trackType: { type: string }
+        tier: { type: integer }
+      required: [trackType, tier]
+
+    ClaimRewardTrackTierResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        alreadyClaimed: { type: boolean }
+        seasonId: { type: integer }
+        trackType: { type: string }
+        tier: { type: integer }
+        rewards:
+          type: array
+          items:
+            $ref: '#/components/schemas/CosmeticUnlockResultDto'
+
+    CosmeticAnalyticsSummaryDto:
+      type: object
+      properties:
+        totalOwnedItems: { type: integer }
+        activeCustomizedUsers: { type: integer }
+        unlockEvents7d: { type: integer }
+        equipEvents7d: { type: integer }
+        purchaseEvents7d: { type: integer }
+        unlocksBySource:
+          type: object
+          additionalProperties: { type: integer }
+        equipByCategory:
+          type: object
+          additionalProperties: { type: integer }
+
+    # Explanations
+    GenerateExplanationRequest:
+      type: object
+      properties:
+        problemId: { type: integer, nullable: true }
+        problemText: { type: string, nullable: true }
+        studentAnswer: { type: string, nullable: true }
+        expectedAnswer: { type: string, nullable: true }
+        topic: { type: string, nullable: true }
+        subtopic: { type: string, nullable: true }
+        grade: { type: integer }
+        difficulty: { type: string }
+        language: { type: string }
+        enableAiTutorEnhancement: { type: boolean }
+        forceRefresh: { type: boolean }
+
+    MistakeAnalysisRequest:
+      type: object
+      properties:
+        problemId: { type: integer, nullable: true }
+        problemText: { type: string, nullable: true }
+        studentAnswer: { type: string }
+        expectedAnswer: { type: string, nullable: true }
+        topic: { type: string, nullable: true }
+        subtopic: { type: string, nullable: true }
+        grade: { type: integer }
+        difficulty: { type: string }
+        language: { type: string }
+        forceRefresh: { type: boolean }
+      required: [studentAnswer, grade, difficulty, language]
+
+    HintDto:
+      type: object
+      properties:
+        text: { type: string }
+        hintType: { type: string }
+        revealOrder: { type: integer }
+
+    MathContextDto:
+      type: object
+      properties:
+        topic: { type: string }
+        subtopic: { type: string }
+        grade: { type: integer }
+        difficulty: { type: string }
+        commonMistakeType: { type: string }
+
+    StepExplanationItemDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        order: { type: integer }
+        text: { type: string }
+        stepType: { type: string }
+        explanationType: { type: string }
+        highlight: { type: boolean }
+        hint:
+          $ref: '#/components/schemas/HintDto'
+        latexExpression: { type: string, nullable: true }
+        mathMlExpression: { type: string, nullable: true }
+        formulaReferenceId: { type: string, nullable: true }
+        difficulty: { type: string }
+        context:
+          $ref: '#/components/schemas/MathContextDto'
+        imageUrl: { type: string, nullable: true }
+
+    FormulaReferenceDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        latex: { type: string }
+        mathMl: { type: string }
+        description: { type: string }
+
+    MistakeInsightDto:
+      type: object
+      properties:
+        mistakeType: { type: string }
+        description: { type: string }
+        remediation: { type: string }
+        confidence: { type: number }
+        formulaReferenceId: { type: string, nullable: true }
+
+    ExplanationResponseDto:
+      type: object
+      properties:
+        problemId: { type: integer, nullable: true }
+        problemText: { type: string }
+        problemHash: { type: string }
+        language: { type: string }
+        servedFromCache: { type: boolean }
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepExplanationItemDto'
+        formulaReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormulaReferenceDto'
+        mistakes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MistakeInsightDto'
+
+    MistakeAnalysisResponseDto:
+      type: object
+      properties:
+        problemId: { type: integer, nullable: true }
+        problemText: { type: string }
+        problemHash: { type: string }
+        servedFromCache: { type: boolean }
+        mistakes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MistakeInsightDto'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepExplanationItemDto'
+        formulaReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormulaReferenceDto'
+
+    MathProblemDescriptor:
+      type: object
+      properties:
+        problemId: { type: integer, nullable: true }
+        problemText: { type: string }
+        expectedAnswer: { type: string, nullable: true }
+        studentAnswer: { type: string, nullable: true }
+        context:
+          type: object
+        language: { type: string }
+
+    # Leaderboard
+    LeaderboardItemDto:
+      type: object
+      properties:
+        rank: { type: integer }
+        userId: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        appearance:
+          $ref: '#/components/schemas/AvatarAppearanceDto'
+        score: { type: integer }
+        streakDays: { type: integer }
+        level: { type: integer }
+
+    LeaderboardContextDto:
+      type: object
+      properties:
+        schoolId: { type: integer, nullable: true }
+        schoolName: { type: string, nullable: true }
+        facultyId: { type: integer, nullable: true }
+        facultyName: { type: string, nullable: true }
+
+    LeaderboardMeDto:
+      type: object
+      properties:
+        rank: { type: integer }
+        score: { type: integer }
+        percentile: { type: integer }
+        badges:
+          type: array
+          items: { type: string }
+
+    LeaderboardResponseDto:
+      type: object
+      properties:
+        scope: { type: string }
+        period: { type: string }
+        context:
+          $ref: '#/components/schemas/LeaderboardContextDto'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaderboardItemDto'
+        me:
+          $ref: '#/components/schemas/LeaderboardMeDto'
+        nextCursor: { type: string, nullable: true }
+
+    SchoolLeaderboardItemDto:
+      type: object
+      properties:
+        rank: { type: integer }
+        schoolId: { type: integer }
+        schoolName: { type: string }
+        score: { type: integer }
+        members: { type: integer }
+        rankingScore: { type: number, nullable: true }
+        activeStudents: { type: integer, nullable: true }
+        eligibleStudents: { type: integer, nullable: true }
+        participationRate: { type: number, nullable: true }
+        averageXpPerActiveStudent: { type: number, nullable: true }
+        updatedAtUtc: { type: string, format: date-time, nullable: true }
+
+    SchoolLeaderboardResponseDto:
+      type: object
+      properties:
+        period: { type: string }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolLeaderboardItemDto'
+        mySchool:
+          $ref: '#/components/schemas/SchoolLeaderboardItemDto'
+        nextCursor: { type: string, nullable: true }
+        rankingMetric: { type: string }
+        periodStartUtc: { type: string, format: date-time, nullable: true }
+        generatedAtUtc: { type: string, format: date-time }
+        isStale: { type: boolean }
+
+    SchoolLeaderboardDetailDto:
+      type: object
+      properties:
+        period: { type: string }
+        periodStartUtc: { type: string, format: date-time, nullable: true }
+        school:
+          $ref: '#/components/schemas/SchoolLeaderboardItemDto'
+        nearbySchools:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolLeaderboardItemDto'
+        generatedAtUtc: { type: string, format: date-time }
+
+    SchoolLeaderboardHistoryPointDto:
+      type: object
+      properties:
+        snapshotTimeUtc: { type: string, format: date-time }
+        rank: { type: integer }
+        score: { type: integer }
+        activeStudents: { type: integer }
+        participationRate: { type: number }
+        compositeScore: { type: number }
+
+    SchoolLeaderboardHistoryResponseDto:
+      type: object
+      properties:
+        schoolId: { type: integer }
+        period: { type: string }
+        periodStartUtc: { type: string, format: date-time, nullable: true }
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolLeaderboardHistoryPointDto'
+
+    # Practice
+    PracticeQuestionOptionDto:
+      type: object
+      properties:
+        id: { type: integer }
+        text: { type: string }
+        textFormat: { type: string }
+        renderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+
+    PracticeQuestionDto:
+      type: object
+      properties:
+        id: { type: integer }
+        prompt: { type: string }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/PracticeQuestionOptionDto'
+        difficulty: { type: string }
+        promptFormat: { type: string }
+        renderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+
+    StartPracticeSessionRequest:
+      type: object
+      properties:
+        userId: { type: string, nullable: true }
+        skillNodeId: { type: string, nullable: true }
+        topicId: { type: integer, nullable: true }
+        subtopicId: { type: integer, nullable: true }
+        targetQuestions: { type: integer, nullable: true }
+        preferredDifficulty: { type: string, nullable: true }
+
+    StartPracticeSessionResponse:
+      type: object
+      properties:
+        sessionId: { type: string, format: uuid }
+        skillNodeId: { type: string, nullable: true }
+        recommendedDifficulty: { type: string }
+        initialMastery: { type: number }
+        question:
+          $ref: '#/components/schemas/PracticeQuestionDto'
+
+    SubmitPracticeAnswerRequest:
+      type: object
+      properties:
+        questionId: { type: integer }
+        selectedOption: { type: string }
+        timeSpentMs: { type: integer }
+      required: [questionId, selectedOption, timeSpentMs]
+
+    SubmitPracticeAnswerResponse:
+      type: object
+      properties:
+        isCorrect: { type: boolean }
+        feedback: { type: string }
+        masteryBefore: { type: number }
+        masteryAfter: { type: number }
+        xpEarned: { type: integer }
+        nextQuestion:
+          $ref: '#/components/schemas/PracticeQuestionDto'
+
+    CompletePracticeSessionResponse:
+      type: object
+      properties:
+        sessionId: { type: string, format: uuid }
+        status: { type: string }
+        answeredQuestions: { type: integer }
+        correctAnswers: { type: integer }
+        accuracy: { type: number }
+        xpEarned: { type: integer }
+        initialMastery: { type: number }
+        finalMastery: { type: number }
+        masteryDelta: { type: number }
+        weakTopicsUpdated: { type: boolean }
+        recommendedNextSkillNodeId: { type: string, nullable: true }
+
+    # Progress
+    ProgressOverviewDto:
+      type: object
+      properties:
+        totalAnswered: { type: integer }
+        accuracy: { type: number }
+        dailyStreak: { type: integer }
+        streakFreezeCount: { type: integer }
+        lastStreakDay: { type: string, nullable: true }
+        lastActivityDay: { type: string, nullable: true }
+        streakEvent:
+          type: object
+
+    StreakRollEventDto:
+      type: object
+      properties:
+        type: { type: string }
+        missedDays: { type: integer }
+        freezesUsed: { type: integer }
+        streakBefore: { type: integer }
+        streakAfter: { type: integer }
+
+    WeakAreaDto:
+      type: object
+      properties:
+        subtopicId: { type: integer }
+        subtopicName: { type: string }
+        accuracy: { type: number }
+
+    TopicProgressDto:
+      type: object
+      properties:
+        topicId: { type: integer }
+        name: { type: string }
+        accuracy: { type: number }
+        unlocked: { type: boolean }
+
+    # Question authoring (selected)
+    QuestionAuthoringOptionDto:
+      type: object
+      properties:
+        id: { type: integer, nullable: true }
+        text: { type: string }
+        isCorrect: { type: boolean }
+        textFormat: { type: string }
+        renderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+
+    QuestionHintDto:
+      type: object
+      properties:
+        key: { type: string }
+        text: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+
+    StepExplanationAuthoringDto:
+      type: object
+      properties:
+        order: { type: integer }
+        text: { type: string }
+        hint: { type: string, nullable: true }
+        highlight: { type: boolean }
+        textFormat: { type: string }
+        hintFormat: { type: string }
+        textRenderMode: { type: string }
+        hintRenderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+
+    QuestionAuthoringRequest:
+      type: object
+      properties:
+        questionId: { type: integer, nullable: true }
+        text: { type: string }
+        type: { type: string }
+        correctAnswer: { type: string, nullable: true }
+        explanation: { type: string, nullable: true }
+        difficulty: { type: integer }
+        categoryId: { type: integer }
+        subtopicId: { type: integer }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionAuthoringOptionDto'
+        hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionHintDto'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepExplanationAuthoringDto'
+        changeReason: { type: string, nullable: true }
+        requireSteps: { type: boolean }
+        textFormat: { type: string }
+        explanationFormat: { type: string }
+        hintFormat: { type: string }
+        textRenderMode: { type: string }
+        explanationRenderMode: { type: string }
+        hintRenderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+        correctOptionId: { type: integer, nullable: true }
+
+    ValidationIssueDto:
+      type: object
+      properties:
+        stage: { type: string }
+        severity: { type: string }
+        ruleId: { type: string }
+        message: { type: string }
+        fieldPath: { type: string, nullable: true }
+        suggestion: { type: string, nullable: true }
+
+    ContentLintResultDto:
+      type: object
+      properties:
+        isValid: { type: boolean }
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssueDto'
+
+    LatexValidationDetailDto:
+      type: object
+      properties:
+        fieldPath: { type: string }
+        isValid: { type: boolean }
+        normalizedExpression: { type: string, nullable: true }
+        errorCode: { type: string, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        safeFallbackText: { type: string, nullable: true }
+
+    LatexValidationResultDto:
+      type: object
+      properties:
+        isValid: { type: boolean }
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/LatexValidationDetailDto'
+
+    ContentSegmentDto:
+      type: object
+      properties:
+        kind: { type: string }
+        value: { type: string }
+
+    NormalizedContentFieldDto:
+      type: object
+      properties:
+        fieldPath: { type: string }
+        rawValue: { type: string }
+        normalizedValue: { type: string }
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentSegmentDto'
+
+    QuestionNormalizationResultDto:
+      type: object
+      properties:
+        isSafe: { type: boolean }
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/NormalizedContentFieldDto'
+
+    MathExpressionValidationResultDto:
+      type: object
+      properties:
+        isValid: { type: boolean }
+        expression: { type: string }
+        normalizedExpression: { type: string, nullable: true }
+        errorCode: { type: string, nullable: true }
+        errorMessage: { type: string, nullable: true }
+
+    EquivalentAnswerResultDto:
+      type: object
+      properties:
+        isEquivalent: { type: boolean }
+        expected: { type: string }
+        actual: { type: string }
+        comparisonMode: { type: string }
+        reason: { type: string, nullable: true }
+
+    StepValidationResultDto:
+      type: object
+      properties:
+        order: { type: integer }
+        isValid: { type: boolean }
+        followsPrevious: { type: boolean }
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssueDto'
+
+    DifficultyEstimateResultDto:
+      type: object
+      properties:
+        score: { type: integer }
+        band: { type: string }
+        signals:
+          type: array
+          items: { type: string }
+
+    QuestionValidationSummaryDto:
+      type: object
+      properties:
+        canPublish: { type: boolean }
+        status: { type: string }
+        errorCount: { type: integer }
+        warningCount: { type: integer }
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssueDto'
+
+    QuestionPreviewPayloadDto:
+      type: object
+      properties:
+        raw:
+          $ref: '#/components/schemas/QuestionAuthoringRequest'
+        normalized:
+          $ref: '#/components/schemas/QuestionNormalizationResultDto'
+        latex:
+          $ref: '#/components/schemas/LatexValidationResultDto'
+        lint:
+          $ref: '#/components/schemas/ContentLintResultDto'
+        equivalenceChecks:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquivalentAnswerResultDto'
+        stepResults:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepValidationResultDto'
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEstimateResultDto'
+        summary:
+          $ref: '#/components/schemas/QuestionValidationSummaryDto'
+        safePreviewFields:
+          type: object
+          additionalProperties: { type: string, nullable: true }
+
+    ValidateQuestionResponse:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/QuestionValidationSummaryDto'
+        lint:
+          $ref: '#/components/schemas/ContentLintResultDto'
+        latex:
+          $ref: '#/components/schemas/LatexValidationResultDto'
+        normalized:
+          $ref: '#/components/schemas/QuestionNormalizationResultDto'
+        equivalenceChecks:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquivalentAnswerResultDto'
+        stepResults:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepValidationResultDto'
+        difficulty:
+          $ref: '#/components/schemas/DifficultyEstimateResultDto'
+
+    PreviewQuestionResponse:
+      type: object
+      properties:
+        preview:
+          $ref: '#/components/schemas/QuestionPreviewPayloadDto'
+
+    SaveQuestionDraftRequest:
+      type: object
+      properties:
+        content:
+          $ref: '#/components/schemas/QuestionAuthoringRequest'
+        changeReason: { type: string, nullable: true }
+
+    SaveQuestionDraftResponse:
+      type: object
+      properties:
+        draftId: { type: string, format: uuid }
+        draftVersion: { type: integer }
+        publishState: { type: string }
+        validation:
+          $ref: '#/components/schemas/ValidateQuestionResponse'
+
+    PublishQuestionRequest:
+      type: object
+      properties:
+        draftId: { type: string, format: uuid }
+        changeReason: { type: string, nullable: true }
+
+    PublishQuestionResponse:
+      type: object
+      properties:
+        published: { type: boolean }
+        questionId: { type: integer }
+        versionId: { type: integer }
+        versionNumber: { type: integer }
+        publishState: { type: string }
+        validationSummary:
+          $ref: '#/components/schemas/QuestionValidationSummaryDto'
+
+    QuestionVersionHistoryItemDto:
+      type: object
+      properties:
+        versionId: { type: integer }
+        versionNumber: { type: integer }
+        publishState: { type: string }
+        authorUserId: { type: string, nullable: true }
+        editorUserId: { type: string, nullable: true }
+        changeReason: { type: string, nullable: true }
+        createdAtUtc: { type: string, format: date-time }
+        publishedAtUtc: { type: string, format: date-time, nullable: true }
+        previousVersionId: { type: integer, nullable: true }
+
+    QuestionValidationHistoryDto:
+      type: object
+      properties:
+        validationResultId: { type: string, format: uuid }
+        draftId: { type: string, format: uuid }
+        status: { type: string }
+        hasErrors: { type: boolean }
+        hasWarnings: { type: boolean }
+        issueCount: { type: integer }
+        validatedAtUtc: { type: string, format: date-time }
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssueDto'
+
+    # Quiz extras
+    NextQuestionRequest:
+      type: object
+      properties:
+        quizId: { type: string, format: uuid }
+        lastQuestionId: { type: integer }
+
+    NextQuestionResponse:
+      type: object
+      properties:
+        question:
+          $ref: '#/components/schemas/QuestionDto'
+
+    OfflineBatchSubmitRequest:
+      type: object
+      properties:
+        answers:
+          type: array
+          items: { type: object }
+
+    OfflineBatchSubmitResponse:
+      type: object
+      properties:
+        attempted: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+
+    StepExplanationDto:
+      type: object
+      properties:
+        text: { type: string }
+        hint: { type: string, nullable: true }
+
+    SrsUpdateDto:
+      type: object
+      properties:
+        questionId: { type: integer }
+        newIntervalDays: { type: integer }
+
+    # Sync: add a few detailed types
+    SyncResponseDto:
+      type: object
+      properties:
+        acknowledgedOperations:
+          type: array
+          items:
+            type: object
+        serverOperations:
+          type: array
+          items:
+            type: object
+        newCheckpoint: { type: integer }
+        recommendedBackoffSeconds: { type: integer }
+
+    SyncServerEventDto:
+      type: object
+      properties:
+        id: { type: integer }
+        eventType: { type: string }
+        aggregateType: { type: string }
+        aggregateId: { type: string }
+        sourceOperationId: { type: string, format: uuid, nullable: true }
+        payload: { type: object }
+        createdAtUtc: { type: string, format: date-time }
+
+    SyncOperationDto:
+      type: object
+      properties:
+        operationId: { type: string, format: uuid }
+        deviceId: { type: string }
+        userId: { type: string }
+        clientSequence: { type: integer }
+        operationType: { type: string }
+        occurredAtUtc: { type: string, format: date-time }
+        payload: { type: object }
+        signature: { type: string, nullable: true }
+
+    # Coins
+    CoinsBalanceDto:
+      type: object
+      properties:
+        coins: { type: integer }
+        totalEarned: { type: integer }
+        totalSpent: { type: integer }
+        level: { type: integer }
+        xp: { type: integer }
+        streak: { type: integer }
+
+    CoinsTransactionDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: integer }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    CoinsHistoryResponse:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CoinsTransactionDto'
+
+    # Users
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName: { type: string, nullable: true }
+
+    UsersProfileDto:
+      type: object
+      properties:
+        userId: { type: string }
+        username: { type: string }
+        displayName: { type: string, nullable: true }
+        coins: { type: integer }
+        level: { type: integer }
+        xp: { type: integer }
+        streak: { type: integer }
+        createdAt: { type: string, format: date-time }
+        schoolName: { type: string, nullable: true }
+        facultyName: { type: string, nullable: true }
+        avatarUrl: { type: string, nullable: true }
+        appearance:
+          $ref: '#/components/schemas/AvatarAppearanceDto'
+
+    # Core leaderboard DTOs
+    LeaderboardEntryCoreDto:
+      type: object
+      properties:
+        rank: { type: integer }
+        userId: { type: string }
+        displayName: { type: string }
+        level: { type: integer }
+        xp: { type: integer }
+        weeklyXp: { type: integer }
+        streak: { type: integer }
+
+    LeaderboardRequestDto:
+      type: object
+      properties:
+        scope: { type: string }
+        period: { type: string }
+        limit: { type: integer }
+        cursor: { type: string, nullable: true }
+        userId: { type: string, nullable: true }
+        schoolId: { type: integer, nullable: true }
+        facultyId: { type: integer, nullable: true }
+        friendIds:
+          type: array
+          items: { type: string }
+
+
 paths:
   /auth/login:
     post:
@@ -482,5 +1797,795 @@ paths:
         '200':
           description: metrics text/plain or json
 
+  /api/adaptive/session/start:
+    post:
+      tags: [Adaptive]
+      summary: Start an adaptive session
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {}
+      responses:
+        '200':
+          description: Adaptive session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveSessionDto'
+
+  /api/adaptive/session/answer:
+    post:
+      tags: [Adaptive]
+      summary: Submit adaptive answer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                adaptiveSessionId: { type: string, format: uuid }
+                adaptiveSessionItemId: { type: string, format: uuid }
+                questionId: { type: integer }
+                answer: { type: string }
+                responseTimeSeconds: { type: integer }
+                confidence: { type: number }
+      responses:
+        '200':
+          description: Adaptive answer result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isCorrect: { type: boolean }
+                  difficultyLevel: { type: string }
+                  wasDifficultyAdjusted: { type: boolean }
+                  topicId: { type: integer }
+                  topicMasteryScore: { type: number }
+                  isWeakTopic: { type: boolean }
+                  nextReviewAt: { type: string, format: date-time }
+
+  /api/adaptive/path:
+    get:
+      tags: [Adaptive]
+      summary: Get adaptive path
+      responses:
+        '200':
+          description: Adaptive path payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptivePathResponse'
+
+  /api/adaptive/recommendations:
+    get:
+      tags: [Adaptive]
+      summary: Get adaptive recommendations
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 5 }
+      responses:
+        '200':
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveRecommendationsResponse'
+
+  /api/analytics/weakness:
+    get:
+      tags: [Analytics]
+      summary: Get weakness topics
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 5 }
+      responses:
+        '200':
+          description: Weak topics list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeakTopicDto'
+
+  /api/analytics/weakness/details:
+    get:
+      tags: [Analytics]
+      summary: Get detailed weakness info
+      responses:
+        '200':
+          description: Weak topics + subtopics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  weakTopics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WeakTopicDto'
+                  weakSubtopics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WeakSubtopicDto'
+
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register user (admin-style)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+                email: { type: string }
+                password: { type: string }
+                schoolName: { type: string, nullable: true }
+                facultyName: { type: string, nullable: true }
+      responses:
+        '200':
+          description: RegisterResponse
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId: { type: string }
+                  username: { type: string }
+                  message: { type: string }
+
+  /auth/revoke-all:
+    post:
+      tags: [Authentication]
+      summary: Revoke all refresh tokens for current user
+      responses:
+        '200':
+          description: Revoked
+
+  /auth/test:
+    get:
+      tags: [Authentication]
+      summary: Auth test endpoint
+      security: []
+      responses:
+        '200':
+          description: Simple JSON health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/cosmetics/items:
+    get:
+      tags: [Cosmetics]
+      summary: List cosmetic catalog items
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: rarity
+          in: query
+          schema: { type: string }
+        - name: seasonId
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Cosmetic catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CosmeticCatalogResponseDto'
+
+  /api/cosmetics/inventory:
+    get:
+      tags: [Cosmetics]
+      summary: Get user's cosmetic inventory
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Cosmetic inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CosmeticInventoryResponseDto'
+
+  /api/cosmetics/avatar:
+    get:
+      tags: [Cosmetics]
+      summary: Get current user's avatar
+      responses:
+        '200':
+          description: Avatar config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarAppearanceDto'
+    put:
+      tags: [Cosmetics]
+      summary: Update current user's avatar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAvatarConfigRequest'
+      responses:
+        '200':
+          description: Updated avatar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarAppearanceDto'
+
+  /api/cosmetics/equip:
+    post:
+      tags: [Cosmetics]
+      summary: Equip a cosmetic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EquipCosmeticRequest'
+      responses:
+        '200':
+          description: Equipped
+
+  /api/cosmetics/equip-batch:
+    post:
+      tags: [Cosmetics]
+      summary: Batch equip cosmetics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EquipCosmeticBatchRequest'
+      responses:
+        '200':
+          description: Ok
+
+  /api/cosmetics/purchase:
+    post:
+      tags: [Cosmetics]
+      summary: Purchase cosmetic item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseCosmeticRequest'
+      responses:
+        '200':
+          description: Purchase result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseCosmeticResponse'
+
+  /api/cosmetics/seasons:
+    get:
+      tags: [Cosmetics]
+      summary: Get seasons
+      parameters:
+        - name: activeOnly
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Seasons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CosmeticSeasonDto'
+
+  /api/cosmetics/reward-track:
+    get:
+      tags: [Cosmetics]
+      summary: Get reward track
+      parameters:
+        - name: seasonId
+          in: query
+          schema: { type: integer }
+        - name: trackType
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Reward track
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardTrackResponseDto'
+
+  /api/cosmetics/reward-track/claim:
+    post:
+      tags: [Cosmetics]
+      summary: Claim reward track tier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRewardTrackTierRequest'
+      responses:
+        '200':
+          description: Claim response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimRewardTrackTierResponse'
+
+  /api/cosmetics/avatar/{userId}:
+    get:
+      tags: [Cosmetics]
+      summary: Get public avatar appearance for user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Avatar appearance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarAppearanceDto'
+
+  /api/bugs/report:
+    post:
+      tags: [Bugs]
+      summary: Report a bug
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BugReportRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReportDto'
+
+  /api/bugs/mine:
+    get:
+      tags: [Bugs]
+      summary: Get my bug reports
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: My bug reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReportsResponse'
+
+  /api/bugs:
+    get:
+      tags: [Bugs]
+      summary: Admin list bug reports
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Bug reports (admin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReportsResponse'
+
+  /api/bugs/{id}:
+    get:
+      tags: [Bugs]
+      summary: Get bug by id (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Bug report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReportDto'
+        '404':
+          description: Not found
+    patch:
+      tags: [Bugs]
+      summary: Update bug status (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBugStatusRequest'
+      responses:
+        '200':
+          description: Updated bug report
+
+  /api/explanations/problem/{problemId}:
+    get:
+      tags: [Explanations]
+      summary: Get explanation by problemId
+      parameters:
+        - name: problemId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: lang
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Explanation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplanationResponseDto'
+
+  /api/explanations/generate:
+    post:
+      tags: [Explanations]
+      summary: Generate an explanation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateExplanationRequest'
+      responses:
+        '200':
+          description: Explanation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplanationResponseDto'
+
+  /api/explanations/mistake-analysis:
+    post:
+      tags: [Explanations]
+      summary: Perform mistake analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MistakeAnalysisRequest'
+      responses:
+        '200':
+          description: Mistake analysis response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MistakeAnalysisResponseDto'
+
+  /api/hints/questions/{id}/clue:
+    get:
+      tags: [Hints]
+      summary: Get clue hint for question (may charge coins)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Clue hint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HintDto'
+
+  /api/leaderboard:
+    get:
+      tags: [Leaderboard]
+      summary: Get leaderboard
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, default: global }
+        - name: period
+          in: query
+          schema: { type: string, default: all_time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponseDto'
+
+  /api/leaderboard/schools:
+    get:
+      tags: [Leaderboard]
+      summary: Get school leaderboard
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, default: week }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: School leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolLeaderboardResponseDto'
+
+  /api/maintenance/rebuild-indexes:
+    post:
+      tags: [Maintenance]
+      summary: Rebuild DB indexes (admin)
+      responses:
+        '200':
+          description: Started
+
+  /api/powerups/streak-freeze/buy:
+    post:
+      tags: [Powerups]
+      summary: Buy a streak freeze powerup
+      responses:
+        '200':
+          description: Purchase result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coins: { type: integer }
+                  streakFreezeCount: { type: integer }
+                  cost: { type: integer }
+                  max: { type: integer }
+
+  /api/practice/session/start:
+    post:
+      tags: [Practice]
+      summary: Start practice session
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartPracticeSessionRequest'
+      responses:
+        '200':
+          description: StartPracticeSessionResponse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartPracticeSessionResponse'
+
+  /api/progress/overview:
+    get:
+      tags: [Progress]
+      summary: Get progress overview
+      responses:
+        '200':
+          description: Progress overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressOverviewDto'
+
+  /api/progress/weak-areas:
+    get:
+      tags: [Progress]
+      summary: Get weak areas
+      responses:
+        '200':
+          description: Weak areas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeakAreaDto'
+
+  /api/progress/topics:
+    get:
+      tags: [Progress]
+      summary: Get topics progress
+      responses:
+        '200':
+          description: Topic progress
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TopicProgressDto'
+
+  /api/questions/validate:
+    post:
+      tags: [QuestionAuthoring]
+      summary: Validate question payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionAuthoringRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateQuestionResponse'
+
+  /api/questions/preview:
+    post:
+      tags: [QuestionAuthoring]
+      summary: Preview question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionAuthoringRequest'
+      responses:
+        '200':
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewQuestionResponse'
+
+  /api/questions/save-draft:
+    post:
+      tags: [QuestionAuthoring]
+      summary: Save question draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveQuestionDraftRequest'
+      responses:
+        '200':
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveQuestionDraftResponse'
+
+  /api/questions/publish:
+    post:
+      tags: [QuestionAuthoring]
+      summary: Publish question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishQuestionRequest'
+      responses:
+        '200':
+          description: Publish result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishQuestionResponse'
+
+  /api/quiz/next-question:
+    post:
+      tags: [Quiz]
+      summary: Get next quiz question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NextQuestionRequest'
+      responses:
+        '200':
+          description: Next question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextQuestionResponse'
+
+  /api/quiz/offline-submit:
+    post:
+      tags: [Quiz]
+      summary: Submit offline batch answers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfflineBatchSubmitRequest'
+      responses:
+        '200':
+          description: Offline submit result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfflineBatchSubmitResponse'
+
+  /api/sync/checkpoint:
+    get:
+      tags: [Sync]
+      summary: Get sync checkpoint for device
+      parameters:
+        - name: deviceId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Checkpoint info
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/users/search:
+    get:
+      tags: [Users]
+      summary: Search users
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: User search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserProfileDto'
 
 # End of partial OpenAPI
