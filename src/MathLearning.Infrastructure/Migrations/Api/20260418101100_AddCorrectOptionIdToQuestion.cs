@@ -17,32 +17,30 @@ ALTER TABLE "Questions"
 ADD COLUMN IF NOT EXISTS "CorrectOptionId" integer NULL;
 """);
 
-        migrationBuilder.Sql("""
+                migrationBuilder.Sql("""
 UPDATE "Questions" q
-SET "CorrectOptionId" = matched."Id"
-FROM LATERAL (
-    SELECT o."Id"
-    FROM "Options" o
-    WHERE o."QuestionId" = q."Id"
-      AND q."CorrectAnswer" IS NOT NULL
-      AND o."Text" = q."CorrectAnswer"
-    ORDER BY o."Id"
-    LIMIT 1
-) matched
+SET "CorrectOptionId" = (
+        SELECT o."Id"
+        FROM "Options" o
+        WHERE o."QuestionId" = q."Id"
+            AND q."CorrectAnswer" IS NOT NULL
+            AND o."Text" = q."CorrectAnswer"
+        ORDER BY o."Id"
+        LIMIT 1
+)
 WHERE q."CorrectOptionId" IS NULL;
 """);
 
-        migrationBuilder.Sql("""
+                migrationBuilder.Sql("""
 UPDATE "Questions" q
-SET "CorrectOptionId" = matched."Id"
-FROM LATERAL (
-    SELECT o."Id"
-    FROM "Options" o
-    WHERE o."QuestionId" = q."Id"
-      AND o."IsCorrect" = TRUE
-    ORDER BY o."Id"
-    LIMIT 1
-) matched
+SET "CorrectOptionId" = (
+        SELECT o."Id"
+        FROM "Options" o
+        WHERE o."QuestionId" = q."Id"
+            AND o."IsCorrect" = TRUE
+        ORDER BY o."Id"
+        LIMIT 1
+)
 WHERE q."CorrectOptionId" IS NULL;
 """);
 

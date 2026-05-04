@@ -192,7 +192,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 var initializeDatabaseOnStartup = app.Environment.IsDevelopment()
-    || app.Configuration.GetValue("Database:InitializeOnStartup", true);
+    || app.Configuration.GetValue<bool>("Database:InitializeOnStartup");
 
 if (initializeDatabaseOnStartup)
 {

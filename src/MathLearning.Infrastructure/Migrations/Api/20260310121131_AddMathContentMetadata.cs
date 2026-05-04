@@ -10,122 +10,52 @@ namespace MathLearning.Infrastructure.Migrations.Api
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "HintFormat",
-                table: "QuestionSteps",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "MarkdownWithMath");
+            migrationBuilder.Sql("""
+                ALTER TABLE "QuestionSteps"
+                ADD COLUMN IF NOT EXISTS "HintFormat" character varying(32) NOT NULL DEFAULT 'MarkdownWithMath';
 
-            migrationBuilder.AddColumn<string>(
-                name: "HintRenderMode",
-                table: "QuestionSteps",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Auto");
+                ALTER TABLE "QuestionSteps"
+                ADD COLUMN IF NOT EXISTS "HintRenderMode" character varying(32) NOT NULL DEFAULT 'Auto';
 
-            migrationBuilder.AddColumn<string>(
-                name: "SemanticsAltText",
-                table: "QuestionSteps",
-                type: "character varying(500)",
-                maxLength: 500,
-                nullable: true);
+                ALTER TABLE "QuestionSteps"
+                ADD COLUMN IF NOT EXISTS "SemanticsAltText" character varying(500) NULL;
 
-            migrationBuilder.AddColumn<string>(
-                name: "TextFormat",
-                table: "QuestionSteps",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "MarkdownWithMath");
+                ALTER TABLE "QuestionSteps"
+                ADD COLUMN IF NOT EXISTS "TextFormat" character varying(32) NOT NULL DEFAULT 'MarkdownWithMath';
 
-            migrationBuilder.AddColumn<string>(
-                name: "TextRenderMode",
-                table: "QuestionSteps",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Auto");
+                ALTER TABLE "QuestionSteps"
+                ADD COLUMN IF NOT EXISTS "TextRenderMode" character varying(32) NOT NULL DEFAULT 'Auto';
 
-            migrationBuilder.AddColumn<string>(
-                name: "ExplanationFormat",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "MarkdownWithMath");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "ExplanationFormat" character varying(32) NOT NULL DEFAULT 'MarkdownWithMath';
 
-            migrationBuilder.AddColumn<string>(
-                name: "ExplanationRenderMode",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Auto");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "ExplanationRenderMode" character varying(32) NOT NULL DEFAULT 'Auto';
 
-            migrationBuilder.AddColumn<string>(
-                name: "HintFormat",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "MarkdownWithMath");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "HintFormat" character varying(32) NOT NULL DEFAULT 'MarkdownWithMath';
 
-            migrationBuilder.AddColumn<string>(
-                name: "HintRenderMode",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Auto");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "HintRenderMode" character varying(32) NOT NULL DEFAULT 'Auto';
 
-            migrationBuilder.AddColumn<string>(
-                name: "SemanticsAltText",
-                table: "Questions",
-                type: "character varying(1000)",
-                maxLength: 1000,
-                nullable: true);
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "SemanticsAltText" character varying(1000) NULL;
 
-            migrationBuilder.AddColumn<string>(
-                name: "TextFormat",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "MarkdownWithMath");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "TextFormat" character varying(32) NOT NULL DEFAULT 'MarkdownWithMath';
 
-            migrationBuilder.AddColumn<string>(
-                name: "TextRenderMode",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Auto");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "TextRenderMode" character varying(32) NOT NULL DEFAULT 'Auto';
 
-            migrationBuilder.AddColumn<string>(
-                name: "RenderMode",
-                table: "Options",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Auto");
+                ALTER TABLE "Options"
+                ADD COLUMN IF NOT EXISTS "RenderMode" character varying(32) NOT NULL DEFAULT 'Auto';
 
-            migrationBuilder.AddColumn<string>(
-                name: "SemanticsAltText",
-                table: "Options",
-                type: "character varying(500)",
-                maxLength: 500,
-                nullable: true);
+                ALTER TABLE "Options"
+                ADD COLUMN IF NOT EXISTS "SemanticsAltText" character varying(500) NULL;
 
-            migrationBuilder.AddColumn<string>(
-                name: "TextFormat",
-                table: "Options",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "MarkdownWithMath");
+                ALTER TABLE "Options"
+                ADD COLUMN IF NOT EXISTS "TextFormat" character varying(32) NOT NULL DEFAULT 'MarkdownWithMath';
+            """);
         }
 
         /// <inheritdoc />

@@ -127,6 +127,11 @@ try
     }
 
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
+    if (string.IsNullOrWhiteSpace(defaultConnectionString) && builder.Environment.IsEnvironment("Test"))
+    {
+        defaultConnectionString = "Host=localhost;Port=5433;Username=postgres;Password=postgres;Database=mathlearning_test_bootstrap;";
+    }
+
     if (string.IsNullOrWhiteSpace(defaultConnectionString))
     {
         Log.Error("? ConnectionStrings:Default is not configured. Set deployment env var `ConnectionStrings__Default` before deploying.");
@@ -194,13 +199,15 @@ try
 
     // Health checks (Fly / uptime monitoring)
     var healthChecks = builder.Services.AddHealthChecks();
-    if (!string.IsNullOrWhiteSpace(defaultConnectionString))
+    if (!builder.Environment.IsEnvironment("Test") && !string.IsNullOrWhiteSpace(defaultConnectionString))
     {
         healthChecks.AddNpgSql(defaultConnectionString, name: "postgres");
     }
 
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<PerformanceDbCommandInterceptor>();
+    builder.Services.AddSingleton<DatabaseSchemaState>();
+    builder.Services.AddSingleton<DatabaseSchemaVersionGuard>();
 
     // Add ApiDbContext (kombinuje Identity i sve entitete)
     // TEMPORARY TRIAGE LOGGING: enable detailed EF/Npgsql logging in Development only.
@@ -451,83 +458,56 @@ try
 
     var databaseStartupSucceeded = false;
     var userProfileIdentitySchemaReady = false;
+    var schemaState = app.Services.GetRequiredService<DatabaseSchemaState>();
+    var databaseStartupMode = DatabaseSchemaVersionGuard.ResolveStartupMode(app.Environment, app.Configuration);
 
-    // ??? Auto-migrate and seed database on startup (skip during EF design-time tools)
-    if (!EF.IsDesignTime && !app.Environment.IsEnvironment("Test"))
+    // Database startup is explicit by environment: Development may auto-migrate, higher environments must already be aligned.
+    if (!EF.IsDesignTime && databaseStartupMode != DatabaseStartupMode.Skip)
     {
-        using (var scope = app.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-            try
-            {
-                Log.Information("??? Applying database migrations...");
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var schemaGuard = scope.ServiceProvider.GetRequiredService<DatabaseSchemaVersionGuard>();
 
-                // TEMPORARY TRIAGE: enumerate pending migrations in Development to aid diagnosis
-                if (isDevelopment)
+        try
+        {
+            Log.Information("Database startup mode resolved to {StartupMode}.", databaseStartupMode);
+
+            if (databaseStartupMode == DatabaseStartupMode.AutoMigrate)
+            {
+                var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+                if (pending.Length > 0)
                 {
-                    try
-                    {
-                        var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-                        if (pending.Length > 0)
-                        {
-                            Log.Information("TEMPORARY TRIAGE: Pending migrations: {Migrations}", string.Join(", ", pending));
-                        }
-                        else
-                        {
-                            Log.Information("TEMPORARY TRIAGE: No pending migrations.");
-                        }
-                    }
-                    catch (Exception pendingEx)
-                    {
-                        Log.Warning(pendingEx, "TEMPORARY TRIAGE: Could not enumerate pending migrations");
-                    }
+                    Log.Information("Applying pending database migrations: {Migrations}", string.Join(", ", pending));
+                }
+                else
+                {
+                    Log.Information("No pending database migrations.");
                 }
 
                 await db.Database.MigrateAsync();
-                Log.Information("? Database migrations applied successfully");
-                databaseStartupSucceeded = true;
+                Log.Information("Database migrations applied successfully.");
+            }
+            else
+            {
+                Log.Information(
+                    "Startup migrations are disabled in {Environment}. Validating exact database schema alignment instead.",
+                    app.Environment.EnvironmentName);
+            }
 
-                // ?? Manual fix for RefreshToken column length (if migration didn't apply)
-                try
-                {
-                    await db.Database.ExecuteSqlRawAsync(@"
-                        DO $$
-                        BEGIN
-                            IF EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'RefreshTokens' 
-                                AND column_name = 'Token' 
-                                AND character_maximum_length = 64
-                            ) THEN
-                                ALTER TABLE ""RefreshTokens"" ALTER COLUMN ""Token"" TYPE character varying(128);
-                                RAISE NOTICE 'RefreshToken column extended to 128 characters';
-                            END IF;
-                        END $$;
-                    ");
-                    Log.Information("? RefreshToken column length verified");
-                }
-                catch (Exception ex)
-                {
-                    // TEMPORARY TRIAGE: log extra Postgres details in Development to help pinpoint failing SQL
-                    if (isDevelopment && ex is PostgresException pgEx)
-                    {
-                        Log.Error(pgEx, "TEMPORARY TRIAGE: PostgresException during DB startup. SqlState={SqlState} Table={TableName} Constraint={ConstraintName} Detail={Detail} Hint={Hint} Position={Position}", pgEx.SqlState, pgEx.TableName, pgEx.ConstraintName, pgEx.Detail, pgEx.Hint, pgEx.Position);
-                    }
+            var schemaStatus = await schemaGuard.CheckAsync(db);
+            schemaState.Update(schemaStatus);
 
-                    if (IsPostgresAuthFailure(ex))
-                    {
-                        Log.Error(
-                            ex,
-                            "Database startup failed because PostgreSQL rejected the configured credentials for {DbTarget}. Update deployment env var `ConnectionStrings__Default` with the current database password.",
-                            DescribeDbConnection(defaultConnectionString));
-                    }
+            if (!schemaStatus.IsSchemaReady)
+            {
+                throw schemaGuard.CreateMismatchException(databaseStartupMode, app.Environment.EnvironmentName, schemaStatus);
+            }
 
-                    Log.Warning(ex, "?? Database migration/seed failed. Continuing without it (DB may not be available yet).");
-                }
-                try
-                {
-                    var cosmeticCountBefore = await db.CosmeticItems.CountAsync();
-                    await db.Database.ExecuteSqlRawAsync(@"
+            databaseStartupSucceeded = true;
+
+            try
+            {
+                var cosmeticCountBefore = await db.CosmeticItems.CountAsync();
+                await db.Database.ExecuteSqlRawAsync(@"
                         INSERT INTO cosmetic_items (""Key"", ""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""IsDefault"", ""ReleaseDate"")
                         VALUES
                             ('skin_classic_student', 'Classic Student', 'skin', 'common', 'cosmetics/skin/classic_student.png', 'cosmetics/skin/preview/classic_student.png', 'default', TRUE, NOW()),
@@ -579,39 +559,47 @@ try
                         ON CONFLICT (""Key"") DO NOTHING;
                     ");
 
-                    var cosmeticCountAfter = await db.CosmeticItems.CountAsync();
-                    if (cosmeticCountAfter > cosmeticCountBefore)
-                    {
-                        Log.Information("🎨 Cosmetic items ensured on startup. Count={Count}", cosmeticCountAfter);
-                    }
-                    else
-                    {
-                        Log.Information("🎨 Cosmetic system tables verified ({Count} items exist)", cosmeticCountAfter);
-                    }
-                }
-                catch (Exception cosmeticEx)
+                var cosmeticCountAfter = await db.CosmeticItems.CountAsync();
+                if (cosmeticCountAfter > cosmeticCountBefore)
                 {
-                    Log.Warning(cosmeticEx, "⚠️ Could not seed cosmetic items");
+                    Log.Information("🎨 Cosmetic items ensured on startup. Count={Count}", cosmeticCountAfter);
                 }
-
-                userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
-
-                var designTokenQueryService = scope.ServiceProvider.GetRequiredService<IDesignTokenQueryService>();
-                await designTokenQueryService.EnsureInitializedAsync(CancellationToken.None);
+                else
+                {
+                    Log.Information("🎨 Cosmetic system tables verified ({Count} items exist)", cosmeticCountAfter);
+                }
             }
-            catch (Exception ex)
+            catch (Exception cosmeticEx)
             {
-                if (IsPostgresAuthFailure(ex))
-                {
-                    Log.Error(
-                        ex,
-                        "Database startup failed because PostgreSQL rejected the configured credentials for {DbTarget}. Update deployment env var `ConnectionStrings__Default` with the current database password.",
-                        DescribeDbConnection(defaultConnectionString));
-                }
-
-                Log.Warning(ex, "?? Database migration/seed failed. Continuing without it (DB may not be available yet).");
+                Log.Warning(cosmeticEx, "⚠️ Could not seed cosmetic items");
             }
 
+            userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
+
+            var designTokenQueryService = scope.ServiceProvider.GetRequiredService<IDesignTokenQueryService>();
+            await designTokenQueryService.EnsureInitializedAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            if (IsPostgresAuthFailure(ex))
+            {
+                Log.Error(
+                    ex,
+                    "Database startup failed because PostgreSQL rejected the configured credentials for {DbTarget}. Update deployment env var `ConnectionStrings__Default` with the current database password.",
+                    DescribeDbConnection(defaultConnectionString));
+            }
+
+            schemaState.Update(DatabaseSchemaStatus.Failed(
+                failureMessage: ex is InvalidOperationException
+                    ? ex.Message
+                    : $"Database startup failed in {app.Environment.EnvironmentName}. StartupMode={databaseStartupMode}. See logs for details.",
+                latestCodeMigration: schemaState.Current.LatestCodeMigration,
+                latestAppliedMigration: schemaState.Current.LatestAppliedMigration,
+                pendingMigrations: schemaState.Current.PendingMigrations,
+                unknownAppliedMigrations: schemaState.Current.UnknownAppliedMigrations));
+
+            Log.Error(ex, "Database startup failed. StartupMode={StartupMode}", databaseStartupMode);
+            throw;
         }
 
         var contentSeedEnabled = app.Configuration.GetValue<bool>("SeedContent:Enabled");
@@ -711,6 +699,7 @@ try
 
     // Health endpoint for Fly.io / uptime checks
     app.MapHealthChecks("/health");
+    app.MapHealthEndpoints();
 
     // Minimal runtime metrics (no Prometheus dependency)
     app.MapGet("/metrics", () =>

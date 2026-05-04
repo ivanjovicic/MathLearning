@@ -1,4 +1,5 @@
-﻿using MathLearning.Infrastructure.Persistance;
+﻿using MathLearning.Api.Services;
+using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Api.Endpoints;
@@ -21,7 +22,7 @@ public static class HealthEndpoints
         .WithDescription("Basic liveness check");
 
         // 🗄️ Database connectivity check
-        group.MapGet("/db", async (ApiDbContext db) =>
+        group.MapGet("/db", async (ApiDbContext db, DatabaseSchemaState schemaState) =>
         {
             try
             {
@@ -32,6 +33,7 @@ public static class HealthEndpoints
                     {
                         status = "Unhealthy",
                         db = "Cannot connect",
+                        schema = BuildSchemaSummary(schemaState.Current),
                         timestamp = DateTime.UtcNow
                     }, statusCode: 503);
                 }
@@ -44,16 +46,18 @@ public static class HealthEndpoints
                     status = "Healthy",
                     db = "Connected",
                     provider = "PostgreSQL",
+                    schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 });
             }
-            catch (Exception ex)
+            catch
             {
                 return Results.Json(new
                 {
                     status = "Unhealthy",
                     db = "Error",
-                    message = ex.Message,
+                    reason = "DatabaseHealthCheckFailed",
+                    schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 }, statusCode: 503);
             }
@@ -62,7 +66,7 @@ public static class HealthEndpoints
         .WithDescription("Check PostgreSQL database connectivity");
 
         // 📊 Detailed readiness check (DB + data counts)
-        group.MapGet("/ready", async (ApiDbContext db) =>
+        group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState) =>
         {
             try
             {
@@ -72,7 +76,19 @@ public static class HealthEndpoints
                     return Results.Json(new
                     {
                         status = "NotReady",
-                        reason = "Database not reachable"
+                        reason = "DatabaseUnavailable",
+                        schema = BuildSchemaSummary(schemaState.Current)
+                    }, statusCode: 503);
+                }
+
+                var schemaStatus = schemaState.Current;
+                if (!schemaStatus.IsSchemaReady)
+                {
+                    return Results.Json(new
+                    {
+                        status = "NotReady",
+                        reason = "SchemaNotReady",
+                        schema = BuildSchemaSummary(schemaStatus)
                     }, statusCode: 503);
                 }
 
@@ -90,19 +106,36 @@ public static class HealthEndpoints
                         categories = categoryCount,
                         users = userCount
                     },
+                    schema = BuildSchemaSummary(schemaStatus),
                     timestamp = DateTime.UtcNow
                 });
             }
-            catch (Exception ex)
+            catch
             {
                 return Results.Json(new
                 {
                     status = "NotReady",
-                    reason = ex.Message
+                    reason = "ReadinessCheckFailed",
+                    schema = BuildSchemaSummary(schemaState.Current)
                 }, statusCode: 503);
             }
         })
         .WithName("ReadinessCheck")
         .WithDescription("Full readiness check including database and seed data");
+    }
+
+    private static object BuildSchemaSummary(DatabaseSchemaStatus status)
+    {
+        return new
+        {
+            state = status.Status,
+            isSchemaReady = status.IsSchemaReady,
+            schemaVersion = status.LatestAppliedMigration,
+            latestRequiredMigration = status.LatestCodeMigration,
+            pendingMigrationsCount = status.PendingMigrationsCount,
+            unknownAppliedMigrationsCount = status.UnknownAppliedMigrationsCount,
+            checkedAtUtc = status.CheckedAtUtc,
+            failure = status.FailureMessage
+        };
     }
 }

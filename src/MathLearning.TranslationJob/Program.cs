@@ -1,6 +1,7 @@
 ﻿using MathLearning.TranslationJob.Services;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -32,10 +33,17 @@ class Program
         var host = Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
+                var connectionString = context.Configuration.GetConnectionString("Default");
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    throw new InvalidOperationException(
+                        "Missing ConnectionStrings:Default. Configure the target API database before running the translation job.");
+                }
+
                 // Database
                 services.AddDbContext<ApiDbContext>(options =>
                     options.UseNpgsql(
-                        "Host=localhost;Port=5433;Username=postgres;Password=postgres;Database=mathlearning;",
+                        connectionString,
                         npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
                 // HTTP client for translation APIs
@@ -70,8 +78,12 @@ class Program
         {
             Console.WriteLine($"Starting translation job: {targetLang} using {provider}");
 
-            // Apply any pending migrations
-            await db.Database.MigrateAsync();
+            var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+            if (pendingMigrations.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Translation job requires an already migrated database. Pending migrations: {string.Join(", ", pendingMigrations)}");
+            }
 
             // Generate translations
             await job.GenerateMissingTranslationsAsync(targetLang);

@@ -12,45 +12,25 @@ namespace MathLearning.Infrastructure.Migrations.Api
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<Guid>(
-                name: "CurrentDraftId",
-                table: "Questions",
-                type: "uuid",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "CurrentDraftId" uuid NULL;
 
-            migrationBuilder.AddColumn<int>(
-                name: "CurrentVersionNumber",
-                table: "Questions",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "CurrentVersionNumber" integer NOT NULL DEFAULT 0;
 
-            migrationBuilder.AddColumn<string>(
-                name: "HintFull",
-                table: "Questions",
-                type: "TEXT",
-                nullable: true);
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "HintFull" TEXT NULL;
 
-            migrationBuilder.AddColumn<string>(
-                name: "PublishState",
-                table: "Questions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "draft");
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "PublishState" character varying(32) NOT NULL DEFAULT 'draft';
 
-            migrationBuilder.AddColumn<DateTime>(
-                name: "PublishedAtUtc",
-                table: "Questions",
-                type: "timestamp with time zone",
-                nullable: true);
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "PublishedAtUtc" timestamp with time zone NULL;
 
-            migrationBuilder.AddColumn<string>(
-                name: "PublishedByUserId",
-                table: "Questions",
-                type: "character varying(450)",
-                maxLength: 450,
-                nullable: true);
+                ALTER TABLE "Questions"
+                ADD COLUMN IF NOT EXISTS "PublishedByUserId" character varying(450) NULL;
+            """);
 
             migrationBuilder.CreateTable(
                 name: "question_authoring_audit_log",
@@ -224,103 +204,53 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Questions_CurrentDraftId",
-                table: "Questions",
-                column: "CurrentDraftId");
+            migrationBuilder.Sql("""
+                CREATE INDEX IF NOT EXISTS "IX_Questions_CurrentDraftId" ON "Questions" ("CurrentDraftId");
+                CREATE INDEX IF NOT EXISTS "IX_Questions_PublishState" ON "Questions" ("PublishState");
+            """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Questions_PublishState",
-                table: "Questions",
-                column: "PublishState");
+            migrationBuilder.Sql("""
+                CREATE INDEX IF NOT EXISTS "IX_question_authoring_audit_draft_occurred" ON "question_authoring_audit_log" ("DraftId", "OccurredAtUtc");
+                CREATE INDEX IF NOT EXISTS "IX_question_authoring_audit_question_occurred" ON "question_authoring_audit_log" ("QuestionId", "OccurredAtUtc");
+                CREATE INDEX IF NOT EXISTS "IX_question_drafts_content_hash" ON "question_drafts" ("ContentHash");
+                CREATE INDEX IF NOT EXISTS "IX_question_drafts_LatestValidationResultId" ON "question_drafts" ("LatestValidationResultId");
+                CREATE UNIQUE INDEX IF NOT EXISTS "UX_question_drafts_question_version" ON "question_drafts" ("QuestionId", "DraftVersion");
+                CREATE INDEX IF NOT EXISTS "IX_question_preview_cache_content_hash" ON "question_preview_cache" ("ContentHash");
+                CREATE INDEX IF NOT EXISTS "IX_question_preview_cache_DraftId" ON "question_preview_cache" ("DraftId");
+                CREATE INDEX IF NOT EXISTS "IX_question_preview_cache_expires" ON "question_preview_cache" ("ExpiresAtUtc");
+                CREATE INDEX IF NOT EXISTS "IX_question_validation_issues_result_stage" ON "question_validation_issues" ("ValidationResultId", "Stage");
+                CREATE INDEX IF NOT EXISTS "IX_question_validation_results_draft_validated" ON "question_validation_results" ("DraftId", "ValidatedAtUtc");
+                CREATE INDEX IF NOT EXISTS "IX_question_versions_PreviousVersionId" ON "question_versions" ("PreviousVersionId");
+                CREATE INDEX IF NOT EXISTS "IX_question_versions_question_published_at" ON "question_versions" ("QuestionId", "PublishedAtUtc");
+                CREATE INDEX IF NOT EXISTS "IX_question_versions_SourceDraftId" ON "question_versions" ("SourceDraftId");
+                CREATE UNIQUE INDEX IF NOT EXISTS "UX_question_versions_question_version" ON "question_versions" ("QuestionId", "VersionNumber");
+            """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_question_authoring_audit_draft_occurred",
-                table: "question_authoring_audit_log",
-                columns: new[] { "DraftId", "OccurredAtUtc" });
+            migrationBuilder.Sql("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints
+                        WHERE constraint_name = 'FK_question_authoring_audit_log_question_drafts_DraftId'
+                    ) THEN
+                        ALTER TABLE "question_authoring_audit_log"
+                        ADD CONSTRAINT "FK_question_authoring_audit_log_question_drafts_DraftId"
+                        FOREIGN KEY ("DraftId") REFERENCES "question_drafts" ("Id") ON DELETE SET NULL;
+                    END IF;
+                END $$;
 
-            migrationBuilder.CreateIndex(
-                name: "IX_question_authoring_audit_question_occurred",
-                table: "question_authoring_audit_log",
-                columns: new[] { "QuestionId", "OccurredAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_drafts_content_hash",
-                table: "question_drafts",
-                column: "ContentHash");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_drafts_LatestValidationResultId",
-                table: "question_drafts",
-                column: "LatestValidationResultId");
-
-            migrationBuilder.CreateIndex(
-                name: "UX_question_drafts_question_version",
-                table: "question_drafts",
-                columns: new[] { "QuestionId", "DraftVersion" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_preview_cache_content_hash",
-                table: "question_preview_cache",
-                column: "ContentHash");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_preview_cache_DraftId",
-                table: "question_preview_cache",
-                column: "DraftId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_preview_cache_expires",
-                table: "question_preview_cache",
-                column: "ExpiresAtUtc");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_validation_issues_result_stage",
-                table: "question_validation_issues",
-                columns: new[] { "ValidationResultId", "Stage" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_validation_results_draft_validated",
-                table: "question_validation_results",
-                columns: new[] { "DraftId", "ValidatedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_versions_PreviousVersionId",
-                table: "question_versions",
-                column: "PreviousVersionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_versions_question_published_at",
-                table: "question_versions",
-                columns: new[] { "QuestionId", "PublishedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_question_versions_SourceDraftId",
-                table: "question_versions",
-                column: "SourceDraftId");
-
-            migrationBuilder.CreateIndex(
-                name: "UX_question_versions_question_version",
-                table: "question_versions",
-                columns: new[] { "QuestionId", "VersionNumber" },
-                unique: true);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_question_authoring_audit_log_question_drafts_DraftId",
-                table: "question_authoring_audit_log",
-                column: "DraftId",
-                principalTable: "question_drafts",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_question_drafts_question_validation_results_LatestValidatio~",
-                table: "question_drafts",
-                column: "LatestValidationResultId",
-                principalTable: "question_validation_results",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints
+                        WHERE constraint_name = 'FK_question_drafts_question_validation_results_LatestValidationResultId'
+                    ) THEN
+                        ALTER TABLE "question_drafts"
+                        ADD CONSTRAINT "FK_question_drafts_question_validation_results_LatestValidationResultId"
+                        FOREIGN KEY ("LatestValidationResultId") REFERENCES "question_validation_results" ("Id") ON DELETE SET NULL;
+                    END IF;
+                END $$;
+            """);
         }
 
         /// <inheritdoc />
