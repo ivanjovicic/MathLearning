@@ -1,4 +1,4 @@
-using MathLearning.Application.DTOs.Cosmetics;
+﻿using MathLearning.Application.DTOs.Cosmetics;
 
 namespace MathLearning.Application.DTOs.Leaderboard;
 
@@ -12,6 +12,12 @@ public record LeaderboardItemDto
     public int Score { get; init; }
     public int StreakDays { get; init; }
     public int Level { get; init; }
+    public int? AvatarFrameId { get; init; }
+    public int? TrailId { get; init; }
+    public int? AvatarGearId { get; init; }
+    public int? AnswerEffectId { get; init; }
+    public int? ProfileBackgroundId { get; init; }
+    public IReadOnlyList<RareUnlockDto>? RecentRareUnlocks { get; init; }
 }
 
 public record LeaderboardContextDto

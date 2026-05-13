@@ -1,4 +1,4 @@
-using MathLearning.Application.DTOs.Cosmetics;
+﻿using MathLearning.Application.DTOs.Cosmetics;
 
 namespace MathLearning.Application.DTOs.Auth;
 
@@ -46,5 +46,11 @@ public record UserProfileDto(
     string? SchoolName = null,
     string? FacultyName = null,
     string? AvatarUrl = null,
-    AvatarAppearanceDto? Appearance = null
+    AvatarAppearanceDto? Appearance = null,
+    int? AvatarFrameId = null,
+    int? TrailId = null,
+    int? AvatarGearId = null,
+    int? AnswerEffectId = null,
+    int? ProfileBackgroundId = null,
+    IReadOnlyList<RareUnlockDto>? RecentRareUnlocks = null
 );

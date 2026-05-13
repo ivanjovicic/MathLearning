@@ -86,6 +86,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<CosmeticRewardClaim> CosmeticRewardClaims => Set<CosmeticRewardClaim>();
     public DbSet<SeasonRewardTrackEntry> SeasonRewardTrackEntries => Set<SeasonRewardTrackEntry>();
     public DbSet<UserAppearanceProjection> UserAppearanceProjections => Set<UserAppearanceProjection>();
+    public DbSet<UserCosmeticLoadoutProjection> UserCosmeticLoadoutProjections => Set<UserCosmeticLoadoutProjection>();
     public DbSet<CosmeticTelemetryEvent> CosmeticTelemetryEvents => Set<CosmeticTelemetryEvent>();
     public DbSet<CosmeticAuditLog> CosmeticAuditLogs => Set<CosmeticAuditLog>();
     public DbSet<LeaderboardSnapshot> LeaderboardSnapshots => Set<LeaderboardSnapshot>();
@@ -1342,6 +1343,15 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.SeasonId, e.TrackType, e.Tier })
                 .IsUnique()
                 .HasDatabaseName("UX_season_reward_tracks_season_track_tier");
+        });
+
+        builder.Entity<UserCosmeticLoadoutProjection>(entity =>
+        {
+            entity.ToTable("user_cosmetic_loadout_projections");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.RecentRareUnlocksJson).HasColumnType("jsonb");
         });
 
         builder.Entity<UserAppearanceProjection>(entity =>

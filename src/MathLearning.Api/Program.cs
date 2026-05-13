@@ -1,4 +1,4 @@
-using MathLearning.Api.Endpoints;
+﻿using MathLearning.Api.Endpoints;
 using MathLearning.Api.Middleware;
 using MathLearning.Api.Services;
 using MathLearning.Application.Validators;
@@ -326,6 +326,7 @@ try
     builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
     builder.Services.AddScoped<LegacyStepExplanationAdapter>();
     builder.Services.AddScoped<AdaptiveApiFacade>();
+    builder.Services.AddScoped<MathLearning.Infrastructure.Services.CosmeticLoadoutProjectionService>();
     builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
     builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
     builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());

@@ -1,5 +1,13 @@
 namespace MathLearning.Application.DTOs.Cosmetics;
 
+public record RareUnlockDto(
+    int CosmeticItemId,
+    string Key,
+    string Category,
+    string Rarity,
+    DateTime UnlockedAtUtc
+);
+
 public record CosmeticCatalogItemDto(
     int Id,
     string Key,

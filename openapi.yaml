@@ -6,6 +6,9 @@ info:
     Partial OpenAPI 3.0 spec generated from the project's endpoint mappings
     (extracted 2026-05-04). This is not exhaustive — verify types and add
     missing paths/schemas as needed.
+  contact:
+    name: MathLearning Dev
+    email: dev@mathlearning.example.com
 servers:
   - url: http://localhost:5180
     description: Development server (local)
@@ -13,6 +16,48 @@ servers:
 # Require Bearer JWT by default; anonymous endpoints override with security: []
 security:
   - bearerAuth: []
+
+tags:
+  - name: Adaptive
+    description: Adaptive learning endpoints
+  - name: Analytics
+    description: Analytics and recommendations
+  - name: Authentication
+    description: Authentication and token endpoints
+  - name: Cosmetics
+    description: Avatar, cosmetics catalog and store
+  - name: Bugs
+    description: Bug reporting and admin review
+  - name: Coins
+    description: Coins, transactions and ledger
+  - name: Monitoring
+    description: Health and monitoring endpoints
+  - name: Hints
+    description: Hint retrieval and purchases
+  - name: Leaderboard
+    description: Leaderboard and school rankings
+  - name: Maintenance
+    description: Admin maintenance actions
+  - name: Powerups
+    description: Powerups and purchases
+  - name: Practice
+    description: Practice sessions and submissions
+  - name: Progress
+    description: Progress, weak areas and analytics
+  - name: QuestionAuthoring
+    description: Question authoring and preview APIs
+  - name: Quiz
+    description: Quiz endpoints and SRS
+  - name: Sync
+    description: Sync, devices and offline bundles
+  - name: Users
+    description: User profiles, settings and avatars
+  - name: Explanations
+    description: Explanation generation and analysis
+  - name: Health
+    description: Health and readiness checks
+  - name: Questions
+    description: Questions retrieval and details
 
 components:
   securitySchemes:
@@ -1768,7 +1813,7 @@ paths:
           schema: { type: integer }
       responses:
         '200':
-          description: { formula, available, cost, remainingCoins }
+          description: Formula hint payload (formula, available, cost, remainingCoins)
 
   /api/coins/balance:
     get:

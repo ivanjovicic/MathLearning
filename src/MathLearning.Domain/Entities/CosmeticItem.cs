@@ -1,4 +1,4 @@
-namespace MathLearning.Domain.Entities;
+﻿namespace MathLearning.Domain.Entities;
 
 public static class CosmeticCategories
 {
@@ -239,4 +239,17 @@ public class CosmeticAuditLog
     public string? BeforeJson { get; set; }
     public string? AfterJson { get; set; }
     public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public class UserCosmeticLoadoutProjection
+{
+    public string UserId { get; set; } = string.Empty;
+    public int? AvatarFrameId { get; set; }
+    public int? TrailId { get; set; }
+    public int? AvatarGearId { get; set; }
+    public int? AnswerEffectId { get; set; }
+    public int? ProfileBackgroundId { get; set; }
+    public string? RecentRareUnlocksJson { get; set; }
+    public long LoadoutVersion { get; set; }
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }
