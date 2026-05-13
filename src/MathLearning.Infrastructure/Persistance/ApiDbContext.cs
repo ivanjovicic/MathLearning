@@ -1351,7 +1351,18 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.UserId);
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
             entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+            
+            // JSON columns for rich metadata per slot
+            entity.Property(e => e.FrameJson).HasColumnType("jsonb");
+            entity.Property(e => e.TrailJson).HasColumnType("jsonb");
+            entity.Property(e => e.AvatarGearJson).HasColumnType("jsonb");
+            entity.Property(e => e.AnswerEffectJson).HasColumnType("jsonb");
+            entity.Property(e => e.ProfileBackgroundJson).HasColumnType("jsonb");
             entity.Property(e => e.RecentRareUnlocksJson).HasColumnType("jsonb");
+            
+            // Indexes for rare cases (direct ID queries, though projection is primary access pattern)
+            entity.HasIndex(e => e.AvatarFrameId).HasDatabaseName("IX_user_cosmetic_loadouts_frame_id");
+            entity.HasIndex(e => e.ProfileBackgroundId).HasDatabaseName("IX_user_cosmetic_loadouts_bg_id");
         });
 
         builder.Entity<UserAppearanceProjection>(entity =>

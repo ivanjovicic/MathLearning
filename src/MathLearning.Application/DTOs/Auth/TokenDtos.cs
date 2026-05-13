@@ -47,10 +47,13 @@ public record UserProfileDto(
     string? FacultyName = null,
     string? AvatarUrl = null,
     AvatarAppearanceDto? Appearance = null,
+    // Backward compatibility: ID fields kept for older clients
     int? AvatarFrameId = null,
     int? TrailId = null,
     int? AvatarGearId = null,
     int? AnswerEffectId = null,
     int? ProfileBackgroundId = null,
-    IReadOnlyList<RareUnlockDto>? RecentRareUnlocks = null
+    IReadOnlyList<RareUnlockDto>? RecentRareUnlocks = null,
+    // Rich metadata: new clients use this instead of above ID fields
+    CosmeticLoadoutDto? CosmeticLoadout = null
 );

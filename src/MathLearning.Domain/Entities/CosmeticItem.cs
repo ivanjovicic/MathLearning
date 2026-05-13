@@ -244,12 +244,25 @@ public class CosmeticAuditLog
 public class UserCosmeticLoadoutProjection
 {
     public string UserId { get; set; } = string.Empty;
+    
+    // Backward compatibility: keep ID fields
     public int? AvatarFrameId { get; set; }
     public int? TrailId { get; set; }
     public int? AvatarGearId { get; set; }
     public int? AnswerEffectId { get; set; }
     public int? ProfileBackgroundId { get; set; }
+    
+    // Rich metadata: serialized EquippedCosmeticDto per slot (JSONB)
+    public string? FrameJson { get; set; }
+    public string? TrailJson { get; set; }
+    public string? AvatarGearJson { get; set; }
+    public string? AnswerEffectJson { get; set; }
+    public string? ProfileBackgroundJson { get; set; }
+    
+    // Recent rare unlock history
     public string? RecentRareUnlocksJson { get; set; }
+    
+    // Version for cache busting and conflict detection
     public long LoadoutVersion { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

@@ -12,12 +12,15 @@ public record LeaderboardItemDto
     public int Score { get; init; }
     public int StreakDays { get; init; }
     public int Level { get; init; }
+    // Backward compatibility: ID fields kept for older clients
     public int? AvatarFrameId { get; init; }
     public int? TrailId { get; init; }
     public int? AvatarGearId { get; init; }
     public int? AnswerEffectId { get; init; }
     public int? ProfileBackgroundId { get; init; }
     public IReadOnlyList<RareUnlockDto>? RecentRareUnlocks { get; init; }
+    // Rich metadata: new clients use this instead of above ID fields
+    public CosmeticLoadoutDto? CosmeticLoadout { get; init; }
 }
 
 public record LeaderboardContextDto
