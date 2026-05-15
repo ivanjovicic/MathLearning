@@ -757,6 +757,8 @@ try
 
     // Map Progress endpoints
     app.MapProgressEndpoints();
+    // Map Daily Run endpoints
+    app.MapDailyRunEndpoints();
 
     // Map Leaderboard endpoints
     app.MapLeaderboardEndpoints();

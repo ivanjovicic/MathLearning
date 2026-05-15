@@ -28,6 +28,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
     public DbSet<UserDailyStat> UserDailyStats => Set<UserDailyStat>();
+    public DbSet<DailyRunChestClaim> DailyRunChestClaims => Set<DailyRunChestClaim>();
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
@@ -467,6 +468,31 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
             entity.HasIndex(e => e.UserId)
                   .HasDatabaseName("IX_UserDailyStats_UserId");
+        });
+
+        builder.Entity<DailyRunChestClaim>(entity =>
+        {
+            entity.ToTable("daily_run_chest_claims");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Day).HasColumnType("date");
+            entity.Property(e => e.TransactionId).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.RewardSnapshotJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.ResponseSnapshotJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.ResultCode).IsRequired().HasMaxLength(64);
+
+            entity.HasIndex(e => new { e.UserId, e.Day })
+                .IsUnique()
+                .HasDatabaseName("UX_daily_run_chest_claims_user_day");
+
+            entity.HasIndex(e => new { e.UserId, e.TransactionId })
+                .IsUnique()
+                .HasDatabaseName("UX_daily_run_chest_claims_user_tx");
+
+            entity.HasIndex(e => new { e.UserId, e.ClaimedAtUtc })
+                .HasDatabaseName("IX_daily_run_chest_claims_user_claimed_at");
         });
 
         builder.Entity<BugReport>(entity =>
