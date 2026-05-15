@@ -27,6 +27,7 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
         // Ensure the process environment is `Test` so Program.cs detects it early (migrations/registrations can change).
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
         Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Test");
+        Environment.SetEnvironmentVariable("Database__StartupMode", "Skip");
         builder.UseEnvironment("Test");
 
         builder.ConfigureTestServices(services =>

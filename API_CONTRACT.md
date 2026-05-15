@@ -1,6 +1,6 @@
 # MathLearning API Contract (auto-generated)
 
-Generated: 2026-05-04
+Generated: 2026-05-15
 
 Purpose: concise list of backend endpoints and request/response contract hints for frontend (Flutter) verification.
 
@@ -9,6 +9,11 @@ Notes:
 - Path parameters are shown as `{name:type}`. Query parameters and default values are shown where present.
 - `Body` indicates the expected request DTO (when present) or primitive/query binding.
 - `Response` is a short summary or DTO name where available. When anonymous objects are returned, key fields are listed.
+- `Compatibility alias` means the route exists for older mobile clients; canonical routes should be preferred for new clients.
+
+Unsupported mobile routes:
+- `/api/analytics/mastery` is not implemented.
+- `/api/chase/*` is not implemented.
 
 ---
 
@@ -17,12 +22,14 @@ Auth: Required
 
 - POST /api/adaptive/session/start
   - Auth: Required
-  - Body: none
+  - Body: none (optional body tolerated for mobile compatibility; ignored fields: `topicId`, `topic`)
   - Response: ApiResult / start session payload (session id, metadata)
 
 - POST /api/adaptive/session/answer
   - Auth: Required
   - Body: `AdaptiveAnswerRequest`
+  - Required fields: `adaptiveSessionId`, `adaptiveSessionItemId`, `questionId`, `answer`
+  - Compatibility: legacy `sessionId` is accepted as alias for `adaptiveSessionId`
   - Response: ApiResult (answer result, score/xp info)
 
 - GET /api/adaptive/path
@@ -37,6 +44,11 @@ Auth: Required
 - GET /api/adaptive/reviews/due
   - Auth: Required
   - Response: ApiResult (due reviews list)
+  - Canonical route
+
+- GET /api/adaptive/review
+  - Auth: Required
+  - Compatibility alias for `/api/adaptive/reviews/due`
 
 ---
 
@@ -51,6 +63,10 @@ Auth: Required
 
 - GET /api/recommendations/practice?page=1&pageSize=10
   - Response: `PracticeRecommendationsResponse` (Recommendations list, Page/PageSize, Returned)
+
+- GET /api/analytics/mastery
+  - Not implemented.
+  - Use `/api/adaptive/path` or `/api/progress/overview` depending on product need.
 
 ---
 
@@ -271,8 +287,13 @@ Auth: Required
 
 - GET /api/leaderboard/schools?period=week&limit=50&cursor=
 - GET /api/leaderboard/schools/{schoolId:int}
+- GET /api/leaderboard/schools/history/{schoolId:int}?period=&take=
+  - Supported params: `period`, `take`
+  - Compatibility: legacy `from`/`to` query params are ignored
 - GET /api/leaderboard/global
 - GET /api/leaderboard/friends
+- GET /api/leaderboard/rivals
+  - Compatibility alias for `/api/leaderboard/friends`
 - GET /api/leaderboard/student
 - POST /api/leaderboard/admin/add-xp/{userId} (Admin)
 - POST /api/leaderboard/admin/reset-xp/{userId} (Admin)
@@ -428,7 +449,10 @@ Auth: Required
 Auth: Required
 
 - GET /api/user/profile/{userId}
-  - Admin-style information (XP/level/streak)
+  - Canonical route (admin-style information: XP/level/streak)
+
+- GET /api/users/{userId}/profile
+  - Compatibility alias for `/api/user/profile/{userId}`
 
 - GET /api/user/coins
   - Legacy alias -> current user's coins

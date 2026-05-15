@@ -25,31 +25,16 @@ public static class UserEndpoints
 
         legacyGroup.MapGet("/profile/{userId}", async (
             ApiDbContext db,
-            string userId) =>
-        {
-            var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
-            if (profile == null)
-            {
-                return Results.NotFound(new { error = "Profile not found" });
-            }
-
-            var appearance = await LoadAppearanceAsync(db, userId);
-            return Results.Ok(new
-            {
-                profile.UserId,
-                profile.Username,
-                profile.Xp,
-                profile.Level,
-                profile.Streak,
-                profile.DailyXp,
-                profile.WeeklyXp,
-                profile.MonthlyXp,
-                profile.AvatarUrl,
-                appearance
-            });
-        })
+            string userId) => await GetProfileByIdAsync(db, userId))
         .WithName("AdminGetUserProfileById")
         .WithDescription("Admin: Get user XP/level/streak by userId");
+
+        // Mobile compatibility alias. Canonical route remains: GET /api/user/profile/{userId}
+        group.MapGet("/{userId}/profile", async (
+            ApiDbContext db,
+            string userId) => await GetProfileByIdAsync(db, userId))
+        .WithName("GetUserProfileByIdCompatibilityAlias")
+        .WithSummary("Mobile compatibility alias for GET /api/user/profile/{userId}");
 
         legacyGroup.MapGet("/coins", async (
             ApiDbContext db,
@@ -499,6 +484,30 @@ private static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ct
     {
         var appearanceMap = await LoadAppearanceMapAsync(db, [userId]);
         return appearanceMap.TryGetValue(userId, out var appearance) ? appearance : null;
+    }
+
+    private static async Task<IResult> GetProfileByIdAsync(ApiDbContext db, string userId)
+    {
+        var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (profile == null)
+        {
+            return Results.NotFound(new { error = "Profile not found" });
+        }
+
+        var appearance = await LoadAppearanceAsync(db, userId);
+        return Results.Ok(new
+        {
+            profile.UserId,
+            profile.Username,
+            profile.Xp,
+            profile.Level,
+            profile.Streak,
+            profile.DailyXp,
+            profile.WeeklyXp,
+            profile.MonthlyXp,
+            profile.AvatarUrl,
+            appearance
+        });
     }
 
     private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)

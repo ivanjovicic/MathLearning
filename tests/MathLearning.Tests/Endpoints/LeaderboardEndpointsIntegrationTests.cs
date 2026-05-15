@@ -75,6 +75,18 @@ public class LeaderboardEndpointsIntegrationTests : IClassFixture<CustomWebAppli
     }
 
     [Fact]
+    public async Task GetRivalsLeaderboard_CompatibilityAlias_ReturnsFriendsShape()
+    {
+        var response = await _client.GetAsync("/api/leaderboard/rivals?period=weekly&limit=10");
+
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<LeaderboardResponseDto>();
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.Items);
+        Assert.NotNull(result.Me);
+    }
+
+    [Fact]
     public async Task GetSchoolLeaderboardDetail_ReturnsSchoolBreakdown()
     {
         var response = await _client.GetAsync("/api/leaderboard/schools/1?period=week&neighbors=2");
