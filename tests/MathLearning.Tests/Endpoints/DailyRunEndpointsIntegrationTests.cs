@@ -74,7 +74,10 @@ public sealed class DailyRunEndpointsIntegrationTests : IClassFixture<CustomWebA
 
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
-        Assert.Equal(firstBody, secondBody);
+        Assert.NotEqual(firstBody, secondBody);
+
+        var secondJson = JsonDocument.Parse(secondBody).RootElement;
+        Assert.True(secondJson.GetProperty("alreadyClaimed").GetBoolean());
 
         Assert.True(afterFirst.Xp > before.Xp);
         Assert.Equal(afterFirst.Xp, afterSecond.Xp);
@@ -110,7 +113,9 @@ public sealed class DailyRunEndpointsIntegrationTests : IClassFixture<CustomWebA
 
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
-        Assert.Equal(firstBody, secondBody);
+        Assert.NotEqual(firstBody, secondBody);
+        var secondJson = JsonDocument.Parse(secondBody).RootElement;
+        Assert.True(secondJson.GetProperty("alreadyClaimed").GetBoolean());
         Assert.Equal(afterFirst.Xp, afterSecond.Xp);
         Assert.Equal(afterFirst.Coins, afterSecond.Coins);
 
@@ -118,6 +123,50 @@ public sealed class DailyRunEndpointsIntegrationTests : IClassFixture<CustomWebA
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var claimsCount = await db.DailyRunChestClaims.CountAsync(x => x.UserId == "test-user" && x.Day == day);
         Assert.Equal(1, claimsCount);
+    }
+
+    [Fact]
+    public async Task SameTransactionId_OnDifferentDate_ReturnsOriginalClaim_AndNoSecondAward()
+    {
+        var firstDay = new DateOnly(2026, 05, 20);
+        var secondDay = new DateOnly(2026, 05, 21);
+        const string tx = "daily_chest_tx_cross_day_retry";
+
+        await EnsureUserAndCompletionAsync("test-user", firstDay, completed: true);
+        await EnsureUserAndCompletionAsync("test-user", secondDay, completed: true);
+
+        var first = await _client.PostAsJsonAsync("/api/daily-run/chest/claim", new
+        {
+            transactionId = tx,
+            date = "2026-05-20"
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var afterFirst = await GetProfileAsync("test-user");
+        var firstJson = await first.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(firstJson.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal("2026-05-20", firstJson.GetProperty("date").GetString());
+
+        var second = await _client.PostAsJsonAsync("/api/daily-run/chest/claim", new
+        {
+            transactionId = tx,
+            date = "2026-05-21"
+        });
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var secondJson = await second.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(secondJson.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal("2026-05-20", secondJson.GetProperty("date").GetString());
+
+        var afterSecond = await GetProfileAsync("test-user");
+        Assert.Equal(afterFirst.Xp, afterSecond.Xp);
+        Assert.Equal(afterFirst.Coins, afterSecond.Coins);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var userClaimsCount = await db.DailyRunChestClaims.CountAsync(x => x.UserId == "test-user");
+        var secondDayClaims = await db.DailyRunChestClaims.CountAsync(x => x.UserId == "test-user" && x.Day == secondDay);
+        Assert.Equal(1, userClaimsCount);
+        Assert.Equal(0, secondDayClaims);
     }
 
     [Fact]

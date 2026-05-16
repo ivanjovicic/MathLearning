@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Buffers.Binary;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -11,14 +13,15 @@ namespace MathLearning.Api.Endpoints;
 
 public static class DailyRunEndpoints
 {
-    private static readonly Regex TransactionIdPattern =
-        new("^daily_chest_tx_[A-Za-z0-9_-]{4,120}$", RegexOptions.Compiled);
+    private static readonly string[] CosmeticFragments =
+    {
+        "Comet Frame Fragment",
+        "Nova Trail Fragment",
+        "Neon Number Burst Fragment",
+        "Solar Pulse Fragment"
+    };
 
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> ClaimLocks = new();
-    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public static void MapDailyRunEndpoints(this IEndpointRouteBuilder app)
     {
@@ -46,12 +49,11 @@ public static class DailyRunEndpoints
                 });
             }
 
-            if (string.IsNullOrWhiteSpace(request.TransactionId) ||
-                !TransactionIdPattern.IsMatch(request.TransactionId))
+            if (string.IsNullOrWhiteSpace(request.TransactionId))
             {
                 return Results.BadRequest(new
                 {
-                    error = "Invalid transactionId format.",
+                    error = "Invalid transactionId.",
                     code = "INVALID_TRANSACTION_ID"
                 });
             }
@@ -61,17 +63,25 @@ public static class DailyRunEndpoints
             await gate.WaitAsync(ct);
             try
             {
-                var sameTx = await db.DailyRunChestClaims
+                var existingClaimByTransaction = await db.DailyRunChestClaims
                     .AsNoTracking()
                     .FirstOrDefaultAsync(x => x.UserId == userId && x.TransactionId == request.TransactionId, ct);
-                if (sameTx is not null)
-                    return JsonSnapshot(sameTx.ResponseSnapshotJson);
+                if (existingClaimByTransaction is not null)
+                {
+                    var profileForTransactionRetry = await db.UserProfiles.AsNoTracking()
+                        .FirstAsync(x => x.UserId == userId, ct);
+                    return Results.Ok(BuildResponse(existingClaimByTransaction, profileForTransactionRetry, true));
+                }
 
                 var existingClaimForDay = await db.DailyRunChestClaims
                     .AsNoTracking()
                     .FirstOrDefaultAsync(x => x.UserId == userId && x.Day == day, ct);
                 if (existingClaimForDay is not null)
-                    return JsonSnapshot(existingClaimForDay.ResponseSnapshotJson);
+                {
+                    var profileForDayRetry = await db.UserProfiles.AsNoTracking()
+                        .FirstAsync(x => x.UserId == userId, ct);
+                    return Results.Ok(BuildResponse(existingClaimForDay, profileForDayRetry, true));
+                }
 
                 var completedDailyRun = await db.UserDailyStats
                     .AsNoTracking()
@@ -86,7 +96,7 @@ public static class DailyRunEndpoints
                     }, statusCode: StatusCodes.Status409Conflict);
                 }
 
-                var reward = BuildCanonicalReward(day);
+                var reward = BuildCanonicalReward(userId, day);
                 var nowUtc = DateTime.UtcNow;
 
                 var useTransaction = db.Database.IsRelational();
@@ -106,48 +116,40 @@ public static class DailyRunEndpoints
                 profile.TotalCoinsEarned += reward.Coins;
                 profile.UpdatedAt = nowUtc;
 
-                var response = new DailyRunChestClaimResponse(
-                    Success: true,
-                    Date: day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    TransactionId: request.TransactionId,
-                    AlreadyClaimed: false,
-                    Reward: reward,
-                    Balances: new DailyRunChestBalances(
-                        Xp: profile.Xp,
-                        Level: profile.Level,
-                        Coins: profile.Coins));
-
-                var rewardSnapshot = JsonSerializer.Serialize(reward, SnapshotJsonOptions);
-                var responseSnapshot = JsonSerializer.Serialize(response, SnapshotJsonOptions);
-
-                db.DailyRunChestClaims.Add(new DailyRunChestClaim
+                var claim = new DailyRunChestClaim
                 {
                     UserId = userId,
                     Day = day,
                     TransactionId = request.TransactionId,
-                    RewardSnapshotJson = rewardSnapshot,
-                    ResponseSnapshotJson = responseSnapshot,
-                    ClaimedAtUtc = nowUtc,
-                    Status = "claimed",
-                    ResultCode = "ok"
-                });
+                    Xp = reward.Xp,
+                    Coins = reward.Coins,
+                    CosmeticFragment = reward.CosmeticFragment,
+                    CreatedAtUtc = nowUtc
+                };
+
+                db.DailyRunChestClaims.Add(claim);
 
                 await db.SaveChangesAsync(ct);
                 if (tx is not null)
                     await tx.CommitAsync(ct);
 
-                return JsonSnapshot(responseSnapshot);
+                return Results.Ok(BuildResponse(claim, profile, false));
             }
             catch (DbUpdateException)
             {
                 var fallback = await db.DailyRunChestClaims
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x =>
-                        x.UserId == userId &&
-                        (x.TransactionId == request.TransactionId || x.Day == day), ct);
+                    .FirstOrDefaultAsync(
+                        x => x.UserId == userId &&
+                             (x.Day == day || x.TransactionId == request.TransactionId),
+                        ct);
 
                 if (fallback is not null)
-                    return JsonSnapshot(fallback.ResponseSnapshotJson);
+                {
+                    var profile = await db.UserProfiles.AsNoTracking()
+                        .FirstAsync(x => x.UserId == userId, ct);
+                    return Results.Ok(BuildResponse(fallback, profile, true));
+                }
 
                 throw;
             }
@@ -159,9 +161,6 @@ public static class DailyRunEndpoints
         .WithName("ClaimDailyRunChest")
         .WithSummary("Claim daily run chest reward (server-authoritative and idempotent)");
     }
-
-    private static IResult JsonSnapshot(string snapshot) =>
-        Results.Text(snapshot, "application/json");
 
     private static bool TryParseDay(string? value, out DateOnly day)
     {
@@ -177,15 +176,51 @@ public static class DailyRunEndpoints
             out day);
     }
 
-    private static DailyRunChestReward BuildCanonicalReward(DateOnly day)
+    private static DailyRunChestReward BuildCanonicalReward(string userId, DateOnly day)
     {
-        // Canonical server-side reward; day-based deterministic variance can be expanded later.
-        var bonus = day.DayOfWeek == DayOfWeek.Sunday ? 5 : 0;
+        var seed = ComputeSeed(userId, day);
+        var xp = 25 + (seed.XpSeed % 26);
+        var coins = 8 + (seed.CoinsSeed % 13);
+        var fragment = CosmeticFragments[seed.FragmentSeed % CosmeticFragments.Length];
+
         return new DailyRunChestReward(
-            Xp: 40 + bonus,
-            Coins: 12 + bonus / 2,
-            CosmeticFragment: "Comet Frame Fragment",
+            Xp: xp,
+            Coins: coins,
+            CosmeticFragment: fragment,
             FragmentCopies: 1);
+    }
+
+    private static DailyRunChestClaimResponse BuildResponse(
+        DailyRunChestClaim claim,
+        UserProfile profile,
+        bool alreadyClaimed)
+    {
+        return new DailyRunChestClaimResponse(
+            Success: true,
+            Date: claim.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            TransactionId: claim.TransactionId,
+            AlreadyClaimed: alreadyClaimed,
+            Reward: new DailyRunChestReward(
+                Xp: claim.Xp,
+                Coins: claim.Coins,
+                CosmeticFragment: claim.CosmeticFragment,
+                FragmentCopies: 1),
+            Balances: new DailyRunChestBalances(
+                Xp: profile.Xp,
+                Level: profile.Level,
+                Coins: profile.Coins));
+    }
+
+    private static (int XpSeed, int CoinsSeed, int FragmentSeed) ComputeSeed(
+        string userId,
+        DateOnly day)
+    {
+        var input = Encoding.UTF8.GetBytes($"{userId}|{day:yyyy-MM-dd}");
+        var hash = SHA256.HashData(input);
+        return (
+            XpSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(0, 4)) & int.MaxValue,
+            CoinsSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(4, 4)) & int.MaxValue,
+            FragmentSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(8, 4)) & int.MaxValue);
     }
 }
 

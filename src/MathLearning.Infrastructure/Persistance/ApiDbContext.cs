@@ -477,22 +477,18 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
             entity.Property(e => e.Day).HasColumnType("date");
             entity.Property(e => e.TransactionId).IsRequired().HasMaxLength(128);
-            entity.Property(e => e.RewardSnapshotJson).IsRequired().HasColumnType("jsonb");
-            entity.Property(e => e.ResponseSnapshotJson).IsRequired().HasColumnType("jsonb");
-            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
-            entity.Property(e => e.Status).IsRequired().HasMaxLength(32);
-            entity.Property(e => e.ResultCode).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Xp).IsRequired();
+            entity.Property(e => e.Coins).IsRequired();
+            entity.Property(e => e.CosmeticFragment).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Ignore(e => e.Date);
 
             entity.HasIndex(e => new { e.UserId, e.Day })
                 .IsUnique()
                 .HasDatabaseName("UX_daily_run_chest_claims_user_day");
-
             entity.HasIndex(e => new { e.UserId, e.TransactionId })
                 .IsUnique()
-                .HasDatabaseName("UX_daily_run_chest_claims_user_tx");
-
-            entity.HasIndex(e => new { e.UserId, e.ClaimedAtUtc })
-                .HasDatabaseName("IX_daily_run_chest_claims_user_claimed_at");
+                .HasDatabaseName("UX_daily_run_chest_claims_user_transaction");
         });
 
         builder.Entity<BugReport>(entity =>

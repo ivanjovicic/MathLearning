@@ -19,21 +19,15 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     UserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
                     Day = table.Column<DateOnly>(type: "date", nullable: false),
                     TransactionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    RewardSnapshotJson = table.Column<string>(type: "jsonb", nullable: false),
-                    ResponseSnapshotJson = table.Column<string>(type: "jsonb", nullable: false),
-                    ClaimedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    ResultCode = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false)
+                    Xp = table.Column<int>(type: "integer", nullable: false),
+                    Coins = table.Column<int>(type: "integer", nullable: false),
+                    CosmeticFragment = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_daily_run_chest_claims", x => x.Id);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_daily_run_chest_claims_user_claimed_at",
-                table: "daily_run_chest_claims",
-                columns: new[] { "UserId", "ClaimedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "UX_daily_run_chest_claims_user_day",
@@ -42,7 +36,7 @@ namespace MathLearning.Infrastructure.Migrations.Api
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "UX_daily_run_chest_claims_user_tx",
+                name: "UX_daily_run_chest_claims_user_transaction",
                 table: "daily_run_chest_claims",
                 columns: new[] { "UserId", "TransactionId" },
                 unique: true);
@@ -56,4 +50,3 @@ namespace MathLearning.Infrastructure.Migrations.Api
         }
     }
 }
-
