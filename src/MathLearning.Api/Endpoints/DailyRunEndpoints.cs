@@ -69,7 +69,16 @@ public static class DailyRunEndpoints
                 if (existingClaimByTransaction is not null)
                 {
                     var profileForTransactionRetry = await db.UserProfiles.AsNoTracking()
-                        .FirstAsync(x => x.UserId == userId, ct);
+                        .FirstOrDefaultAsync(x => x.UserId == userId, ct);
+                    if (profileForTransactionRetry is null)
+                    {
+                        return Results.Json(new
+                        {
+                            error = "User profile not found.",
+                            code = "USER_PROFILE_NOT_FOUND"
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+
                     return Results.Ok(BuildResponse(existingClaimByTransaction, profileForTransactionRetry, true));
                 }
 
@@ -79,7 +88,16 @@ public static class DailyRunEndpoints
                 if (existingClaimForDay is not null)
                 {
                     var profileForDayRetry = await db.UserProfiles.AsNoTracking()
-                        .FirstAsync(x => x.UserId == userId, ct);
+                        .FirstOrDefaultAsync(x => x.UserId == userId, ct);
+                    if (profileForDayRetry is null)
+                    {
+                        return Results.Json(new
+                        {
+                            error = "User profile not found.",
+                            code = "USER_PROFILE_NOT_FOUND"
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+
                     return Results.Ok(BuildResponse(existingClaimForDay, profileForDayRetry, true));
                 }
 
@@ -147,7 +165,16 @@ public static class DailyRunEndpoints
                 if (fallback is not null)
                 {
                     var profile = await db.UserProfiles.AsNoTracking()
-                        .FirstAsync(x => x.UserId == userId, ct);
+                        .FirstOrDefaultAsync(x => x.UserId == userId, ct);
+                    if (profile is null)
+                    {
+                        return Results.Json(new
+                        {
+                            error = "User profile not found.",
+                            code = "USER_PROFILE_NOT_FOUND"
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+
                     return Results.Ok(BuildResponse(fallback, profile, true));
                 }
 
@@ -156,6 +183,11 @@ public static class DailyRunEndpoints
             finally
             {
                 gate.Release();
+                // Best-effort cleanup; DB unique constraints remain the real idempotency guard.
+                if (gate.CurrentCount == 1)
+                {
+                    ClaimLocks.TryRemove(lockKey, out _);
+                }
             }
         })
         .WithName("ClaimDailyRunChest")

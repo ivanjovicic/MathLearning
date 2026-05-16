@@ -1,6 +1,7 @@
 ﻿using MathLearning.Api.Endpoints;
 using MathLearning.Api.Middleware;
 using MathLearning.Api.Services;
+using MathLearning.Api.Startup;
 using MathLearning.Application.Validators;
 using MathLearning.Application.Services;
 using MathLearning.Core.Services;
@@ -155,278 +156,68 @@ try
             "Production deployment is using a local fallback database connection string. Set ConnectionStrings__Default.");
     }
 
-    // OpenTelemetry (minimal tracing)
-    var otelServiceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "mathlearning-api";
-    var otelServiceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
-    var enableEfCoreTracing = builder.Configuration.GetValue<bool?>("OpenTelemetry:EnableEntityFrameworkInstrumentation")
-        ?? !builder.Environment.IsDevelopment();
+    builder.AddObservabilityServices();
+    builder.AddDatabaseServices(defaultConnectionString, isDevelopment);
+    var backgroundJobRuntimeState = new BackgroundJobRuntimeState();
+    builder.Services.AddSingleton(backgroundJobRuntimeState);
+    var hangfireEnabled = await builder.AddBackgroundJobServices(
+        defaultConnectionString,
+        (connectionString, cancellationToken) => CanOpenPostgresConnectionAsync(connectionString, cancellationToken));
+    backgroundJobRuntimeState.HangfireEnabled = hangfireEnabled;
+    backgroundJobRuntimeState.DisabledReason = hangfireEnabled
+        ? null
+        : builder.Environment.IsEnvironment("Test")
+            ? "Disabled in test environment."
+            : "PostgreSQL unavailable at startup.";
+    builder.AddApplicationServices();
 
-    builder.Services.AddOpenTelemetry()
-        .ConfigureResource(resource => resource.AddService(
-            serviceName: otelServiceName,
-            serviceVersion: otelServiceVersion))
-        .WithTracing(tracerProviderBuilder =>
-        {
-            tracerProviderBuilder
-                .AddAspNetCoreInstrumentation(options =>
-                {
-                    options.RecordException = true;
-                })
-                .AddHttpClientInstrumentation();
-
-            if (enableEfCoreTracing)
-            {
-                tracerProviderBuilder.AddEntityFrameworkCoreInstrumentation();
-            }
-
-            // Optional OTLP exporter (Jaeger/Tempo/etc). If not configured, dev uses console exporter.
-            var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
-                ?? builder.Configuration["OpenTelemetry:Otlp:Endpoint"];
-
-            if (builder.Environment.IsDevelopment())
-            {
-                tracerProviderBuilder.AddConsoleExporter();
-            }
-
-            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
-            {
-                tracerProviderBuilder.AddOtlpExporter(options =>
-                {
-                    options.Endpoint = new Uri(otlpEndpoint);
-                });
-            }
-        });
-
-    // Health checks (Fly / uptime monitoring)
-    var healthChecks = builder.Services.AddHealthChecks();
-    if (!builder.Environment.IsEnvironment("Test") && !string.IsNullOrWhiteSpace(defaultConnectionString))
-    {
-        healthChecks.AddNpgSql(defaultConnectionString, name: "postgres");
-    }
-
-    builder.Services.AddHttpContextAccessor();
-    builder.Services.AddSingleton<PerformanceDbCommandInterceptor>();
-    builder.Services.AddSingleton<DatabaseSchemaState>();
-    builder.Services.AddSingleton<DatabaseSchemaVersionGuard>();
-
-    // Add ApiDbContext (kombinuje Identity i sve entitete)
-    // TEMPORARY TRIAGE LOGGING: enable detailed EF/Npgsql logging in Development only.
-    builder.Services.AddDbContext<ApiDbContext>((sp, options) =>
-    {
-        options.UseNpgsql(
-                defaultConnectionString,
-                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
-        options.AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>());
-
-        if (isDevelopment)
-        {
-            // Show parameter values and detailed EF errors to help triage SQL failures.
-            options.EnableDetailedErrors();
-            options.EnableSensitiveDataLogging();
-            // Log EF SQL commands and other messages via Serilog at Information level.
-            options.LogTo(s => Log.Debug("EF: {Message}", s), Microsoft.Extensions.Logging.LogLevel.Information);
-        }
-    });
-
-    // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
-    // Add AppDbContext (domain/outbox context used by event handlers + OutboxProcessor)
-    // TEMPORARY TRIAGE: mirror EF logging settings for AppDbContext in Development.
-    builder.Services.AddDbContext<AppDbContext>((sp, options) =>
-    {
-        options.UseNpgsql(
-                defaultConnectionString,
-                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
-        options.AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>());
-
-        if (isDevelopment)
-        {
-            options.EnableDetailedErrors();
-            options.EnableSensitiveDataLogging();
-            options.LogTo(s => Log.Debug("EF: {Message}", s), Microsoft.Extensions.Logging.LogLevel.Information);
-        }
-    });
-
-    var hangfireEnabled = false;
-
-    if (!builder.Environment.IsEnvironment("Test"))
-    {
-        if (await CanOpenPostgresConnectionAsync(defaultConnectionString))
-        {
-            // Hangfire (PostgreSQL)
-            builder.Services.AddHangfire(config => config
-                .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-                .UseSimpleAssemblyNameTypeSerializer()
-                .UseRecommendedSerializerSettings()
-                .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(defaultConnectionString), new PostgreSqlStorageOptions
-                {
-                    SchemaName = "hangfire",
-                    QueuePollInterval = TimeSpan.FromSeconds(15),
-                    InvisibilityTimeout = TimeSpan.FromMinutes(5)
-                }));
-            builder.Services.AddHangfireServer();
-            hangfireEnabled = true;
-        }
-        else
-        {
-            builder.Services.AddSingleton<IBackgroundJobClient, DisabledBackgroundJobClient>();
-            Log.Warning(
-                "Skipping Hangfire startup because PostgreSQL is unavailable at startup. Background job enqueue calls will be logged and ignored until the service restarts with a reachable database.");
-        }
-    }
-    else
-    {
-        builder.Services.AddSingleton<IBackgroundJobClient, DisabledBackgroundJobClient>();
-    }
-
-    // Add Identity (for User management)
-    builder.Services.AddIdentityCore<IdentityUser>(options =>
-    {
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequiredLength = 6;
-    })
-        .AddRoles<IdentityRole>()
-        .AddEntityFrameworkStores<ApiDbContext>()
-        .AddDefaultTokenProviders();
-
-    // ?? Add Background Services
-    builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
-    builder.Services.AddHostedService<XpResetBackgroundService>();
-
-    // ?? Domain Events & Outbox Pattern (In-proc via OutboxProcessor)
-    // Keep OutboxProcessor hosted service; use in-proc event bus so background worker invokes local handlers.
-    builder.Services.AddScoped<IEventBus, InProcEventBus>();
-
-    // Event handlers (unchanged)
-    builder.Services.AddScoped<IEventHandler<QuizCompleted>, QuizCompletedCoinsHandler>();
-    builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
-    builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
-
-    // ? SRS service
-    builder.Services.AddScoped<ISrsService, SrsService>();
-    builder.Services.AddScoped<IAdaptiveLearningService, AdaptiveLearningService>();
-    builder.Services.AddScoped<IWeaknessAnalysisService, WeaknessAnalysisService>();
-    builder.Services.AddScoped<IQuizAttemptIngestService, QuizAttemptIngestService>();
-    builder.Services.AddScoped<IBktService, BktService>();
-    builder.Services.AddScoped<IQuestionSelector, EfQuestionSelector>();
-    builder.Services.AddScoped<IPracticeAnalyticsUpdater, PracticeAnalyticsUpdater>();
-    builder.Services.AddScoped<IPracticeBackgroundJobs, PracticeBackgroundJobs>();
-    builder.Services.AddScoped<IPracticeHangfireJobs, PracticeHangfireJobs>();
-    builder.Services.AddScoped<ISchoolLeaderboardHangfireJobs, SchoolLeaderboardHangfireJobs>();
-    builder.Services.AddScoped<IAntiCheatHangfireJobs, AntiCheatHangfireJobs>();
-    builder.Services.AddScoped<IPracticeSessionService, PracticeSessionService>();
-    builder.Services.AddScoped<IMathReasoningGraphEngine, MathReasoningGraphEngine>();
-    builder.Services.AddScoped<IStepExplanationGenerator, StepExplanationGenerator>();
-    builder.Services.AddScoped<ICommonMistakeDetector, CommonMistakeDetector>();
-    builder.Services.AddScoped<IFormulaReferenceService, FormulaReferenceService>();
-    builder.Services.AddScoped<IAiTutorEnhancer, AiTutorEnhancer>();
-    builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
-    builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
-    builder.Services.AddScoped<LegacyStepExplanationAdapter>();
-    builder.Services.AddScoped<AdaptiveApiFacade>();
-    builder.Services.AddScoped<MathLearning.Infrastructure.Services.CosmeticLoadoutProjectionService>();
-    builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
-    builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
-    builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
-    builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
-
-    // In-memory cache + lock (replaces Redis for local / single-node)
-    // IMPORTANT: when SizeLimit is set, every cache entry MUST set a Size or IMemoryCache will throw.
-    builder.Services.AddMemoryCache(options =>
-    {
-        // Count-based limit (we set Size=1 per entry in InMemoryCacheService).
-        options.SizeLimit = 1000;
-    });
-    builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddControllers();
-    builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
-    builder.Services.AddSingleton<InMemoryCacheService>();
-    builder.Services.AddSingleton<InMemoryLockService>();
-    builder.Services.AddScoped<RequestDataCacheService>();
-
-    var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
-        ?? builder.Configuration["Redis:ConnectionString"];
-    if (!string.IsNullOrWhiteSpace(redisConnectionString))
-    {
-        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
-        builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
-        Log.Information("?? Redis connection configured for cache-backed features.");
-    }
-    else
-    {
-        builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
-        Log.Warning("Redis connection string is not configured. Falling back to DB-backed leaderboard service.");
-    }
-
-    // ? Bug reporting services
-    builder.Services.AddScoped<IBugReportService, BugReportService>();
-    builder.Services.AddScoped<IScreenshotStorageService, LocalScreenshotStorageService>();
-
-    // ?? Leaderboard service
-    // Register the DB-backed LeaderboardService in non-test environments only.
-    if (!builder.Environment.IsEnvironment("Test"))
-    {
-        builder.Services.AddScoped<LeaderboardService>();
-        builder.Services.AddScoped<MathLearning.Application.Services.ILeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
-        builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
-    }
-
-    // XP tracking and leaderboard aggregation services
-    builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
-    builder.Services.Configure<XpTrackingOptions>(
-        builder.Configuration.GetSection(XpTrackingOptions.SectionName));
-    builder.Services.AddScoped<XpTrackingService>();
-    builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
-    builder.Services.AddScoped<StudentLeaderboardService>();
-    builder.Services.AddScoped<IStudentLeaderboardService>(sp => sp.GetRequiredService<StudentLeaderboardService>());
-
-    // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-    var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
-    var issuer = jwtSettings["Issuer"] ?? "MathLearningAPI";
-    var audience = jwtSettings["Audience"] ?? "MathLearningApp";
-
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = issuer,
-                ValidAudience = audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
-            };
-        });
-
-    builder.Services.AddAuthorization(options =>
+    var fallbackJwtSecret = "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
+    var jwtSecret = jwtSettings["SecretKey"];
+    if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Test"))
     {
-        options.AddPolicy(DesignTokenSecurity.AdminPolicy, policy =>
+        if (string.IsNullOrWhiteSpace(jwtSecret) ||
+            string.Equals(jwtSecret, fallbackJwtSecret, StringComparison.Ordinal) ||
+            jwtSecret.Length < 32)
         {
-            policy.RequireAuthenticatedUser();
-            policy.RequireRole(DesignTokenSecurity.AdminRole);
-        });
-    });
+            Log.Error(
+                "JwtSettings:SecretKey must be configured with a non-fallback value of at least 32 characters in {Environment}.",
+                builder.Environment.EnvironmentName);
+            throw new InvalidOperationException("Invalid JwtSettings:SecretKey. Configure a production secret at least 32 characters long.");
+        }
+    }
 
-    // Configure CORS
+    builder.AddSecurityServices();
+    builder.AddCorsAndSwagger();
+
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
         {
-            policy.AllowAnyOrigin()
+            if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test"))
+            {
+                policy.AllowAnyOrigin()
+                      .AllowAnyMethod()
+                      .AllowAnyHeader()
+                      .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
+                return;
+            }
+
+            var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+            allowedOrigins = allowedOrigins.Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray();
+
+            if (allowedOrigins.Length == 0)
+            {
+                Log.Error("Cors:AllowedOrigins is not configured for non-Development/non-Test environments.");
+                throw new InvalidOperationException("Missing Cors:AllowedOrigins. Configure allowed origins for production.");
+            }
+
+            policy.WithOrigins(allowedOrigins)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
         });
     });
-
-    // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
 
     var app = builder.Build();
 
@@ -505,75 +296,7 @@ try
 
             databaseStartupSucceeded = true;
 
-            try
-            {
-                var cosmeticCountBefore = await db.CosmeticItems.CountAsync();
-                await db.Database.ExecuteSqlRawAsync(@"
-                        INSERT INTO cosmetic_items (""Key"", ""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""IsDefault"", ""ReleaseDate"")
-                        VALUES
-                            ('skin_classic_student', 'Classic Student', 'skin', 'common', 'cosmetics/skin/classic_student.png', 'cosmetics/skin/preview/classic_student.png', 'default', TRUE, NOW()),
-                            ('skin_math_explorer', 'Math Explorer', 'skin', 'common', 'cosmetics/skin/math_explorer.png', 'cosmetics/skin/preview/math_explorer.png', 'default', TRUE, NOW()),
-                            ('hair_short_classic', 'Short Classic', 'hair', 'common', 'cosmetics/hair/short_classic.png', 'cosmetics/hair/preview/short_classic.png', 'default', TRUE, NOW()),
-                            ('hair_long_straight', 'Long Straight', 'hair', 'common', 'cosmetics/hair/long_straight.png', 'cosmetics/hair/preview/long_straight.png', 'default', TRUE, NOW()),
-                            ('hair_curly', 'Curly', 'hair', 'common', 'cosmetics/hair/curly.png', 'cosmetics/hair/preview/curly.png', 'default', TRUE, NOW()),
-                            ('clothing_school_uniform', 'School Uniform', 'clothing', 'common', 'cosmetics/clothing/school_uniform.png', 'cosmetics/clothing/preview/school_uniform.png', 'default', TRUE, NOW()),
-                            ('clothing_casual_tshirt', 'Casual T-Shirt', 'clothing', 'common', 'cosmetics/clothing/casual_tshirt.png', 'cosmetics/clothing/preview/casual_tshirt.png', 'default', TRUE, NOW()),
-                            ('accessory_none', 'None', 'accessory', 'common', 'cosmetics/accessory/none.png', 'cosmetics/accessory/preview/none.png', 'default', TRUE, NOW()),
-                            ('frame_basic', 'Basic Frame', 'frame', 'common', 'cosmetics/frame/basic.png', 'cosmetics/frame/preview/basic.png', 'default', TRUE, NOW()),
-                            ('background_classroom', 'Classroom', 'background', 'common', 'cosmetics/background/classroom.png', 'cosmetics/background/preview/classroom.png', 'default', TRUE, NOW()),
-                            ('background_math_board', 'Math Board', 'background', 'common', 'cosmetics/background/math_board.png', 'cosmetics/background/preview/math_board.png', 'default', TRUE, NOW())
-                        ON CONFLICT (""Key"") DO NOTHING;
-
-                        INSERT INTO cosmetic_items (""Key"", ""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""CoinPrice"", ""IsDefault"", ""ReleaseDate"")
-                        VALUES
-                            ('skin_ninja_mathematician', 'Ninja Mathematician', 'skin', 'rare', 'cosmetics/skin/ninja_math.png', 'cosmetics/skin/preview/ninja_math.png', 'shop', 200, FALSE, NOW()),
-                            ('skin_robot_student', 'Robot Student', 'skin', 'rare', 'cosmetics/skin/robot_student.png', 'cosmetics/skin/preview/robot_student.png', 'shop', 200, FALSE, NOW()),
-                            ('hair_spiky_blue', 'Spiky Blue', 'hair', 'rare', 'cosmetics/hair/spiky_blue.png', 'cosmetics/hair/preview/spiky_blue.png', 'shop', 100, FALSE, NOW()),
-                            ('hair_rainbow_ponytail', 'Rainbow Ponytail', 'hair', 'rare', 'cosmetics/hair/rainbow_ponytail.png', 'cosmetics/hair/preview/rainbow_ponytail.png', 'shop', 100, FALSE, NOW()),
-                            ('clothing_lab_coat', 'Lab Coat', 'clothing', 'rare', 'cosmetics/clothing/lab_coat.png', 'cosmetics/clothing/preview/lab_coat.png', 'shop', 150, FALSE, NOW()),
-                            ('clothing_hoodie', 'Hoodie', 'clothing', 'rare', 'cosmetics/clothing/hoodie.png', 'cosmetics/clothing/preview/hoodie.png', 'shop', 150, FALSE, NOW()),
-                            ('accessory_calculator_watch', 'Calculator Watch', 'accessory', 'rare', 'cosmetics/accessory/calculator_watch.png', 'cosmetics/accessory/preview/calculator_watch.png', 'shop', 100, FALSE, NOW()),
-                            ('accessory_pi_necklace', 'Pi Necklace', 'accessory', 'rare', 'cosmetics/accessory/pi_necklace.png', 'cosmetics/accessory/preview/pi_necklace.png', 'shop', 100, FALSE, NOW()),
-                            ('frame_golden', 'Golden Frame', 'frame', 'rare', 'cosmetics/frame/golden.png', 'cosmetics/frame/preview/golden.png', 'shop', 150, FALSE, NOW()),
-                            ('frame_neon', 'Neon Frame', 'frame', 'rare', 'cosmetics/frame/neon.png', 'cosmetics/frame/preview/neon.png', 'shop', 150, FALSE, NOW()),
-                            ('hair_einstein', 'Einstein Hair', 'hair', 'epic', 'cosmetics/hair/einstein.png', 'cosmetics/hair/preview/einstein.png', 'shop', 300, FALSE, NOW()),
-                            ('clothing_professor_outfit', 'Professor Outfit', 'clothing', 'epic', 'cosmetics/clothing/professor.png', 'cosmetics/clothing/preview/professor.png', 'shop', 400, FALSE, NOW()),
-                            ('background_starfield', 'Starfield Background', 'background', 'epic', 'cosmetics/background/starfield.png', 'cosmetics/background/preview/starfield.png', 'shop', 350, FALSE, NOW()),
-                            ('frame_animated_fire', 'Animated Fire Frame', 'frame', 'epic', 'cosmetics/frame/animated_fire.png', 'cosmetics/frame/preview/animated_fire.png', 'shop', 500, FALSE, NOW()),
-                            ('skin_golden_genius', 'Golden Genius Skin', 'skin', 'legendary', 'cosmetics/skin/golden_genius.png', 'cosmetics/skin/preview/golden_genius.png', 'shop', 1000, FALSE, NOW()),
-                            ('background_galaxy', 'Galaxy Background', 'background', 'legendary', 'cosmetics/background/galaxy.png', 'cosmetics/background/preview/galaxy.png', 'shop', 800, FALSE, NOW())
-                        ON CONFLICT (""Key"") DO NOTHING;
-
-                        INSERT INTO cosmetic_items (""Key"", ""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""UnlockCondition"", ""IsDefault"", ""ReleaseDate"")
-                        VALUES
-                            ('accessory_streak_7day_badge', '7-Day Streak Badge', 'accessory', 'rare', 'cosmetics/accessory/streak_7day.png', 'cosmetics/accessory/preview/streak_7day.png', 'streak', 'streak:7', FALSE, NOW()),
-                            ('accessory_streak_30day_crown', '30-Day Streak Crown', 'accessory', 'epic', 'cosmetics/accessory/streak_30day_crown.png', 'cosmetics/accessory/preview/streak_30day_crown.png', 'streak', 'streak:30', FALSE, NOW()),
-                            ('effect_streak_100day_aura', '100-Day Streak Aura', 'effect', 'legendary', 'cosmetics/effect/streak_100day_aura.png', 'cosmetics/effect/preview/streak_100day_aura.png', 'streak', 'streak:100', FALSE, NOW()),
-                            ('accessory_apprentice_hat', 'Apprentice Hat', 'accessory', 'common', 'cosmetics/accessory/apprentice_hat.png', 'cosmetics/accessory/preview/apprentice_hat.png', 'level', 'level:5', FALSE, NOW()),
-                            ('clothing_scholar_robe', 'Scholar Robe', 'clothing', 'rare', 'cosmetics/clothing/scholar_robe.png', 'cosmetics/clothing/preview/scholar_robe.png', 'level', 'level:10', FALSE, NOW()),
-                            ('frame_master', 'Master Frame', 'frame', 'epic', 'cosmetics/frame/master.png', 'cosmetics/frame/preview/master.png', 'level', 'level:25', FALSE, NOW()),
-                            ('skin_grandmaster', 'Grandmaster Skin', 'skin', 'legendary', 'cosmetics/skin/grandmaster.png', 'cosmetics/skin/preview/grandmaster.png', 'level', 'level:50', FALSE, NOW()),
-                            ('frame_top10_trophy', 'Top 10 Trophy Frame', 'frame', 'epic', 'cosmetics/frame/top10_trophy.png', 'cosmetics/frame/preview/top10_trophy.png', 'leaderboard', 'top:10', FALSE, NOW()),
-                            ('accessory_champion_crown', '#1 Champion Crown', 'accessory', 'legendary', 'cosmetics/accessory/champion_crown.png', 'cosmetics/accessory/preview/champion_crown.png', 'leaderboard', 'top:1', FALSE, NOW()),
-                            ('effect_xp_1000_star', '1000 XP Star', 'effect', 'rare', 'cosmetics/effect/xp_1000_star.png', 'cosmetics/effect/preview/xp_1000_star.png', 'xp_milestone', 'xp:1000', FALSE, NOW()),
-                            ('effect_xp_10000_nova', '10000 XP Nova', 'effect', 'epic', 'cosmetics/effect/xp_10000_nova.png', 'cosmetics/effect/preview/xp_10000_nova.png', 'xp_milestone', 'xp:10000', FALSE, NOW())
-                        ON CONFLICT (""Key"") DO NOTHING;
-                    ");
-
-                var cosmeticCountAfter = await db.CosmeticItems.CountAsync();
-                if (cosmeticCountAfter > cosmeticCountBefore)
-                {
-                    Log.Information("🎨 Cosmetic items ensured on startup. Count={Count}", cosmeticCountAfter);
-                }
-                else
-                {
-                    Log.Information("🎨 Cosmetic system tables verified ({Count} items exist)", cosmeticCountAfter);
-                }
-            }
-            catch (Exception cosmeticEx)
-            {
-                Log.Warning(cosmeticEx, "⚠️ Could not seed cosmetic items");
-            }
+            await CosmeticStartupSeeder.EnsureCosmeticItemsAsync(scope.ServiceProvider, CancellationToken.None);
 
             userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
 
@@ -701,6 +424,19 @@ try
     // Health endpoint for Fly.io / uptime checks
     app.MapHealthChecks("/health");
     app.MapHealthEndpoints();
+    app.MapGet("/health/background-jobs", (BackgroundJobRuntimeState backgroundJobState) =>
+    {
+        return Results.Ok(new
+        {
+            status = backgroundJobState.HangfireEnabled ? "Healthy" : "Disabled",
+            enabled = backgroundJobState.HangfireEnabled,
+            disabledReason = backgroundJobState.DisabledReason,
+            timestamp = DateTime.UtcNow
+        });
+    })
+    .AllowAnonymous()
+    .WithName("BackgroundJobsHealth")
+    .WithDescription("Reports whether background jobs were enabled at startup");
 
     // Minimal runtime metrics (no Prometheus dependency)
     app.MapGet("/metrics", () =>
@@ -1605,4 +1341,5 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
 

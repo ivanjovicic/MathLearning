@@ -40,12 +40,10 @@ public static class QuizEndpoints
 
             db.QuizSessions.Add(quiz);
 
-            var questionIds = await db.Questions
-                .Where(q => q.SubtopicId == request.SubtopicId)
-                .OrderBy(q => Guid.NewGuid())
-                .Take(request.QuestionCount)
-                .Select(q => q.Id)
-                .ToListAsync();
+            var questionIds = await SelectRandomQuestionIdsAsync(
+                db.Questions.Where(q => q.SubtopicId == request.SubtopicId),
+                request.QuestionCount,
+                ctx.RequestAborted);
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
 
             var questionDtos = questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList();
@@ -423,13 +421,10 @@ public static class QuizEndpoints
                 var dueIds = questions.Select(q => q.Id).ToList();
                 int needed = targetCount - questions.Count;
 
-                var randomFillIds = await db.Questions
-                    .AsNoTracking()
-                    .Where(q => !dueIds.Contains(q.Id))
-                    .OrderBy(q => Guid.NewGuid())
-                    .Take(needed)
-                    .Select(q => q.Id)
-                    .ToListAsync();
+                var randomFillIds = await SelectRandomQuestionIdsAsync(
+                    db.Questions.AsNoTracking().Where(q => !dueIds.Contains(q.Id)),
+                    needed,
+                    ctx.RequestAborted);
                 var randomFill = await LoadQuestionsWithDetailsByIds(db, randomFillIds);
 
                 questions.AddRange(randomFill);
@@ -465,13 +460,10 @@ public static class QuizEndpoints
 
             if (needed > 0)
             {
-                var randomQuestionIds = await db.Questions
-                    .AsNoTracking()
-                    .Where(x => !dueIds.Contains(x.Id))
-                    .OrderBy(x => Guid.NewGuid())
-                    .Take(needed)
-                    .Select(x => x.Id)
-                    .ToListAsync();
+                var randomQuestionIds = await SelectRandomQuestionIdsAsync(
+                    db.Questions.AsNoTracking().Where(x => !dueIds.Contains(x.Id)),
+                    needed,
+                    ctx.RequestAborted);
                 randomQuestions = await LoadQuestionsWithDetailsByIds(db, randomQuestionIds);
             }
 
@@ -555,6 +547,51 @@ public static class QuizEndpoints
         );
     }
 
+    private static async Task<List<int>> SelectRandomQuestionIdsAsync(
+        IQueryable<Question> baseQuery,
+        int count,
+        CancellationToken ct)
+    {
+        if (count <= 0)
+        {
+            return [];
+        }
+
+        var total = await baseQuery.CountAsync(ct);
+        if (total <= count)
+        {
+            return await baseQuery
+                .OrderBy(q => q.Id)
+                .Select(q => q.Id)
+                .ToListAsync(ct);
+        }
+
+        try
+        {
+            var skip = Random.Shared.Next(0, total - count + 1);
+            var ids = await baseQuery
+                .OrderBy(q => q.Id)
+                .Skip(skip)
+                .Take(count)
+                .Select(q => q.Id)
+                .ToListAsync(ct);
+
+            if (ids.Count == count)
+            {
+                return ids;
+            }
+        }
+        catch
+        {
+        }
+
+        return await baseQuery
+            .OrderBy(q => Guid.NewGuid())
+            .Take(count)
+            .Select(q => q.Id)
+            .ToListAsync(ct);
+    }
+
     private static async Task<IResult> BuildLegacyQuestionsResponse(
         ApiDbContext db,
         HttpContext ctx,
@@ -576,11 +613,10 @@ public static class QuizEndpoints
             query = query.Where(q => q.Subtopic != null && q.Subtopic.TopicId == topicId.Value);
         }
 
-        var questionIds = await query
-            .OrderBy(q => Guid.NewGuid())
-            .Take(Math.Max(1, count))
-            .Select(q => q.Id)
-            .ToListAsync();
+        var questionIds = await SelectRandomQuestionIdsAsync(
+            query,
+            Math.Max(1, count),
+            ctx.RequestAborted);
         var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
 
         var quizSession = new QuizSession
