@@ -205,6 +205,42 @@ public sealed class DailyRunChestClaimEndpointTests : IClassFixture<CustomWebApp
         Assert.Equal(2, claimsCount);
     }
 
+    [Fact]
+    public async Task RetryClaim_WhenUserProfileMissing_Returns409UserProfileNotFound()
+    {
+        var day = new DateOnly(2026, 05, 21);
+        await EnsureUserStateAsync("test-user", day, completed: true);
+
+        var firstClaim = await _client.PostAsJsonAsync("/api/daily-run/chest/claim", new
+        {
+            transactionId = "tx-missing-profile-retry",
+            date = "2026-05-21"
+        });
+        Assert.Equal(HttpStatusCode.OK, firstClaim.StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == "test-user");
+            if (profile is not null)
+            {
+                db.UserProfiles.Remove(profile);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        var retryResponse = await _client.PostAsJsonAsync("/api/daily-run/chest/claim", new
+        {
+            transactionId = "tx-missing-profile-retry",
+            date = "2026-05-21"
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, retryResponse.StatusCode);
+        var payload = await retryResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("USER_PROFILE_NOT_FOUND", payload.GetProperty("code").GetString());
+        Assert.Equal("User profile not found.", payload.GetProperty("error").GetString());
+    }
+
     private async Task EnsureUserStateAsync(string userId, DateOnly day, bool completed)
     {
         using var scope = _factory.Services.CreateScope();
