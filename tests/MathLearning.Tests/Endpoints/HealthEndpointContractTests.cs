@@ -25,10 +25,16 @@ public sealed class HealthEndpointContractTests : IClassFixture<CustomWebApplica
         AssertHealthStatus(response.StatusCode);
 
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(payload.TryGetProperty("status", out _));
+        Assert.True(payload.TryGetProperty("status", out var statusElement));
+        var status = statusElement.GetString();
+        Assert.False(string.Equals(status, "Healthy", StringComparison.Ordinal));
+        Assert.False(string.Equals(status, "Unhealthy", StringComparison.Ordinal));
         Assert.True(payload.TryGetProperty("isSchemaReady", out _));
+        Assert.True(payload.TryGetProperty("latestCodeMigration", out _));
+        Assert.True(payload.TryGetProperty("latestAppliedMigration", out _));
         Assert.True(payload.TryGetProperty("pendingMigrationsCount", out _));
         Assert.True(payload.TryGetProperty("unknownAppliedMigrationsCount", out _));
+        Assert.True(payload.TryGetProperty("failureMessage", out _));
         Assert.True(payload.TryGetProperty("checkedAtUtc", out _));
     }
 

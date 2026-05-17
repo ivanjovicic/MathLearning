@@ -19,10 +19,12 @@ public sealed class ServiceRegistrationSecurityTests
         Assert.Equal("Cors:AllowedOrigins must be configured outside Development/Test.", exception.Message);
     }
 
-    [Fact]
-    public void AddCorsAndSwagger_DevelopmentWithoutAllowedOrigins_DoesNotThrow()
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Test")]
+    public void AddCorsAndSwagger_DevelopmentOrTestWithoutAllowedOrigins_DoesNotThrow(string environmentName)
     {
-        var builder = CreateBuilder("Development");
+        var builder = CreateBuilder(environmentName);
 
         var exception = Record.Exception(() => builder.AddCorsAndSwagger());
 
