@@ -8,6 +8,9 @@ namespace MathLearning.Application.Helpers;
 public static class TranslationHelper
 {
     private static readonly IMathContentSanitizer Sanitizer = new MathContentSanitizer();
+    private static readonly HashSet<string> SupportedLanguages = new(
+        ["sr", "en", "de", "es"],
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Default language for question content (original text stored on Question entity).
@@ -155,19 +158,34 @@ public static class TranslationHelper
     public static string ResolveLanguage(string? settingsLang, string? acceptLanguageHeader)
     {
         // 1. UserSettings.Language (if loaded)
-        if (!string.IsNullOrWhiteSpace(settingsLang))
-            return settingsLang.Trim().ToLowerInvariant();
+        var settingsLanguage = NormalizeSupportedLanguage(settingsLang);
+        if (settingsLanguage is not null)
+            return settingsLanguage;
 
         // 2. Accept-Language header
         if (!string.IsNullOrWhiteSpace(acceptLanguageHeader))
         {
-            var primaryLang = acceptLanguageHeader.Split(',', ';')[0].Trim().ToLowerInvariant();
-            if (primaryLang.Contains('-'))
-                primaryLang = primaryLang.Split('-')[0];
-            return primaryLang;
+            foreach (var languageRange in acceptLanguageHeader.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var language = NormalizeSupportedLanguage(languageRange.Split(';')[0]);
+                if (language is not null)
+                    return language;
+            }
         }
 
         return DefaultLang;
+    }
+
+    private static string? NormalizeSupportedLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language))
+            return null;
+
+        var normalized = language.Trim().ToLowerInvariant();
+        if (normalized.Contains('-'))
+            normalized = normalized.Split('-')[0];
+
+        return SupportedLanguages.Contains(normalized) ? normalized : null;
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 ﻿using MathLearning.Domain.Entities;
+using MathLearning.Application.Helpers;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +7,22 @@ namespace MathLearning.Tests.Endpoints;
 
 public class QuizEndpointTranslationTests
 {
+    [Theory]
+    [InlineData("de", "en-US,en;q=0.9", "de")]
+    [InlineData(null, "fr-FR, de-DE;q=0.9, en;q=0.8", "de")]
+    [InlineData(null, "fr-FR, en;q=0.9", "en")]
+    [InlineData(null, "fr-FR, it;q=0.9", "sr")]
+    [InlineData(null, null, "sr")]
+    public void ResolveLanguage_UsesSettingsThenFirstSupportedAcceptLanguageThenDefault(
+        string? settingsLang,
+        string? acceptLanguage,
+        string expected)
+    {
+        var resolved = TranslationHelper.ResolveLanguage(settingsLang, acceptLanguage);
+
+        Assert.Equal(expected, resolved);
+    }
+
     [Fact]
     public async Task SrsMixed_ReturnsTranslatedQuestionsWithHints()
     {

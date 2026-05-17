@@ -989,8 +989,8 @@ public static class QuizEndpoints
             }
         }
 
-        var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
-        return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);
+        var acceptLang = ctx.Request.Headers.AcceptLanguage.ToString();
+        return TranslationHelper.ResolveLanguage(settings?.LanguageCode ?? settings?.Language, acceptLang);
     }
 
     private static int? ParseTopicIdFromTopic(string topic)
