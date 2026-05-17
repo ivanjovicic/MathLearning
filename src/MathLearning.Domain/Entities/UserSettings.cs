@@ -6,6 +6,7 @@ public class UserSettings
     public string UserId { get; set; } = string.Empty;
 
     public string Language { get; set; } = "sr";
+    public string? LanguageCode { get; set; }
     public string Theme { get; set; } = "light";
     public bool HintsEnabled { get; set; } = true;
     public bool SoundEnabled { get; set; } = true;

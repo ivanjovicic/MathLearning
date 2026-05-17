@@ -425,6 +425,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.ToTable("user_settings");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Language).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.LanguageCode).HasColumnType("varchar(8)").HasMaxLength(8);
             entity.Property(e => e.Theme).IsRequired().HasMaxLength(20);
             entity.Property(e => e.DailyNotificationTime).HasMaxLength(5);
             entity.Property(e => e.CreatedAt).IsRequired();

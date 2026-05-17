@@ -22,6 +22,7 @@ public class UserSettingsModelTests
         var settings = await db.UserSettings.FirstAsync(s => s.UserId == "1");
 
         Assert.Equal("sr", settings.Language);
+        Assert.Null(settings.LanguageCode);
         Assert.Equal("light", settings.Theme);
         Assert.True(settings.HintsEnabled);
         Assert.True(settings.SoundEnabled);
@@ -45,6 +46,7 @@ public class UserSettingsModelTests
 
         var settings = await db.UserSettings.FirstAsync(s => s.UserId == "1");
         settings.Language = "en";
+        settings.LanguageCode = "en";
         settings.Theme = "dark";
         settings.HintsEnabled = false;
         settings.SoundEnabled = false;
@@ -55,6 +57,7 @@ public class UserSettingsModelTests
 
         var updated = await db.UserSettings.FirstAsync(s => s.UserId == "1");
         Assert.Equal("en", updated.Language);
+        Assert.Equal("en", updated.LanguageCode);
         Assert.Equal("dark", updated.Theme);
         Assert.False(updated.HintsEnabled);
         Assert.False(updated.SoundEnabled);
@@ -68,6 +71,7 @@ public class UserSettingsModelTests
         var settings = new UserSettings();
 
         Assert.Equal("sr", settings.Language);
+        Assert.Null(settings.LanguageCode);
         Assert.Equal("light", settings.Theme);
         Assert.True(settings.HintsEnabled);
         Assert.True(settings.SoundEnabled);

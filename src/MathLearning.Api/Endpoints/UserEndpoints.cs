@@ -10,6 +10,10 @@ namespace MathLearning.Api.Endpoints;
 
 public static class UserEndpoints
 {
+    private static readonly HashSet<string> SupportedLanguageCodes = new(
+        ["en", "sr", "de", "es"],
+        StringComparer.OrdinalIgnoreCase);
+
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/users")
@@ -288,6 +292,7 @@ public static class UserEndpoints
             return Results.Ok(new UserSettingsDto(
                 settings.UserId,
                 settings.Language,
+                settings.LanguageCode,
                 settings.Theme,
                 settings.HintsEnabled,
                 settings.SoundEnabled,
@@ -332,6 +337,20 @@ public static class UserEndpoints
             if (!string.IsNullOrWhiteSpace(request.Language))
                 settings.Language = request.Language;
 
+            var requestedLanguageCode = request.ResolveLanguageCode();
+            if (!string.IsNullOrWhiteSpace(requestedLanguageCode))
+            {
+                if (!SupportedLanguageCodes.Contains(requestedLanguageCode))
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = "Invalid languageCode. Supported values: en, sr, de, es."
+                    });
+                }
+
+                settings.LanguageCode = requestedLanguageCode.ToLowerInvariant();
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Theme))
                 settings.Theme = request.Theme;
 
@@ -357,6 +376,7 @@ public static class UserEndpoints
             return Results.Ok(new UserSettingsDto(
                 settings.UserId,
                 settings.Language,
+                settings.LanguageCode,
                 settings.Theme,
                 settings.HintsEnabled,
                 settings.SoundEnabled,
