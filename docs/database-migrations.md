@@ -10,6 +10,7 @@
 
 - `./scripts/db/update-dev.ps1`: apply API migrations to the configured development database and print the exact host, port, database, and user.
 - `./scripts/db/drop-dev-db.ps1`: drop and recreate the local development API database. The script refuses to run against non-local hosts.
+- `./scripts/db/show-migration-drift.ps1`: print migrations in code and show the applied migrations history (when direct DB query tooling is available) to diagnose local drift.
 - `./scripts/db/generate-prod-script.ps1 -FromMigration <current-prod> -ToMigration <target>`: generate the reviewed SQL script to apply in higher environments.
 - `./scripts/db/validate-schema.ps1`: create a fresh validation database, apply migrations from zero, run the schema drift tests, and return non-zero on failure.
 
@@ -28,6 +29,7 @@
 - `/health` remains the basic liveness endpoint.
 - `/api/health/db` reports connectivity plus summarized schema status.
 - `/api/health/ready` returns `503` when the database is unreachable or the schema guard says the runtime schema is not ready.
+- If startup fails with `Pending=0` and `UnknownApplied>0`, that is local migration-history drift. For disposable local data, run `./scripts/db/drop-dev-db.ps1`.
 
 ## What changed
 

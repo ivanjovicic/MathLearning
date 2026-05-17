@@ -11,44 +11,32 @@ namespace MathLearning.Infrastructure.Migrations.Api
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<DateTime>(
-                name: "DeletedAt",
-                table: "Questions",
-                type: "timestamp with time zone",
-                nullable: true);
+            // Idempotent because some dev databases already contain these columns from older repair/branch drift.
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Questions""
+ADD COLUMN IF NOT EXISTS ""DeletedAt"" timestamp with time zone;");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "IsDeleted",
-                table: "Questions",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Questions""
+ADD COLUMN IF NOT EXISTS ""IsDeleted"" boolean NOT NULL DEFAULT FALSE;");
 
-            migrationBuilder.AddColumn<int>(
-                name: "Order",
-                table: "Options",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Options""
+ADD COLUMN IF NOT EXISTS ""Order"" integer NOT NULL DEFAULT 0;");
 
-            migrationBuilder.CreateTable(
-                name: "user_cosmetic_loadout_projections",
-                columns: table => new
-                {
-                    UserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
-                    AvatarFrameId = table.Column<int>(type: "integer", nullable: true),
-                    TrailId = table.Column<int>(type: "integer", nullable: true),
-                    AvatarGearId = table.Column<int>(type: "integer", nullable: true),
-                    AnswerEffectId = table.Column<int>(type: "integer", nullable: true),
-                    ProfileBackgroundId = table.Column<int>(type: "integer", nullable: true),
-                    RecentRareUnlocksJson = table.Column<string>(type: "jsonb", nullable: true),
-                    LoadoutVersion = table.Column<long>(type: "bigint", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_user_cosmetic_loadout_projections", x => x.UserId);
-                });
+            migrationBuilder.Sql(
+                @"CREATE TABLE IF NOT EXISTS ""user_cosmetic_loadout_projections"" (
+  ""UserId"" character varying(450) NOT NULL,
+  ""AvatarFrameId"" integer NULL,
+  ""TrailId"" integer NULL,
+  ""AvatarGearId"" integer NULL,
+  ""AnswerEffectId"" integer NULL,
+  ""ProfileBackgroundId"" integer NULL,
+  ""RecentRareUnlocksJson"" jsonb NULL,
+  ""LoadoutVersion"" bigint NOT NULL,
+  ""UpdatedAtUtc"" timestamp with time zone NOT NULL,
+  CONSTRAINT ""PK_user_cosmetic_loadout_projections"" PRIMARY KEY (""UserId"")
+);");
         }
 
         /// <inheritdoc />

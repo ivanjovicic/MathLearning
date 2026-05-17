@@ -123,6 +123,14 @@ public sealed class DatabaseSchemaVersionGuard
             status.PendingMigrationsCount,
             status.UnknownAppliedMigrationsCount);
 
+        if (!isSchemaReady)
+        {
+            logger.LogWarning(
+                "Database schema mismatch details. PendingMigrations={PendingMigrations}; UnknownAppliedMigrations={UnknownAppliedMigrations}",
+                string.Join(", ", pendingMigrations),
+                string.Join(", ", unknownAppliedMigrations));
+        }
+
         return status;
     }
 
@@ -136,11 +144,16 @@ public sealed class DatabaseSchemaVersionGuard
             ? "Use scripts/db/drop-dev-db.ps1 for a local reset, or add an explicit repair migration before retrying startup."
             : "Apply the reviewed migration script before starting this service. Startup migrations are disabled in this environment.";
 
+        var detailsSegment = string.IsNullOrWhiteSpace(status.FailureMessage)
+            ? string.Empty
+            : $" Details={status.FailureMessage};";
+
         var message = $"Database schema validation failed in {environmentName}. " +
             $"LatestApplied={status.LatestAppliedMigration ?? "<none>"}; " +
             $"LatestCode={status.LatestCodeMigration ?? "<none>"}; " +
             $"Pending={status.PendingMigrationsCount}; " +
-            $"UnknownApplied={status.UnknownAppliedMigrationsCount}. " +
+            $"UnknownApplied={status.UnknownAppliedMigrationsCount};" +
+            detailsSegment + " " +
             guidance;
 
         return new InvalidOperationException(message, innerException);

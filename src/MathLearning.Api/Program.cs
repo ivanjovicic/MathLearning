@@ -358,11 +358,11 @@ try
         {
             if (!databaseStartupSucceeded)
             {
-                Log.Warning("Skipping admin/test user seeding because database startup did not complete successfully.");
+                Log.Warning("Skipping admin seeding because database startup did not complete successfully.");
             }
             else if (!userProfileIdentitySchemaReady)
             {
-                Log.Warning("Skipping admin/test user seeding because UserProfiles.UserId is not compatible with Identity text keys.");
+                Log.Warning("Skipping admin seeding because UserProfiles.UserId is not compatible with Identity text keys.");
             }
             else
             {
@@ -371,12 +371,42 @@ try
         }
         else
         {
-            Log.Warning("SeedAdmin is disabled (set `SeedAdmin__Enabled=true` to enable). Skipping admin/test user seeding.");
+            Log.Warning("SeedAdmin is disabled (set `SeedAdmin__Enabled=true` to enable). Skipping admin seeding.");
         }
     }
     catch (Exception ex)
     {
         Log.Warning(ex, "Admin seeding failed, continuing without seeding.");
+    }
+
+    // Seed deterministic Development/Test login accounts for local app testing.
+    try
+    {
+        var shouldSeedTestAccounts = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Test");
+        if (!shouldSeedTestAccounts)
+        {
+            Log.Information(
+                "Skipping Development/Test account seeding in environment {Environment}.",
+                app.Environment.EnvironmentName);
+        }
+        else if (!databaseStartupSucceeded)
+        {
+            Log.Warning("Skipping Development/Test account seeding because database startup did not complete successfully.");
+        }
+        else if (!userProfileIdentitySchemaReady)
+        {
+            Log.Warning("Skipping Development/Test account seeding because UserProfiles.UserId is not compatible with Identity text keys.");
+        }
+        else
+        {
+            using var seedScope = app.Services.CreateScope();
+            var testAccountSeeder = ActivatorUtilities.CreateInstance<TestAccountSeeder>(seedScope.ServiceProvider);
+            await testAccountSeeder.SeedAsync(app.Environment);
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Development/Test account seeding failed, continuing startup.");
     }
 
     // Configure the HTTP request pipeline.
@@ -756,137 +786,6 @@ static async Task SeedAdminUser(WebApplication app)
             Log.Information("? Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
         }
     }
-    
-    // ?? Seed Test Users for Mobile App
-    // 
-    // -------------------------------------------------------------------------------
-    // ?? TEST USERS (for mobile app login)
-    // -------------------------------------------------------------------------------
-    // 
-    // Username: test     | Password: Test123!
-    // Username: demo     | Password: Demo123!
-    // Username: ivan     | Password: Ivan123!
-    // 
-    // -------------------------------------------------------------------------------
-    
-    var seedTestUsersEnabled =
-        app.Environment.IsDevelopment()
-        || app.Configuration.GetValue<bool>("SeedTestUsers:Enabled");
-
-    if (!seedTestUsersEnabled)
-    {
-        Log.Warning("SeedTestUsers is disabled (set `SeedTestUsers__Enabled=true` to enable). Skipping test user seeding.");
-        return;
-    }
-
-    var testUsers = new[]
-    {
-        new { Username = "test", Email = "test@mathlearning.com", Password = "Test123!", DisplayName = "Test User", Coins = 100, Level = 1, Xp = 0, Streak = 0 },
-        new { Username = "demo", Email = "demo@mathlearning.com", Password = "Demo123!", DisplayName = "Demo User", Coins = 150, Level = 2, Xp = 50, Streak = 3 },
-        new { Username = "ivan", Email = "ivan@mathlearning.com", Password = "Ivan123!", DisplayName = "Ivan", Coins = 300, Level = 3, Xp = 200, Streak = 5 }
-    };
-    
-    foreach (var testUser in testUsers)
-    {
-        var existingUser = await userManager.FindByNameAsync(testUser.Username);
-        
-        if (existingUser == null)
-        {
-            var user = new IdentityUser
-            {
-                UserName = testUser.Username,
-                Email = testUser.Email,
-                EmailConfirmed = true
-            };
-            
-            var result = await userManager.CreateAsync(user, testUser.Password);
-            
-            if (result.Succeeded)
-            {
-                Log.Information($"? Test user '{testUser.Username}' created successfully!");
-                
-                 // Create UserProfile
-                 string userId = user.Id;
-                 
-                 // Check by Username (unique constraint) instead of UserId
-                 if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
-                 {
-                     var userProfile = new MathLearning.Domain.Entities.UserProfile
-                     {
-                         UserId = userId,
-                        Username = testUser.Username,
-                        DisplayName = testUser.DisplayName,
-                        Coins = testUser.Coins,
-                        Level = testUser.Level,
-                        Xp = testUser.Xp,
-                        Streak = testUser.Streak,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                    db.UserProfiles.Add(userProfile);
-                    await db.SaveChangesAsync();
-                    Log.Information($"? User profile for '{testUser.Username}' created!");
-                }
-                else
-                {
-                    Log.Information($"? User profile for '{testUser.Username}' already exists.");
-                }
-            }
-            else
-            {
-                Log.Warning($"? Failed to create test user '{testUser.Username}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
-            }
-        }
-        else
-        {
-            Log.Information($"? Test user '{testUser.Username}' already exists.");
-            await EnsurePasswordAsync(userManager, existingUser, testUser.Password);
-              
-            // Ensure UserProfile exists even if IdentityUser was created before
-            if (!await db.UserProfiles.AnyAsync(p => p.Username == testUser.Username))
-            {
-                string userId = existingUser.Id;
-                 
-                var userProfile = new MathLearning.Domain.Entities.UserProfile
-                {
-                    UserId = userId,
-                    Username = testUser.Username,
-                    DisplayName = testUser.DisplayName,
-                    Coins = testUser.Coins,
-                    Level = testUser.Level,
-                    Xp = testUser.Xp,
-                    Streak = testUser.Streak,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                db.UserProfiles.Add(userProfile);
-                await db.SaveChangesAsync();
-                Log.Information($"? User profile for existing user '{testUser.Username}' created!");
-            }
-        }
-    }
-     
-    // ?? Backfill UserProfiles for Identity users (stable 1:1 mapping)
-    var allIdentityUsers = await userManager.Users.ToListAsync();
-    foreach (var u in allIdentityUsers)
-    {
-        if (await db.UserProfiles.AnyAsync(p => p.UserId == u.Id))
-            continue;
-
-        db.UserProfiles.Add(new MathLearning.Domain.Entities.UserProfile
-        {
-            UserId = u.Id,
-            Username = u.UserName ?? u.Id,
-            DisplayName = u.UserName ?? u.Id,
-            Coins = 100,
-            Level = 1,
-            Xp = 0,
-            Streak = 0,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        });
-    }
-    await db.SaveChangesAsync();
 }
 
 static string DescribeDbConnection(string connectionString)
