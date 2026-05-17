@@ -122,6 +122,36 @@ public static class HealthEndpoints
         })
         .WithName("ReadinessCheck")
         .WithDescription("Full readiness check including database and seed data");
+
+        group.MapGet("/schema", BuildSchemaHealthResult)
+        .WithName("SchemaHealthCheck")
+        .WithDescription("Expose database schema/migration state");
+
+        app.MapGet("/health/schema", BuildSchemaHealthResult)
+            .AllowAnonymous()
+            .WithName("CanonicalSchemaHealthCheck")
+            .WithTags("Health")
+            .WithDescription("Expose database schema/migration state");
+    }
+
+    private static IResult BuildSchemaHealthResult(DatabaseSchemaState schemaState)
+    {
+        var schemaStatus = schemaState.Current;
+        var payload = new
+        {
+            status = schemaStatus.Status,
+            isSchemaReady = schemaStatus.IsSchemaReady,
+            latestCodeMigration = schemaStatus.LatestCodeMigration,
+            latestAppliedMigration = schemaStatus.LatestAppliedMigration,
+            pendingMigrationsCount = schemaStatus.PendingMigrationsCount,
+            unknownAppliedMigrationsCount = schemaStatus.UnknownAppliedMigrationsCount,
+            failureMessage = schemaStatus.FailureMessage,
+            checkedAtUtc = schemaStatus.CheckedAtUtc
+        };
+
+        return schemaStatus.IsSchemaReady
+            ? Results.Ok(payload)
+            : Results.Json(payload, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
     private static object BuildSchemaSummary(DatabaseSchemaStatus status)

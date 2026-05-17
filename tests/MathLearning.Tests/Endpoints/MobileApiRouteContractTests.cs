@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using MathLearning.Api;
-using MathLearning.Domain.Entities;
-using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Text.Encodings.Web;
 
 namespace MathLearning.Tests.Endpoints;
 
@@ -16,8 +18,7 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
 
     public MobileApiRouteContractTests(CustomWebApplicationFactory<Program> factory)
     {
-        SeedCurrentUserProfile(factory);
-        _client = factory.CreateClient();
+        _client = new AnonymousWebApplicationFactory().CreateClient();
     }
 
     [Theory]
@@ -32,7 +33,7 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
     [InlineData("GET", "/api/users/profile")]
     [InlineData("GET", "/api/user/coins")]
     [InlineData("POST", "/api/daily-run/chest/claim")]
-    public async Task MobileRoutes_ArePresent_And_DoNotReturn404(string method, string path)
+    public async Task MobileRoutes_Return401WithoutToken(string method, string path)
     {
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
         if (method == "POST")
@@ -42,7 +43,7 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
 
         var response = await _client.SendAsync(request);
 
-        Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Theory]
@@ -65,37 +66,33 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
-    private static void SeedCurrentUserProfile(CustomWebApplicationFactory<Program> factory)
+    private sealed class AnonymousWebApplicationFactory : CustomWebApplicationFactory<Program>
     {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-
-        if (!db.Users.Any(x => x.Id == "test-user"))
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            db.Users.Add(new IdentityUser
+            base.ConfigureWebHost(builder);
+
+            builder.ConfigureTestServices(services =>
             {
-                Id = "test-user",
-                UserName = "test-user",
-                Email = "test-user@example.test"
+                services.AddAuthentication("Anonymous")
+                    .AddScheme<AuthenticationSchemeOptions, NoAuthHandler>("Anonymous", _ => { });
             });
         }
+    }
 
-        if (!db.UserProfiles.Any(x => x.UserId == "test-user"))
+    private sealed class NoAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+    {
+        public NoAuthHandler(
+            IOptionsMonitor<AuthenticationSchemeOptions> options,
+            ILoggerFactory logger,
+            UrlEncoder encoder)
+            : base(options, logger, encoder)
         {
-            db.UserProfiles.Add(new UserProfile
-            {
-                UserId = "test-user",
-                Username = "test-user",
-                DisplayName = "Test User",
-                Coins = 100,
-                Level = 1,
-                Xp = 0,
-                Streak = 0,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
         }
 
-        db.SaveChanges();
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
     }
 }

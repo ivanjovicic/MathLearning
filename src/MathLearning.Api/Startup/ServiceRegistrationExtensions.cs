@@ -27,6 +27,8 @@ namespace MathLearning.Api.Startup;
 
 public static class ServiceRegistrationExtensions
 {
+    private const string FallbackJwtSecret = "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
+
     public static void AddObservabilityServices(this WebApplicationBuilder builder)
     {
         var otelServiceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "mathlearning-api";
@@ -154,7 +156,7 @@ public static class ServiceRegistrationExtensions
         return hangfireEnabled;
     }
 
-    public static void AddApplicationServices(this WebApplicationBuilder builder)
+    public static void AddApplicationLayerServices(this WebApplicationBuilder builder)
     {
         builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
         builder.Services.AddHostedService<XpResetBackgroundService>();
@@ -190,7 +192,10 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
         builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
         builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
+    }
 
+    public static void AddCacheAndInfrastructureServices(this WebApplicationBuilder builder)
+    {
         builder.Services.AddMemoryCache(options =>
         {
             options.SizeLimit = 1000;
@@ -251,7 +256,7 @@ public static class ServiceRegistrationExtensions
             .AddDefaultTokenProviders();
 
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
+        var secretKey = ResolveJwtSecret(builder);
         var issuer = jwtSettings["Issuer"] ?? "MathLearningAPI";
         var audience = jwtSettings["Audience"] ?? "MathLearningApp";
 
@@ -280,13 +285,71 @@ public static class ServiceRegistrationExtensions
         });
     }
 
+    private static string ResolveJwtSecret(WebApplicationBuilder builder)
+    {
+        var secretKey = builder.Configuration.GetSection("JwtSettings")["SecretKey"];
+        var isDevelopmentOrTest = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test");
+
+        if (string.IsNullOrWhiteSpace(secretKey))
+        {
+            if (isDevelopmentOrTest)
+            {
+                secretKey = FallbackJwtSecret;
+            }
+            else
+            {
+                Log.Error("JwtSettings:SecretKey must be configured outside Development/Test.");
+                throw new InvalidOperationException("JwtSettings:SecretKey must be configured outside Development/Test.");
+            }
+        }
+
+        if (!isDevelopmentOrTest && string.Equals(secretKey, FallbackJwtSecret, StringComparison.Ordinal))
+        {
+            Log.Error("JwtSettings:SecretKey must be configured outside Development/Test.");
+            throw new InvalidOperationException("JwtSettings:SecretKey must be configured outside Development/Test.");
+        }
+
+        if (secretKey.Length < 32)
+        {
+            Log.Error("JwtSettings:SecretKey must be at least 32 characters.");
+            throw new InvalidOperationException("JwtSettings:SecretKey must be at least 32 characters.");
+        }
+
+        return secretKey;
+    }
+
+    public static void AddApiDocumentationServices(this WebApplicationBuilder builder)
+        => AddCorsAndSwagger(builder);
+
     public static void AddCorsAndSwagger(this WebApplicationBuilder builder)
     {
+        var isDevelopmentOrTest = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test");
+        var allowedOrigins = Array.Empty<string>();
+
+        if (!isDevelopmentOrTest)
+        {
+            allowedOrigins = GetConfiguredCorsAllowedOrigins(builder.Configuration);
+            if (allowedOrigins.Length == 0)
+            {
+                Log.Error("Cors:AllowedOrigins must be configured outside Development/Test.");
+                throw new InvalidOperationException("Cors:AllowedOrigins must be configured outside Development/Test.");
+            }
+        }
+
         builder.Services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
             {
-                policy.AllowAnyOrigin()
+                if (isDevelopmentOrTest)
+                {
+                    policy.AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
+                    return;
+                }
+
+                policy.WithOrigins(allowedOrigins)
                     .AllowAnyMethod()
                     .AllowAnyHeader()
                     .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
@@ -295,5 +358,27 @@ public static class ServiceRegistrationExtensions
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+    }
+
+    private static string[] GetConfiguredCorsAllowedOrigins(IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Cors:AllowedOrigins");
+        var origins = section.Get<string[]>() ?? [];
+
+        if (origins.Length == 0)
+        {
+            var rawOrigins = configuration["Cors:AllowedOrigins"];
+            if (!string.IsNullOrWhiteSpace(rawOrigins))
+            {
+                origins = rawOrigins.Split(
+                    [',', ';'],
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+        }
+
+        return origins
+            .Where(origin => !string.IsNullOrWhiteSpace(origin))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 }

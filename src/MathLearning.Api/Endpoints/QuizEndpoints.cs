@@ -373,144 +373,6 @@ public static class QuizEndpoints
             ));
         });
 
-        // ?? SRS UPDATE
-        group.MapPost("/srs/update", async (
-            SrsUpdateDto dto,
-            ISrsService srs,
-            HttpContext ctx) =>
-        {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-
-            var result = await srs.UpdateAsync(userId, dto);
-
-            return Results.Ok(new
-            {
-                questionId = result.QuestionId,
-                nextReview = result.NextReview,
-                streak = result.SuccessStreak,
-                ease = result.Ease
-            });
-        });
-
-        // ?? SRS DAILY
-        group.MapGet("/srs/daily", async (
-            ApiDbContext db,
-            HttpContext ctx,
-            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
-            int limit = 20) =>
-        {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
-
-            var dueQuestionIds = await db.QuestionStats
-                .AsNoTracking()
-                .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
-                .OrderBy(x => x.Ease)
-                .ThenBy(x => x.QuestionId)
-                .Take(limit)
-                .Select(x => x.QuestionId)
-                .ToListAsync();
-            var questions = await LoadQuestionsWithDetailsByIds(db, dueQuestionIds);
-
-            // Legacy/mobile UX fallback:
-            // if user has at least one due SRS item, pad the session with random questions
-            // so quiz flow doesn't stop after a single card.
-            int targetCount = Math.Min(limit, 10);
-            if (questions.Count > 0 && questions.Count < targetCount)
-            {
-                var dueIds = questions.Select(q => q.Id).ToList();
-                int needed = targetCount - questions.Count;
-
-                var randomFillIds = await SelectRandomQuestionIdsAsync(
-                    db.Questions.AsNoTracking().Where(q => !dueIds.Contains(q.Id)),
-                    needed,
-                    ctx.RequestAborted);
-                var randomFill = await LoadQuestionsWithDetailsByIds(db, randomFillIds);
-
-                questions.AddRange(randomFill);
-            }
-
-            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList());
-        });
-
-        // ?? SRS MIXED (due + random)
-        group.MapGet("/srs/mixed", async (
-            ApiDbContext db,
-            HttpContext ctx,
-            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
-            int count = 15) =>
-        {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
-
-            var dueStats = await db.QuestionStats
-                .AsNoTracking()
-                .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
-                .OrderBy(x => x.Ease)
-                .Take(count)
-                .ToListAsync();
-
-            var dueIds = dueStats.Select(x => x.QuestionId).ToList();
-
-            var srsQuestions = await LoadQuestionsWithDetailsByIds(db, dueIds);
-
-            int needed = count - srsQuestions.Count;
-
-            List<Question> randomQuestions = new();
-
-            if (needed > 0)
-            {
-                var randomQuestionIds = await SelectRandomQuestionIdsAsync(
-                    db.Questions.AsNoTracking().Where(x => !dueIds.Contains(x.Id)),
-                    needed,
-                    ctx.RequestAborted);
-                randomQuestions = await LoadQuestionsWithDetailsByIds(db, randomQuestionIds);
-            }
-
-            return Results.Ok(new
-            {
-                srs = srsQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter)),
-                random = randomQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter))
-            });
-        });
-
-        group.MapGet("/srs/streak", async (
-            ApiDbContext db,
-            HttpContext ctx) =>
-        {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-
-            var profile = await db.UserProfiles
-                .FirstOrDefaultAsync(p => p.UserId == userId);
-
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            StreakRollEventDto? streakEvent = null;
-
-            if (profile != null)
-            {
-                var roll = StreakRoller.Apply(profile, today);
-                if (roll != null)
-                {
-                    streakEvent = new StreakRollEventDto(
-                        roll.Type,
-                        roll.MissedDays,
-                        roll.FreezesUsed,
-                        roll.StreakBefore,
-                        roll.StreakAfter
-                    );
-                    await db.SaveChangesAsync();
-                }
-            }
-
-            return Results.Ok(new
-            {
-                streak = profile?.Streak ?? 0,
-                streakFreezeCount = profile?.StreakFreezeCount ?? 0,
-                lastStreakDay = profile?.LastStreakDay,
-                lastActivityDay = profile?.LastActivityDay,
-                streakEvent = streakEvent
-            });
-        });
     }
 
     // ??? Shared helper to map Question entity ? QuestionDto with translation + steps
@@ -566,30 +428,30 @@ public static class QuizEndpoints
                 .ToListAsync(ct);
         }
 
-        try
+        var orderedIdsQuery = baseQuery
+            .OrderBy(q => q.Id)
+            .Select(q => q.Id);
+
+        var skip = Random.Shared.Next(0, total);
+        var ids = await orderedIdsQuery
+            .Skip(skip)
+            .Take(count)
+            .ToListAsync(ct);
+
+        if (ids.Count < count)
         {
-            var skip = Random.Shared.Next(0, total - count + 1);
-            var ids = await baseQuery
-                .OrderBy(q => q.Id)
-                .Skip(skip)
-                .Take(count)
-                .Select(q => q.Id)
+            var remaining = count - ids.Count;
+            var wrapAroundIds = await orderedIdsQuery
+                .Take(remaining)
                 .ToListAsync(ct);
 
-            if (ids.Count == count)
-            {
-                return ids;
-            }
-        }
-        catch
-        {
+            ids.AddRange(wrapAroundIds);
         }
 
-        return await baseQuery
-            .OrderBy(q => Guid.NewGuid())
+        return ids
+            .Distinct()
             .Take(count)
-            .Select(q => q.Id)
-            .ToListAsync(ct);
+            .ToList();
     }
 
     private static async Task<IResult> BuildLegacyQuestionsResponse(

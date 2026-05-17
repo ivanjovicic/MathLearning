@@ -36,7 +36,7 @@ public static class DailyRunEndpoints
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            var userId = ctx.User.FindFirst("userId")?.Value;
+            var userId = EndpointUser.GetUserId(ctx);
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 

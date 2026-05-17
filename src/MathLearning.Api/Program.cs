@@ -169,55 +169,47 @@ try
         : builder.Environment.IsEnvironment("Test")
             ? "Disabled in test environment."
             : "PostgreSQL unavailable at startup.";
-    builder.AddApplicationServices();
+    builder.AddApplicationLayerServices();
+    builder.AddCacheAndInfrastructureServices();
 
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
     var fallbackJwtSecret = "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
     var jwtSecret = jwtSettings["SecretKey"];
-    if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Test"))
+    var isDevelopmentOrTest = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test");
+
+    if (string.IsNullOrWhiteSpace(jwtSecret))
     {
-        if (string.IsNullOrWhiteSpace(jwtSecret) ||
-            string.Equals(jwtSecret, fallbackJwtSecret, StringComparison.Ordinal) ||
-            jwtSecret.Length < 32)
+        if (isDevelopmentOrTest)
         {
-            Log.Error(
-                "JwtSettings:SecretKey must be configured with a non-fallback value of at least 32 characters in {Environment}.",
-                builder.Environment.EnvironmentName);
-            throw new InvalidOperationException("Invalid JwtSettings:SecretKey. Configure a production secret at least 32 characters long.");
+            jwtSecret = fallbackJwtSecret;
+        }
+        else
+        {
+            Log.Error("JwtSettings:SecretKey is missing in {Environment}.", builder.Environment.EnvironmentName);
+            throw new InvalidOperationException("Missing JwtSettings:SecretKey. Configure a production secret.");
         }
     }
 
-    builder.AddSecurityServices();
-    builder.AddCorsAndSwagger();
-
-    builder.Services.AddCors(options =>
+    if (!string.IsNullOrWhiteSpace(jwtSecret) &&
+        jwtSecret.Length < 32)
     {
-        options.AddDefaultPolicy(policy =>
-        {
-            if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test"))
-            {
-                policy.AllowAnyOrigin()
-                      .AllowAnyMethod()
-                      .AllowAnyHeader()
-                      .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
-                return;
-            }
+        Log.Error(
+            "JwtSettings:SecretKey must be at least 32 characters in {Environment}.",
+            builder.Environment.EnvironmentName);
+        throw new InvalidOperationException("Invalid JwtSettings:SecretKey. Secret must be at least 32 characters long.");
+    }
 
-            var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-            allowedOrigins = allowedOrigins.Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray();
+    if (!isDevelopmentOrTest &&
+        string.Equals(jwtSecret, fallbackJwtSecret, StringComparison.Ordinal))
+    {
+        Log.Error(
+            "JwtSettings:SecretKey is using the fallback value in {Environment}.",
+            builder.Environment.EnvironmentName);
+        throw new InvalidOperationException("Invalid JwtSettings:SecretKey. Configure a non-fallback production secret.");
+    }
 
-            if (allowedOrigins.Length == 0)
-            {
-                Log.Error("Cors:AllowedOrigins is not configured for non-Development/non-Test environments.");
-                throw new InvalidOperationException("Missing Cors:AllowedOrigins. Configure allowed origins for production.");
-            }
-
-            policy.WithOrigins(allowedOrigins)
-                  .AllowAnyMethod()
-                  .AllowAnyHeader()
-                  .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
-        });
-    });
+    builder.AddSecurityServices();
+    builder.AddApiDocumentationServices();
 
     var app = builder.Build();
 
@@ -426,13 +418,22 @@ try
     app.MapHealthEndpoints();
     app.MapGet("/health/background-jobs", (BackgroundJobRuntimeState backgroundJobState) =>
     {
-        return Results.Ok(new
+        var payload = new
         {
-            status = backgroundJobState.HangfireEnabled ? "Healthy" : "Disabled",
-            enabled = backgroundJobState.HangfireEnabled,
+            hangfireEnabled = backgroundJobState.HangfireEnabled,
             disabledReason = backgroundJobState.DisabledReason,
-            timestamp = DateTime.UtcNow
-        });
+        };
+
+        if (backgroundJobState.HangfireEnabled)
+        {
+            return Results.Ok(payload);
+        }
+
+        return Results.Json(
+            payload,
+            statusCode: builder.Environment.IsEnvironment("Test")
+                ? StatusCodes.Status200OK
+                : StatusCodes.Status503ServiceUnavailable);
     })
     .AllowAnonymous()
     .WithName("BackgroundJobsHealth")
@@ -463,6 +464,7 @@ try
 
     // Map Quiz endpoints
     app.MapQuizEndpoints();
+    app.MapSrsEndpoints();
 
     // Map question authoring endpoints
     app.MapQuestionAuthoringEndpoints();
