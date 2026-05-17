@@ -416,7 +416,7 @@ try
     // Health endpoint for Fly.io / uptime checks
     app.MapHealthChecks("/health");
     app.MapHealthEndpoints();
-    app.MapGet("/health/background-jobs", (BackgroundJobRuntimeState backgroundJobState) =>
+    IResult BuildBackgroundJobsHealthResponse(BackgroundJobRuntimeState backgroundJobState)
     {
         var payload = new
         {
@@ -434,9 +434,16 @@ try
             statusCode: builder.Environment.IsEnvironment("Test")
                 ? StatusCodes.Status200OK
                 : StatusCodes.Status503ServiceUnavailable);
-    })
+    }
+
+    app.MapGet("/health/background-jobs", BuildBackgroundJobsHealthResponse)
     .AllowAnonymous()
     .WithName("BackgroundJobsHealth")
+    .WithDescription("Reports whether background jobs were enabled at startup");
+
+    app.MapGet("/api/health/background-jobs", BuildBackgroundJobsHealthResponse)
+    .AllowAnonymous()
+    .WithName("BackgroundJobsHealthApi")
     .WithDescription("Reports whether background jobs were enabled at startup");
 
     // Minimal runtime metrics (no Prometheus dependency)

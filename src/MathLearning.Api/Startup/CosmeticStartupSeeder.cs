@@ -70,16 +70,16 @@ public static class CosmeticStartupSeeder
             var cosmeticCountAfter = await db.CosmeticItems.CountAsync(ct);
             if (cosmeticCountAfter > cosmeticCountBefore)
             {
-                Log.Information("🎨 Cosmetic items ensured on startup. Count={Count}", cosmeticCountAfter);
+                Log.Information("Cosmetic items ensured on startup. Count={Count}", cosmeticCountAfter);
             }
             else
             {
-                Log.Information("🎨 Cosmetic system tables verified ({Count} items exist)", cosmeticCountAfter);
+                Log.Information("Cosmetic system tables verified ({Count} items exist)", cosmeticCountAfter);
             }
         }
         catch (Exception cosmeticEx)
         {
-            Log.Warning(cosmeticEx, "⚠️ Could not seed cosmetic items");
+            Log.Warning(cosmeticEx, "Could not seed cosmetic items");
         }
     }
 }
