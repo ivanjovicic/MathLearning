@@ -257,23 +257,25 @@ public static class UserEndpoints
         .WithName("SearchUsers")
         .WithDescription("Search users by username or display name");
 
-        settingsGroup.MapGet("/{id:int}/settings", async (
-            int id,
+        settingsGroup.MapGet("/{userId}/settings", async (
+            string userId,
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-            if (id.ToString() != userId)
+            var authenticatedUserId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(authenticatedUserId))
+                return Results.Unauthorized();
+            if (!string.Equals(userId, authenticatedUserId, StringComparison.Ordinal))
                 return Results.Forbid();
 
             var settings = await db.UserSettings
-                .FirstOrDefaultAsync(s => s.UserId == userId);
+                .FirstOrDefaultAsync(s => s.UserId == authenticatedUserId);
 
             if (settings == null)
             {
                 settings = new UserSettings
                 {
-                    UserId = userId,
+                    UserId = authenticatedUserId,
                     Language = "sr",
                     Theme = "light",
                     HintsEnabled = true,
@@ -302,24 +304,26 @@ public static class UserEndpoints
             ));
         });
 
-        settingsGroup.MapPatch("/{id:int}/settings", async (
-            int id,
+        settingsGroup.MapPatch("/{userId}/settings", async (
+            string userId,
             UpdateUserSettingsRequest request,
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-            if (id.ToString() != userId)
+            var authenticatedUserId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(authenticatedUserId))
+                return Results.Unauthorized();
+            if (!string.Equals(userId, authenticatedUserId, StringComparison.Ordinal))
                 return Results.Forbid();
 
             var settings = await db.UserSettings
-                .FirstOrDefaultAsync(s => s.UserId == userId);
+                .FirstOrDefaultAsync(s => s.UserId == authenticatedUserId);
 
             if (settings == null)
             {
                 settings = new UserSettings
                 {
-                    UserId = userId,
+                    UserId = authenticatedUserId,
                     Language = "sr",
                     Theme = "light",
                     HintsEnabled = true,
