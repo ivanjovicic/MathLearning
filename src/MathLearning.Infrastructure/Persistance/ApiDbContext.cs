@@ -30,6 +30,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserDailyStat> UserDailyStats => Set<UserDailyStat>();
     public DbSet<DailyRunChestClaim> DailyRunChestClaims => Set<DailyRunChestClaim>();
     public DbSet<EconomyTransaction> EconomyTransactions => Set<EconomyTransaction>();
+      public DbSet<EconomyRewardDefinition> EconomyRewardDefinitions => Set<EconomyRewardDefinition>();
+      public DbSet<AdminEconomyRewardGrant> AdminEconomyRewardGrants => Set<AdminEconomyRewardGrant>();
     public DbSet<UserSeasonProgress> UserSeasonProgresses => Set<UserSeasonProgress>();
     public DbSet<UserSeasonDailyRunClaim> UserSeasonDailyRunClaims => Set<UserSeasonDailyRunClaim>();
     public DbSet<UserSeasonMilestoneClaim> UserSeasonMilestoneClaims => Set<UserSeasonMilestoneClaim>();

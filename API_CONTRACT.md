@@ -200,6 +200,10 @@ Auth: Mixed (reporting is allowed but handler checks for userId)
 ## Coins (/api/coins)
 Auth: Required
 
+Notes:
+- These routes are legacy compatibility / admin-dev style routes.
+- Mobile runtime should prefer the backend-authoritative settlement routes under `/api/economy/*`, `/api/shop/*`, `/api/seasons/*`, and `/api/cosmetics/*` where applicable.
+
 - GET /api/coins/balance
   - Auth: Required
   - Response: { coins, totalEarned, totalSpent, level, xp, streak }
@@ -220,6 +224,27 @@ Auth: Required
 - GET /api/coins/leaderboard?limit=10
   - Auth: Required
   - Response: leaderboard list
+
+---
+
+## Economy Settlement (/api/economy, /api/shop, /api/seasons, /api/cosmetics)
+Auth: Required (except admin override route, which requires admin policy)
+
+- POST /api/economy/rewards/claim
+  - Auth: Required
+  - Body: `RewardClaimRequest`
+  - Canonical input: `rewardId` (`rewardType` is validation/context only)
+  - Compatibility fields: request `coins` / `xp` are accepted for payload compatibility but ignored as settlement authority for authenticated mobile callers
+  - Resolution: server-authoritative data-driven reward catalog stored in `economy_reward_definitions` using regex matchers plus JSON eligibility/grant rules
+  - Duplicate guard: same `rewardId` for the same user does not mint again; returns success with `alreadyClaimed=true`
+  - Errors: `409 unknown_reward`, `409 not_eligible`, `409 idempotency_conflict`
+
+- POST /api/admin/economy/rewards/grant
+  - Auth: Admin policy (`UiTokensAdminPolicy`)
+  - Body: `AdminRewardGrantRequest` { `idempotencyKey`, `userId`, `grantId`, `coins`, `xp`, `reason?`, `metadata?` }
+  - Purpose: separate admin-only override path; not for mobile runtime
+  - Audit: persisted in `admin_economy_reward_grants`
+  - Duplicate guard: same `grantId` for the same user does not mint again; idempotent retries replay the stored result
 
 ---
 

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using MathLearning.Api;
 using MathLearning.Domain.Entities;
+using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
 using Microsoft.AspNetCore.Identity;
@@ -14,6 +15,34 @@ namespace MathLearning.Tests.Endpoints;
 
 public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<CustomWebApplicationFactory<Program>>
 {
+    private const string AlwaysEligibleRuleJson = """
+        {"type":"always"}
+        """;
+    private const string DailyGrantRuleJson = """
+        {"coins":{"type":"const","value":20},"xp":{"type":"const","value":15}}
+        """;
+    private const string GenericOnboardingGrantRuleJson = """
+        {"coins":{"type":"const","value":50},"xp":{"type":"const","value":0}}
+        """;
+    private const string GenericStarterGrantRuleJson = """
+        {"coins":{"type":"const","value":25},"xp":{"type":"const","value":0}}
+        """;
+    private const string GenericWelcomeBackGrantRuleJson = """
+        {"coins":{"type":"const","value":15},"xp":{"type":"const","value":10}}
+        """;
+    private const string LevelEligibilityRuleJson = """
+        {"type":"compare","operator":"gte","left":{"type":"profile","field":"level"},"right":{"type":"capture","name":"threshold"}}
+        """;
+    private const string LevelGrantRuleJson = """
+        {"coins":{"type":"clamp","value":{"type":"multiply","left":{"type":"capture","name":"threshold"},"right":{"type":"const","value":10}},"min":{"type":"const","value":10}},"xp":{"type":"const","value":0}}
+        """;
+    private const string StreakEligibilityRuleJson = """
+        {"type":"compare","operator":"gte","left":{"type":"profile","field":"streak"},"right":{"type":"capture","name":"threshold"}}
+        """;
+    private const string StreakGrantRuleJson = """
+        {"coins":{"type":"clamp","value":{"type":"multiply","left":{"type":"capture","name":"threshold"},"right":{"type":"const","value":5}},"min":{"type":"const","value":10},"max":{"type":"const","value":500}},"xp":{"type":"const","value":0}}
+        """;
+
     private readonly HttpClient _client;
     private readonly CustomWebApplicationFactory<Program> _factory;
 
@@ -120,40 +149,199 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
-    public async Task RewardClaim_Success_DuplicateRewardIdBlocked_NotEligibleNoMutation()
+    public async Task RewardClaim_IgnoresClientSuppliedCoinsAndXp()
     {
         var userId = $"user-reward-{Guid.NewGuid():N}";
-        await EnsureUserAsync(userId, coins: 30, xp: 0);
+        await EnsureUserAsync(userId, coins: 30, xp: 5);
+        await EnsureRewardCatalogSeededAsync();
 
         var first = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
         {
             idempotencyKey = "reward-key-1",
-            rewardId = "daily:abc",
+            rewardId = "daily:lesson-complete",
+            rewardType = "daily",
+            coins = 999999,
+            xp = 999999
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var payload = await first.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(20, payload.GetProperty("reward").GetProperty("coins").GetInt32());
+        Assert.Equal(15, payload.GetProperty("reward").GetProperty("xp").GetInt32());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(50, economy.Coins);
+        Assert.Equal(20, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_UnknownReward_RejectedWithoutMutation()
+    {
+        var userId = $"user-reward-unknown-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 5);
+        await EnsureRewardCatalogSeededAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-unknown-1",
+            rewardId = "generic:not-in-catalog",
+            rewardType = "generic",
+            coins = 999999,
+            xp = 999999
+        });
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("unknown_reward", payload.GetProperty("errorCode").GetString());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(30, economy.Coins);
+        Assert.Equal(5, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_SameIdempotencyKey_SamePayload_ReplaysStoredResult()
+    {
+        var userId = $"user-reward-retry-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 10, xp: 0);
+        await EnsureRewardCatalogSeededAsync();
+
+        var first = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-retry-1",
+            rewardId = "daily:retryable",
+            rewardType = "daily",
+            coins = 500,
+            xp = 500
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var retry = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-retry-1",
+            rewardId = "daily:retryable",
+            rewardType = "daily",
+            coins = 500,
+            xp = 500
+        });
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+
+        var retryPayload = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(retryPayload.GetProperty("alreadyClaimed").GetBoolean());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(30, economy.Coins);
+        Assert.Equal(15, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_SameIdempotencyKey_DifferentPayload_ReturnsConflict()
+    {
+        var userId = $"user-reward-conflict-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 10, xp: 0);
+        await EnsureRewardCatalogSeededAsync();
+
+        var first = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-conflict-1",
+            rewardId = "daily:conflict",
+            rewardType = "daily",
+            coins = 10,
+            xp = 10
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var conflict = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-conflict-1",
+            rewardId = "daily:conflict",
             rewardType = "daily",
             coins = 20,
-            xp = 15
+            xp = 10
+        });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+
+        var payload = await conflict.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("idempotency_conflict", payload.GetProperty("errorCode").GetString());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(30, economy.Coins);
+        Assert.Equal(15, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_SameRewardId_DifferentIdempotencyKeys_DoesNotDoubleGrant()
+    {
+        var userId = $"user-reward-duplicate-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 0);
+        await EnsureRewardCatalogSeededAsync();
+
+        var first = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-dup-1",
+            rewardId = "daily:duplicate-guard",
+            rewardType = "daily",
+            coins = 1,
+            xp = 1
         });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
         var duplicateRewardId = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
         {
-            idempotencyKey = "reward-key-2",
-            rewardId = "daily:abc",
+            idempotencyKey = "reward-dup-2",
+            rewardId = "daily:duplicate-guard",
             rewardType = "daily",
-            coins = 20,
-            xp = 15
+            coins = 999999,
+            xp = 999999
         });
         Assert.Equal(HttpStatusCode.OK, duplicateRewardId.StatusCode);
         var dupPayload = await duplicateRewardId.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(dupPayload.GetProperty("alreadyClaimed").GetBoolean());
 
-        await SetRewardEligibilityAsync(userId, "blocked:reward", eligible: false);
-        var beforeCoins = await GetCoinsAsync(userId);
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(50, economy.Coins);
+        Assert.Equal(15, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_LevelThreshold_UsesDataDrivenCatalogRules()
+    {
+        var userId = $"user-reward-level-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 5, xp: 600);
+        await EnsureRewardCatalogSeededAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-level-1",
+            rewardId = "level:7",
+            rewardType = "level",
+            coins = 999,
+            xp = 999
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(payload.GetProperty("alreadyClaimed").GetBoolean());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(75, economy.Coins);
+        Assert.Equal(600, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_KnownRewardBlockedByEligibilityState_DoesNotMutate()
+    {
+        var userId = $"user-reward-blocked-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 0);
+        await EnsureRewardCatalogSeededAsync();
+
+        await SetRewardEligibilityAsync(userId, "generic:starter_bonus", eligible: false);
+        var before = await GetEconomyAsync(userId);
 
         var blocked = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
         {
-            idempotencyKey = "reward-key-3",
-            rewardId = "blocked:reward",
+            idempotencyKey = "reward-blocked-1",
+            rewardId = "generic:starter_bonus",
             rewardType = "generic",
             coins = 999,
             xp = 0
@@ -161,7 +349,85 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         var blockedPayload = await blocked.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("not_eligible", blockedPayload.GetProperty("errorCode").GetString());
-        Assert.Equal(beforeCoins, await GetCoinsAsync(userId));
+
+        var after = await GetEconomyAsync(userId);
+        Assert.Equal(before.Coins, after.Coins);
+        Assert.Equal(before.Xp, after.Xp);
+    }
+
+    [Fact]
+    public async Task AdminRewardGrant_RequiresAdminRole()
+    {
+        var userId = $"user-admin-target-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 10, xp: 0);
+
+        var response = await PostAsUserAsync("non-admin-user", "/api/admin/economy/rewards/grant", new
+        {
+            idempotencyKey = "admin-grant-unauthorized",
+            userId,
+            grantId = "grant-1",
+            coins = 50,
+            xp = 5,
+            reason = "manual_test"
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminRewardGrant_Succeeds_AndDoesNotDoubleGrant()
+    {
+        var userId = $"user-admin-target-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 10, xp: 0);
+
+        var first = await PostAsUserAsync("admin-actor", "/api/admin/economy/rewards/grant", new
+        {
+            idempotencyKey = "admin-grant-1",
+            userId,
+            grantId = "manual-bonus-1",
+            coins = 40,
+            xp = 5,
+            reason = "manual_test"
+        }, roles: DesignTokenSecurity.AdminRole);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var retry = await PostAsUserAsync("admin-actor", "/api/admin/economy/rewards/grant", new
+        {
+            idempotencyKey = "admin-grant-1",
+            userId,
+            grantId = "manual-bonus-1",
+            coins = 40,
+            xp = 5,
+            reason = "manual_test"
+        }, roles: DesignTokenSecurity.AdminRole);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        var retryPayload = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(retryPayload.GetProperty("alreadyProcessed").GetBoolean());
+
+        var duplicateGrantId = await PostAsUserAsync("admin-actor", "/api/admin/economy/rewards/grant", new
+        {
+            idempotencyKey = "admin-grant-2",
+            userId,
+            grantId = "manual-bonus-1",
+            coins = 999,
+            xp = 999,
+            reason = "manual_test"
+        }, roles: DesignTokenSecurity.AdminRole);
+        Assert.Equal(HttpStatusCode.OK, duplicateGrantId.StatusCode);
+        var duplicatePayload = await duplicateGrantId.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(duplicatePayload.GetProperty("alreadyProcessed").GetBoolean());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(50, economy.Coins);
+        Assert.Equal(5, economy.Xp);
+
+        var auditGrant = await GetAdminRewardGrantAsync(userId, "manual-bonus-1");
+        Assert.NotNull(auditGrant);
+        Assert.Equal("admin-actor", auditGrant!.ActorUserId);
+        Assert.Equal(40, auditGrant.Coins);
+        Assert.Equal(5, auditGrant.Xp);
+        Assert.Equal("manual_test", auditGrant.Reason);
+        Assert.Equal(1, await CountAdminRewardGrantsAsync(userId, "manual-bonus-1"));
     }
 
     [Fact]
@@ -336,13 +602,17 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         Assert.Equal(1, ownedCount);
     }
 
-    private async Task<HttpResponseMessage> PostAsUserAsync(string userId, string url, object payload)
+    private async Task<HttpResponseMessage> PostAsUserAsync(string userId, string url, object payload, string? roles = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
         };
         request.Headers.Add("X-Test-UserId", userId);
+        if (!string.IsNullOrWhiteSpace(roles))
+        {
+            request.Headers.Add("X-Test-Roles", roles);
+        }
         return await _client.SendAsync(request);
     }
 
@@ -390,6 +660,16 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         return await db.UserProfiles.Where(x => x.UserId == userId).Select(x => x.Coins).FirstAsync();
     }
 
+    private async Task<(int Coins, int Xp)> GetEconomyAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserProfiles
+            .Where(x => x.UserId == userId)
+            .Select(x => new ValueTuple<int, int>(x.Coins, x.Xp))
+            .FirstAsync();
+    }
+
     private async Task<int> GetStreakFreezeCountAsync(string userId)
     {
         using var scope = _factory.Services.CreateScope();
@@ -418,6 +698,117 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         state.ClaimedAtUtc = null;
         state.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
+    }
+
+    private async Task EnsureRewardCatalogSeededAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+        if (await db.EconomyRewardDefinitions.AnyAsync())
+            return;
+
+        db.EconomyRewardDefinitions.AddRange(
+            new EconomyRewardDefinition
+            {
+                Id = Guid.Parse("7B40D3BA-E74D-4E25-BD84-60D2D645A1C1"),
+                RewardIdPattern = "^daily:(?<slug>.+)$",
+                RewardType = "daily",
+                Priority = 20,
+                EligibilityRuleJson = AlwaysEligibleRuleJson,
+                GrantRuleJson = DailyGrantRuleJson,
+                IneligibilityMessage = "Reward is not eligible.",
+                IsSingleUse = true,
+                IsActive = true,
+                UpdatedAtUtc = DateTime.UtcNow
+            },
+            new EconomyRewardDefinition
+            {
+                Id = Guid.Parse("2E3D6E31-3F8D-4D60-9266-3CBDB3A34729"),
+                RewardIdPattern = "^generic:onboarding_bonus$",
+                RewardType = "generic",
+                Priority = 10,
+                EligibilityRuleJson = AlwaysEligibleRuleJson,
+                GrantRuleJson = GenericOnboardingGrantRuleJson,
+                IneligibilityMessage = "Reward is not eligible.",
+                IsSingleUse = true,
+                IsActive = true,
+                UpdatedAtUtc = DateTime.UtcNow
+            },
+            new EconomyRewardDefinition
+            {
+                Id = Guid.Parse("D4E88C31-56C0-494B-9611-271DB4F1DCD8"),
+                RewardIdPattern = "^generic:starter_bonus$",
+                RewardType = "generic",
+                Priority = 10,
+                EligibilityRuleJson = AlwaysEligibleRuleJson,
+                GrantRuleJson = GenericStarterGrantRuleJson,
+                IneligibilityMessage = "Reward is not eligible.",
+                IsSingleUse = true,
+                IsActive = true,
+                UpdatedAtUtc = DateTime.UtcNow
+            },
+            new EconomyRewardDefinition
+            {
+                Id = Guid.Parse("E1F90A77-EEB8-4FD7-973E-E05449B7678A"),
+                RewardIdPattern = "^generic:welcome_back$",
+                RewardType = "generic",
+                Priority = 10,
+                EligibilityRuleJson = AlwaysEligibleRuleJson,
+                GrantRuleJson = GenericWelcomeBackGrantRuleJson,
+                IneligibilityMessage = "Reward is not eligible.",
+                IsSingleUse = true,
+                IsActive = true,
+                UpdatedAtUtc = DateTime.UtcNow
+            },
+            new EconomyRewardDefinition
+            {
+                Id = Guid.Parse("D9D5E0D8-87FA-4819-BE4A-6285C2EF6FC7"),
+                RewardIdPattern = "^level:(?<threshold>[1-9]\\d*)$",
+                RewardType = "level",
+                Priority = 30,
+                EligibilityRuleJson = LevelEligibilityRuleJson,
+                GrantRuleJson = LevelGrantRuleJson,
+                IneligibilityMessage = "Reward is not eligible.",
+                IsSingleUse = true,
+                IsActive = true,
+                UpdatedAtUtc = DateTime.UtcNow
+            },
+            new EconomyRewardDefinition
+            {
+                Id = Guid.Parse("FA5D14D5-7931-4B57-B5D0-442AFC4BA26E"),
+                RewardIdPattern = "^streak:(?<threshold>[1-9]\\d*)$",
+                RewardType = "streak",
+                Priority = 30,
+                EligibilityRuleJson = StreakEligibilityRuleJson,
+                GrantRuleJson = StreakGrantRuleJson,
+                IneligibilityMessage = "Reward is not eligible.",
+                IsSingleUse = true,
+                IsActive = true,
+                UpdatedAtUtc = DateTime.UtcNow
+            });
+
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<AdminEconomyRewardGrant?> GetAdminRewardGrantAsync(string userId, string grantId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+        return await db.AdminEconomyRewardGrants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.GrantId == grantId);
+    }
+
+    private async Task<int> CountAdminRewardGrantsAsync(string userId, string grantId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+        return await db.AdminEconomyRewardGrants
+            .AsNoTracking()
+            .CountAsync(x => x.UserId == userId && x.GrantId == grantId);
     }
 
     private async Task<int> EnsureActiveSeasonAsync()

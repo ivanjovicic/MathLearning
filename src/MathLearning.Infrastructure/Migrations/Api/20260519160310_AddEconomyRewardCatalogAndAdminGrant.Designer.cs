@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260519160310_AddEconomyRewardCatalogAndAdminGrant")]
+    partial class AddEconomyRewardCatalogAndAdminGrant
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -119,63 +122,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("IX_AdaptiveSessionItems_Topic_Difficulty");
 
                     b.ToTable("adaptive_session_items", (string)null);
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.AdminEconomyRewardGrant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ActorUserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.Property<int>("Coins")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("EconomyTransactionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("GrantId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.Property<int>("Xp")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EconomyTransactionId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_admin_economy_reward_grants_transaction");
-
-                    b.HasIndex("ActorUserId", "CreatedAtUtc")
-                        .HasDatabaseName("IX_admin_economy_reward_grants_actor_created_at");
-
-                    b.HasIndex("UserId", "GrantId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_admin_economy_reward_grants_user_grant");
-
-                    b.ToTable("admin_economy_reward_grants", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.AnswerPatternDetectionLog", b =>
@@ -1266,16 +1212,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("EligibilityRuleJson")
-                        .HasColumnType("jsonb");
+                    b.Property<int>("Coins")
+                        .HasColumnType("integer");
 
-                    b.Property<string>("GrantRuleJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("IneligibilityMessage")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int?>("CoinsPerUnit")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -1283,10 +1224,18 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<bool>("IsSingleUse")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("MatchStrategy")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("MaxCoins")
+                        .HasColumnType("integer");
+
                     b.Property<string>("MetadataJson")
                         .HasColumnType("jsonb");
 
-                    b.Property<int>("Priority")
+                    b.Property<int?>("MinCoins")
                         .HasColumnType("integer");
 
                     b.Property<string>("RewardIdPattern")
@@ -1302,14 +1251,17 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Xp")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("RewardType", "IsActive")
+                        .HasDatabaseName("IX_economy_reward_definitions_type_active");
 
                     b.HasIndex("RewardType", "RewardIdPattern")
                         .IsUnique()
                         .HasDatabaseName("UX_economy_reward_definitions_type_pattern");
-
-                    b.HasIndex("RewardType", "IsActive", "Priority")
-                        .HasDatabaseName("IX_economy_reward_definitions_type_active_priority");
 
                     b.ToTable("economy_reward_definitions", (string)null);
 
@@ -1317,80 +1269,79 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         new
                         {
                             Id = new Guid("7b40d3ba-e74d-4e25-bd84-60d2d645a1c1"),
-                            EligibilityRuleJson = "{\"type\":\"always\"}",
-                            GrantRuleJson = "{\"coins\":{\"type\":\"const\",\"value\":20},\"xp\":{\"type\":\"const\",\"value\":15}}",
-                            IneligibilityMessage = "Reward is not eligible.",
+                            Coins = 20,
                             IsActive = true,
                             IsSingleUse = true,
-                            Priority = 20,
-                            RewardIdPattern = "^daily:(?<slug>.+)$",
+                            MatchStrategy = "PrefixNonEmptySuffix",
+                            RewardIdPattern = "daily:",
                             RewardType = "daily",
-                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Xp = 15
                         },
                         new
                         {
                             Id = new Guid("2e3d6e31-3f8d-4d60-9266-3cbdb3a34729"),
-                            EligibilityRuleJson = "{\"type\":\"always\"}",
-                            GrantRuleJson = "{\"coins\":{\"type\":\"const\",\"value\":50},\"xp\":{\"type\":\"const\",\"value\":0}}",
-                            IneligibilityMessage = "Reward is not eligible.",
+                            Coins = 50,
                             IsActive = true,
                             IsSingleUse = true,
-                            Priority = 10,
-                            RewardIdPattern = "^generic:onboarding_bonus$",
+                            MatchStrategy = "Exact",
+                            RewardIdPattern = "generic:onboarding_bonus",
                             RewardType = "generic",
-                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Xp = 0
                         },
                         new
                         {
                             Id = new Guid("d4e88c31-56c0-494b-9611-271db4f1dcd8"),
-                            EligibilityRuleJson = "{\"type\":\"always\"}",
-                            GrantRuleJson = "{\"coins\":{\"type\":\"const\",\"value\":25},\"xp\":{\"type\":\"const\",\"value\":0}}",
-                            IneligibilityMessage = "Reward is not eligible.",
+                            Coins = 25,
                             IsActive = true,
                             IsSingleUse = true,
-                            Priority = 10,
-                            RewardIdPattern = "^generic:starter_bonus$",
+                            MatchStrategy = "Exact",
+                            RewardIdPattern = "generic:starter_bonus",
                             RewardType = "generic",
-                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Xp = 0
                         },
                         new
                         {
                             Id = new Guid("e1f90a77-eeb8-4fd7-973e-e05449b7678a"),
-                            EligibilityRuleJson = "{\"type\":\"always\"}",
-                            GrantRuleJson = "{\"coins\":{\"type\":\"const\",\"value\":15},\"xp\":{\"type\":\"const\",\"value\":10}}",
-                            IneligibilityMessage = "Reward is not eligible.",
+                            Coins = 15,
                             IsActive = true,
                             IsSingleUse = true,
-                            Priority = 10,
-                            RewardIdPattern = "^generic:welcome_back$",
+                            MatchStrategy = "Exact",
+                            RewardIdPattern = "generic:welcome_back",
                             RewardType = "generic",
-                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Xp = 10
                         },
                         new
                         {
                             Id = new Guid("d9d5e0d8-87fa-4819-be4a-6285c2ef6fc7"),
-                            EligibilityRuleJson = "{\"type\":\"compare\",\"operator\":\"gte\",\"left\":{\"type\":\"profile\",\"field\":\"level\"},\"right\":{\"type\":\"capture\",\"name\":\"threshold\"}}",
-                            GrantRuleJson = "{\"coins\":{\"type\":\"clamp\",\"value\":{\"type\":\"multiply\",\"left\":{\"type\":\"capture\",\"name\":\"threshold\"},\"right\":{\"type\":\"const\",\"value\":10}},\"min\":{\"type\":\"const\",\"value\":10}},\"xp\":{\"type\":\"const\",\"value\":0}}",
-                            IneligibilityMessage = "Reward is not eligible.",
+                            Coins = 0,
+                            CoinsPerUnit = 10,
                             IsActive = true,
                             IsSingleUse = true,
-                            Priority = 30,
-                            RewardIdPattern = "^level:(?<threshold>[1-9]\\d*)$",
+                            MatchStrategy = "NumericSuffixLevelThreshold",
+                            MinCoins = 10,
+                            RewardIdPattern = "level:",
                             RewardType = "level",
-                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Xp = 0
                         },
                         new
                         {
                             Id = new Guid("fa5d14d5-7931-4b57-b5d0-442afc4ba26e"),
-                            EligibilityRuleJson = "{\"type\":\"compare\",\"operator\":\"gte\",\"left\":{\"type\":\"profile\",\"field\":\"streak\"},\"right\":{\"type\":\"capture\",\"name\":\"threshold\"}}",
-                            GrantRuleJson = "{\"coins\":{\"type\":\"clamp\",\"value\":{\"type\":\"multiply\",\"left\":{\"type\":\"capture\",\"name\":\"threshold\"},\"right\":{\"type\":\"const\",\"value\":5}},\"min\":{\"type\":\"const\",\"value\":10},\"max\":{\"type\":\"const\",\"value\":500}},\"xp\":{\"type\":\"const\",\"value\":0}}",
-                            IneligibilityMessage = "Reward is not eligible.",
+                            Coins = 0,
+                            CoinsPerUnit = 5,
                             IsActive = true,
                             IsSingleUse = true,
-                            Priority = 30,
-                            RewardIdPattern = "^streak:(?<threshold>[1-9]\\d*)$",
+                            MatchStrategy = "NumericSuffixStreakThreshold",
+                            MaxCoins = 500,
+                            MinCoins = 10,
+                            RewardIdPattern = "streak:",
                             RewardType = "streak",
-                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Xp = 0
                         });
                 });
 

@@ -20,7 +20,16 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
             ? headerUserId.ToString().Trim()
             : "test-user";
 
-        var claims = new[] { new Claim("userId", userId) };
+        var claims = new List<Claim> { new("userId", userId) };
+
+        if (Request.Headers.TryGetValue("X-Test-Roles", out var headerRoles))
+        {
+            foreach (var role in headerRoles.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+
         var identity = new ClaimsIdentity(claims, "Test");
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, "Test");

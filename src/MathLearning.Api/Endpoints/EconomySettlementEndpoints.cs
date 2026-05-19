@@ -12,7 +12,6 @@ public static class EconomySettlementEndpoints
     private const int DailyFreeHintLimit = 10;
     private const int StreakFreezeUnitCost = 50;
     private const int MaxStreakFreezes = 5;
-
     private static readonly IReadOnlyDictionary<string, int> HintCosts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
     {
         ["clue"] = 10,
@@ -211,6 +210,7 @@ public static class EconomySettlementEndpoints
             RewardClaimRequest request,
             ApiDbContext db,
             IEconomyTransactionService txService,
+            IEconomyRewardCatalogService rewardCatalogService,
             HttpContext ctx,
             CancellationToken ct) =>
         {
@@ -222,16 +222,15 @@ public static class EconomySettlementEndpoints
                 return keyError!;
             if (string.IsNullOrWhiteSpace(request.RewardId))
                 return Results.BadRequest(BusinessError("invalid_reward_id", "RewardId is required."));
-            if (request.Coins < 0 || request.Xp < 0 || (request.Coins == 0 && request.Xp == 0))
-                return Results.BadRequest(BusinessError("invalid_reward_payload", "Reward coins/xp must be non-negative and not both zero."));
 
             var normalizedRewardId = request.RewardId.Trim();
+            var normalizedRewardType = Normalize(request.RewardType);
             var beginTuple = await TryBeginAsync(
                 txService,
                 userId,
                 "economy_reward_claim",
                 request.IdempotencyKey!,
-                request with { RewardId = normalizedRewardId, RewardType = Normalize(request.RewardType) },
+                request with { RewardId = normalizedRewardId, RewardType = normalizedRewardType },
                 ct);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
@@ -250,64 +249,200 @@ public static class EconomySettlementEndpoints
                 return Results.Conflict(error);
             }
 
-            var rewardState = await db.UserRewardStates.FirstOrDefaultAsync(
-                x => x.UserId == userId && x.RewardKey == normalizedRewardId,
-                ct);
-
-            if (rewardState is not null && rewardState.Claimed)
+            var rewardDefinition = await rewardCatalogService.ResolveAsync(normalizedRewardId, normalizedRewardType, profile, ct);
+            if (rewardDefinition is null)
             {
-                var alreadyClaimed = new RewardClaimResponse(
-                    Success: true,
-                    AlreadyClaimed: true,
-                    Coins: profile.Coins,
-                    Xp: profile.Xp,
-                    Reward: new RewardGrantSummary(0, 0),
-                    ErrorCode: null,
-                    Message: null);
-                await txService.CompleteAsync(begin.TransactionId, alreadyClaimed, ct);
+                var error = BusinessError("unknown_reward", $"Reward '{normalizedRewardId}' is not supported by the server reward catalog.");
+                await txService.FailAsync(begin.TransactionId, "unknown_reward", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
-                return Results.Ok(alreadyClaimed);
+                return Results.Conflict(error);
             }
 
-            if (rewardState is not null && !rewardState.Eligible)
+            UserRewardState? rewardState = null;
+            if (rewardDefinition.IsSingleUse)
             {
-                var error = BusinessError("not_eligible", "Reward is not eligible.");
+                rewardState = await db.UserRewardStates.FirstOrDefaultAsync(
+                    x => x.UserId == userId && x.RewardKey == normalizedRewardId,
+                    ct);
+
+                if (rewardState is not null && rewardState.Claimed)
+                {
+                    var alreadyClaimed = new RewardClaimResponse(
+                        Success: true,
+                        AlreadyClaimed: true,
+                        Coins: profile.Coins,
+                        Xp: profile.Xp,
+                        Reward: new RewardGrantSummary(0, 0),
+                        ErrorCode: null,
+                        Message: null);
+                    await txService.CompleteAsync(begin.TransactionId, alreadyClaimed, ct);
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
+                    return Results.Ok(alreadyClaimed);
+                }
+
+                if (rewardState is not null && !rewardState.Eligible)
+                {
+                    var error = BusinessError("not_eligible", "Reward is not eligible.");
+                    await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
+                    return Results.Conflict(error);
+                }
+
+                if (rewardState is null)
+                {
+                    rewardState = new UserRewardState
+                    {
+                        UserId = userId,
+                        RewardKey = normalizedRewardId,
+                        Eligible = true,
+                        Claimed = false,
+                        UpdatedAtUtc = DateTime.UtcNow
+                    };
+                    db.UserRewardStates.Add(rewardState);
+                }
+            }
+
+            if (!rewardDefinition.IsEligible)
+            {
+                var error = BusinessError("not_eligible", rewardDefinition.IneligibilityMessage);
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
-            if (rewardState is null)
+            profile.Coins += rewardDefinition.Coins;
+            profile.TotalCoinsEarned += rewardDefinition.Coins;
+            profile.Xp += rewardDefinition.Xp;
+            profile.Level = 1 + (profile.Xp / 100);
+            profile.UpdatedAt = DateTime.UtcNow;
+
+            if (rewardState is not null)
             {
-                rewardState = new UserRewardState
-                {
-                    UserId = userId,
-                    RewardKey = normalizedRewardId,
-                    Eligible = true,
-                    Claimed = false,
-                    UpdatedAtUtc = DateTime.UtcNow
-                };
-                db.UserRewardStates.Add(rewardState);
+                rewardState.Claimed = true;
+                rewardState.ClaimedAtUtc = DateTime.UtcNow;
+                rewardState.UpdatedAtUtc = DateTime.UtcNow;
             }
 
-            // SECURITY NOTE: the current implementation applies client-supplied `coins`/`xp`.
-            // This can be exploited by a malicious client to mint rewards. Replace this
-            // with server-resolved reward amounts from a trusted reward catalog or
-            // rule engine. Until a server-side catalog is implemented, carefully
-            // consider restricting who can call this endpoint or ignore client values.
+            var response = new RewardClaimResponse(
+                Success: true,
+                AlreadyClaimed: false,
+                Coins: profile.Coins,
+                Xp: profile.Xp,
+                Reward: new RewardGrantSummary(rewardDefinition.Coins, rewardDefinition.Xp),
+                ErrorCode: null,
+                Message: null);
+
+            await txService.CompleteAsync(begin.TransactionId, response, ct);
+            if (dbTx is not null) await dbTx.CommitAsync(ct);
+            return Results.Ok(response);
+        });
+
+        var adminEconomy = app.MapGroup("/api/admin/economy")
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+            .WithTags("Admin Economy");
+
+        adminEconomy.MapPost("/rewards/grant", async (
+            AdminRewardGrantRequest request,
+            ApiDbContext db,
+            IEconomyTransactionService txService,
+            HttpContext ctx,
+            CancellationToken ct) =>
+        {
+            var actorUserId = EndpointUser.GetUserId(ctx);
+            if (string.IsNullOrWhiteSpace(actorUserId))
+                return Results.Unauthorized();
+
+            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+                return keyError!;
+            if (string.IsNullOrWhiteSpace(request.UserId))
+                return Results.BadRequest(BusinessError("invalid_user_id", "UserId is required."));
+            if (string.IsNullOrWhiteSpace(request.GrantId))
+                return Results.BadRequest(BusinessError("invalid_grant_id", "GrantId is required."));
+            if (request.Coins < 0 || request.Xp < 0 || (request.Coins == 0 && request.Xp == 0))
+                return Results.BadRequest(BusinessError("invalid_reward_payload", "Admin grant coins/xp must be non-negative and not both zero."));
+
+            var normalizedTargetUserId = request.UserId.Trim();
+            var normalizedGrantId = request.GrantId.Trim();
+            var normalizedReason = string.IsNullOrWhiteSpace(request.Reason)
+                ? "admin_override"
+                : request.Reason.Trim();
+
+            var beginTuple = await TryBeginAsync(
+                txService,
+                normalizedTargetUserId,
+                "admin_reward_grant",
+                request.IdempotencyKey!,
+                new
+                {
+                    UserId = normalizedTargetUserId,
+                    GrantId = normalizedGrantId,
+                    request.Coins,
+                    request.Xp,
+                    Reason = normalizedReason,
+                    request.Metadata,
+                    ActorUserId = actorUserId
+                },
+                ct);
+            if (beginTuple.Error is not null)
+                return beginTuple.Error;
+            var begin = beginTuple.Begin!;
+            var idempotencyResult = HandleIdempotentDecision(begin);
+            if (idempotencyResult is not null)
+                return idempotencyResult;
+
+            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == normalizedTargetUserId, ct);
+            if (profile is null)
+            {
+                var error = BusinessError("profile_not_found", "Target user profile was not found.");
+                await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Conflict(error);
+            }
+
+            var existingGrant = await db.AdminEconomyRewardGrants.FirstOrDefaultAsync(
+                x => x.UserId == normalizedTargetUserId && x.GrantId == normalizedGrantId,
+                ct);
+
+            if (existingGrant is not null)
+            {
+                var alreadyProcessed = new AdminRewardGrantResponse(
+                    Success: true,
+                    AlreadyProcessed: true,
+                    UserId: normalizedTargetUserId,
+                    Coins: profile.Coins,
+                    Xp: profile.Xp,
+                    Reward: new RewardGrantSummary(existingGrant.Coins, existingGrant.Xp),
+                    ErrorCode: null,
+                    Message: null);
+                await txService.CompleteAsync(begin.TransactionId, alreadyProcessed, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Ok(alreadyProcessed);
+            }
+
             profile.Coins += request.Coins;
             profile.TotalCoinsEarned += request.Coins;
             profile.Xp += request.Xp;
             profile.Level = 1 + (profile.Xp / 100);
             profile.UpdatedAt = DateTime.UtcNow;
 
-            rewardState.Claimed = true;
-            rewardState.ClaimedAtUtc = DateTime.UtcNow;
-            rewardState.UpdatedAtUtc = DateTime.UtcNow;
+            db.AdminEconomyRewardGrants.Add(new AdminEconomyRewardGrant
+            {
+                UserId = normalizedTargetUserId,
+                GrantId = normalizedGrantId,
+                EconomyTransactionId = begin.TransactionId,
+                ActorUserId = actorUserId,
+                Coins = request.Coins,
+                Xp = request.Xp,
+                Reason = normalizedReason,
+                MetadataJson = request.Metadata?.ToJsonString(),
+                CreatedAtUtc = DateTime.UtcNow
+            });
 
-            var response = new RewardClaimResponse(
+            var response = new AdminRewardGrantResponse(
                 Success: true,
-                AlreadyClaimed: false,
+                AlreadyProcessed: false,
+                UserId: normalizedTargetUserId,
                 Coins: profile.Coins,
                 Xp: profile.Xp,
                 Reward: new RewardGrantSummary(request.Coins, request.Xp),
@@ -990,6 +1125,9 @@ public static class EconomySettlementEndpoints
         {
             "insufficient_balance" => StatusCodes.Status409Conflict,
             "not_eligible" => StatusCodes.Status409Conflict,
+            "unknown_reward" => StatusCodes.Status409Conflict,
+            "invalid_grant_id" => StatusCodes.Status409Conflict,
+            "invalid_user_id" => StatusCodes.Status409Conflict,
             "invalid_season" => StatusCodes.Status409Conflict,
             "inactive_season" => StatusCodes.Status409Conflict,
             "invalid_reward_payload" => StatusCodes.Status409Conflict,
@@ -1198,6 +1336,27 @@ public sealed record RewardGrantSummary(
 public sealed record RewardClaimResponse(
     bool Success,
     bool AlreadyClaimed,
+    int Coins,
+    int Xp,
+    RewardGrantSummary Reward,
+    string? ErrorCode,
+    string? Message
+);
+
+public sealed record AdminRewardGrantRequest(
+    string? IdempotencyKey,
+    string? UserId,
+    string? GrantId,
+    int Coins,
+    int Xp,
+    string? Reason,
+    JsonObject? Metadata
+);
+
+public sealed record AdminRewardGrantResponse(
+    bool Success,
+    bool AlreadyProcessed,
+    string UserId,
     int Coins,
     int Xp,
     RewardGrantSummary Reward,
