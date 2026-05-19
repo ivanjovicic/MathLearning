@@ -290,6 +290,11 @@ public static class EconomySettlementEndpoints
                 db.UserRewardStates.Add(rewardState);
             }
 
+            // SECURITY NOTE: the current implementation applies client-supplied `coins`/`xp`.
+            // This can be exploited by a malicious client to mint rewards. Replace this
+            // with server-resolved reward amounts from a trusted reward catalog or
+            // rule engine. Until a server-side catalog is implemented, carefully
+            // consider restricting who can call this endpoint or ignore client values.
             profile.Coins += request.Coins;
             profile.TotalCoinsEarned += request.Coins;
             profile.Xp += request.Xp;

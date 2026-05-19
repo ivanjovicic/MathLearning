@@ -141,3 +141,29 @@ Cross-device correctness depends on backend idempotency + authoritative refresh:
 1. Reuse stable idempotency keys on retries.
 2. Refresh authoritative balances/progress after settlement responses.
 3. Do not assume device-local state is authoritative across devices.
+
+## Server Observations & Recommendations (review notes)
+
+- Observation: The current backend implementation (as of this review) accepts client-supplied `coins` and `xp` in `POST /api/economy/rewards/claim` and applies them to the user's profile.
+  - Risk: This lets a malicious client mint coins/xp by crafting reward requests.
+  - Recommendation: Treat `rewardId` as the single canonical input and resolve the award amounts server-side from a trusted reward catalog or rule engine. The server should ignore or reject client-supplied `coins`/`xp` unless the caller is an authorized admin.
+
+- Observation: `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` rows (by `transactionId`) as authority. This matches the desired contract: server-side provenance is used to determine awarded XP.
+  - Recommendation: Keep `DailyRunChestClaim` or equivalent as the canonical authority for daily-run claims.
+
+- Observation: `POST /api/cosmetics/fragments/grant` is implemented idempotently and includes a threshold-based unlock path. The endpoint uses idempotency + inventory checks to avoid double-unlock.
+  - Recommendation: Keep fragment unlocks driven by server-side fragment progress and enforce uniqueness on `UserCosmeticInventories` where possible.
+
+- Observation: There are no `POST /api/coins/earn` or legacy `/api/coins/spend` (top-level) routes discovered in the current codebase; the mobile runtime should use the new `/api/economy/*` endpoints. If legacy/compat endpoints exist in other deployments, document them as admin/legacy-only.
+
+- Observation: There is no `/api/cosmetics/purchase` route in the codebase. Clarify whether `shop` endpoints (for purchases) are the canonical way to buy cosmetics, or whether a legacy alias should be supported.
+  - Recommendation: Document which endpoint(s) represent the canonical shop purchase flow (for example `/api/shop/streak-freeze/purchase` and potential `/api/shop/cosmetics/purchase`), or add an explicit alias if clients expect `/api/cosmetics/purchase`.
+
+- Idempotency & auth enforcement: All newly introduced endpoints are under authenticated route groups and validate `idempotencyKey`. The server maps idempotency payload conflicts to `409` (`idempotency_conflict`). Business failures return `409` (or `400`) and do not commit the terminal success state. Existing integration tests assert retry/no-double-grant behavior for coins, hints, fragments, seasons, and shop purchases.
+
+- Action items:
+  1. Implement server-side reward catalog / rule evaluation for `rewards/claim` and stop applying client-supplied `coins`/`xp`.
+  2. Clarify shop/cosmetics purchase routing and document legacy endpoints (if any) as admin-only.
+  3. Add an integration test that proves `rewards/claim` ignores client-supplied `coins`/`xp` (or rejects non-authoritative payloads) after the catalog is implemented.
+
+These notes were added after running the backend review and executing the targeted economy endpoint integration tests.
