@@ -6,6 +6,7 @@ using MathLearning.Infrastructure.Services.Cosmetics;
 using MathLearning.Infrastructure.Services.DesignTokens;
 using MathLearning.Infrastructure.Services.Performance;
 using MathLearning.Infrastructure.Services.QuestionAuthoring;
+using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.Sync;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -43,6 +44,8 @@ public static class DependencyInjection
         services.AddScoped<ICosmeticInventoryService>(sp => sp.GetRequiredService<CosmeticPlatformService>());
         services.AddScoped<ICosmeticRewardService>(sp => sp.GetRequiredService<CosmeticPlatformService>());
         services.AddScoped<ICosmeticAdminService>(sp => sp.GetRequiredService<CosmeticPlatformService>());
+        services.AddScoped<EconomyTransactionService>();
+        services.AddScoped<IEconomyTransactionService>(sp => sp.GetRequiredService<EconomyTransactionService>());
         services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
         services.AddScoped<IMathContentLinter, MathContentLinter>();
         services.AddScoped<ILatexValidationService, LatexValidationService>();

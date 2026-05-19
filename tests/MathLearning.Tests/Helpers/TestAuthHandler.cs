@@ -15,7 +15,12 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var claims = new[] { new Claim("userId", "test-user") };
+        var userId = Request.Headers.TryGetValue("X-Test-UserId", out var headerUserId) &&
+                     !string.IsNullOrWhiteSpace(headerUserId.ToString())
+            ? headerUserId.ToString().Trim()
+            : "test-user";
+
+        var claims = new[] { new Claim("userId", userId) };
         var identity = new ClaimsIdentity(claims, "Test");
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, "Test");

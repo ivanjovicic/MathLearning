@@ -529,6 +529,7 @@ try
 
     // Map Powerup endpoints
     app.MapPowerupEndpoints();
+    app.MapEconomySettlementEndpoints();
 
     // Map Progress endpoints
     app.MapProgressEndpoints();

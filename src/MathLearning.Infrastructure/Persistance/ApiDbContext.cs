@@ -29,6 +29,11 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
     public DbSet<UserDailyStat> UserDailyStats => Set<UserDailyStat>();
     public DbSet<DailyRunChestClaim> DailyRunChestClaims => Set<DailyRunChestClaim>();
+    public DbSet<EconomyTransaction> EconomyTransactions => Set<EconomyTransaction>();
+    public DbSet<UserSeasonProgress> UserSeasonProgresses => Set<UserSeasonProgress>();
+    public DbSet<UserSeasonDailyRunClaim> UserSeasonDailyRunClaims => Set<UserSeasonDailyRunClaim>();
+    public DbSet<UserSeasonMilestoneClaim> UserSeasonMilestoneClaims => Set<UserSeasonMilestoneClaim>();
+    public DbSet<UserCosmeticFragmentProgress> UserCosmeticFragmentProgresses => Set<UserCosmeticFragmentProgress>();
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
@@ -490,6 +495,77 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.UserId, e.TransactionId })
                 .IsUnique()
                 .HasDatabaseName("UX_daily_run_chest_claims_user_transaction");
+        });
+
+        builder.Entity<UserSeasonProgress>(entity =>
+        {
+            entity.ToTable("user_season_progress");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                .WithMany()
+                .HasForeignKey(e => e.SeasonId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.SeasonId })
+                .IsUnique()
+                .HasDatabaseName("UX_user_season_progress_user_season");
+        });
+
+        builder.Entity<UserSeasonDailyRunClaim>(entity =>
+        {
+            entity.ToTable("user_season_daily_run_claims");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.DailyRunTransactionId).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                .WithMany()
+                .HasForeignKey(e => e.SeasonId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.DailyRunTransactionId })
+                .IsUnique()
+                .HasDatabaseName("UX_user_season_daily_run_claims_user_transaction");
+            entity.HasIndex(e => new { e.UserId, e.SeasonId })
+                .HasDatabaseName("IX_user_season_daily_run_claims_user_season");
+        });
+
+        builder.Entity<UserSeasonMilestoneClaim>(entity =>
+        {
+            entity.ToTable("user_season_milestone_claims");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.RewardType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.FragmentName).HasMaxLength(128);
+            entity.Property(e => e.ClaimedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.Season)
+                .WithMany()
+                .HasForeignKey(e => e.SeasonId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.SeasonId, e.MilestoneId })
+                .IsUnique()
+                .HasDatabaseName("UX_user_season_milestone_claims_user_season_milestone");
+            entity.HasIndex(e => new { e.UserId, e.SeasonId, e.ClaimedAtUtc })
+                .HasDatabaseName("IX_user_season_milestone_claims_user_season_claimed_at");
+        });
+
+        builder.Entity<UserCosmeticFragmentProgress>(entity =>
+        {
+            entity.ToTable("user_cosmetic_fragment_progress");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.FragmentName).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.FragmentName })
+                .IsUnique()
+                .HasDatabaseName("UX_user_cosmetic_fragment_progress_user_fragment");
         });
 
         builder.Entity<BugReport>(entity =>
