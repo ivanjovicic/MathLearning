@@ -76,6 +76,7 @@ Response:
 }
 ```
 Preview is informational only. It never creates `EconomyTransaction` rows, never marks a claim as used, and never settles balances or inventory.
+Preview also never mutates season progress/claim state (`user_season_progresses`, `user_season_milestone_claims`, `user_season_daily_run_claims`) and never creates `user_reward_states`.
 For catalog rewards (`level`, `generic`, `streak`, and `daily` when `transactionId` is omitted), preview reuses the same backend resolver as `POST /api/economy/rewards/claim`.
 When `rewardType=daily` and `transactionId` is supplied, preview resolves the Daily Run chest reward from the normalized `date` and current server-side claim state.
 Known preview `reason` values:
@@ -87,6 +88,7 @@ Known preview `reason` values:
 - `season_ended` for season-scoped preview types
 
 Preview may still return server-derived `displayCoins`, `displayXp`, or `fragment` details while `isEligible=false`; `POST` claim endpoints remain the only settlement authority.
+Stale previews are expected in concurrent flows; clients must treat `POST` claim responses as final authority even if a prior preview was eligible.
 
 ### 4) `POST /api/economy/rewards/claim`
 Request:
@@ -156,7 +158,7 @@ Server validates milestone unlock/claim state and settles reward atomically with
 The request always requires explicit `idempotencyKey`; missing or empty values return `400 invalid_idempotency_key`.
 The backend also enforces uniqueness by `UserId + SeasonId + MilestoneId`, so a different retry key still cannot mint the same milestone twice.
 
-### 7) `POST /api/cosmetics/items/{itemId}/claim`
+### 7) `POST /api/cosmetics/items/{itemKey}/claim`
 Request:
 ```json
 {
@@ -165,6 +167,7 @@ Request:
   "metadata": {}
 }
 ```
+Path parameter `itemKey` is the public cosmetic key used by mobile inventory/catalog (for example `frame_comet`, `effect_nova_trail`), not a numeric database id.
 Server resolves ownership; response returns refreshed `inventory` + `fragmentProgress`.
 
 ### 8) `POST /api/cosmetics/fragments/grant`

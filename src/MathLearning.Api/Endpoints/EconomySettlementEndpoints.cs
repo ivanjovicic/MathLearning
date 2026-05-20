@@ -972,8 +972,8 @@ public static class EconomySettlementEndpoints
             .RequireAuthorization()
             .WithTags("Cosmetics");
 
-        cosmetics.MapPost("/items/{itemId:int}/claim", async (
-            int itemId,
+        cosmetics.MapPost("/items/{itemKey}/claim", async (
+            string itemKey,
             CosmeticItemClaimRequest request,
             ApiDbContext db,
             IEconomyTransactionService txService,
@@ -986,8 +986,9 @@ public static class EconomySettlementEndpoints
 
             if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
-            if (itemId <= 0)
-                return Results.BadRequest(BusinessError("invalid_item_id", "ItemId must be greater than zero."));
+            if (string.IsNullOrWhiteSpace(itemKey))
+                return Results.BadRequest(BusinessError("invalid_item_key", "ItemKey is required."));
+            var normalizedItemKey = itemKey.Trim();
 
             var source = Normalize(request.Source);
             var beginTuple = await TryBeginAsync(
@@ -995,7 +996,7 @@ public static class EconomySettlementEndpoints
                 userId,
                 "cosmetics_item_claim",
                 request.IdempotencyKey!,
-                new { itemId, source, request.Metadata },
+                new { itemKey = normalizedItemKey, source, request.Metadata },
                 ct);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
@@ -1005,7 +1006,7 @@ public static class EconomySettlementEndpoints
                 return idempotencyResult;
 
             await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
-            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == itemId, ct);
+            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Key == normalizedItemKey, ct);
             if (item is null || !item.IsActive)
             {
                 var error = BusinessError("invalid_item", "Cosmetic item was not found or is inactive.");
@@ -1016,13 +1017,13 @@ public static class EconomySettlementEndpoints
 
             var alreadyOwned = await db.UserCosmeticInventories
                 .AsNoTracking()
-                .AnyAsync(x => x.UserId == userId && x.CosmeticItemId == itemId && !x.IsRevoked, ct);
+                .AnyAsync(x => x.UserId == userId && x.CosmeticItemId == item.Id && !x.IsRevoked, ct);
             if (!alreadyOwned)
             {
                 db.UserCosmeticInventories.Add(new UserCosmeticInventory
                 {
                     UserId = userId,
-                    CosmeticItemId = itemId,
+                    CosmeticItemId = item.Id,
                     Source = string.IsNullOrWhiteSpace(source) ? "reward" : source,
                     SourceRef = $"{source}:{request.IdempotencyKey}",
                     GrantReason = "Cosmetic claim endpoint",

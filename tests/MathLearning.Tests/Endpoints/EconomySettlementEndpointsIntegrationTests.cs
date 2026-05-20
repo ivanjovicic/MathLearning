@@ -200,6 +200,95 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task RewardClaim_DailyDateRewardId_IsAccepted()
+    {
+        var userId = $"user-reward-daily-date-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 5);
+        await EnsureRewardCatalogSeededAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-daily-date-1",
+            rewardId = "daily:2026-05-20",
+            rewardType = "daily",
+            coins = 999999,
+            xp = 999999
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(payload.GetProperty("success").GetBoolean());
+        Assert.False(payload.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(20, payload.GetProperty("reward").GetProperty("coins").GetInt32());
+        Assert.Equal(15, payload.GetProperty("reward").GetProperty("xp").GetInt32());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(50, economy.Coins);
+        Assert.Equal(20, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_DailyDateRewardId_DifferentIdempotencyKeys_DoesNotDoubleGrant()
+    {
+        var userId = $"user-reward-daily-date-dup-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 5);
+        await EnsureRewardCatalogSeededAsync();
+
+        var first = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-daily-date-dup-1",
+            rewardId = "daily:2026-05-21",
+            rewardType = "daily",
+            coins = 1,
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var duplicate = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-daily-date-dup-2",
+            rewardId = "daily:2026-05-21",
+            rewardType = "daily",
+            coins = 999999,
+            xp = 999999
+        });
+        Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
+
+        var duplicatePayload = await duplicate.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(duplicatePayload.GetProperty("alreadyClaimed").GetBoolean());
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(50, economy.Coins);
+        Assert.Equal(20, economy.Xp);
+    }
+
+    [Fact]
+    public async Task RewardClaim_DailyRewardLegacyPrefix_ReturnsInvalidRewardId()
+    {
+        var userId = $"user-reward-daily-legacy-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 5);
+        await EnsureRewardCatalogSeededAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = "reward-daily-legacy-1",
+            rewardId = $"daily-reward:{userId}:2026-05-20",
+            rewardType = "daily",
+            coins = 999999,
+            xp = 999999
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var errorCode = payload.GetProperty("errorCode").GetString();
+        Assert.Contains(errorCode, new[] { "invalid_reward_id", "invalid_reward_type" });
+
+        var economy = await GetEconomyAsync(userId);
+        Assert.Equal(30, economy.Coins);
+        Assert.Equal(5, economy.Xp);
+    }
+
+    [Fact]
     public async Task RewardClaim_SameIdempotencyKey_SamePayload_ReplaysStoredResult()
     {
         var userId = $"user-reward-retry-{Guid.NewGuid():N}";
@@ -495,6 +584,56 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task RewardPreview_GenericReward_DoesNotCreateClaimState_AndClaimMatchesPreview()
+    {
+        var userId = $"user-reward-preview-generic-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 10, xp: 0);
+        await EnsureRewardCatalogSeededAsync();
+
+        const string rewardId = "generic:onboarding_bonus";
+        var beforeEconomy = await GetEconomyAsync(userId);
+        var beforeTransactions = await CountEconomyTransactionsAsync(userId);
+        var beforeRewardState = await CountRewardStateEntriesAsync(userId, rewardId);
+
+        var previewResponse = await GetAsUserAsync(
+            userId,
+            "/api/economy/rewards/preview?rewardId=generic:onboarding_bonus&rewardType=generic");
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        var previewPayload = await previewResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var preview = previewPayload.GetProperty("preview");
+        Assert.True(preview.GetProperty("isEligible").GetBoolean());
+        var previewCoins = preview.GetProperty("displayCoins").GetInt32();
+        var previewXp = preview.GetProperty("displayXp").GetInt32();
+        Assert.Equal(50, previewCoins);
+        Assert.Equal(0, previewXp);
+
+        var afterPreviewEconomy = await GetEconomyAsync(userId);
+        var afterPreviewTransactions = await CountEconomyTransactionsAsync(userId);
+        var afterPreviewRewardState = await CountRewardStateEntriesAsync(userId, rewardId);
+
+        Assert.Equal(beforeEconomy.Coins, afterPreviewEconomy.Coins);
+        Assert.Equal(beforeEconomy.Xp, afterPreviewEconomy.Xp);
+        Assert.Equal(beforeTransactions, afterPreviewTransactions);
+        Assert.Equal(beforeRewardState, afterPreviewRewardState);
+
+        var claimResponse = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = $"reward-preview-generic-{Guid.NewGuid():N}",
+            rewardId = rewardId,
+            rewardType = "generic",
+            coins = 999,
+            xp = 999
+        });
+
+        Assert.Equal(HttpStatusCode.OK, claimResponse.StatusCode);
+        var claimPayload = await claimResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(claimPayload.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(previewCoins, claimPayload.GetProperty("reward").GetProperty("coins").GetInt32());
+        Assert.Equal(previewXp, claimPayload.GetProperty("reward").GetProperty("xp").GetInt32());
+    }
+
+    [Fact]
     public async Task RewardPreview_LevelReward_MatchesClaimRewardCalculation()
     {
         var userId = $"user-reward-preview-level-{Guid.NewGuid():N}";
@@ -573,6 +712,37 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task RewardPreview_DoesNotAlterSeasonOrProgressState()
+    {
+        var userId = $"user-reward-preview-season-state-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 5, xp: 600);
+        await EnsureRewardCatalogSeededAsync();
+
+        var seasonId = await EnsureActiveSeasonAsync();
+        var milestoneId = await EnsureSeasonMilestoneAsync(seasonId, xpRequired: 50, rewardType: "coins", payloadJson: """{"coins":25}""");
+        await SetSeasonXpAsync(userId, seasonId, earnedXp: 120);
+
+        var beforeProgress = await GetSeasonProgressAsync(userId, seasonId);
+        var beforeMilestoneClaims = await CountSeasonMilestoneClaimsAsync(userId, seasonId);
+        var beforeSeasonDailyRunClaims = await CountSeasonDailyRunClaimsAsync(userId, seasonId);
+
+        var previewResponse = await GetAsUserAsync(
+            userId,
+            $"/api/economy/rewards/preview?rewardId=level:7&rewardType=level&seasonId={seasonId}&milestoneId={milestoneId}");
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+
+        var afterProgress = await GetSeasonProgressAsync(userId, seasonId);
+        var afterMilestoneClaims = await CountSeasonMilestoneClaimsAsync(userId, seasonId);
+        var afterSeasonDailyRunClaims = await CountSeasonDailyRunClaimsAsync(userId, seasonId);
+
+        Assert.Equal(beforeProgress.EarnedXp, afterProgress.EarnedXp);
+        Assert.Equal(beforeProgress.Level, afterProgress.Level);
+        Assert.Equal(beforeMilestoneClaims, afterMilestoneClaims);
+        Assert.Equal(beforeSeasonDailyRunClaims, afterSeasonDailyRunClaims);
+    }
+
+    [Fact]
     public async Task RewardPreview_AlreadyClaimedReward_ReturnsIneligible()
     {
         var userId = $"user-reward-preview-claimed-{Guid.NewGuid():N}";
@@ -618,6 +788,80 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         var preview = payload.GetProperty("preview");
         Assert.False(preview.GetProperty("isEligible").GetBoolean());
         Assert.Equal(reason, preview.GetProperty("reason").GetString());
+    }
+
+    [Fact]
+    public async Task RewardPreview_IneligibleReward_AndClaim_AgreeOnNotEligible()
+    {
+        var userId = $"user-reward-preview-ineligible-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 30, xp: 0);
+        await EnsureRewardCatalogSeededAsync();
+
+        await SetRewardEligibilityAsync(userId, "generic:starter_bonus", eligible: false);
+        var beforeEconomy = await GetEconomyAsync(userId);
+
+        var previewResponse = await GetAsUserAsync(
+            userId,
+            "/api/economy/rewards/preview?rewardId=generic:starter_bonus&rewardType=generic");
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        var previewPayload = await previewResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var preview = previewPayload.GetProperty("preview");
+        Assert.False(preview.GetProperty("isEligible").GetBoolean());
+        Assert.Equal("not_eligible", preview.GetProperty("reason").GetString());
+
+        var claimResponse = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = $"reward-preview-ineligible-{Guid.NewGuid():N}",
+            rewardId = "generic:starter_bonus",
+            rewardType = "generic",
+            coins = 999,
+            xp = 999
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, claimResponse.StatusCode);
+        var claimPayload = await claimResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("not_eligible", claimPayload.GetProperty("errorCode").GetString());
+
+        var afterEconomy = await GetEconomyAsync(userId);
+        Assert.Equal(beforeEconomy.Coins, afterEconomy.Coins);
+        Assert.Equal(beforeEconomy.Xp, afterEconomy.Xp);
+    }
+
+    [Theory]
+    [InlineData("level:not-a-number", "level", "invalid_reward_id")]
+    [InlineData("level:7", "banana", "invalid_reward_type")]
+    public async Task RewardPreview_InvalidReward_AndClaim_AgreeOnReason(
+        string rewardId,
+        string rewardType,
+        string expectedReason)
+    {
+        var userId = $"user-reward-preview-invalid-parity-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 5, xp: 600);
+        await EnsureRewardCatalogSeededAsync();
+
+        var previewResponse = await GetAsUserAsync(
+            userId,
+            $"/api/economy/rewards/preview?rewardId={Uri.EscapeDataString(rewardId)}&rewardType={Uri.EscapeDataString(rewardType)}");
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        var previewPayload = await previewResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var preview = previewPayload.GetProperty("preview");
+        Assert.False(preview.GetProperty("isEligible").GetBoolean());
+        Assert.Equal(expectedReason, preview.GetProperty("reason").GetString());
+
+        var claimResponse = await PostAsUserAsync(userId, "/api/economy/rewards/claim", new
+        {
+            idempotencyKey = $"reward-preview-invalid-parity-{Guid.NewGuid():N}",
+            rewardId,
+            rewardType,
+            coins = 999,
+            xp = 999
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, claimResponse.StatusCode);
+        var claimPayload = await claimResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(expectedReason, claimPayload.GetProperty("errorCode").GetString());
     }
 
     [Fact]
@@ -862,27 +1106,65 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
-    public async Task CosmeticItemClaim_AndAlreadyOwned_AreSafe()
+    public async Task CosmeticItemClaim_StringItemKey_AndAlreadyOwned_AreSafe()
     {
         var userId = $"user-item-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId, coins: 100);
-        var itemId = await EnsureCosmeticItemAsync("item-claim-key", "Item Claim");
+        var cometItemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        await EnsureCosmeticItemAsync("effect_nova_trail", "Nova Trail");
 
-        var first = await PostAsUserAsync(userId, $"/api/cosmetics/items/{itemId}/claim", new
+        var first = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
             idempotencyKey = "item-key-1",
             source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(firstPayload.GetProperty("success").GetBoolean());
+        Assert.False(firstPayload.GetProperty("alreadyOwned").GetBoolean());
 
-        var second = await PostAsUserAsync(userId, $"/api/cosmetics/items/{itemId}/claim", new
+        var second = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
             idempotencyKey = "item-key-2",
             source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         var secondPayload = await second.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(secondPayload.GetProperty("success").GetBoolean());
         Assert.True(secondPayload.GetProperty("alreadyOwned").GetBoolean());
+
+        var third = await PostAsUserAsync(userId, "/api/cosmetics/items/effect_nova_trail/claim", new
+        {
+            idempotencyKey = "item-key-3",
+            source = "reward"
+        });
+        Assert.Equal(HttpStatusCode.OK, third.StatusCode);
+        var thirdPayload = await third.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(thirdPayload.GetProperty("success").GetBoolean());
+        Assert.False(thirdPayload.GetProperty("alreadyOwned").GetBoolean());
+
+        var invalid = await PostAsUserAsync(userId, "/api/cosmetics/items/invalid_key/claim", new
+        {
+            idempotencyKey = "item-key-invalid",
+            source = "reward"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
+        var invalidPayload = await invalid.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("invalid_item", invalidPayload.GetProperty("errorCode").GetString());
+
+        var retry = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
+        {
+            idempotencyKey = "item-key-retry",
+            source = "reward"
+        });
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        var retryAgain = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
+        {
+            idempotencyKey = "item-key-retry",
+            source = "reward"
+        });
+        Assert.Equal(HttpStatusCode.OK, retryAgain.StatusCode);
+        Assert.Equal(1, await CountOwnedItemAsync(userId, cometItemId));
     }
 
     [Fact]
@@ -1016,6 +1298,13 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         return await db.UserProfiles.Where(x => x.UserId == userId).Select(x => x.StreakFreezeCount).FirstAsync();
+    }
+
+    private async Task<int> CountRewardStateEntriesAsync(string userId, string rewardId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserRewardStates.CountAsync(x => x.UserId == userId && x.RewardKey == rewardId);
     }
 
     private async Task SetRewardEligibilityAsync(string userId, string rewardId, bool eligible)
@@ -1245,6 +1534,20 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             .AsNoTracking()
             .FirstAsync(x => x.UserId == userId && x.SeasonId == seasonId);
         return (progress.EarnedXp, progress.Level);
+    }
+
+    private async Task<int> CountSeasonMilestoneClaimsAsync(string userId, int seasonId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserSeasonMilestoneClaims.CountAsync(x => x.UserId == userId && x.SeasonId == seasonId);
+    }
+
+    private async Task<int> CountSeasonDailyRunClaimsAsync(string userId, int seasonId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserSeasonDailyRunClaims.CountAsync(x => x.UserId == userId && x.SeasonId == seasonId);
     }
 
     private async Task<int> EnsureSeasonMilestoneAsync(int seasonId, int xpRequired, string rewardType, string payloadJson)
