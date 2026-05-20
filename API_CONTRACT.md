@@ -236,8 +236,24 @@ Auth: Required (except admin override route, which requires admin policy)
   - Canonical input: `rewardId` (`rewardType` is validation/context only)
   - Compatibility fields: request `coins` / `xp` are accepted for payload compatibility but ignored as settlement authority for authenticated mobile callers
   - Resolution: server-authoritative data-driven reward catalog stored in `economy_reward_definitions` using regex matchers plus JSON eligibility/grant rules
+  - Level rewards use `rewardType=level` and `rewardId=level:<n>` with a positive integer threshold; malformed or out-of-range values return `400 invalid_reward_id`
+  - Dynamic level rewards are validated for `1 <= n <= 214748364` before catalog resolution
+  - Response shape includes authoritative `success`, `alreadyClaimed` / `alreadyProcessed`, `coins`, `xp`, `reward { coins, xp }`, `errorCode`, and `message`
   - Duplicate guard: same `rewardId` for the same user does not mint again; returns success with `alreadyClaimed=true`
-  - Errors: `409 unknown_reward`, `409 not_eligible`, `409 idempotency_conflict`
+  - Errors: `400 invalid_reward_id`, `409 unknown_reward`, `409 not_eligible`, `409 idempotency_conflict`
+
+- POST /api/seasons/milestones/{id}/claim
+  - Auth: Required
+  - Body: `SeasonMilestoneClaimRequest` { `idempotencyKey`, `seasonId` }
+  - Idempotency: same key replays the stored success result, different key after a successful claim returns success with `alreadyClaimed=true`
+  - Uniqueness: `UserId + SeasonId + MilestoneId` prevents duplicate grants even with a different `idempotencyKey`
+  - Validation: missing or blank `idempotencyKey` returns `400 invalid_idempotency_key`
+
+- POST /api/shop/streak-freeze/purchase
+  - Auth: Required
+  - Body: `StreakFreezePurchaseRequest` { `idempotencyKey`, `quantity` }
+  - Response shape includes authoritative `success`, `alreadyProcessed`, `coins`, `streakFreezeCount`, `spentCoins`, `errorCode`, and `message`
+  - Mobile retry guidance: the client should persist one pending purchase attempt key and reuse it across retry, sheet reopen, and app restart until the backend settles or returns a terminal business failure
 
 - POST /api/admin/economy/rewards/grant
   - Auth: Admin policy (`UiTokensAdminPolicy`)

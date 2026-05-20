@@ -36,7 +36,7 @@ Request:
   "metadata": {}
 }
 ```
-Response includes authoritative `coins`, `freeHints`, and `spentCoins`.
+Response includes authoritative `success`, `alreadyProcessed`, `coins`, `freeHints`, `spentCoins`, `errorCode`, and `message`.
 
 ### 2) `POST /api/economy/hints/use`
 Request:
@@ -50,7 +50,45 @@ Request:
 ```
 Server validates hint type/cost and returns authoritative `coins`, `freeHints`, `spentCoins`, `usedFreeHint`.
 
-### 3) `POST /api/economy/rewards/claim`
+### 3) `GET /api/economy/rewards/preview`
+Query params:
+- `rewardId` required
+- `rewardType` required
+- `transactionId` optional
+- `date` optional, `yyyy-MM-dd`
+- `seasonId` optional
+- `milestoneId` optional
+
+Response:
+```json
+{
+  "success": true,
+  "preview": {
+    "rewardId": "level:12",
+    "rewardType": "level",
+    "displayCoins": 120,
+    "displayXp": 0,
+    "cosmetic": null,
+    "fragment": null,
+    "isEligible": true,
+    "reason": null
+  }
+}
+```
+Preview is informational only. It never creates `EconomyTransaction` rows, never marks a claim as used, and never settles balances or inventory.
+For catalog rewards (`level`, `generic`, `streak`, and `daily` when `transactionId` is omitted), preview reuses the same backend resolver as `POST /api/economy/rewards/claim`.
+When `rewardType=daily` and `transactionId` is supplied, preview resolves the Daily Run chest reward from the normalized `date` and current server-side claim state.
+Known preview `reason` values:
+- `already_claimed`
+- `not_eligible`
+- `not_reached`
+- `invalid_reward_id`
+- `invalid_reward_type`
+- `season_ended` for season-scoped preview types
+
+Preview may still return server-derived `displayCoins`, `displayXp`, or `fragment` details while `isEligible=false`; `POST` claim endpoints remain the only settlement authority.
+
+### 4) `POST /api/economy/rewards/claim`
 Request:
 ```json
 {
@@ -68,6 +106,7 @@ The server resolves the actual grant from a trusted reward catalog/rule set keye
 Unknown `rewardId` values return `409` with `errorCode = "unknown_reward"`.
 Single-use rewards are guarded by `rewardId`; duplicate rewardId claims do not mint again.
 The initial catalog is persisted server-side in `economy_reward_definitions` as data-driven regex matchers plus JSON eligibility/grant rules.
+Success responses include authoritative `success`, `alreadyClaimed`, `coins`, `xp`, `reward { coins, xp }`, `errorCode`, and `message`.
 
 Initial server-side reward catalog:
 - `daily:{non-empty-id}` -> fixed daily reward of `20` coins and `15` xp.
@@ -77,9 +116,11 @@ Initial server-side reward catalog:
 - `generic:starter_bonus` -> `25` coins, `0` xp.
 - `generic:welcome_back` -> `15` coins, `10` xp.
 
+Dynamic level rewards accept `1 <= n <= 214748364`. Values outside that safe bound return `400 invalid_reward_id`.
+
 Retry note: legacy `coins`/`xp` fields still participate in the request payload for idempotency. Retries must reuse the exact same payload.
 
-### 4) `POST /api/shop/streak-freeze/purchase`
+### 5) `POST /api/shop/streak-freeze/purchase`
 Request:
 ```json
 {
@@ -87,9 +128,10 @@ Request:
   "quantity": 1
 }
 ```
-Response returns authoritative `coins`, `streakFreezeCount`, `spentCoins`.
+Response returns authoritative `success`, `alreadyProcessed`, `coins`, `streakFreezeCount`, `spentCoins`, `errorCode`, and `message`.
+Mobile clients should persist one pending purchase attempt key before the first request and reuse it across retry, sheet reopen, and app restart until success or a terminal business failure clears it.
 
-### 5) `POST /api/seasons/daily-run-claim`
+### 6) `POST /api/seasons/daily-run-claim`
 Request:
 ```json
 {
@@ -101,7 +143,7 @@ Request:
 ```
 Server validates season and daily-run claim provenance, then returns authoritative season state.
 
-### 6) `POST /api/seasons/milestones/{milestoneId}/claim`
+### 7) `POST /api/seasons/milestones/{milestoneId}/claim`
 Request:
 ```json
 {
@@ -111,6 +153,8 @@ Request:
 ```
 Server validates milestone unlock/claim state and settles reward atomically with claim state.
 `cosmetic_fragment` rewards are explicit in contract (`fragmentName`, `fragmentCopies`) and are not silently mapped to item unlocks.
+The request always requires explicit `idempotencyKey`; missing or empty values return `400 invalid_idempotency_key`.
+The backend also enforces uniqueness by `UserId + SeasonId + MilestoneId`, so a different retry key still cannot mint the same milestone twice.
 
 ### 7) `POST /api/cosmetics/items/{itemId}/claim`
 Request:
@@ -159,7 +203,8 @@ Cross-device correctness depends on backend idempotency + authoritative refresh:
 
 ## Server Notes
 
-- `POST /api/economy/rewards/claim` is now server-authoritative for authenticated callers. Client-supplied `coins` and `xp` are not trusted as settlement authority.
+- `GET /api/economy/rewards/preview` is informational only. It is safe to call repeatedly and does not reserve or settle rewards.
+- `POST /api/economy/rewards/claim` is server-authoritative for authenticated callers. Client-supplied `coins` and `xp` are not trusted as settlement authority.
 - Admin-only reward overrides are exposed through a separate authenticated admin endpoint: `POST /api/admin/economy/rewards/grant`. They are not supported by the mobile runtime endpoint.
 - Admin overrides are audited in a dedicated `admin_economy_reward_grants` table and duplicate `grantId` values for the same user do not mint twice.
 - `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` provenance as authority.

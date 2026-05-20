@@ -208,7 +208,7 @@ public static class DailyRunEndpoints
             out day);
     }
 
-    private static DailyRunChestReward BuildCanonicalReward(string userId, DateOnly day)
+    internal static DailyRunChestReward BuildCanonicalReward(string userId, DateOnly day)
     {
         var seed = ComputeSeed(userId, day);
         var xp = 25 + (seed.XpSeed % 26);

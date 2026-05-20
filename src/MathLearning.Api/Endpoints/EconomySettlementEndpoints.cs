@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MathLearning.Application.Services;
@@ -12,6 +13,14 @@ public static class EconomySettlementEndpoints
     private const int DailyFreeHintLimit = 10;
     private const int StreakFreezeUnitCost = 50;
     private const int MaxStreakFreezes = 5;
+    private const int MaxDynamicLevelRewardThreshold = int.MaxValue / 10;
+    private static readonly HashSet<string> SupportedCatalogRewardTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "daily",
+        "generic",
+        "level",
+        "streak"
+    };
     private static readonly IReadOnlyDictionary<string, int> HintCosts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
     {
         ["clue"] = 10,
@@ -206,6 +215,64 @@ public static class EconomySettlementEndpoints
             return Results.Ok(responseAfterUse);
         });
 
+        economy.MapGet("/rewards/preview", async (
+            string? rewardId,
+            string? rewardType,
+            string? transactionId,
+            string? date,
+            int? seasonId,
+            int? milestoneId,
+            ApiDbContext db,
+            IEconomyRewardCatalogService rewardCatalogService,
+            HttpContext ctx,
+            CancellationToken ct) =>
+        {
+            var userId = EndpointUser.GetUserId(ctx);
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(rewardId))
+                return Results.BadRequest(BusinessError("invalid_reward_id", "RewardId is required."));
+            if (string.IsNullOrWhiteSpace(rewardType))
+                return Results.BadRequest(BusinessError("invalid_reward_type", "RewardType is required."));
+            if (!TryParseRewardPreviewDate(date, out var normalizedDate))
+                return Results.BadRequest(BusinessError("invalid_date", "Date must use yyyy-MM-dd."));
+
+            var resolutionRequest = new RewardResolutionRequest(
+                RewardId: rewardId.Trim(),
+                RewardType: rewardType.Trim(),
+                TransactionId: TrimOrNull(transactionId),
+                Date: normalizedDate,
+                SeasonId: seasonId,
+                MilestoneId: milestoneId);
+
+            if (ShouldUseDailyRunPreview(resolutionRequest) && !normalizedDate.HasValue)
+            {
+                return Results.BadRequest(
+                    BusinessError(
+                        "invalid_date",
+                        "Date is required for Daily Run reward previews and must use yyyy-MM-dd."));
+            }
+
+            var resolution = ShouldUseDailyRunPreview(resolutionRequest)
+                ? await ResolveDailyRunRewardPreviewAsync(db, userId, resolutionRequest, ct)
+                : await ResolveEconomyRewardAsync(db, rewardCatalogService, userId, resolutionRequest, RewardResolutionMode.Preview, ct);
+
+            if (resolution.Status == RewardResolutionStatus.ProfileNotFound)
+            {
+                return Results.Conflict(
+                    BusinessError(
+                        "profile_not_found",
+                        resolution.Message ?? "User profile not found."));
+            }
+
+            return Results.Ok(new RewardPreviewResponse(
+                Success: true,
+                Preview: BuildRewardPreview(resolution)));
+        })
+        .WithName("PreviewEconomyReward")
+        .WithSummary("Preview backend-derived reward values without settling them");
+
         economy.MapPost("/rewards/claim", async (
             RewardClaimRequest request,
             ApiDbContext db,
@@ -240,87 +307,115 @@ public static class EconomySettlementEndpoints
                 return idempotencyResult;
 
             await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
-            var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
-            if (profile is null)
+            var resolution = await ResolveEconomyRewardAsync(
+                db,
+                rewardCatalogService,
+                userId,
+                new RewardResolutionRequest(
+                    RewardId: normalizedRewardId,
+                    RewardType: normalizedRewardType,
+                    TransactionId: null,
+                    Date: null,
+                    SeasonId: null,
+                    MilestoneId: null),
+                RewardResolutionMode.Claim,
+                ct);
+
+            if (resolution.Status == RewardResolutionStatus.ProfileNotFound)
             {
-                var error = BusinessError("profile_not_found", "User profile not found.");
+                var error = BusinessError(
+                    "profile_not_found",
+                    resolution.Message ?? "User profile not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
-            var rewardDefinition = await rewardCatalogService.ResolveAsync(normalizedRewardId, normalizedRewardType, profile, ct);
-            if (rewardDefinition is null)
+            if (resolution.Status == RewardResolutionStatus.InvalidRewardType)
             {
-                var error = BusinessError("unknown_reward", $"Reward '{normalizedRewardId}' is not supported by the server reward catalog.");
+                var error = BusinessError(
+                    "invalid_reward_type",
+                    resolution.Message ?? "RewardType is not supported.");
+                await txService.FailAsync(begin.TransactionId, "invalid_reward_type", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.BadRequest(error);
+            }
+
+            if (resolution.Status == RewardResolutionStatus.InvalidRewardId)
+            {
+                var error = BusinessError(
+                    "invalid_reward_id",
+                    resolution.Message ?? "RewardId is invalid.");
+                await txService.FailAsync(begin.TransactionId, "invalid_reward_id", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.BadRequest(error);
+            }
+
+            if (resolution.Status == RewardResolutionStatus.UnknownReward)
+            {
+                var error = BusinessError(
+                    "unknown_reward",
+                    resolution.Message ?? $"Reward '{normalizedRewardId}' is not supported by the server reward catalog.");
                 await txService.FailAsync(begin.TransactionId, "unknown_reward", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
-            UserRewardState? rewardState = null;
-            if (rewardDefinition.IsSingleUse)
+            var profile = resolution.Profile!;
+            var rewardDefinition = resolution.ResolvedReward!;
+            var rewardState = resolution.RewardState;
+
+            if (resolution.Status == RewardResolutionStatus.AlreadyClaimed)
             {
-                rewardState = await db.UserRewardStates.FirstOrDefaultAsync(
-                    x => x.UserId == userId && x.RewardKey == normalizedRewardId,
-                    ct);
-
-                if (rewardState is not null && rewardState.Claimed)
-                {
-                    var alreadyClaimed = new RewardClaimResponse(
-                        Success: true,
-                        AlreadyClaimed: true,
-                        Coins: profile.Coins,
-                        Xp: profile.Xp,
-                        Reward: new RewardGrantSummary(0, 0),
-                        ErrorCode: null,
-                        Message: null);
-                    await txService.CompleteAsync(begin.TransactionId, alreadyClaimed, ct);
-                    if (dbTx is not null) await dbTx.CommitAsync(ct);
-                    return Results.Ok(alreadyClaimed);
-                }
-
-                if (rewardState is not null && !rewardState.Eligible)
-                {
-                    var error = BusinessError("not_eligible", "Reward is not eligible.");
-                    await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
-                    if (dbTx is not null) await dbTx.CommitAsync(ct);
-                    return Results.Conflict(error);
-                }
-
-                if (rewardState is null)
-                {
-                    rewardState = new UserRewardState
-                    {
-                        UserId = userId,
-                        RewardKey = normalizedRewardId,
-                        Eligible = true,
-                        Claimed = false,
-                        UpdatedAtUtc = DateTime.UtcNow
-                    };
-                    db.UserRewardStates.Add(rewardState);
-                }
+                var alreadyClaimed = new RewardClaimResponse(
+                    Success: true,
+                    AlreadyClaimed: true,
+                    Coins: profile.Coins,
+                    Xp: profile.Xp,
+                    Reward: new RewardGrantSummary(0, 0),
+                    ErrorCode: null,
+                    Message: null);
+                await txService.CompleteAsync(begin.TransactionId, alreadyClaimed, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Ok(alreadyClaimed);
             }
 
-            if (!rewardDefinition.IsEligible)
+            if (resolution.Status is RewardResolutionStatus.NotEligible or RewardResolutionStatus.NotReached)
             {
-                var error = BusinessError("not_eligible", rewardDefinition.IneligibilityMessage);
+                var error = BusinessError(
+                    "not_eligible",
+                    resolution.Message ?? rewardDefinition.IneligibilityMessage);
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
+            var nowUtc = DateTime.UtcNow;
             profile.Coins += rewardDefinition.Coins;
             profile.TotalCoinsEarned += rewardDefinition.Coins;
             profile.Xp += rewardDefinition.Xp;
             profile.Level = 1 + (profile.Xp / 100);
-            profile.UpdatedAt = DateTime.UtcNow;
+            profile.UpdatedAt = nowUtc;
 
-            if (rewardState is not null)
+            if (rewardDefinition.IsSingleUse)
             {
+                if (rewardState is null)
+                {
+                    rewardState = new UserRewardState
+                    {
+                        UserId = userId,
+                        RewardKey = resolution.RewardId,
+                        Eligible = true,
+                        Claimed = false,
+                        UpdatedAtUtc = nowUtc
+                    };
+                    db.UserRewardStates.Add(rewardState);
+                }
+
+                rewardState.Eligible = true;
                 rewardState.Claimed = true;
-                rewardState.ClaimedAtUtc = DateTime.UtcNow;
-                rewardState.UpdatedAtUtc = DateTime.UtcNow;
+                rewardState.ClaimedAtUtc = nowUtc;
+                rewardState.UpdatedAtUtc = nowUtc;
             }
 
             var response = new RewardClaimResponse(
@@ -1126,12 +1221,14 @@ public static class EconomySettlementEndpoints
             "insufficient_balance" => StatusCodes.Status409Conflict,
             "not_eligible" => StatusCodes.Status409Conflict,
             "unknown_reward" => StatusCodes.Status409Conflict,
+            "invalid_reward_id" => StatusCodes.Status400BadRequest,
             "invalid_grant_id" => StatusCodes.Status409Conflict,
             "invalid_user_id" => StatusCodes.Status409Conflict,
             "invalid_season" => StatusCodes.Status409Conflict,
             "inactive_season" => StatusCodes.Status409Conflict,
             "invalid_reward_payload" => StatusCodes.Status409Conflict,
             "profile_not_found" => StatusCodes.Status409Conflict,
+            "invalid_reward_type" => StatusCodes.Status400BadRequest,
             "unsupported_reward_type" => StatusCodes.Status409Conflict,
             "invalid_item" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest
@@ -1162,6 +1259,9 @@ public static class EconomySettlementEndpoints
 
     private static string Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+
+    private static string? TrimOrNull(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static async Task<CosmeticSeason?> ResolveActiveSeasonAsync(ApiDbContext db, int? requestedSeasonId, CancellationToken ct)
     {
@@ -1224,6 +1324,359 @@ public static class EconomySettlementEndpoints
             ClaimedMilestoneIds: claimedIds);
     }
 
+    private static async Task<RewardResolutionResult> ResolveEconomyRewardAsync(
+        ApiDbContext db,
+        IEconomyRewardCatalogService rewardCatalogService,
+        string userId,
+        RewardResolutionRequest request,
+        RewardResolutionMode mode,
+        CancellationToken ct)
+    {
+        var normalizedRewardId = TrimOrNull(request.RewardId);
+        var normalizedRewardType = Normalize(request.RewardType);
+        var inferredRewardType = normalizedRewardId is null
+            ? string.Empty
+            : InferRewardType(normalizedRewardId);
+        var effectiveRewardType = string.IsNullOrWhiteSpace(normalizedRewardType)
+            ? inferredRewardType
+            : normalizedRewardType;
+
+        if (normalizedRewardId is null)
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.InvalidRewardId,
+                RewardId: string.Empty,
+                RewardType: effectiveRewardType,
+                Preview: RewardPreviewPayload.Empty,
+                Message: "RewardId is required.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedRewardType) &&
+            !SupportedCatalogRewardTypes.Contains(normalizedRewardType))
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.InvalidRewardType,
+                RewardId: normalizedRewardId,
+                RewardType: normalizedRewardType,
+                Preview: RewardPreviewPayload.Empty,
+                Message: $"RewardType '{normalizedRewardType}' is not supported.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedRewardType) &&
+            !string.IsNullOrWhiteSpace(inferredRewardType) &&
+            !string.Equals(normalizedRewardType, inferredRewardType, StringComparison.OrdinalIgnoreCase))
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.InvalidRewardType,
+                RewardId: normalizedRewardId,
+                RewardType: normalizedRewardType,
+                Preview: RewardPreviewPayload.Empty,
+                Message: $"RewardType '{normalizedRewardType}' does not match RewardId '{normalizedRewardId}'.");
+        }
+
+        if (!TryValidateDynamicLevelRewardId(normalizedRewardId, normalizedRewardType, out var invalidRewardIdMessage))
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.InvalidRewardId,
+                RewardId: normalizedRewardId,
+                RewardType: effectiveRewardType,
+                Preview: RewardPreviewPayload.Empty,
+                Message: invalidRewardIdMessage);
+        }
+
+        var profile = mode == RewardResolutionMode.Preview
+            ? await db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct)
+            : await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
+        if (profile is null)
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.ProfileNotFound,
+                RewardId: normalizedRewardId,
+                RewardType: effectiveRewardType,
+                Preview: RewardPreviewPayload.Empty,
+                Message: "User profile not found.");
+        }
+
+        var reward = await rewardCatalogService.ResolveAsync(normalizedRewardId, normalizedRewardType, profile, ct);
+        if (reward is null)
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.UnknownReward,
+                RewardId: normalizedRewardId,
+                RewardType: effectiveRewardType,
+                Preview: RewardPreviewPayload.Empty,
+                Message: $"Reward '{normalizedRewardId}' is not supported by the server reward catalog.",
+                Profile: profile);
+        }
+
+        var previewPayload = BuildEconomyRewardPreviewPayload(reward);
+        UserRewardState? rewardState = null;
+        if (reward.IsSingleUse)
+        {
+            rewardState = mode == RewardResolutionMode.Preview
+                ? await db.UserRewardStates.AsNoTracking().FirstOrDefaultAsync(
+                    x => x.UserId == userId && x.RewardKey == normalizedRewardId,
+                    ct)
+                : await db.UserRewardStates.FirstOrDefaultAsync(
+                    x => x.UserId == userId && x.RewardKey == normalizedRewardId,
+                    ct);
+
+            if (rewardState is { Claimed: true })
+            {
+                return new RewardResolutionResult(
+                    Status: RewardResolutionStatus.AlreadyClaimed,
+                    RewardId: normalizedRewardId,
+                    RewardType: reward.RewardType,
+                    Preview: RewardPreviewPayload.Empty,
+                    Message: "Reward already claimed.",
+                    ResolvedReward: reward,
+                    Profile: profile,
+                    RewardState: rewardState);
+            }
+
+            if (rewardState is { Eligible: false })
+            {
+                return new RewardResolutionResult(
+                    Status: RewardResolutionStatus.NotEligible,
+                    RewardId: normalizedRewardId,
+                    RewardType: reward.RewardType,
+                    Preview: previewPayload,
+                    Message: "Reward is not eligible.",
+                    ResolvedReward: reward,
+                    Profile: profile,
+                    RewardState: rewardState);
+            }
+        }
+
+        if (!reward.IsEligible)
+        {
+            var status = reward.RewardType is "level" or "streak"
+                ? RewardResolutionStatus.NotReached
+                : RewardResolutionStatus.NotEligible;
+            var message = status == RewardResolutionStatus.NotReached
+                ? "Reward threshold has not been reached."
+                : reward.IneligibilityMessage;
+
+            return new RewardResolutionResult(
+                Status: status,
+                RewardId: normalizedRewardId,
+                RewardType: reward.RewardType,
+                Preview: previewPayload,
+                Message: message,
+                ResolvedReward: reward,
+                Profile: profile,
+                RewardState: rewardState);
+        }
+
+        return new RewardResolutionResult(
+            Status: RewardResolutionStatus.Eligible,
+            RewardId: normalizedRewardId,
+            RewardType: reward.RewardType,
+            Preview: previewPayload,
+            ResolvedReward: reward,
+            Profile: profile,
+            RewardState: rewardState);
+    }
+
+    private static async Task<RewardResolutionResult> ResolveDailyRunRewardPreviewAsync(
+        ApiDbContext db,
+        string userId,
+        RewardResolutionRequest request,
+        CancellationToken ct)
+    {
+        var normalizedRewardId = TrimOrNull(request.RewardId) ?? "daily";
+        var normalizedTransactionId = TrimOrNull(request.TransactionId);
+        if (!request.Date.HasValue)
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.InvalidRewardId,
+                RewardId: normalizedRewardId,
+                RewardType: "daily",
+                Preview: RewardPreviewPayload.Empty,
+                Message: "Date is required for Daily Run reward previews.");
+        }
+
+        var day = request.Date.Value;
+        var reward = DailyRunEndpoints.BuildCanonicalReward(userId, day);
+        var previewPayload = new RewardPreviewPayload(
+            Coins: reward.Coins,
+            Xp: reward.Xp,
+            Cosmetic: null,
+            Fragment: new RewardPreviewFragment(reward.CosmeticFragment, reward.FragmentCopies));
+
+        var existingClaim = await db.DailyRunChestClaims
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x => x.UserId == userId &&
+                     (x.Day == day ||
+                      (normalizedTransactionId != null && x.TransactionId == normalizedTransactionId)),
+                ct);
+        if (existingClaim is not null)
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.AlreadyClaimed,
+                RewardId: normalizedRewardId,
+                RewardType: "daily",
+                Preview: RewardPreviewPayload.Empty,
+                Message: "Daily Run reward already claimed.");
+        }
+
+        var completedDailyRun = await db.UserDailyStats
+            .AsNoTracking()
+            .AnyAsync(x => x.UserId == userId && x.Day == day && x.Completed, ct);
+        if (!completedDailyRun)
+        {
+            return new RewardResolutionResult(
+                Status: RewardResolutionStatus.NotEligible,
+                RewardId: normalizedRewardId,
+                RewardType: "daily",
+                Preview: previewPayload,
+                Message: "Daily Run not completed for requested date.");
+        }
+
+        return new RewardResolutionResult(
+            Status: RewardResolutionStatus.Eligible,
+            RewardId: normalizedRewardId,
+            RewardType: "daily",
+            Preview: previewPayload);
+    }
+
+    private static RewardPreviewResult BuildRewardPreview(RewardResolutionResult resolution)
+    {
+        var previewPayload = ShouldDisplayPreviewPayload(resolution.Status)
+            ? resolution.Preview
+            : RewardPreviewPayload.Empty;
+
+        return new RewardPreviewResult(
+            RewardId: resolution.RewardId,
+            RewardType: resolution.RewardType,
+            DisplayCoins: previewPayload.Coins,
+            DisplayXp: previewPayload.Xp,
+            Cosmetic: previewPayload.Cosmetic,
+            Fragment: previewPayload.Fragment,
+            IsEligible: resolution.Status == RewardResolutionStatus.Eligible,
+            Reason: GetPreviewReasonCode(resolution.Status));
+    }
+
+    private static RewardPreviewPayload BuildEconomyRewardPreviewPayload(ResolvedEconomyReward reward)
+        => new(reward.Coins, reward.Xp, null, null);
+
+    private static bool ShouldDisplayPreviewPayload(RewardResolutionStatus status)
+        => status is RewardResolutionStatus.Eligible or RewardResolutionStatus.NotEligible or RewardResolutionStatus.NotReached;
+
+    private static string? GetPreviewReasonCode(RewardResolutionStatus status)
+    {
+        return status switch
+        {
+            RewardResolutionStatus.Eligible => null,
+            RewardResolutionStatus.AlreadyClaimed => "already_claimed",
+            RewardResolutionStatus.NotEligible => "not_eligible",
+            RewardResolutionStatus.NotReached => "not_reached",
+            RewardResolutionStatus.InvalidRewardId => "invalid_reward_id",
+            RewardResolutionStatus.InvalidRewardType => "invalid_reward_type",
+            RewardResolutionStatus.UnknownReward => "invalid_reward_id",
+            RewardResolutionStatus.SeasonEnded => "season_ended",
+            _ => "not_eligible"
+        };
+    }
+
+    private static bool ShouldUseDailyRunPreview(RewardResolutionRequest request)
+        => string.Equals(Normalize(request.RewardType), "daily", StringComparison.OrdinalIgnoreCase) &&
+           !string.IsNullOrWhiteSpace(request.TransactionId);
+
+    private static bool TryParseRewardPreviewDate(string? value, out DateOnly? date)
+    {
+        date = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!DateOnly.TryParseExact(
+                value.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed))
+        {
+            return false;
+        }
+
+        date = parsed;
+        return true;
+    }
+
+    private static string InferRewardType(string rewardId)
+    {
+        var separatorIndex = rewardId.IndexOf(':');
+        if (separatorIndex <= 0)
+            return string.Empty;
+
+        return Normalize(rewardId[..separatorIndex]);
+    }
+
+    private static bool TryValidateDynamicLevelRewardId(
+        string rewardId,
+        string rewardType,
+        out string? message)
+    {
+        message = null;
+        var looksLikeLevelReward =
+            string.Equals(rewardType, "level", StringComparison.OrdinalIgnoreCase) ||
+            rewardId.StartsWith("level:", StringComparison.OrdinalIgnoreCase);
+        if (!looksLikeLevelReward)
+            return true;
+
+        if (TryParseDynamicLevelRewardId(rewardId, out _))
+            return true;
+
+        message = $"RewardId '{rewardId}' must use the format level:<n> with n between 1 and {MaxDynamicLevelRewardThreshold}.";
+        return false;
+    }
+
+    private static bool TryValidateDynamicLevelRewardRequest(
+        string rewardId,
+        string? rewardType,
+        out IResult? error)
+    {
+        error = null;
+        var normalizedRewardType = Normalize(rewardType);
+        var looksLikeLevelReward =
+            string.Equals(normalizedRewardType, "level", StringComparison.OrdinalIgnoreCase) ||
+            rewardId.StartsWith("level:", StringComparison.OrdinalIgnoreCase);
+        if (!looksLikeLevelReward)
+            return true;
+
+        if (TryParseDynamicLevelRewardId(rewardId, out _))
+            return true;
+
+        error = Results.BadRequest(
+            BusinessError(
+                "invalid_reward_id",
+                $"RewardId '{rewardId}' must use the format level:<n> with n between 1 and {MaxDynamicLevelRewardThreshold}."));
+        return false;
+    }
+
+    private static bool TryParseDynamicLevelRewardId(string rewardId, out int threshold)
+    {
+        threshold = 0;
+        const string prefix = "level:";
+        if (!rewardId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var rawThreshold = rewardId[prefix.Length..].Trim();
+        if (string.IsNullOrWhiteSpace(rawThreshold) || rawThreshold[0] == '0')
+            return false;
+
+        for (var index = 0; index < rawThreshold.Length; index += 1)
+        {
+            if (!char.IsDigit(rawThreshold[index]))
+                return false;
+        }
+
+        return int.TryParse(rawThreshold, out threshold) &&
+            threshold > 0 &&
+            threshold <= MaxDynamicLevelRewardThreshold;
+    }
+
     private static bool TryReadIntPayload(string payloadJson, string propertyName, out int value)
     {
         value = 0;
@@ -1276,6 +1729,53 @@ public static class EconomySettlementEndpoints
             .OrderBy(x => x.FragmentName)
             .ToDictionaryAsync(x => x.FragmentName, x => x.Copies, ct);
     }
+
+    private enum RewardResolutionMode
+    {
+        Preview,
+        Claim
+    }
+
+    private enum RewardResolutionStatus
+    {
+        Eligible,
+        AlreadyClaimed,
+        NotEligible,
+        NotReached,
+        InvalidRewardId,
+        InvalidRewardType,
+        UnknownReward,
+        ProfileNotFound,
+        SeasonEnded
+    }
+
+    private sealed record RewardResolutionRequest(
+        string RewardId,
+        string RewardType,
+        string? TransactionId,
+        DateOnly? Date,
+        int? SeasonId,
+        int? MilestoneId
+    );
+
+    private sealed record RewardPreviewPayload(
+        int Coins,
+        int Xp,
+        RewardPreviewCosmetic? Cosmetic,
+        RewardPreviewFragment? Fragment)
+    {
+        public static RewardPreviewPayload Empty { get; } = new(0, 0, null, null);
+    }
+
+    private sealed record RewardResolutionResult(
+        RewardResolutionStatus Status,
+        string RewardId,
+        string RewardType,
+        RewardPreviewPayload Preview,
+        string? Message = null,
+        ResolvedEconomyReward? ResolvedReward = null,
+        UserProfile? Profile = null,
+        UserRewardState? RewardState = null);
 }
 
 public sealed record ApiErrorResponse(
@@ -1326,6 +1826,31 @@ public sealed record RewardClaimRequest(
     int Coins,
     int Xp,
     JsonObject? Metadata
+);
+
+public sealed record RewardPreviewResponse(
+    bool Success,
+    RewardPreviewResult Preview
+);
+
+public sealed record RewardPreviewResult(
+    string RewardId,
+    string RewardType,
+    int DisplayCoins,
+    int DisplayXp,
+    RewardPreviewCosmetic? Cosmetic,
+    RewardPreviewFragment? Fragment,
+    bool IsEligible,
+    string? Reason
+);
+
+public sealed record RewardPreviewCosmetic(
+    int ItemId
+);
+
+public sealed record RewardPreviewFragment(
+    string Name,
+    int Copies
 );
 
 public sealed record RewardGrantSummary(
