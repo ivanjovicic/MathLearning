@@ -24,6 +24,12 @@ Business errors return:
 }
 ```
 
+## Legacy Endpoints (Not Used by Flutter Runtime)
+The following endpoints are NOT called by Flutter runtime and exist only for non-mobile backward compatibility:
+- `POST /api/coins/earn` — deprecated; use `POST /api/economy/rewards/claim` instead
+- `POST /api/coins/spend` — deprecated; use `POST /api/economy/coins/spend` (Flutter endpoint below)
+- `POST /api/cosmetics/purchase` — deprecated; use `POST /api/cosmetics/items/{itemKey}/claim` instead
+
 ## Endpoints
 
 ### 1) `POST /api/economy/coins/spend`
@@ -97,21 +103,18 @@ Request:
   "idempotencyKey": "string",
   "rewardId": "string",
   "rewardType": "daily|level|streak|generic",
-  "coins": 10,
-  "xp": 0,
   "metadata": {}
 }
 ```
-`rewardId` is the canonical input. `rewardType` is validation/context only.
-For authenticated mobile callers, request `coins` and `xp` are legacy compatibility fields and are ignored as settlement authority.
-The server resolves the actual grant from a trusted reward catalog/rule set keyed by `rewardId` and current server-side user state.
+Flutter mobile client does NOT send `coins` or `xp` in the request body; the server resolves the actual grant from a trusted reward catalog/rule set.
+`rewardId` is the canonical input (e.g., `daily:2026-05-20`, `level:7`, `streak:5`, `generic:onboarding_bonus`). `rewardType` is validation/context only.
 Unknown `rewardId` values return `409` with `errorCode = "unknown_reward"`.
 Single-use rewards are guarded by `rewardId`; duplicate rewardId claims do not mint again.
 The initial catalog is persisted server-side in `economy_reward_definitions` as data-driven regex matchers plus JSON eligibility/grant rules.
 Success responses include authoritative `success`, `alreadyClaimed`, `coins`, `xp`, `reward { coins, xp }`, `errorCode`, and `message`.
 
 Initial server-side reward catalog:
-- `daily:{non-empty-id}` -> fixed daily reward of `20` coins and `15` xp.
+- `daily:<dayKey>` -> fixed daily reward of `20` coins and `15` xp (e.g., `daily:2026-05-20`).
 - `level:{n}` -> eligible only when server-side `profile.Level >= n`; grants `n * 10` coins, minimum `10`, and `0` xp.
 - `streak:{n}` -> eligible only when server-side `profile.Streak >= n`; grants `n * 5` coins, clamped to `10..500`, and `0` xp.
 - `generic:onboarding_bonus` -> `50` coins, `0` xp.
@@ -120,7 +123,7 @@ Initial server-side reward catalog:
 
 Dynamic level rewards accept `1 <= n <= 214748364`. Values outside that safe bound return `400 invalid_reward_id`.
 
-Retry note: legacy `coins`/`xp` fields still participate in the request payload for idempotency. Retries must reuse the exact same payload.
+Idempotency is keyed by `UserId + RewardType + IdempotencyKey`; the server does not require specific idempotencyKey format but clients should use stable, scoped keys (e.g., `reward:daily:<userId>:<dayKey>` or `reward:level:<userId>:<level>`).
 
 ### 5) `POST /api/shop/streak-freeze/purchase`
 Request:
