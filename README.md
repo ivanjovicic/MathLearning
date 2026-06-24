@@ -26,6 +26,7 @@ offline replay, Daily Run rewards, seasons, economy, and cosmetics.
 Before changing backend endpoints consumed by the mobile app, read:
 
 - [`docs/mobile_contract_idempotency_handoff.md`](docs/mobile_contract_idempotency_handoff.md) — backend verification checklist for the mobile contract
+- [`docs/backend_contract_gap_report.md`](docs/backend_contract_gap_report.md) — current backend gap snapshot against the mobile handoff
 - Mobile repo: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md`
 - Mobile repo: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_backend_contract_status.md`
 - Mobile repo: `ivanjovicic/Mathlearning-Mobile-App/docs/backend_idempotency_implementation_plan.md`
@@ -60,7 +61,7 @@ P0 endpoints to verify first:
 | `POST /api/economy/rewards/claim` | `economy_reward_claim` |
 | `POST /api/shop/streak-freeze/purchase` | `shop_streak_freeze_purchase` |
 
-For exact behavior and test expectations, see [`docs/mobile_contract_idempotency_handoff.md`](docs/mobile_contract_idempotency_handoff.md).
+For exact behavior and test expectations, see [`docs/mobile_contract_idempotency_handoff.md`](docs/mobile_contract_idempotency_handoff.md). For current implementation gaps, see [`docs/backend_contract_gap_report.md`](docs/backend_contract_gap_report.md).
 
 ---
 
