@@ -19,6 +19,9 @@ public sealed class EconomyTransactionConfiguration : IEntityTypeConfiguration<E
             .IsRequired()
             .HasMaxLength(128);
 
+        builder.Property(x => x.OperationId)
+            .HasMaxLength(128);
+
         builder.Property(x => x.TransactionType)
             .IsRequired()
             .HasMaxLength(64);
@@ -54,6 +57,11 @@ public sealed class EconomyTransactionConfiguration : IEntityTypeConfiguration<E
         builder.HasIndex(x => new { x.UserId, x.TransactionType, x.IdempotencyKey })
             .IsUnique()
             .HasDatabaseName("UX_economy_transactions_user_type_key");
+
+        builder.HasIndex(x => new { x.UserId, x.TransactionType, x.OperationId })
+            .IsUnique()
+            .HasDatabaseName("UX_economy_transactions_user_type_operation")
+            .HasFilter("\"OperationId\" IS NOT NULL");
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc })
             .HasDatabaseName("IX_economy_transactions_user_created_at");

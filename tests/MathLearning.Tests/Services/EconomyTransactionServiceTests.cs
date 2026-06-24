@@ -78,4 +78,37 @@ public sealed class EconomyTransactionServiceTests
         Assert.Equal(complete.TransactionId, completeAgain.TransactionId);
         Assert.Equal(complete.ResultJson, completeAgain.ResultJson);
     }
+
+    [Fact]
+    public async Task OperationIdAndIdempotencyKey_ResolveSameLedgerEntry()
+    {
+        await using var db = TestDbContextFactory.Create();
+        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+
+        var first = await service.BeginOrGetExistingAsync(
+            "u1",
+            "cosmetics_fragment_grant",
+            "daily-run-tx-1",
+            new { fragmentName = "Comet Frame Fragment", copies = 1 },
+            operationId: "op-1");
+        await service.CompleteAsync(first.TransactionId, new { success = true });
+
+        var byOperation = await service.BeginOrGetExistingAsync(
+            "u1",
+            "cosmetics_fragment_grant",
+            "daily-run-tx-1",
+            new { fragmentName = "Comet Frame Fragment", copies = 1 },
+            operationId: "op-1");
+        var byIdempotency = await service.BeginOrGetExistingAsync(
+            "u1",
+            "cosmetics_fragment_grant",
+            "daily-run-tx-1",
+            new { fragmentName = "Comet Frame Fragment", copies = 1 },
+            operationId: "op-1");
+
+        Assert.False(byOperation.ShouldProcess);
+        Assert.False(byIdempotency.ShouldProcess);
+        Assert.Equal(first.TransactionId, byOperation.TransactionId);
+        Assert.Equal(first.TransactionId, byIdempotency.TransactionId);
+    }
 }

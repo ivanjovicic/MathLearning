@@ -29,15 +29,6 @@ public static class EconomySettlementEndpoints
         ["solution"] = 20
     };
 
-    private static readonly IReadOnlyDictionary<string, (string ItemKey, int RequiredCopies)> FragmentUnlocks
-        = new Dictionary<string, (string ItemKey, int RequiredCopies)>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Comet Frame Fragment"] = ("comet-frame", 5),
-            ["Nova Trail Fragment"] = ("nova-trail", 5),
-            ["Neon Number Burst Fragment"] = ("neon-number-burst", 5),
-            ["Solar Pulse Fragment"] = ("solar-pulse", 5)
-        };
-
     public static void MapEconomySettlementEndpoints(this IEndpointRouteBuilder app)
     {
         var economy = app.MapGroup("/api/economy")
@@ -55,12 +46,12 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (request.Amount <= 0)
-                return Results.BadRequest(BusinessError("invalid_amount", "Amount must be greater than zero."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_amount", "Amount must be greater than zero."));
 
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
                 "economy_coins_spend",
@@ -70,15 +61,15 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
-                var error = BusinessError("profile_not_found", "User profile not found.");
+                var error = EconomyEndpointHelpers.BusinessError("profile_not_found", "User profile not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -86,7 +77,7 @@ public static class EconomySettlementEndpoints
 
             if (profile.Coins < request.Amount)
             {
-                var error = BusinessError("insufficient_balance", "Insufficient coin balance.");
+                var error = EconomyEndpointHelpers.BusinessError("insufficient_balance", "Insufficient coin balance.");
                 await txService.FailAsync(begin.TransactionId, "insufficient_balance", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -121,16 +112,16 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (request.QuestionId <= 0)
-                return Results.BadRequest(BusinessError("invalid_question_id", "QuestionId must be greater than zero."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_question_id", "QuestionId must be greater than zero."));
 
             var hintType = Normalize(request.HintType);
             if (!HintCosts.TryGetValue(hintType, out var serverCost))
-                return Results.BadRequest(BusinessError("invalid_hint_type", "Unsupported hint type."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_hint_type", "Unsupported hint type."));
 
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
                 "economy_hint_use",
@@ -140,15 +131,15 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
-                var error = BusinessError("profile_not_found", "User profile not found.");
+                var error = EconomyEndpointHelpers.BusinessError("profile_not_found", "User profile not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -181,7 +172,7 @@ public static class EconomySettlementEndpoints
                 spentCoins = serverCost;
                 if (profile.Coins < spentCoins)
                 {
-                    var error = BusinessError("insufficient_balance", "Insufficient coin balance.");
+                    var error = EconomyEndpointHelpers.BusinessError("insufficient_balance", "Insufficient coin balance.");
                     await txService.FailAsync(begin.TransactionId, "insufficient_balance", error, ct);
                     if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
@@ -232,11 +223,11 @@ public static class EconomySettlementEndpoints
                 return Results.Unauthorized();
 
             if (string.IsNullOrWhiteSpace(rewardId))
-                return Results.BadRequest(BusinessError("invalid_reward_id", "RewardId is required."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_reward_id", "RewardId is required."));
             if (string.IsNullOrWhiteSpace(rewardType))
-                return Results.BadRequest(BusinessError("invalid_reward_type", "RewardType is required."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_reward_type", "RewardType is required."));
             if (!TryParseRewardPreviewDate(date, out var normalizedDate))
-                return Results.BadRequest(BusinessError("invalid_date", "Date must use yyyy-MM-dd."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_date", "Date must use yyyy-MM-dd."));
 
             var resolutionRequest = new RewardResolutionRequest(
                 RewardId: rewardId.Trim(),
@@ -249,7 +240,7 @@ public static class EconomySettlementEndpoints
             if (ShouldUseDailyRunPreview(resolutionRequest) && !normalizedDate.HasValue)
             {
                 return Results.BadRequest(
-                    BusinessError(
+                    EconomyEndpointHelpers.BusinessError(
                         "invalid_date",
                         "Date is required for Daily Run reward previews and must use yyyy-MM-dd."));
             }
@@ -261,7 +252,7 @@ public static class EconomySettlementEndpoints
             if (resolution.Status == RewardResolutionStatus.ProfileNotFound)
             {
                 return Results.Conflict(
-                    BusinessError(
+                    EconomyEndpointHelpers.BusinessError(
                         "profile_not_found",
                         resolution.Message ?? "User profile not found."));
             }
@@ -285,14 +276,14 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (string.IsNullOrWhiteSpace(request.RewardId))
-                return Results.BadRequest(BusinessError("invalid_reward_id", "RewardId is required."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_reward_id", "RewardId is required."));
 
             var normalizedRewardId = request.RewardId.Trim();
             var normalizedRewardType = Normalize(request.RewardType);
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
                 "economy_reward_claim",
@@ -302,11 +293,11 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var resolution = await ResolveEconomyRewardAsync(
                 db,
                 rewardCatalogService,
@@ -323,7 +314,7 @@ public static class EconomySettlementEndpoints
 
             if (resolution.Status == RewardResolutionStatus.ProfileNotFound)
             {
-                var error = BusinessError(
+                var error = EconomyEndpointHelpers.BusinessError(
                     "profile_not_found",
                     resolution.Message ?? "User profile not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
@@ -333,7 +324,7 @@ public static class EconomySettlementEndpoints
 
             if (resolution.Status == RewardResolutionStatus.InvalidRewardType)
             {
-                var error = BusinessError(
+                var error = EconomyEndpointHelpers.BusinessError(
                     "invalid_reward_type",
                     resolution.Message ?? "RewardType is not supported.");
                 await txService.FailAsync(begin.TransactionId, "invalid_reward_type", error, ct);
@@ -343,7 +334,7 @@ public static class EconomySettlementEndpoints
 
             if (resolution.Status == RewardResolutionStatus.InvalidRewardId)
             {
-                var error = BusinessError(
+                var error = EconomyEndpointHelpers.BusinessError(
                     "invalid_reward_id",
                     resolution.Message ?? "RewardId is invalid.");
                 await txService.FailAsync(begin.TransactionId, "invalid_reward_id", error, ct);
@@ -353,7 +344,7 @@ public static class EconomySettlementEndpoints
 
             if (resolution.Status == RewardResolutionStatus.UnknownReward)
             {
-                var error = BusinessError(
+                var error = EconomyEndpointHelpers.BusinessError(
                     "unknown_reward",
                     resolution.Message ?? $"Reward '{normalizedRewardId}' is not supported by the server reward catalog.");
                 await txService.FailAsync(begin.TransactionId, "unknown_reward", error, ct);
@@ -382,7 +373,7 @@ public static class EconomySettlementEndpoints
 
             if (resolution.Status is RewardResolutionStatus.NotEligible or RewardResolutionStatus.NotReached)
             {
-                var error = BusinessError(
+                var error = EconomyEndpointHelpers.BusinessError(
                     "not_eligible",
                     resolution.Message ?? rewardDefinition.IneligibilityMessage);
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
@@ -447,14 +438,14 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(actorUserId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (string.IsNullOrWhiteSpace(request.UserId))
-                return Results.BadRequest(BusinessError("invalid_user_id", "UserId is required."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_user_id", "UserId is required."));
             if (string.IsNullOrWhiteSpace(request.GrantId))
-                return Results.BadRequest(BusinessError("invalid_grant_id", "GrantId is required."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_grant_id", "GrantId is required."));
             if (request.Coins < 0 || request.Xp < 0 || (request.Coins == 0 && request.Xp == 0))
-                return Results.BadRequest(BusinessError("invalid_reward_payload", "Admin grant coins/xp must be non-negative and not both zero."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Admin grant coins/xp must be non-negative and not both zero."));
 
             var normalizedTargetUserId = request.UserId.Trim();
             var normalizedGrantId = request.GrantId.Trim();
@@ -462,7 +453,7 @@ public static class EconomySettlementEndpoints
                 ? "admin_override"
                 : request.Reason.Trim();
 
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 normalizedTargetUserId,
                 "admin_reward_grant",
@@ -481,15 +472,15 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == normalizedTargetUserId, ct);
             if (profile is null)
             {
-                var error = BusinessError("profile_not_found", "Target user profile was not found.");
+                var error = EconomyEndpointHelpers.BusinessError("profile_not_found", "Target user profile was not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -564,12 +555,12 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (request.Quantity <= 0)
-                return Results.BadRequest(BusinessError("invalid_quantity", "Quantity must be greater than zero."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_quantity", "Quantity must be greater than zero."));
 
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
                 "shop_streak_freeze_purchase",
@@ -579,15 +570,15 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
-                var error = BusinessError("profile_not_found", "User profile not found.");
+                var error = EconomyEndpointHelpers.BusinessError("profile_not_found", "User profile not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -595,7 +586,7 @@ public static class EconomySettlementEndpoints
 
             if (profile.StreakFreezeCount + request.Quantity > MaxStreakFreezes)
             {
-                var error = BusinessError("max_inventory_reached", "Max streak freeze inventory reached.");
+                var error = EconomyEndpointHelpers.BusinessError("max_inventory_reached", "Max streak freeze inventory reached.");
                 await txService.FailAsync(begin.TransactionId, "max_inventory_reached", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -604,7 +595,7 @@ public static class EconomySettlementEndpoints
             var spentCoins = request.Quantity * StreakFreezeUnitCost;
             if (profile.Coins < spentCoins)
             {
-                var error = BusinessError("insufficient_balance", "Insufficient coin balance.");
+                var error = EconomyEndpointHelpers.BusinessError("insufficient_balance", "Insufficient coin balance.");
                 await txService.FailAsync(begin.TransactionId, "insufficient_balance", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -644,12 +635,12 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (string.IsNullOrWhiteSpace(request.TransactionId))
-                return Results.BadRequest(BusinessError("invalid_transaction_id", "TransactionId is required."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_transaction_id", "TransactionId is required."));
 
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
                 "season_daily_run_claim",
@@ -659,15 +650,15 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var season = await ResolveActiveSeasonAsync(db, request.SeasonId, ct);
             if (season is null)
             {
-                var error = BusinessError("invalid_season", "Season is missing or inactive.");
+                var error = EconomyEndpointHelpers.BusinessError("invalid_season", "Season is missing or inactive.");
                 await txService.FailAsync(begin.TransactionId, "invalid_season", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -680,11 +671,14 @@ public static class EconomySettlementEndpoints
             if (existing is not null)
             {
                 var seasonStateExisting = await BuildSeasonStateAsync(db, userId, season.Id, ct);
+                var fragmentGrantHint = await DailyRunCosmeticsSettlement.BuildFragmentGrantHintAsync(
+                    db, userId, normalizedTxId, ct);
                 var replay = new SeasonDailyRunClaimResponse(
                     Success: true,
                     AlreadyClaimed: true,
                     AwardedXp: 0,
                     Season: seasonStateExisting,
+                    FragmentGrant: fragmentGrantHint,
                     ErrorCode: null,
                     Message: null);
                 await txService.CompleteAsync(begin.TransactionId, replay, ct);
@@ -697,7 +691,7 @@ public static class EconomySettlementEndpoints
                 .FirstOrDefaultAsync(x => x.UserId == userId && x.TransactionId == normalizedTxId, ct);
             if (dailyRunClaim is null)
             {
-                var error = BusinessError("not_eligible", "Daily Run claim transaction was not found.");
+                var error = EconomyEndpointHelpers.BusinessError("not_eligible", "Daily Run claim transaction was not found.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -720,11 +714,14 @@ public static class EconomySettlementEndpoints
             });
 
             var seasonState = await BuildSeasonStateAsync(db, userId, season.Id, ct);
+            var fragmentGrant = await DailyRunCosmeticsSettlement.BuildFragmentGrantHintAsync(
+                db, userId, normalizedTxId, ct);
             var response = new SeasonDailyRunClaimResponse(
                 Success: true,
                 AlreadyClaimed: false,
                 AwardedXp: awardedXp,
                 Season: seasonState,
+                FragmentGrant: fragmentGrant,
                 ErrorCode: null,
                 Message: null);
 
@@ -738,6 +735,7 @@ public static class EconomySettlementEndpoints
             SeasonMilestoneClaimRequest request,
             ApiDbContext db,
             IEconomyTransactionService txService,
+            ICosmeticsFragmentService fragmentService,
             HttpContext ctx,
             CancellationToken ct) =>
         {
@@ -745,12 +743,12 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
+            if (!EconomyEndpointHelpers.ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
                 return keyError!;
             if (milestoneId <= 0)
-                return Results.BadRequest(BusinessError("invalid_milestone", "MilestoneId must be greater than zero."));
+                return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_milestone", "MilestoneId must be greater than zero."));
 
-            var beginTuple = await TryBeginAsync(
+            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
                 "season_milestone_claim",
@@ -760,15 +758,15 @@ public static class EconomySettlementEndpoints
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
+            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var season = await ResolveActiveSeasonAsync(db, request.SeasonId, ct);
             if (season is null)
             {
-                var error = BusinessError("invalid_season", "Season is missing or inactive.");
+                var error = EconomyEndpointHelpers.BusinessError("invalid_season", "Season is missing or inactive.");
                 await txService.FailAsync(begin.TransactionId, "invalid_season", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -779,7 +777,7 @@ public static class EconomySettlementEndpoints
                 .FirstOrDefaultAsync(x => x.Id == milestoneId && x.SeasonId == season.Id && x.IsActive, ct);
             if (milestone is null)
             {
-                var error = BusinessError("invalid_milestone", "Milestone was not found for this season.");
+                var error = EconomyEndpointHelpers.BusinessError("invalid_milestone", "Milestone was not found for this season.");
                 await txService.FailAsync(begin.TransactionId, "invalid_milestone", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -814,7 +812,7 @@ public static class EconomySettlementEndpoints
             var progress = await GetOrCreateSeasonProgressAsync(db, userId, season.Id, ct);
             if (progress.EarnedXp < milestone.XpRequired)
             {
-                var error = BusinessError("insufficient_season_xp", "User has not reached the milestone XP threshold.");
+                var error = EconomyEndpointHelpers.BusinessError("insufficient_season_xp", "User has not reached the milestone XP threshold.");
                 await txService.FailAsync(begin.TransactionId, "insufficient_season_xp", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -823,7 +821,7 @@ public static class EconomySettlementEndpoints
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
-                var error = BusinessError("profile_not_found", "User profile not found.");
+                var error = EconomyEndpointHelpers.BusinessError("profile_not_found", "User profile not found.");
                 await txService.FailAsync(begin.TransactionId, "profile_not_found", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -837,7 +835,7 @@ public static class EconomySettlementEndpoints
             {
                 if (!TryReadIntPayload(milestone.RewardPayloadJson, "coins", out var coins) || coins <= 0)
                 {
-                    var error = BusinessError("invalid_reward_payload", "Milestone reward payload is invalid.");
+                    var error = EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Milestone reward payload is invalid.");
                     await txService.FailAsync(begin.TransactionId, "invalid_reward_payload", error, ct);
                     if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
@@ -851,7 +849,7 @@ public static class EconomySettlementEndpoints
             {
                 if (!TryReadIntPayload(milestone.RewardPayloadJson, "xp", out var xp) || xp <= 0)
                 {
-                    var error = BusinessError("invalid_reward_payload", "Milestone reward payload is invalid.");
+                    var error = EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Milestone reward payload is invalid.");
                     await txService.FailAsync(begin.TransactionId, "invalid_reward_payload", error, ct);
                     if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
@@ -865,7 +863,7 @@ public static class EconomySettlementEndpoints
             {
                 if (!TryReadIntPayload(milestone.RewardPayloadJson, "cosmeticItemId", out var itemId) || itemId <= 0)
                 {
-                    var error = BusinessError("invalid_reward_payload", "Milestone reward payload is invalid.");
+                    var error = EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Milestone reward payload is invalid.");
                     await txService.FailAsync(begin.TransactionId, "invalid_reward_payload", error, ct);
                     if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
@@ -879,7 +877,7 @@ public static class EconomySettlementEndpoints
                     var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == itemId, ct);
                     if (item is null)
                     {
-                        var error = BusinessError("invalid_reward_payload", "Milestone cosmetic item was not found.");
+                        var error = EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Milestone cosmetic item was not found.");
                         await txService.FailAsync(begin.TransactionId, "invalid_reward_payload", error, ct);
                         if (dbTx is not null) await dbTx.CommitAsync(ct);
                         return Results.Conflict(error);
@@ -906,32 +904,27 @@ public static class EconomySettlementEndpoints
                     !TryReadIntPayload(milestone.RewardPayloadJson, "copies", out var copies) ||
                     copies <= 0)
                 {
-                    var error = BusinessError("invalid_reward_payload", "Milestone fragment payload is invalid.");
+                    var error = EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Milestone fragment payload is invalid.");
                     await txService.FailAsync(begin.TransactionId, "invalid_reward_payload", error, ct);
                     if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
                 }
 
-                var fragmentProgress = await db.UserCosmeticFragmentProgresses
-                    .FirstOrDefaultAsync(x => x.UserId == userId && x.FragmentName == fragmentName, ct);
-                if (fragmentProgress is null)
+                var target = await fragmentService.ResolveFragmentTargetAsync(fragmentName, ct);
+                if (target is null)
                 {
-                    fragmentProgress = new UserCosmeticFragmentProgress
-                    {
-                        UserId = userId,
-                        FragmentName = fragmentName,
-                        Copies = 0
-                    };
-                    db.UserCosmeticFragmentProgresses.Add(fragmentProgress);
+                    var error = EconomyEndpointHelpers.BusinessError("invalid_reward_payload", "Milestone fragment is not recognized.");
+                    await txService.FailAsync(begin.TransactionId, "invalid_reward_payload", error, ct);
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
+                    return Results.Conflict(error);
                 }
 
-                fragmentProgress.Copies += copies;
-                fragmentProgress.UpdatedAtUtc = DateTime.UtcNow;
+                await fragmentService.GrantFragmentsAsync(userId, fragmentName, copies, DateTime.UtcNow, ct);
                 reward = reward with { FragmentName = fragmentName, FragmentCopies = copies };
             }
             else
             {
-                var error = BusinessError("unsupported_reward_type", $"Unsupported milestone reward type '{rewardType}'.");
+                var error = EconomyEndpointHelpers.BusinessError("unsupported_reward_type", $"Unsupported milestone reward type '{rewardType}'.");
                 await txService.FailAsync(begin.TransactionId, "unsupported_reward_type", error, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
@@ -967,277 +960,7 @@ public static class EconomySettlementEndpoints
             if (dbTx is not null) await dbTx.CommitAsync(ct);
             return Results.Ok(response);
         });
-
-        var cosmetics = app.MapGroup("/api/cosmetics")
-            .RequireAuthorization()
-            .WithTags("Cosmetics");
-
-        cosmetics.MapPost("/items/{itemKey}/claim", async (
-            string itemKey,
-            CosmeticItemClaimRequest request,
-            ApiDbContext db,
-            IEconomyTransactionService txService,
-            HttpContext ctx,
-            CancellationToken ct) =>
-        {
-            var userId = EndpointUser.GetUserId(ctx);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Results.Unauthorized();
-
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
-                return keyError!;
-            if (string.IsNullOrWhiteSpace(itemKey))
-                return Results.BadRequest(BusinessError("invalid_item_key", "ItemKey is required."));
-            var normalizedItemKey = itemKey.Trim();
-
-            var source = Normalize(request.Source);
-            var beginTuple = await TryBeginAsync(
-                txService,
-                userId,
-                "cosmetics_item_claim",
-                request.IdempotencyKey!,
-                new { itemKey = normalizedItemKey, source, request.Metadata },
-                ct);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
-            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Key == normalizedItemKey, ct);
-            if (item is null || !item.IsActive)
-            {
-                var error = BusinessError("invalid_item", "Cosmetic item was not found or is inactive.");
-                await txService.FailAsync(begin.TransactionId, "invalid_item", error, ct);
-                if (dbTx is not null) await dbTx.CommitAsync(ct);
-                return Results.Conflict(error);
-            }
-
-            var alreadyOwned = await db.UserCosmeticInventories
-                .AsNoTracking()
-                .AnyAsync(x => x.UserId == userId && x.CosmeticItemId == item.Id && !x.IsRevoked, ct);
-            if (!alreadyOwned)
-            {
-                db.UserCosmeticInventories.Add(new UserCosmeticInventory
-                {
-                    UserId = userId,
-                    CosmeticItemId = item.Id,
-                    Source = string.IsNullOrWhiteSpace(source) ? "reward" : source,
-                    SourceRef = $"{source}:{request.IdempotencyKey}",
-                    GrantReason = "Cosmetic claim endpoint",
-                    SeasonId = item.SeasonId,
-                    AssetVersion = item.AssetVersion,
-                    UnlockedAt = DateTime.UtcNow
-                });
-            }
-
-            var response = new CosmeticItemClaimResponse(
-                Success: true,
-                AlreadyOwned: alreadyOwned,
-                Inventory: await LoadInventoryItemIdsAsync(db, userId, ct),
-                FragmentProgress: await LoadFragmentProgressAsync(db, userId, ct),
-                ErrorCode: null,
-                Message: null);
-
-            await txService.CompleteAsync(begin.TransactionId, response, ct);
-            if (dbTx is not null) await dbTx.CommitAsync(ct);
-            return Results.Ok(response);
-        });
-
-        cosmetics.MapPost("/fragments/grant", async (
-            CosmeticFragmentGrantRequest request,
-            ApiDbContext db,
-            IEconomyTransactionService txService,
-            HttpContext ctx,
-            CancellationToken ct) =>
-        {
-            var userId = EndpointUser.GetUserId(ctx);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Results.Unauthorized();
-
-            if (!ValidateIdempotencyKey(request.IdempotencyKey, out var keyError))
-                return keyError!;
-            if (string.IsNullOrWhiteSpace(request.FragmentName))
-                return Results.BadRequest(BusinessError("invalid_fragment", "FragmentName is required."));
-            if (request.Copies <= 0)
-                return Results.BadRequest(BusinessError("invalid_copies", "Copies must be greater than zero."));
-
-            var source = Normalize(request.Source);
-            var beginTuple = await TryBeginAsync(
-                txService,
-                userId,
-                "cosmetics_fragment_grant",
-                request.IdempotencyKey!,
-                request with { Source = source },
-                ct);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
-            var fragmentName = request.FragmentName!.Trim();
-            var progress = await db.UserCosmeticFragmentProgresses
-                .FirstOrDefaultAsync(x => x.UserId == userId && x.FragmentName == fragmentName, ct);
-            if (progress is null)
-            {
-                progress = new UserCosmeticFragmentProgress
-                {
-                    UserId = userId,
-                    FragmentName = fragmentName,
-                    Copies = 0
-                };
-                db.UserCosmeticFragmentProgresses.Add(progress);
-            }
-
-            progress.Copies += request.Copies;
-            progress.UpdatedAtUtc = DateTime.UtcNow;
-
-            var itemUnlocked = false;
-            int? unlockedItemId = null;
-            if (FragmentUnlocks.TryGetValue(fragmentName, out var unlock))
-            {
-                var unlockItem = await db.CosmeticItems.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Key == unlock.ItemKey && x.IsActive, ct);
-                if (unlockItem is not null && progress.Copies >= unlock.RequiredCopies)
-                {
-                    var alreadyOwned = await db.UserCosmeticInventories
-                        .AsNoTracking()
-                        .AnyAsync(x => x.UserId == userId && x.CosmeticItemId == unlockItem.Id && !x.IsRevoked, ct);
-                    if (!alreadyOwned)
-                    {
-                        db.UserCosmeticInventories.Add(new UserCosmeticInventory
-                        {
-                            UserId = userId,
-                            CosmeticItemId = unlockItem.Id,
-                            Source = "fragment_unlock",
-                            SourceRef = $"fragment:{fragmentName}",
-                            GrantReason = $"Unlocked via {fragmentName}",
-                            SeasonId = unlockItem.SeasonId,
-                            AssetVersion = unlockItem.AssetVersion,
-                            UnlockedAt = DateTime.UtcNow
-                        });
-                        itemUnlocked = true;
-                        unlockedItemId = unlockItem.Id;
-                    }
-                }
-            }
-
-            var response = new CosmeticFragmentGrantResponse(
-                Success: true,
-                AlreadyProcessed: false,
-                ItemUnlocked: itemUnlocked,
-                UnlockedItemId: unlockedItemId,
-                Inventory: await LoadInventoryItemIdsAsync(db, userId, ct),
-                FragmentProgress: await LoadFragmentProgressAsync(db, userId, ct),
-                ErrorCode: null,
-                Message: null);
-
-            await txService.CompleteAsync(begin.TransactionId, response, ct);
-            if (dbTx is not null) await dbTx.CommitAsync(ct);
-            return Results.Ok(response);
-        });
     }
-
-    private static bool ValidateIdempotencyKey(string? key, out IResult? error)
-    {
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            error = Results.BadRequest(BusinessError("invalid_idempotency_key", "IdempotencyKey is required."));
-            return false;
-        }
-
-        error = null;
-        return true;
-    }
-
-    private static IResult? HandleIdempotentDecision(EconomyTransactionBeginResult begin)
-    {
-        if (begin.ShouldProcess)
-            return null;
-
-        if (begin.IsCompleted)
-            return ReplayStoredJson(begin.ResultJson, successStatusCode: StatusCodes.Status200OK);
-
-        if (begin.IsFailed)
-            return ReplayStoredJson(begin.ResultJson, successStatusCode: MapErrorStatusCode(begin.ErrorCode));
-
-        if (begin.IsPending)
-            return Results.Conflict(BusinessError("transaction_in_progress", "A matching request is already being processed."));
-
-        return Results.Conflict(BusinessError("idempotency_conflict", "Invalid transaction state."));
-    }
-
-    private static async Task<(EconomyTransactionBeginResult? Begin, IResult? Error)> TryBeginAsync(
-        IEconomyTransactionService txService,
-        string userId,
-        string transactionType,
-        string idempotencyKey,
-        object requestPayload,
-        CancellationToken ct)
-    {
-        try
-        {
-            var begin = await txService.BeginOrGetExistingAsync(userId, transactionType, idempotencyKey, requestPayload, ct);
-            return (begin, null);
-        }
-        catch (EconomyTransactionConflictException)
-        {
-            return (null, Results.Conflict(BusinessError("idempotency_conflict", "Idempotency key already exists with a different payload.")));
-        }
-    }
-
-    private static IResult ReplayStoredJson(string? resultJson, int successStatusCode)
-    {
-        if (string.IsNullOrWhiteSpace(resultJson))
-            return Results.StatusCode(successStatusCode);
-
-        try
-        {
-            var node = JsonNode.Parse(resultJson);
-            if (node is JsonObject obj)
-            {
-                if (obj.ContainsKey("alreadyProcessed"))
-                    obj["alreadyProcessed"] = true;
-                if (obj.ContainsKey("alreadyClaimed"))
-                    obj["alreadyClaimed"] = true;
-            }
-
-            return Results.Json(node, statusCode: successStatusCode);
-        }
-        catch
-        {
-            return Results.Content(resultJson, "application/json", statusCode: successStatusCode);
-        }
-    }
-
-    private static int MapErrorStatusCode(string? errorCode)
-    {
-        return errorCode switch
-        {
-            "insufficient_balance" => StatusCodes.Status409Conflict,
-            "not_eligible" => StatusCodes.Status409Conflict,
-            "unknown_reward" => StatusCodes.Status409Conflict,
-            "invalid_reward_id" => StatusCodes.Status400BadRequest,
-            "invalid_grant_id" => StatusCodes.Status409Conflict,
-            "invalid_user_id" => StatusCodes.Status409Conflict,
-            "invalid_season" => StatusCodes.Status409Conflict,
-            "inactive_season" => StatusCodes.Status409Conflict,
-            "invalid_reward_payload" => StatusCodes.Status409Conflict,
-            "profile_not_found" => StatusCodes.Status409Conflict,
-            "invalid_reward_type" => StatusCodes.Status400BadRequest,
-            "unsupported_reward_type" => StatusCodes.Status409Conflict,
-            "invalid_item" => StatusCodes.Status409Conflict,
-            _ => StatusCodes.Status400BadRequest
-        };
-    }
-
-    private static ApiErrorResponse BusinessError(string errorCode, string message)
-        => new(false, errorCode, message);
 
     private static async Task<int> GetFreeHintsRemainingAsync(ApiDbContext db, string userId, CancellationToken ct)
     {
@@ -1248,14 +971,6 @@ public static class EconomySettlementEndpoints
             .CountAsync(x => x.UserId == userId && x.UsedAt >= todayUtc && x.UsedAt < tomorrowUtc, ct);
 
         return Math.Max(0, DailyFreeHintLimit - usedToday);
-    }
-
-    private static async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction?> BeginDbTransactionIfSupportedAsync(ApiDbContext db, CancellationToken ct)
-    {
-        if (!db.Database.IsRelational())
-            return null;
-
-        return await db.Database.BeginTransactionAsync(ct);
     }
 
     private static string Normalize(string? value)
@@ -1650,7 +1365,7 @@ public static class EconomySettlementEndpoints
             return true;
 
         error = Results.BadRequest(
-            BusinessError(
+            EconomyEndpointHelpers.BusinessError(
                 "invalid_reward_id",
                 $"RewardId '{rewardId}' must use the format level:<n> with n between 1 and {MaxDynamicLevelRewardThreshold}."));
         return false;
@@ -1710,25 +1425,6 @@ public static class EconomySettlementEndpoints
         {
             return false;
         }
-    }
-
-    private static async Task<IReadOnlyList<int>> LoadInventoryItemIdsAsync(ApiDbContext db, string userId, CancellationToken ct)
-    {
-        return await db.UserCosmeticInventories
-            .AsNoTracking()
-            .Where(x => x.UserId == userId && !x.IsRevoked)
-            .OrderBy(x => x.CosmeticItemId)
-            .Select(x => x.CosmeticItemId)
-            .ToListAsync(ct);
-    }
-
-    private static async Task<IReadOnlyDictionary<string, int>> LoadFragmentProgressAsync(ApiDbContext db, string userId, CancellationToken ct)
-    {
-        return await db.UserCosmeticFragmentProgresses
-            .AsNoTracking()
-            .Where(x => x.UserId == userId)
-            .OrderBy(x => x.FragmentName)
-            .ToDictionaryAsync(x => x.FragmentName, x => x.Copies, ct);
     }
 
     private enum RewardResolutionMode
@@ -1924,6 +1620,7 @@ public sealed record SeasonDailyRunClaimResponse(
     bool AlreadyClaimed,
     int AwardedXp,
     SeasonStateResponse Season,
+    SeasonDailyRunFragmentGrantHint? FragmentGrant,
     string? ErrorCode,
     string? Message
 );
@@ -1948,40 +1645,6 @@ public sealed record SeasonMilestoneClaimResponse(
     bool AlreadyOwned,
     SeasonStateResponse Season,
     SeasonMilestoneRewardResponse Reward,
-    string? ErrorCode,
-    string? Message
-);
-
-public sealed record CosmeticItemClaimRequest(
-    string? IdempotencyKey,
-    string? Source,
-    JsonObject? Metadata
-);
-
-public sealed record CosmeticItemClaimResponse(
-    bool Success,
-    bool AlreadyOwned,
-    IReadOnlyList<int> Inventory,
-    IReadOnlyDictionary<string, int> FragmentProgress,
-    string? ErrorCode,
-    string? Message
-);
-
-public sealed record CosmeticFragmentGrantRequest(
-    string? IdempotencyKey,
-    string? FragmentName,
-    int Copies,
-    string? Source,
-    JsonObject? Metadata
-);
-
-public sealed record CosmeticFragmentGrantResponse(
-    bool Success,
-    bool AlreadyProcessed,
-    bool ItemUnlocked,
-    int? UnlockedItemId,
-    IReadOnlyList<int> Inventory,
-    IReadOnlyDictionary<string, int> FragmentProgress,
     string? ErrorCode,
     string? Message
 );

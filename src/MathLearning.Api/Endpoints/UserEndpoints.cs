@@ -1,4 +1,5 @@
 using MathLearning.Application.DTOs.Auth;
+using MathLearning.Application.Services;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.DTOs.Users;
 using MathLearning.Domain.Entities;
@@ -29,14 +30,16 @@ public static class UserEndpoints
 
         legacyGroup.MapGet("/profile/{userId}", async (
             ApiDbContext db,
-            string userId) => await GetProfileByIdAsync(db, userId))
+            IAvatarAppearanceReader appearanceReader,
+            string userId) => await GetProfileByIdAsync(db, appearanceReader, userId))
         .WithName("AdminGetUserProfileById")
         .WithDescription("Admin: Get user XP/level/streak by userId");
 
         // Mobile compatibility alias. Canonical route remains: GET /api/user/profile/{userId}
         group.MapGet("/{userId}/profile", async (
             ApiDbContext db,
-            string userId) => await GetProfileByIdAsync(db, userId))
+            IAvatarAppearanceReader appearanceReader,
+            string userId) => await GetProfileByIdAsync(db, appearanceReader, userId))
         .WithName("GetUserProfileByIdCompatibilityAlias")
         .WithSummary("Mobile compatibility alias for GET /api/user/profile/{userId}");
 
@@ -78,6 +81,7 @@ public static class UserEndpoints
 
         group.MapGet("/profile", async (
             ApiDbContext db,
+            IAvatarAppearanceReader appearanceReader,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -90,7 +94,7 @@ public static class UserEndpoints
                 return Results.NotFound(new { error = "Profile not found" });
             }
 
-            var appearance = await LoadAppearanceAsync(db, userId);
+            var appearance = await appearanceReader.GetAppearanceAsync(userId, ctx.RequestAborted);
             return Results.Ok(new UserProfileDto(
                 UserId: profile.UserId,
                 Username: profile.Username,
@@ -112,6 +116,7 @@ public static class UserEndpoints
         group.MapPut("/profile", async (
             UpdateProfileRequest request,
             ApiDbContext db,
+            IAvatarAppearanceReader appearanceReader,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -131,7 +136,7 @@ public static class UserEndpoints
                 await db.SaveChangesAsync();
             }
 
-            var appearance = await LoadAppearanceAsync(db, userId);
+            var appearance = await appearanceReader.GetAppearanceAsync(userId, ctx.RequestAborted);
             return Results.Ok(new UserProfileDto(
                 UserId: profile.UserId,
                 Username: profile.Username,
@@ -152,6 +157,7 @@ public static class UserEndpoints
 
         group.MapGet("/stats", async (
             ApiDbContext db,
+            IAvatarAppearanceReader appearanceReader,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -178,7 +184,7 @@ public static class UserEndpoints
             var hintsUsed = await db.UserHints
                 .Where(h => h.UserId == userId)
                 .CountAsync();
-            var appearance = await LoadAppearanceAsync(db, userId);
+            var appearance = await appearanceReader.GetAppearanceAsync(userId, ctx.RequestAborted);
 
             return Results.Ok(new
             {
@@ -218,6 +224,8 @@ public static class UserEndpoints
         group.MapGet("/search", async (
             string query,
             ApiDbContext db,
+            IAvatarAppearanceReader appearanceReader,
+            CancellationToken ct,
             int limit = 10) =>
         {
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
@@ -238,9 +246,11 @@ public static class UserEndpoints
                     p.Level,
                     p.Xp
                 })
-                .ToListAsync();
+                .ToListAsync(ct);
 
-            var appearanceMap = await LoadAppearanceMapAsync(db, users.Select(x => x.UserId));
+            var appearanceMap = await appearanceReader.GetAppearancesAsync(
+                users.Select(x => x.UserId).ToList(),
+                ct);
 
             var result = users.Select(x => new
             {
@@ -487,30 +497,10 @@ private static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ct
     });
 }
 
-    private static async Task<Dictionary<string, AvatarAppearanceDto>> LoadAppearanceMapAsync(ApiDbContext db, IEnumerable<string> userIds)
-    {
-        var ids = userIds
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct()
-            .ToList();
-        if (ids.Count == 0)
-        {
-            return new Dictionary<string, AvatarAppearanceDto>();
-        }
-
-        return await db.UserAppearanceProjections
-            .AsNoTracking()
-            .Where(x => ids.Contains(x.UserId))
-            .ToDictionaryAsync(x => x.UserId, MapAppearance);
-    }
-
-    private static async Task<AvatarAppearanceDto?> LoadAppearanceAsync(ApiDbContext db, string userId)
-    {
-        var appearanceMap = await LoadAppearanceMapAsync(db, [userId]);
-        return appearanceMap.TryGetValue(userId, out var appearance) ? appearance : null;
-    }
-
-    private static async Task<IResult> GetProfileByIdAsync(ApiDbContext db, string userId)
+    private static async Task<IResult> GetProfileByIdAsync(
+        ApiDbContext db,
+        IAvatarAppearanceReader appearanceReader,
+        string userId)
     {
         var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
         if (profile == null)
@@ -518,7 +508,7 @@ private static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ct
             return Results.NotFound(new { error = "Profile not found" });
         }
 
-        var appearance = await LoadAppearanceAsync(db, userId);
+        var appearance = await appearanceReader.GetAppearanceAsync(userId);
         return Results.Ok(new
         {
             profile.UserId,
@@ -533,29 +523,6 @@ private static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ct
             appearance
         });
     }
-
-    private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)
-        => new(
-            new AvatarConfigDto(
-                projection.SkinId,
-                projection.HairId,
-                projection.ClothingId,
-                projection.AccessoryId,
-                projection.EmojiId,
-                projection.FrameId,
-                projection.BackgroundId,
-                projection.EffectId,
-                projection.LeaderboardDecorationId,
-                projection.AvatarVersion),
-            projection.SkinAssetPath,
-            projection.HairAssetPath,
-            projection.ClothingAssetPath,
-            projection.AccessoryAssetPath,
-            projection.EmojiAssetPath,
-            projection.FrameAssetPath,
-            projection.BackgroundAssetPath,
-            projection.EffectAssetPath,
-            projection.LeaderboardDecorationAssetPath);
 }
 
 public record UpdateProfileRequest(

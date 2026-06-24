@@ -146,7 +146,21 @@ Request:
   "xp": 25
 }
 ```
-Server validates season and daily-run claim provenance, then returns authoritative season state.
+Server validates season and daily-run claim provenance, then returns authoritative season state plus a `fragmentGrant` hint when the chest awarded a cosmetic fragment:
+```json
+{
+  "success": true,
+  "alreadyClaimed": false,
+  "awardedXp": 25,
+  "season": { "seasonId": 1, "earnedXp": 80, "level": 1, "claimedMilestoneIds": [] },
+  "fragmentGrant": {
+    "transactionId": "daily-run-claim-id",
+    "fragmentName": "Comet Frame Fragment",
+    "copies": 2
+  }
+}
+```
+Mobile should follow with `POST /api/cosmetics/fragments/grant` using `source`/`sourceType: "dailyRun"` and `operationId` = `idempotencyKey` = `transactionId`.
 
 ### 7) `POST /api/seasons/milestones/{milestoneId}/claim`
 Request:
@@ -165,26 +179,35 @@ The backend also enforces uniqueness by `UserId + SeasonId + MilestoneId`, so a 
 Request:
 ```json
 {
+  "operationId": "string",
   "idempotencyKey": "string",
+  "transactionId": "optional-daily-run-alias",
   "source": "season|dailyRun|shop|admin|reward",
   "metadata": {}
 }
 ```
 Path parameter `itemKey` is the public cosmetic key used by mobile inventory/catalog (for example `frame_comet`, `effect_nova_trail`), not a numeric database id.
-Server resolves ownership; response returns refreshed `inventory` + `fragmentProgress`.
+Server resolves ownership; response returns refreshed `inventory` (string item keys) and `fragmentProgress`.
+Idempotency is scoped per authenticated `userId`. Both `operationId` and `idempotencyKey` are required unless `transactionId` is supplied (Daily Run), in which case it may satisfy both.
+Duplicate retries with the same keys replay `alreadyClaimed: true`. Payload conflicts return `409` with `conflict: true` and `errorCode: "idempotency_conflict"`.
 
 ### 8) `POST /api/cosmetics/fragments/grant`
 Request:
 ```json
 {
+  "operationId": "string",
   "idempotencyKey": "string",
+  "transactionId": "optional-daily-run-alias",
   "fragmentName": "Comet Frame Fragment",
   "copies": 1,
   "source": "dailyRun|season|reward",
   "metadata": {}
 }
 ```
-Server increments fragment progress once per idempotency key and may unlock mapped item server-side.
+Server increments fragment progress once per idempotency scope and may unlock mapped item server-side.
+Daily Run clients should send the chest `transactionId` as `idempotencyKey` (and may reuse it as `operationId`).
+Every settled response includes authoritative `progress { itemId, collectedFragments, requiredFragments, updatedAt, unlockedAt }` plus refreshed `inventory` and `fragmentProgress`.
+When the threshold is reached, response also includes `unlockedItemId` and optional `unlockedInventory`.
 
 ## Flutter Methods to Replace
 - `CoinProvider.trySpendCoins`
@@ -213,8 +236,8 @@ Cross-device correctness depends on backend idempotency + authoritative refresh:
 - `POST /api/economy/rewards/claim` is server-authoritative for authenticated callers. Client-supplied `coins` and `xp` are not trusted as settlement authority.
 - Admin-only reward overrides are exposed through a separate authenticated admin endpoint: `POST /api/admin/economy/rewards/grant`. They are not supported by the mobile runtime endpoint.
 - Admin overrides are audited in a dedicated `admin_economy_reward_grants` table and duplicate `grantId` values for the same user do not mint twice.
-- `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` provenance as authority.
-- `POST /api/cosmetics/fragments/grant` is idempotent and only unlocks a mapped cosmetic item once after the fragment threshold is reached.
+- `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` provenance as authority and returns `fragmentGrant { transactionId, fragmentName, copies }` for the follow-up cosmetics grant.
+- `POST /api/cosmetics/fragments/grant` with `source`/`sourceType = dailyRun` requires a matching `DailyRunChestClaim` and completed season daily-run settlement for the same `transactionId`. Server uses chest-authoritative `fragmentName` and `copies` (1–3); mobile should send `operationId` = `idempotencyKey` = chest `transactionId`.
 - All new economy settlement endpoints require auth and `idempotencyKey`.
 - Same `idempotencyKey` with a different request payload returns `409` with `errorCode = "idempotency_conflict"`.
 - Business failures do not mint rewards or mutate balances/progress.

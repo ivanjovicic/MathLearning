@@ -26,6 +26,7 @@ public static class LeaderboardEndpoints
         group.MapGet("", async (
             [FromServices] IRedisLeaderboardService leaderboardService,
             [FromServices] ApiDbContext db,
+            [FromServices] IAvatarAppearanceReader appearanceReader,
             HttpContext ctx,
             string scope = "global",
             string period = "all_time",
@@ -51,7 +52,7 @@ public static class LeaderboardEndpoints
                 .Where(p => leaderboardUserIds.Contains(p.UserId))
                 .Select(p => new { p.UserId, Name = p.DisplayName ?? p.Username ?? ("User" + p.UserId), p.Level, p.Streak })
                 .ToDictionaryAsync(p => p.UserId, ctx.RequestAborted);
-            var appearanceMap = await LoadAppearanceMapAsync(db, leaderboardUserIds, ctx.RequestAborted);
+            var appearanceMap = await appearanceReader.GetAppearancesAsync(leaderboardUserIds, ctx.RequestAborted);
 
             var items = leaderboard.Select(e =>
             {
@@ -141,6 +142,7 @@ public static class LeaderboardEndpoints
 
         group.MapGet("/global", async (
             [FromServices] ApiDbContext db,
+            [FromServices] IAvatarAppearanceReader appearanceReader,
             [FromServices] ILogger<Program> logger,
             HttpContext ctx,
             string range = "allTime",
@@ -151,7 +153,9 @@ public static class LeaderboardEndpoints
             var rankedRows = await ToListAsync(
                 CompiledQueries.GetGlobalLeaderboard(db, range, limit),
                 ctx.RequestAborted);
-            var appearanceMap = await LoadAppearanceMapAsync(db, rankedRows.Select(x => x.UserId), ctx.RequestAborted);
+            var appearanceMap = await appearanceReader.GetAppearancesAsync(
+                rankedRows.Select(x => x.UserId).ToList(),
+                ctx.RequestAborted);
 
             var ranked = rankedRows
                 .Select((x, index) => new
@@ -182,12 +186,13 @@ public static class LeaderboardEndpoints
         group.MapGet("/friends", async (
             [FromServices] IRedisLeaderboardService leaderboardService,
             [FromServices] ApiDbContext db,
+            [FromServices] IAvatarAppearanceReader appearanceReader,
             HttpContext ctx,
             string scope = "friends",
             string period = "weekly",
             int limit = 50) =>
         {
-            return await GetFriendsLeaderboardResultAsync(leaderboardService, db, ctx, scope, period, limit);
+            return await GetFriendsLeaderboardResultAsync(leaderboardService, appearanceReader, db, ctx, scope, period, limit);
         })
         .WithName("GetFriendsLeaderboard")
         .WithSummary("Get friends leaderboard using Redis");
@@ -196,12 +201,13 @@ public static class LeaderboardEndpoints
         group.MapGet("/rivals", async (
             [FromServices] IRedisLeaderboardService leaderboardService,
             [FromServices] ApiDbContext db,
+            [FromServices] IAvatarAppearanceReader appearanceReader,
             HttpContext ctx,
             string scope = "friends",
             string period = "weekly",
             int limit = 50) =>
         {
-            return await GetFriendsLeaderboardResultAsync(leaderboardService, db, ctx, scope, period, limit);
+            return await GetFriendsLeaderboardResultAsync(leaderboardService, appearanceReader, db, ctx, scope, period, limit);
         })
         .WithName("GetRivalsLeaderboardCompatibilityAlias")
         .WithSummary("Mobile compatibility alias for GET /api/leaderboard/friends");
@@ -252,49 +258,6 @@ public static class LeaderboardEndpoints
         .WithSummary("Resetuje XP (daily/weekly/monthly) za korisnika (admin endpoint)");
     }
 
-    private static async Task<Dictionary<string, AvatarAppearanceDto>> LoadAppearanceMapAsync(
-        ApiDbContext db,
-        IEnumerable<string> userIds,
-        CancellationToken cancellationToken)
-    {
-        var ids = userIds
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct()
-            .ToList();
-        if (ids.Count == 0)
-        {
-            return new Dictionary<string, AvatarAppearanceDto>();
-        }
-
-        return await db.UserAppearanceProjections
-            .AsNoTracking()
-            .Where(x => ids.Contains(x.UserId))
-            .ToDictionaryAsync(x => x.UserId, MapAppearance, cancellationToken);
-    }
-
-    private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection projection)
-        => new(
-            new AvatarConfigDto(
-                projection.SkinId,
-                projection.HairId,
-                projection.ClothingId,
-                projection.AccessoryId,
-                projection.EmojiId,
-                projection.FrameId,
-                projection.BackgroundId,
-                projection.EffectId,
-                projection.LeaderboardDecorationId,
-                projection.AvatarVersion),
-            projection.SkinAssetPath,
-            projection.HairAssetPath,
-            projection.ClothingAssetPath,
-            projection.AccessoryAssetPath,
-            projection.EmojiAssetPath,
-            projection.FrameAssetPath,
-            projection.BackgroundAssetPath,
-            projection.EffectAssetPath,
-            projection.LeaderboardDecorationAssetPath);
-
     private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source, CancellationToken cancellationToken)
     {
         var results = new List<T>();
@@ -308,6 +271,7 @@ public static class LeaderboardEndpoints
 
     private static async Task<IResult> GetFriendsLeaderboardResultAsync(
         IRedisLeaderboardService leaderboardService,
+        IAvatarAppearanceReader appearanceReader,
         ApiDbContext db,
         HttpContext ctx,
         string scope,
@@ -333,7 +297,7 @@ public static class LeaderboardEndpoints
             .Where(p => friendsUserIds.Contains(p.UserId))
             .Select(p => new { p.UserId, Name = p.DisplayName ?? p.Username ?? ("User" + p.UserId), p.Level, p.Streak })
             .ToDictionaryAsync(p => p.UserId, ctx.RequestAborted);
-        var appearanceMap = await LoadAppearanceMapAsync(db, friendsUserIds, ctx.RequestAborted);
+        var appearanceMap = await appearanceReader.GetAppearancesAsync(friendsUserIds, ctx.RequestAborted);
 
         var items = leaderboard.Select(e =>
         {

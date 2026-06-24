@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MathLearning.Application.DTOs.Cosmetics;
+using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -192,7 +193,7 @@ public sealed partial class CosmeticPlatformService
 
             if (!item.IsDefault && !owned.Contains(item.Id))
             {
-                throw new InvalidOperationException($"User does not own cosmetic item '{item.Name}'.");
+                throw new CosmeticAvatarOwnershipException($"User does not own cosmetic item '{item.Name}'.");
             }
         }
 

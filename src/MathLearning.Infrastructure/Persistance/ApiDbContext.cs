@@ -36,6 +36,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserSeasonDailyRunClaim> UserSeasonDailyRunClaims => Set<UserSeasonDailyRunClaim>();
     public DbSet<UserSeasonMilestoneClaim> UserSeasonMilestoneClaims => Set<UserSeasonMilestoneClaim>();
     public DbSet<UserCosmeticFragmentProgress> UserCosmeticFragmentProgresses => Set<UserCosmeticFragmentProgress>();
+    public DbSet<CosmeticsIdempotencyLedger> CosmeticsIdempotencyLedgers => Set<CosmeticsIdempotencyLedger>();
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
@@ -488,6 +489,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.Xp).IsRequired();
             entity.Property(e => e.Coins).IsRequired();
             entity.Property(e => e.CosmeticFragment).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.FragmentCopies).IsRequired().HasDefaultValue(1);
             entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
             entity.Ignore(e => e.Date);
 
@@ -562,12 +564,42 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.ToTable("user_cosmetic_fragment_progress");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
-            entity.Property(e => e.FragmentName).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UnlockedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(e => e.CosmeticItem)
+                .WithMany()
+                .HasForeignKey(e => e.CosmeticItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.CosmeticItemId })
+                .IsUnique()
+                .HasDatabaseName("UX_user_cosmetic_fragment_progress_user_item");
+        });
+
+        builder.Entity<CosmeticsIdempotencyLedger>(entity =>
+        {
+            entity.ToTable("cosmetics_idempotency_ledger");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.OperationId).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.IdempotencyKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.OperationType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.PayloadHash).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.RequestJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.ResultJson).HasColumnType("jsonb");
+            entity.Property(e => e.ErrorCode).HasMaxLength(64);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CompletedAtUtc).HasColumnType("timestamp with time zone");
             entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
 
-            entity.HasIndex(e => new { e.UserId, e.FragmentName })
+            entity.HasIndex(e => new { e.UserId, e.OperationId })
                 .IsUnique()
-                .HasDatabaseName("UX_user_cosmetic_fragment_progress_user_fragment");
+                .HasDatabaseName("UX_cosmetics_idempotency_ledger_user_operation");
+            entity.HasIndex(e => new { e.UserId, e.IdempotencyKey })
+                .IsUnique()
+                .HasDatabaseName("UX_cosmetics_idempotency_ledger_user_idempotency");
         });
 
         builder.Entity<BugReport>(entity =>
@@ -1304,6 +1336,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.UnlockConditionJson).HasColumnType("jsonb");
             entity.Property(e => e.CompatibilityRulesJson).HasColumnType("jsonb");
             entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.FragmentLabel).HasMaxLength(128);
             entity.Property(e => e.AssetVersion).IsRequired().HasMaxLength(32).HasDefaultValue("1");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.SortOrder).HasDefaultValue(0);
@@ -1336,7 +1369,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
 
         builder.Entity<UserCosmeticInventory>(entity =>
         {
-            entity.ToTable("user_cosmetic_inventory");
+            entity.ToTable("user_cosmetics");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
             entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
@@ -1354,18 +1387,18 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             // Each user can own an item only once
             entity.HasIndex(e => new { e.UserId, e.CosmeticItemId })
                   .IsUnique()
-                  .HasDatabaseName("UX_user_cosmetic_inventory_user_item");
+                  .HasDatabaseName("UX_user_cosmetics_user_item");
             entity.HasIndex(e => e.UserId)
-                  .HasDatabaseName("IX_user_cosmetic_inventory_user");
+                  .HasDatabaseName("IX_user_cosmetics_user");
             entity.HasIndex(e => new { e.UserId, e.Source })
-                  .HasDatabaseName("IX_user_cosmetic_inventory_user_source");
+                  .HasDatabaseName("IX_user_cosmetics_user_source");
             entity.HasIndex(e => new { e.Source, e.SourceRef })
-                  .HasDatabaseName("IX_user_cosmetic_inventory_source_ref");
+                  .HasDatabaseName("IX_user_cosmetics_source_ref");
         });
 
         builder.Entity<UserAvatarConfig>(entity =>
         {
-            entity.ToTable("user_avatar_configs");
+            entity.ToTable("user_avatar");
             entity.HasKey(e => e.UserId);
             entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
             entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");

@@ -142,6 +142,7 @@ public static class DailyRunEndpoints
                     Xp = reward.Xp,
                     Coins = reward.Coins,
                     CosmeticFragment = reward.CosmeticFragment,
+                    FragmentCopies = reward.FragmentCopies,
                     CreatedAtUtc = nowUtc
                 };
 
@@ -214,12 +215,13 @@ public static class DailyRunEndpoints
         var xp = 25 + (seed.XpSeed % 26);
         var coins = 8 + (seed.CoinsSeed % 13);
         var fragment = CosmeticFragments[seed.FragmentSeed % CosmeticFragments.Length];
+        var fragmentCopies = 1 + (seed.FragmentCopiesSeed % 3);
 
         return new DailyRunChestReward(
             Xp: xp,
             Coins: coins,
             CosmeticFragment: fragment,
-            FragmentCopies: 1);
+            FragmentCopies: fragmentCopies);
     }
 
     private static DailyRunChestClaimResponse BuildResponse(
@@ -236,14 +238,14 @@ public static class DailyRunEndpoints
                 Xp: claim.Xp,
                 Coins: claim.Coins,
                 CosmeticFragment: claim.CosmeticFragment,
-                FragmentCopies: 1),
+                FragmentCopies: claim.FragmentCopies > 0 ? claim.FragmentCopies : 1),
             Balances: new DailyRunChestBalances(
                 Xp: profile.Xp,
                 Level: profile.Level,
                 Coins: profile.Coins));
     }
 
-    private static (int XpSeed, int CoinsSeed, int FragmentSeed) ComputeSeed(
+    private static (int XpSeed, int CoinsSeed, int FragmentSeed, int FragmentCopiesSeed) ComputeSeed(
         string userId,
         DateOnly day)
     {
@@ -252,7 +254,8 @@ public static class DailyRunEndpoints
         return (
             XpSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(0, 4)) & int.MaxValue,
             CoinsSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(4, 4)) & int.MaxValue,
-            FragmentSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(8, 4)) & int.MaxValue);
+            FragmentSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(8, 4)) & int.MaxValue,
+            FragmentCopiesSeed: BinaryPrimitives.ReadInt32LittleEndian(hash.AsSpan(12, 4)) & int.MaxValue);
     }
 }
 

@@ -65,6 +65,22 @@ public static class CosmeticStartupSeeder
                             ('effect_xp_1000_star', '1000 XP Star', 'effect', 'rare', 'cosmetics/effect/xp_1000_star.png', 'cosmetics/effect/preview/xp_1000_star.png', 'xp_milestone', 'xp:1000', FALSE, NOW()),
                             ('effect_xp_10000_nova', '10000 XP Nova', 'effect', 'epic', 'cosmetics/effect/xp_10000_nova.png', 'cosmetics/effect/preview/xp_10000_nova.png', 'xp_milestone', 'xp:10000', FALSE, NOW())
                         ON CONFLICT (""Key"") DO NOTHING;
+
+                        INSERT INTO cosmetic_items (""Key"", ""Name"", ""Category"", ""Rarity"", ""AssetPath"", ""PreviewAssetPath"", ""UnlockType"", ""IsDefault"", ""FragmentLabel"", ""FragmentsRequired"", ""ReleaseDate"")
+                        VALUES
+                            ('skin_default', 'Default Skin', 'skin', 'common', 'cosmetics/skin/default.png', 'cosmetics/skin/preview/default.png', 'default', TRUE, NULL, NULL, NOW()),
+                            ('hair_default', 'Default Hair', 'hair', 'common', 'cosmetics/hair/default.png', 'cosmetics/hair/preview/default.png', 'default', TRUE, NULL, NULL, NOW()),
+                            ('clothing_default', 'Default Clothing', 'clothing', 'common', 'cosmetics/clothing/default.png', 'cosmetics/clothing/preview/default.png', 'default', TRUE, NULL, NULL, NOW()),
+                            ('emoji_default', 'Default Emoji', 'emoji', 'common', 'cosmetics/emoji/default.png', 'cosmetics/emoji/preview/default.png', 'default', TRUE, NULL, NULL, NOW()),
+                            ('bg_default', 'Default Background', 'background', 'common', 'cosmetics/background/default.png', 'cosmetics/background/preview/default.png', 'default', TRUE, NULL, NULL, NOW()),
+                            ('frame_comet', 'Comet Frame', 'frame', 'epic', 'cosmetics/frame/comet.png', 'cosmetics/frame/preview/comet.png', 'fragment', FALSE, 'Comet Frame Fragment', 5, NOW()),
+                            ('effect_nova_trail', 'Nova Trail', 'effect', 'epic', 'cosmetics/effect/nova_trail.png', 'cosmetics/effect/preview/nova_trail.png', 'fragment', FALSE, 'Nova Trail Fragment', 5, NOW()),
+                            ('effect_neon_number_burst', 'Neon Number Burst', 'effect', 'epic', 'cosmetics/effect/neon_number_burst.png', 'cosmetics/effect/preview/neon_number_burst.png', 'fragment', FALSE, 'Neon Number Burst Fragment', 5, NOW())
+                        ON CONFLICT (""Key"") DO UPDATE SET
+                            ""FragmentLabel"" = EXCLUDED.""FragmentLabel"",
+                            ""FragmentsRequired"" = EXCLUDED.""FragmentsRequired"",
+                            ""IsDefault"" = EXCLUDED.""IsDefault"",
+                            ""UnlockType"" = EXCLUDED.""UnlockType"";
                     ");
 
             var cosmeticCountAfter = await db.CosmeticItems.CountAsync(ct);

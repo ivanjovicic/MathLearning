@@ -29,57 +29,6 @@ public static class AvatarEndpoints
             return Results.Ok(await catalogService.GetCatalogAsync(userId, category, rarity, seasonId, cancellationToken));
         });
 
-        group.MapGet("/inventory", async (
-            ICosmeticInventoryService inventoryService,
-            HttpContext ctx,
-            CancellationToken cancellationToken,
-            string? category) =>
-        {
-            var userId = ctx.User.FindFirst("userId")?.Value;
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                return Results.Unauthorized();
-            }
-
-            return Results.Ok(await inventoryService.GetInventoryAsync(userId, category, cancellationToken));
-        });
-
-        group.MapGet("/avatar", async (
-            ICosmeticInventoryService inventoryService,
-            HttpContext ctx,
-            CancellationToken cancellationToken) =>
-        {
-            var userId = ctx.User.FindFirst("userId")?.Value;
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                return Results.Unauthorized();
-            }
-
-            return Results.Ok(await inventoryService.GetAvatarAsync(userId, cancellationToken));
-        });
-
-        group.MapPut("/avatar", async (
-            UpdateAvatarConfigRequest request,
-            ICosmeticInventoryService inventoryService,
-            HttpContext ctx,
-            CancellationToken cancellationToken) =>
-        {
-            var userId = ctx.User.FindFirst("userId")?.Value;
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                return Results.Unauthorized();
-            }
-
-            try
-            {
-                return Results.Ok(await inventoryService.UpdateAvatarAsync(userId, request, cancellationToken));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Results.BadRequest(new { error = ex.Message });
-            }
-        });
-
         group.MapPost("/equip", async (
             EquipCosmeticRequest request,
             ICosmeticInventoryService inventoryService,

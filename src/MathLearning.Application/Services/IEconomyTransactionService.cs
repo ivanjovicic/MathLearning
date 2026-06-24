@@ -9,6 +9,7 @@ public interface IEconomyTransactionService
         string transactionType,
         string idempotencyKey,
         object? requestPayload,
+        string? operationId = null,
         CancellationToken cancellationToken = default);
 
     Task<EconomyTransactionState> CompleteAsync(

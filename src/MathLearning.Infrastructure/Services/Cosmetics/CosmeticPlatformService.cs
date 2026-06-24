@@ -13,7 +13,8 @@ public sealed partial class CosmeticPlatformService :
     ICosmeticCatalogService,
     ICosmeticInventoryService,
     ICosmeticRewardService,
-    ICosmeticAdminService
+    ICosmeticAdminService,
+    IMobileCosmeticsService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan CatalogCacheTtl = TimeSpan.FromMinutes(5);
@@ -22,11 +23,17 @@ public sealed partial class CosmeticPlatformService :
     private readonly ApiDbContext db;
     private readonly ILogger<CosmeticPlatformService> logger;
     private readonly HybridCacheService cache;
+    private readonly IAvatarAppearanceReader appearanceReader;
 
-    public CosmeticPlatformService(ApiDbContext db, ILogger<CosmeticPlatformService> logger, HybridCacheService cache)
+    public CosmeticPlatformService(
+        ApiDbContext db,
+        ILogger<CosmeticPlatformService> logger,
+        HybridCacheService cache,
+        IAvatarAppearanceReader appearanceReader)
     {
         this.db = db;
         this.logger = logger;
         this.cache = cache;
+        this.appearanceReader = appearanceReader;
     }
 }

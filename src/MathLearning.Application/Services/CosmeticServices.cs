@@ -70,6 +70,28 @@ public interface ICosmeticRewardService
         CancellationToken cancellationToken);
 }
 
+public interface IMobileCosmeticsService
+{
+    Task<MobileCosmeticCatalogResponseDto> GetPublishedCatalogAsync(
+        string? category,
+        string? rarity,
+        int? seasonId,
+        CancellationToken cancellationToken);
+
+    Task<MobileCosmeticInventoryResponseDto> GetMobileInventoryAsync(
+        string userId,
+        CancellationToken cancellationToken);
+
+    Task<MobileCosmeticAvatarResponseDto> GetMobileAvatarAsync(
+        string userId,
+        CancellationToken cancellationToken);
+
+    Task<MobileCosmeticAvatarResponseDto> UpdateMobileAvatarAsync(
+        string userId,
+        MobileCosmeticAvatarUpdateRequest request,
+        CancellationToken cancellationToken);
+}
+
 public interface ICosmeticAdminService
 {
     Task<IReadOnlyList<AdminCosmeticItemDto>> GetItemsAsync(CancellationToken cancellationToken);

@@ -14,5 +14,6 @@ public class DailyRunChestClaim
     public int Xp { get; set; }
     public int Coins { get; set; }
     public string CosmeticFragment { get; set; } = string.Empty;
+    public int FragmentCopies { get; set; } = 1;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

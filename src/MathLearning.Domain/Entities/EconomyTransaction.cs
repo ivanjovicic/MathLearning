@@ -12,6 +12,7 @@ public class EconomyTransaction
     public Guid Id { get; set; } = Guid.NewGuid();
     public string UserId { get; set; } = string.Empty;
     public string IdempotencyKey { get; set; } = string.Empty;
+    public string? OperationId { get; set; }
     public string TransactionType { get; set; } = string.Empty;
     public EconomyTransactionStatus Status { get; set; } = EconomyTransactionStatus.Pending;
     public string RequestHash { get; set; } = string.Empty;

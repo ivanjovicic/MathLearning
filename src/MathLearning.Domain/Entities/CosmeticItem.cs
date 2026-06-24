@@ -81,6 +81,8 @@ public class CosmeticItem
     public DateTime? ReleaseDate { get; set; }
     public DateTime? RetirementDate { get; set; }
     public string? MetadataJson { get; set; }
+    public string? FragmentLabel { get; set; }
+    public int? FragmentsRequired { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

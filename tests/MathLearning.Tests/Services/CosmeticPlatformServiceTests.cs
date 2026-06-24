@@ -148,5 +148,6 @@ public class CosmeticPlatformServiceTests
             NullLogger<CosmeticPlatformService>.Instance,
             new HybridCacheService(
                 new MemoryCache(new MemoryCacheOptions { SizeLimit = 1000 }),
-                NullLogger<HybridCacheService>.Instance));
+                NullLogger<HybridCacheService>.Instance),
+            new AvatarAppearanceReader(db));
 }

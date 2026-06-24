@@ -51,14 +51,22 @@ public static class MobileEconomyContractPayloads
         string idempotencyKey,
         string sourceType,
         string? sourceEvent = null,
+        string? operationId = null,
+        string? transactionId = null,
         IReadOnlyDictionary<string, object?>? metadata = null)
     {
         var payload = new Dictionary<string, object?>
         {
             ["idempotencyKey"] = idempotencyKey,
+            ["operationId"] = operationId ?? idempotencyKey,
             ["source"] = sourceType,
             ["sourceType"] = sourceType
         };
+
+        if (!string.IsNullOrWhiteSpace(transactionId))
+        {
+            payload["transactionId"] = transactionId;
+        }
 
         if (!string.IsNullOrWhiteSpace(sourceEvent))
         {
@@ -77,15 +85,26 @@ public static class MobileEconomyContractPayloads
         string idempotencyKey,
         string fragmentName,
         int copies,
-        string sourceType = "dailyRun")
+        string sourceType = "reward",
+        string? operationId = null,
+        string? transactionId = null)
     {
-        return new Dictionary<string, object?>
+        var payload = new Dictionary<string, object?>
         {
             ["idempotencyKey"] = idempotencyKey,
+            ["operationId"] = operationId ?? idempotencyKey,
             ["fragmentName"] = fragmentName,
             ["copies"] = copies,
-            ["source"] = sourceType
+            ["source"] = sourceType,
+            ["sourceType"] = sourceType
         };
+
+        if (!string.IsNullOrWhiteSpace(transactionId))
+        {
+            payload["transactionId"] = transactionId;
+        }
+
+        return payload;
     }
 
     public static IReadOnlyDictionary<string, object?> SeasonDailyRunClaim(

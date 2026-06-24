@@ -1115,36 +1115,40 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
 
         var first = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
+            operationId = "item-key-1",
             idempotencyKey = "item-key-1",
             source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(firstPayload.GetProperty("success").GetBoolean());
-        Assert.False(firstPayload.GetProperty("alreadyOwned").GetBoolean());
+        Assert.False(firstPayload.GetProperty("alreadyClaimed").GetBoolean());
 
         var second = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
+            operationId = "item-key-2",
             idempotencyKey = "item-key-2",
             source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         var secondPayload = await second.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(secondPayload.GetProperty("success").GetBoolean());
-        Assert.True(secondPayload.GetProperty("alreadyOwned").GetBoolean());
+        Assert.True(secondPayload.GetProperty("alreadyClaimed").GetBoolean());
 
         var third = await PostAsUserAsync(userId, "/api/cosmetics/items/effect_nova_trail/claim", new
         {
+            operationId = "item-key-3",
             idempotencyKey = "item-key-3",
             source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, third.StatusCode);
         var thirdPayload = await third.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(thirdPayload.GetProperty("success").GetBoolean());
-        Assert.False(thirdPayload.GetProperty("alreadyOwned").GetBoolean());
+        Assert.False(thirdPayload.GetProperty("alreadyClaimed").GetBoolean());
 
         var invalid = await PostAsUserAsync(userId, "/api/cosmetics/items/invalid_key/claim", new
         {
+            operationId = "item-key-invalid",
             idempotencyKey = "item-key-invalid",
             source = "reward"
         });
@@ -1154,12 +1158,14 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
 
         var retry = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
+            operationId = "item-key-retry",
             idempotencyKey = "item-key-retry",
             source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var retryAgain = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
+            operationId = "item-key-retry",
             idempotencyKey = "item-key-retry",
             source = "reward"
         });
@@ -1172,23 +1178,30 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     {
         var userId = $"user-fragment-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId, coins: 100);
-        var unlockItemId = await EnsureCosmeticItemAsync("comet-frame", "Comet Frame");
+        var unlockItemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
 
         var grant = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", new
         {
+            operationId = "frag-key-1",
             idempotencyKey = "frag-key-1",
             fragmentName = "Comet Frame Fragment",
             copies = 5,
-            source = "dailyRun"
+            source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, grant.StatusCode);
+        var grantPayload = await grant.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("frame_comet", grantPayload.GetProperty("progress").GetProperty("itemId").GetString());
+        Assert.Equal(5, grantPayload.GetProperty("progress").GetProperty("collectedFragments").GetInt32());
+        Assert.Equal(5, grantPayload.GetProperty("progress").GetProperty("requiredFragments").GetInt32());
+        Assert.True(grantPayload.GetProperty("itemUnlocked").GetBoolean());
 
         var retry = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", new
         {
+            operationId = "frag-key-1",
             idempotencyKey = "frag-key-1",
             fragmentName = "Comet Frame Fragment",
             copies = 5,
-            source = "dailyRun"
+            source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var retryPayload = await retry.Content.ReadFromJsonAsync<JsonElement>();
@@ -1196,10 +1209,11 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
 
         var secondGrant = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", new
         {
+            operationId = "frag-key-2",
             idempotencyKey = "frag-key-2",
             fragmentName = "Comet Frame Fragment",
             copies = 1,
-            source = "dailyRun"
+            source = "reward"
         });
         Assert.Equal(HttpStatusCode.OK, secondGrant.StatusCode);
 
@@ -1507,7 +1521,12 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         return season.Id;
     }
 
-    private async Task SeedDailyRunChestClaimAsync(string userId, string transactionId, int xp)
+    private async Task SeedDailyRunChestClaimAsync(
+        string userId,
+        string transactionId,
+        int xp,
+        string fragmentName = "Comet Frame Fragment",
+        int fragmentCopies = 2)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1519,7 +1538,8 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             TransactionId = transactionId,
             Xp = xp,
             Coins = 10,
-            CosmeticFragment = "Comet Frame Fragment",
+            CosmeticFragment = fragmentName,
+            FragmentCopies = fragmentCopies,
             CreatedAtUtc = DateTime.UtcNow
         });
 

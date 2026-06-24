@@ -14,7 +14,7 @@ namespace MathLearning.Infrastructure.Services;
 /// <summary>
 /// Student leaderboard service — fully decoupled from school leaderboard operations.
 /// Reads directly from UserProfiles with scope-aware filtering (global/school/faculty/friends).
-/// Appearance data is hydrated from UserAppearanceProjection via HybridCacheService.
+/// Appearance data is hydrated from user_avatar + cosmetic_items via IAvatarAppearanceReader.
 /// </summary>
 public class StudentLeaderboardService : IStudentLeaderboardService
 {
@@ -22,16 +22,19 @@ public class StudentLeaderboardService : IStudentLeaderboardService
     private readonly ILogger<StudentLeaderboardService> _logger;
     private readonly ICosmeticRewardService? _cosmeticRewardService;
     private readonly HybridCacheService _cache;
+    private readonly IAvatarAppearanceReader _appearanceReader;
 
     public StudentLeaderboardService(
         ApiDbContext db,
         ILogger<StudentLeaderboardService> logger,
         HybridCacheService cache,
+        IAvatarAppearanceReader appearanceReader,
         ICosmeticRewardService? cosmeticRewardService = null)
     {
         _db = db;
         _logger = logger;
         _cache = cache;
+        _appearanceReader = appearanceReader;
         _cosmeticRewardService = cosmeticRewardService;
     }
 
@@ -234,63 +237,9 @@ public class StudentLeaderboardService : IStudentLeaderboardService
         IEnumerable<string> userIds,
         CancellationToken ct)
     {
-        var ids = userIds
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct()
-            .ToList();
-
-        if (ids.Count == 0)
-        {
-            return new Dictionary<string, AvatarAppearanceDto>();
-        }
-
-        var results = new Dictionary<string, AvatarAppearanceDto>(StringComparer.Ordinal);
-        var missingIds = new List<string>();
-
-        foreach (var uid in ids)
-        {
-            var cached = await _cache.GetAsync<AvatarAppearanceDto>($"leaderboard:appearance:{uid}", ct);
-            if (cached is null)
-            {
-                missingIds.Add(uid);
-            }
-            else
-            {
-                results[uid] = cached;
-            }
-        }
-
-        if (missingIds.Count > 0)
-        {
-            var loaded = await _db.UserAppearanceProjections
-                .AsNoTracking()
-                .Where(x => missingIds.Contains(x.UserId))
-                .ToDictionaryAsync(x => x.UserId, MapAppearance, ct);
-
-            foreach (var pair in loaded)
-            {
-                results[pair.Key] = pair.Value;
-                await _cache.SetAsync(
-                    $"leaderboard:appearance:{pair.Key}",
-                    pair.Value,
-                    TimeSpan.FromSeconds(30),
-                    TimeSpan.FromMinutes(2),
-                    ct);
-            }
-        }
-
-        return results;
+        var loaded = await _appearanceReader.GetAppearancesAsync(userIds.ToList(), ct);
+        return loaded.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
     }
-
-    private static AvatarAppearanceDto MapAppearance(UserAppearanceProjection p)
-        => new(
-            new AvatarConfigDto(
-                p.SkinId, p.HairId, p.ClothingId, p.AccessoryId,
-                p.EmojiId, p.FrameId, p.BackgroundId, p.EffectId,
-                p.LeaderboardDecorationId, p.AvatarVersion),
-            p.SkinAssetPath, p.HairAssetPath, p.ClothingAssetPath,
-            p.AccessoryAssetPath, p.EmojiAssetPath, p.FrameAssetPath,
-            p.BackgroundAssetPath, p.EffectAssetPath, p.LeaderboardDecorationAssetPath);
 
     private static string BuildLeaderboardSourceRef(string scope, string period)
     {

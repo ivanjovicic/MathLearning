@@ -151,7 +151,10 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
             "/api/cosmetics/items/frame_comet/claim",
             conflictPayload);
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-        await AssertBusinessErrorCodeAsync(conflict, "idempotency_conflict");
+        var conflictResponse = await ReadJsonAsync(conflict);
+        Assert.Equal("idempotency_conflict", conflictResponse.GetProperty("errorCode").GetString());
+        Assert.True(conflictResponse.GetProperty("conflict").GetBoolean());
+        Assert.False(conflictResponse.GetProperty("alreadyProcessed").GetBoolean());
 
         var invalidItem = await PostAsUserAsync(
             userId,
@@ -201,7 +204,10 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
                 fragmentName: "Comet Frame Fragment",
                 copies: 2));
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-        await AssertBusinessErrorCodeAsync(conflict, "idempotency_conflict");
+        var conflictResponse = await ReadJsonAsync(conflict);
+        Assert.Equal("idempotency_conflict", conflictResponse.GetProperty("errorCode").GetString());
+        Assert.True(conflictResponse.GetProperty("conflict").GetBoolean());
+        Assert.False(conflictResponse.GetProperty("alreadyProcessed").GetBoolean());
 
         var invalidCopies = await PostAsUserAsync(
             userId,
@@ -262,6 +268,53 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
                 awardedXp: 30));
         Assert.Equal(HttpStatusCode.Conflict, invalidSeason.StatusCode);
         await AssertBusinessErrorCodeAsync(invalidSeason, "invalid_season");
+    }
+
+    [Fact]
+    public async Task DailyRunFragmentGrant_AfterSeasonClaim_IsIdempotentPerTransactionId()
+    {
+        var userId = $"mobile-contract-daily-frag-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 0, xp: 0);
+        await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var seasonId = await EnsureActiveSeasonAsync();
+
+        const string transactionId = "daily-run-mobile-frag-tx-1";
+        await SeedDailyRunChestClaimAsync(userId, transactionId, xp: 30, fragmentCopies: 2);
+
+        var seasonClaim = await PostAsUserAsync(
+            userId,
+            "/api/seasons/daily-run-claim",
+            MobileEconomyContractPayloads.SeasonDailyRunClaim(
+                idempotencyKey: $"season_daily_run/{userId}/{seasonId}/{transactionId}",
+                seasonId: seasonId,
+                transactionId: transactionId,
+                awardedXp: 30));
+        Assert.Equal(HttpStatusCode.OK, seasonClaim.StatusCode);
+        var seasonPayload = await ReadJsonAsync(seasonClaim);
+        Assert.NotNull(seasonPayload.GetProperty("fragmentGrant").GetProperty("fragmentName").GetString());
+        Assert.Equal(2, seasonPayload.GetProperty("fragmentGrant").GetProperty("copies").GetInt32());
+
+        var grantPayload = MobileEconomyContractPayloads.CosmeticFragmentGrant(
+            idempotencyKey: transactionId,
+            fragmentName: "Comet Frame Fragment",
+            copies: 2,
+            sourceType: "dailyRun",
+            transactionId: transactionId);
+
+        var firstGrant = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", grantPayload);
+        Assert.Equal(HttpStatusCode.OK, firstGrant.StatusCode);
+        var firstGrantPayload = await ReadJsonAsync(firstGrant);
+        Assert.False(firstGrantPayload.GetProperty("alreadyProcessed").GetBoolean());
+        Assert.Equal(2, firstGrantPayload.GetProperty("progress").GetProperty("collectedFragments").GetInt32());
+
+        var replayGrant = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", grantPayload);
+        Assert.Equal(HttpStatusCode.OK, replayGrant.StatusCode);
+        var replayGrantPayload = await ReadJsonAsync(replayGrant);
+        Assert.True(replayGrantPayload.GetProperty("alreadyProcessed").GetBoolean());
+        Assert.Equal(2, replayGrantPayload.GetProperty("progress").GetProperty("collectedFragments").GetInt32());
+        Assert.Equal(
+            firstGrantPayload.GetProperty("progress").GetProperty("updatedAt").GetString(),
+            replayGrantPayload.GetProperty("progress").GetProperty("updatedAt").GetString());
     }
 
     [Fact]
@@ -515,7 +568,12 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
         await db.SaveChangesAsync();
     }
 
-    private async Task SeedDailyRunChestClaimAsync(string userId, string transactionId, int xp)
+    private async Task SeedDailyRunChestClaimAsync(
+        string userId,
+        string transactionId,
+        int xp,
+        string fragmentName = "Comet Frame Fragment",
+        int fragmentCopies = 2)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -527,7 +585,8 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
             TransactionId = transactionId,
             Xp = xp,
             Coins = 10,
-            CosmeticFragment = "Comet Frame Fragment",
+            CosmeticFragment = fragmentName,
+            FragmentCopies = fragmentCopies,
             CreatedAtUtc = DateTime.UtcNow
         });
 
@@ -551,6 +610,8 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
             Rarity = "common",
             AssetPath = "/assets/test.png",
             UnlockType = CosmeticUnlockTypes.RewardRule,
+            FragmentLabel = key == "frame_comet" ? "Comet Frame Fragment" : null,
+            FragmentsRequired = key == "frame_comet" ? 5 : null,
             IsActive = true,
             AssetVersion = "1"
         };

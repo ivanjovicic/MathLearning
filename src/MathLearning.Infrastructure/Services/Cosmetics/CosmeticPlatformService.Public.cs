@@ -200,39 +200,18 @@ public sealed partial class CosmeticPlatformService
 
     public async Task<AvatarAppearanceDto> GetPublicAppearanceAsync(string userId, CancellationToken cancellationToken)
     {
-        var projection = await cache.GetOrCreateAsync(
-            GetAppearanceCacheKey(userId),
-            async ct => await db.UserAppearanceProjections.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct),
-            AppearanceCacheTtl,
-            TimeSpan.FromMinutes(2),
-            cancellationToken);
-        if (projection is null)
-        {
-            projection = await RebuildAppearanceProjectionAsync(userId, cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-        }
-
-        return new AvatarAppearanceDto(
-            new AvatarConfigDto(
-                projection.SkinId,
-                projection.HairId,
-                projection.ClothingId,
-                projection.AccessoryId,
-                projection.EmojiId,
-                projection.FrameId,
-                projection.BackgroundId,
-                projection.EffectId,
-                projection.LeaderboardDecorationId,
-                projection.AvatarVersion),
-            projection.SkinAssetPath,
-            projection.HairAssetPath,
-            projection.ClothingAssetPath,
-            projection.AccessoryAssetPath,
-            projection.EmojiAssetPath,
-            projection.FrameAssetPath,
-            projection.BackgroundAssetPath,
-            projection.EffectAssetPath,
-            projection.LeaderboardDecorationAssetPath);
+        return await appearanceReader.GetAppearanceAsync(userId, cancellationToken)
+            ?? new AvatarAppearanceDto(
+                new AvatarConfigDto(null, null, null, null, null, null, null, null, null, 0),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     public async Task<AvatarAppearanceDto> UpdateAvatarAsync(

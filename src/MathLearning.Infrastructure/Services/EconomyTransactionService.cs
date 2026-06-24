@@ -27,22 +27,68 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         string transactionType,
         string idempotencyKey,
         object? requestPayload,
+        string? operationId = null,
         CancellationToken cancellationToken = default)
     {
         var effectiveUserId = RequireValue(userId, nameof(userId));
         var effectiveTransactionType = RequireValue(transactionType, nameof(transactionType));
         var effectiveIdempotencyKey = RequireValue(idempotencyKey, nameof(idempotencyKey));
+        var effectiveOperationId = string.IsNullOrWhiteSpace(operationId) ? null : operationId.Trim();
         var requestJson = CanonicalizeToJson(requestPayload);
         var requestHash = ComputePayloadHash(requestJson);
 
-        var existing = await FindByKeyAsync(
+        var byIdempotencyKey = await FindByIdempotencyKeyAsync(
             effectiveUserId,
             effectiveTransactionType,
             effectiveIdempotencyKey,
             cancellationToken);
 
+        EconomyTransaction? byOperationId = null;
+        if (effectiveOperationId is not null)
+        {
+            byOperationId = await FindByOperationIdAsync(
+                effectiveUserId,
+                effectiveTransactionType,
+                effectiveOperationId,
+                cancellationToken);
+        }
+
+        if (byIdempotencyKey is not null && byOperationId is not null && byIdempotencyKey.Id != byOperationId.Id)
+        {
+            logger.LogWarning(
+                "Economy transaction key conflict detected. UserId={UserId} TransactionType={TransactionType} IdempotencyKey={IdempotencyKey} OperationId={OperationId}",
+                effectiveUserId,
+                effectiveTransactionType,
+                effectiveIdempotencyKey,
+                effectiveOperationId);
+
+            throw new EconomyTransactionConflictException(
+                effectiveUserId,
+                effectiveTransactionType,
+                effectiveIdempotencyKey);
+        }
+
+        var existing = byIdempotencyKey ?? byOperationId;
         if (existing is not null)
         {
+            if (effectiveOperationId is not null &&
+                !string.IsNullOrWhiteSpace(existing.OperationId) &&
+                !string.Equals(existing.OperationId, effectiveOperationId, StringComparison.Ordinal))
+            {
+                throw new EconomyTransactionConflictException(
+                    effectiveUserId,
+                    effectiveTransactionType,
+                    effectiveIdempotencyKey);
+            }
+
+            if (!string.Equals(existing.IdempotencyKey, effectiveIdempotencyKey, StringComparison.Ordinal))
+            {
+                throw new EconomyTransactionConflictException(
+                    effectiveUserId,
+                    effectiveTransactionType,
+                    effectiveIdempotencyKey);
+            }
+
             return ValidateAndMapExisting(existing, requestHash);
         }
 
@@ -52,6 +98,7 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
             UserId = effectiveUserId,
             TransactionType = effectiveTransactionType,
             IdempotencyKey = effectiveIdempotencyKey,
+            OperationId = effectiveOperationId,
             Status = EconomyTransactionStatus.Pending,
             RequestHash = requestHash,
             RequestJson = requestJson,
@@ -69,19 +116,35 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         {
             DetachIfTracked(transaction);
 
-            existing = await FindByKeyAsync(
+            byIdempotencyKey = await FindByIdempotencyKeyAsync(
                 effectiveUserId,
                 effectiveTransactionType,
                 effectiveIdempotencyKey,
                 cancellationToken);
+            byOperationId = effectiveOperationId is null
+                ? null
+                : await FindByOperationIdAsync(
+                    effectiveUserId,
+                    effectiveTransactionType,
+                    effectiveOperationId,
+                    cancellationToken);
 
-            if (existing is null)
+            if (byIdempotencyKey is null && byOperationId is null)
                 throw;
 
+            if (byIdempotencyKey is not null && byOperationId is not null && byIdempotencyKey.Id != byOperationId.Id)
+            {
+                throw new EconomyTransactionConflictException(
+                    effectiveUserId,
+                    effectiveTransactionType,
+                    effectiveIdempotencyKey);
+            }
+
+            existing = byIdempotencyKey ?? byOperationId;
             logger.LogDebug(
                 ex,
                 "Economy transaction creation raced with another request. Reusing transaction {TransactionId}.",
-                existing.Id);
+                existing!.Id);
 
             return ValidateAndMapExisting(existing, requestHash);
         }
@@ -163,7 +226,7 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         return ToState(transaction);
     }
 
-    private async Task<EconomyTransaction?> FindByKeyAsync(
+    private async Task<EconomyTransaction?> FindByIdempotencyKeyAsync(
         string userId,
         string transactionType,
         string idempotencyKey,
@@ -173,6 +236,19 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
             x => x.UserId == userId &&
                  x.TransactionType == transactionType &&
                  x.IdempotencyKey == idempotencyKey,
+            cancellationToken);
+    }
+
+    private async Task<EconomyTransaction?> FindByOperationIdAsync(
+        string userId,
+        string transactionType,
+        string operationId,
+        CancellationToken cancellationToken)
+    {
+        return await db.EconomyTransactions.FirstOrDefaultAsync(
+            x => x.UserId == userId &&
+                 x.TransactionType == transactionType &&
+                 x.OperationId == operationId,
             cancellationToken);
     }
 
