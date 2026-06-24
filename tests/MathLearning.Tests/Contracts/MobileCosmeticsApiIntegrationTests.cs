@@ -255,6 +255,25 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     }
 
     [Fact]
+    public async Task AvatarPut_LegacySnakeCaseBody_Returns400()
+    {
+        var userId = NewUserId("avatar-legacy-shape");
+        await EnsureUserAsync(userId);
+        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame", category: "frame");
+
+        var response = await PutAsUserAsync(
+            userId,
+            "/api/cosmetics/avatar",
+            new Dictionary<string, object?>
+            {
+                ["skin_id"] = "skin_default",
+                ["frame_id"] = FrameCometKey,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task InventoryGet_AfterUnlock_ReflectsAuthoritativeServerState()
     {
         var userId = NewUserId("inventory-authoritative");

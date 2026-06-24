@@ -159,7 +159,7 @@ public static class CosmeticsEndpoints
 
 
 
-            if (request.Slots.Count == 0)
+            if (request.Slots is null || request.Slots.Count == 0)
 
                 return Results.BadRequest(new { error = "At least one avatar slot must be provided." });
 

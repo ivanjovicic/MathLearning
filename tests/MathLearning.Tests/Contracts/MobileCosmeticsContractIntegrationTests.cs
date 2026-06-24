@@ -81,6 +81,7 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Contains("frame_comet", payload.GetProperty("itemKeys").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(2, payload.GetProperty("fragmentProgress").GetProperty("Comet Frame Fragment").GetInt32());
+        Assert.False(payload.TryGetProperty("items", out _));
     }
 
     [Fact]
@@ -112,6 +113,13 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
 
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         var updated = await update.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(updated.TryGetProperty("slots", out var slots));
+        Assert.Contains(
+            slots.EnumerateObject().Select(x => x.Name),
+            name => name == "skin");
+        Assert.Contains(
+            slots.EnumerateObject().Select(x => x.Name),
+            name => name == "frame");
         Assert.Equal("frame_comet", updated.GetProperty("slots").GetProperty("frame").GetString());
         Assert.True(updated.GetProperty("version").GetInt64() > 0);
 
@@ -119,6 +127,10 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
         getRequest.Headers.Add("X-Test-UserId", userId);
         var getResponse = await _client.SendAsync(getRequest);
         var avatar = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(avatar.TryGetProperty("slots", out var avatarSlots));
+        Assert.Contains(
+            avatarSlots.EnumerateObject().Select(x => x.Name),
+            name => name == "frame");
         Assert.Equal("frame_comet", avatar.GetProperty("slots").GetProperty("frame").GetString());
 
         var invalid = await SendAsUserAsync(
