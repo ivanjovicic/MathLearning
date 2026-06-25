@@ -9,6 +9,22 @@ offline replay, Daily Run rewards, seasons, economy, and cosmetics.
 
 ---
 
+## Start here for agents
+
+Before making backend changes, read these in order:
+
+1. [`AGENTS.md`](AGENTS.md) — backend AI agent rulebook
+2. [`docs/DOCS_INDEX.md`](docs/DOCS_INDEX.md) — documentation source-of-truth order
+3. [`docs/AGENT_QUICKSTART.md`](docs/AGENT_QUICKSTART.md) — token-saving task map
+4. [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md) — runtime and ownership map
+5. [`docs/API_ENDPOINT_INVENTORY.md`](docs/API_ENDPOINT_INVENTORY.md) — current endpoint inventory
+6. [`docs/BACKEND_CHANGE_CHECKLIST.md`](docs/BACKEND_CHANGE_CHECKLIST.md) — pre-commit safety checklist
+7. [`docs/COMMON_AGENT_PITFALLS.md`](docs/COMMON_AGENT_PITFALLS.md) — common mistakes to avoid
+
+These files are designed to save context tokens and prevent repeated architecture discovery.
+
+---
+
 ## Repository role
 
 | Area | Responsibility |
@@ -45,23 +61,23 @@ Default idempotency scope for authenticated retryable mutations:
 userId + operationType + operationId/idempotencyKey
 ```
 
-P0 endpoints to verify first:
+P0 endpoints to protect:
 
-| Endpoint | Operation type |
+| Endpoint | Operation type / policy |
 |---|---|
 | `POST /api/quiz/answer` | `quiz_answer` |
 | `POST /api/quiz/srs/update` | `srs_update` |
-| `POST /api/daily-run/chest/claim` | `daily_run_chest_claim` |
+| `POST /api/daily-run/chest/claim` | `daily_run_chest_claim` / Daily Run Policy B |
 | `POST /api/seasons/daily-run-claim` | `season_daily_run_claim` |
 | `POST /api/seasons/milestones/{milestoneId}/claim` | `season_milestone_claim` |
 | `POST /api/cosmetics/fragments/grant` | `cosmetics_fragment_grant` |
 | `POST /api/cosmetics/items/{itemKey}/claim` | `cosmetics_item_claim` |
-| `POST /api/economy/coins/spend` | `economy_coin_spend` |
+| `POST /api/economy/coins/spend` | `economy_coins_spend` |
 | `POST /api/economy/hints/use` | `economy_hint_use` |
 | `POST /api/economy/rewards/claim` | `economy_reward_claim` |
 | `POST /api/shop/streak-freeze/purchase` | `shop_streak_freeze_purchase` |
 
-For exact behavior and test expectations, see [`docs/mobile_contract_idempotency_handoff.md`](docs/mobile_contract_idempotency_handoff.md). For current implementation gaps, see [`docs/backend_contract_gap_report.md`](docs/backend_contract_gap_report.md).
+For exact behavior and test expectations, see [`docs/mobile_contract_idempotency_handoff.md`](docs/mobile_contract_idempotency_handoff.md). For current implementation/evidence, see [`docs/backend_contract_gap_report.md`](docs/backend_contract_gap_report.md).
 
 ---
 
@@ -71,7 +87,8 @@ For exact behavior and test expectations, see [`docs/mobile_contract_idempotency
 - ORM: Entity Framework Core
 - Database: PostgreSQL
 - Cache / leaderboard: Redis where enabled
-- Tests: backend unit/integration tests under `tests/`
+- Jobs: Hangfire where enabled
+- Tests: backend unit/integration/contract tests under `tests/`
 - Mobile consumer: Flutter app in `ivanjovicic/Mathlearning-Mobile-App`
 
 ---
@@ -82,8 +99,10 @@ For exact behavior and test expectations, see [`docs/mobile_contract_idempotency
 |---|---|
 | `src/MathLearning.Api` | API project / HTTP endpoints |
 | `src/MathLearning.Application` | Application/business logic |
+| `src/MathLearning.Domain` | Domain entities/events |
 | `src/MathLearning.Infrastructure` | Persistence, caching, external integrations |
 | `src/MathLearning.TranslationJob` | Background translation job |
+| `src/MathLearning.Admin` | Admin app surface |
 | `tests/MathLearning.Tests` | Backend tests |
 | `scripts/` | Local setup / migration helper scripts, if present |
 | `docs/` | Backend documentation and mobile contract handoff |
@@ -129,7 +148,7 @@ Then update:
 ivanjovicic/Mathlearning-Mobile-App/docs/mobile_backend_contract_status.md
 ```
 
-with backend PR/commit/test evidence.
+with backend commit/test evidence.
 
 ---
 
