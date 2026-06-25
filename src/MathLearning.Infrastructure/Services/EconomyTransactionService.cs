@@ -4,6 +4,7 @@ using System.Text.Json;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -15,11 +16,16 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
 
     private readonly ApiDbContext db;
     private readonly ILogger<EconomyTransactionService> logger;
+    private readonly IdempotencyObservabilityService observability;
 
-    public EconomyTransactionService(ApiDbContext db, ILogger<EconomyTransactionService> logger)
+    public EconomyTransactionService(
+        ApiDbContext db,
+        ILogger<EconomyTransactionService> logger,
+        IdempotencyObservabilityService observability)
     {
         this.db = db;
         this.logger = logger;
+        this.observability = observability;
     }
 
     public async Task<EconomyTransactionBeginResult> BeginOrGetExistingAsync(
@@ -55,6 +61,11 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
 
         if (byIdempotencyKey is not null && byOperationId is not null && byIdempotencyKey.Id != byOperationId.Id)
         {
+            observability.RecordConflict(
+                IdempotencyObservabilityService.ResolveEconomyEndpoint(effectiveTransactionType),
+                effectiveTransactionType,
+                effectiveOperationId ?? effectiveIdempotencyKey,
+                effectiveUserId);
             logger.LogWarning(
                 "Economy transaction key conflict detected. UserId={UserId} TransactionType={TransactionType} IdempotencyKey={IdempotencyKey} OperationId={OperationId}",
                 effectiveUserId,
@@ -75,6 +86,11 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                 !string.IsNullOrWhiteSpace(existing.OperationId) &&
                 !string.Equals(existing.OperationId, effectiveOperationId, StringComparison.Ordinal))
             {
+                observability.RecordConflict(
+                    IdempotencyObservabilityService.ResolveEconomyEndpoint(effectiveTransactionType),
+                    effectiveTransactionType,
+                    effectiveOperationId,
+                    effectiveUserId);
                 throw new EconomyTransactionConflictException(
                     effectiveUserId,
                     effectiveTransactionType,
@@ -83,6 +99,11 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
 
             if (!string.Equals(existing.IdempotencyKey, effectiveIdempotencyKey, StringComparison.Ordinal))
             {
+                observability.RecordConflict(
+                    IdempotencyObservabilityService.ResolveEconomyEndpoint(effectiveTransactionType),
+                    effectiveTransactionType,
+                    effectiveOperationId ?? effectiveIdempotencyKey,
+                    effectiveUserId);
                 throw new EconomyTransactionConflictException(
                     effectiveUserId,
                     effectiveTransactionType,
@@ -185,6 +206,11 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         transaction.UpdatedAtUtc = now;
 
         await db.SaveChangesAsync(cancellationToken);
+        observability.RecordFirstSuccess(
+            IdempotencyObservabilityService.ResolveEconomyEndpoint(transaction.TransactionType),
+            transaction.TransactionType,
+            transaction.OperationId ?? transaction.IdempotencyKey,
+            transaction.UserId);
         return ToState(transaction);
     }
 
@@ -223,6 +249,13 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         transaction.UpdatedAtUtc = DateTime.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);
+        observability.RecordFailure(
+            IdempotencyObservabilityService.ResolveEconomyEndpoint(transaction.TransactionType),
+            transaction.TransactionType,
+            transaction.OperationId ?? transaction.IdempotencyKey,
+            transaction.UserId,
+            transaction.Status.ToString(),
+            transaction.ErrorCode);
         return ToState(transaction);
     }
 
@@ -262,6 +295,11 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
     {
         if (!string.Equals(transaction.RequestHash, requestHash, StringComparison.Ordinal))
         {
+            observability.RecordConflict(
+                IdempotencyObservabilityService.ResolveEconomyEndpoint(transaction.TransactionType),
+                transaction.TransactionType,
+                transaction.OperationId ?? transaction.IdempotencyKey,
+                transaction.UserId);
             logger.LogWarning(
                 "Economy transaction payload conflict detected. UserId={UserId} TransactionType={TransactionType} IdempotencyKey={IdempotencyKey}",
                 transaction.UserId,
@@ -274,6 +312,12 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                 transaction.IdempotencyKey);
         }
 
+        observability.RecordReplay(
+            IdempotencyObservabilityService.ResolveEconomyEndpoint(transaction.TransactionType),
+            transaction.TransactionType,
+            transaction.OperationId ?? transaction.IdempotencyKey,
+            transaction.UserId,
+            transaction.Status.ToString());
         return ToBeginResult(transaction, isExisting: true, shouldProcess: false);
     }
 

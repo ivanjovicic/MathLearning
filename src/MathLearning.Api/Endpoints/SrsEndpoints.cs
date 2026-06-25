@@ -4,6 +4,7 @@ using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,7 @@ public static class SrsEndpoints
             ISrsService srs,
             ApiDbContext db,
             IIdempotencyLedgerService idempotencyService,
+            IdempotencyObservabilityService observability,
             ILogger<Program> logger,
             HttpContext ctx) =>
         {
@@ -114,6 +116,15 @@ public static class SrsEndpoints
             catch (IdempotentSrsUpdateEarlyReturnException early)
             {
                 return early.Result;
+            }
+            catch (Exception)
+            {
+                observability.RecordRollback(
+                    SrsEndpointHelpers.SrsUpdateEndpoint,
+                    QuizOperationTypes.SrsUpdate,
+                    operationId,
+                    userId);
+                throw;
             }
 
             if (processingResult.IsReplay)

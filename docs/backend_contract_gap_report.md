@@ -258,6 +258,34 @@ canonical route families:
 - current-user profile: `/api/users/profile`
 - public/other-user profile: `/api/user/profile/{userId}`
 
+## Idempotency observability (U5)
+
+Backend idempotency now exposes a small in-memory observability surface for release smoke and incident triage:
+
+- singleton service: `IdempotencyObservabilityService`
+- admin snapshot endpoint: `GET /api/monitoring/idempotency`
+- safe fields only: `endpoint`, `operationType`, short operation-id suffix, hashed user id, `status`, optional `errorCode`
+
+Covered categories:
+
+- `first_success`: counter only, intentionally not a per-request log line
+- `replay`: counted and logged for settled replays
+- `conflict`: counted and logged for payload/key mismatches
+- `failure`: counted and logged when shared-ledger/economy/cosmetics flows settle through `FailAsync(...)`
+- `rollback`: counted and logged when quiz/SRS work throws before ledger completion inside the serializable transaction
+
+Smoke verification path:
+
+1. send a first idempotent mutation
+2. resend the same request and optionally a conflict variant
+3. query `GET /api/monitoring/idempotency` as an admin user
+
+Notes:
+
+- raw answers, tokens, emails, and full payload JSON are not logged
+- economy/cosmetics endpoint names are resolved from operation-type mappings
+- Daily Run chest is included as replay/first-success observability even though it remains on Policy B domain-table authority
+
 Do not remove legacy routes blindly in the first pass. Instead:
 
 1. document which ones are compatibility-only

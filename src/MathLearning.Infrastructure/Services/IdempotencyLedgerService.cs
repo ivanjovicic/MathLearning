@@ -4,6 +4,7 @@ using System.Text.Json;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -15,11 +16,16 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
 
     private readonly ApiDbContext db;
     private readonly ILogger<IdempotencyLedgerService> logger;
+    private readonly IdempotencyObservabilityService observability;
 
-    public IdempotencyLedgerService(ApiDbContext db, ILogger<IdempotencyLedgerService> logger)
+    public IdempotencyLedgerService(
+        ApiDbContext db,
+        ILogger<IdempotencyLedgerService> logger,
+        IdempotencyObservabilityService observability)
     {
         this.db = db;
         this.logger = logger;
+        this.observability = observability;
     }
 
     public async Task<IdempotencyLedgerBeginResult> BeginOrGetExistingAsync(
@@ -65,6 +71,11 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
             if (!string.Equals(existing.OperationId, effectiveOperationId, StringComparison.Ordinal) ||
                 !string.Equals(existing.IdempotencyKey, effectiveIdempotencyKey, StringComparison.Ordinal))
             {
+                observability.RecordConflict(
+                    existing.Endpoint,
+                    existing.OperationType,
+                    effectiveOperationId,
+                    effectiveUserId);
                 throw new IdempotencyLedgerConflictException(
                     effectiveUserId,
                     effectiveOperationType,
@@ -117,6 +128,11 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
 
             if (byOperationId is not null && byIdempotencyKey is not null && byOperationId.Id != byIdempotencyKey.Id)
             {
+                observability.RecordConflict(
+                    effectiveEndpoint,
+                    effectiveOperationType,
+                    effectiveOperationId,
+                    effectiveUserId);
                 throw new IdempotencyLedgerConflictException(
                     effectiveUserId,
                     effectiveOperationType,
@@ -167,6 +183,7 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
         ledger.UpdatedAtUtc = now;
 
         await db.SaveChangesAsync(cancellationToken);
+        observability.RecordFirstSuccess(ledger.Endpoint, ledger.OperationType, ledger.OperationId, ledger.UserId);
         return ToState(ledger);
     }
 
@@ -206,6 +223,13 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
         ledger.UpdatedAtUtc = DateTime.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);
+        observability.RecordFailure(
+            ledger.Endpoint,
+            ledger.OperationType,
+            ledger.OperationId,
+            ledger.UserId,
+            ledger.Status,
+            ledger.ErrorCode);
         return ToState(ledger);
     }
 
@@ -245,6 +269,11 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
     {
         if (!string.Equals(ledger.PayloadHash, payloadHash, StringComparison.Ordinal))
         {
+            observability.RecordConflict(
+                ledger.Endpoint,
+                ledger.OperationType,
+                ledger.OperationId,
+                ledger.UserId);
             logger.LogWarning(
                 "Idempotency payload conflict. UserId={UserId} OperationType={OperationType} OperationId={OperationId} IdempotencyKey={IdempotencyKey}",
                 ledger.UserId,
@@ -259,6 +288,12 @@ public sealed class IdempotencyLedgerService : IIdempotencyLedgerService
                 ledger.IdempotencyKey);
         }
 
+        observability.RecordReplay(
+            ledger.Endpoint,
+            ledger.OperationType,
+            ledger.OperationId,
+            ledger.UserId,
+            ledger.Status);
         return ToBeginResult(ledger, isExisting: true, shouldProcess: false);
     }
 

@@ -4,6 +4,7 @@ using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.AntiCheat;
 using MathLearning.Infrastructure.Services.Cosmetics;
 using MathLearning.Infrastructure.Services.DesignTokens;
+using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Infrastructure.Services.Performance;
 using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using MathLearning.Infrastructure.Services;
@@ -55,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<ICosmeticsIdempotencyService>(sp => sp.GetRequiredService<CosmeticsIdempotencyService>());
         services.AddScoped<IdempotencyLedgerService>();
         services.AddScoped<IIdempotencyLedgerService>(sp => sp.GetRequiredService<IdempotencyLedgerService>());
+        services.AddSingleton<IdempotencyObservabilityService>();
         services.AddScoped<CosmeticsFragmentService>();
         services.AddScoped<ICosmeticsFragmentService>(sp => sp.GetRequiredService<CosmeticsFragmentService>());
         services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();

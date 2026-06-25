@@ -4,6 +4,7 @@ using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -166,6 +167,7 @@ public static class QuizEndpoints
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             IIdempotencyLedgerService idempotencyService,
+            IdempotencyObservabilityService observability,
             ILogger<Program> logger) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -293,6 +295,15 @@ public static class QuizEndpoints
                 catch (IdempotentQuizAnswerEarlyReturnException early)
                 {
                     return early.Result;
+                }
+                catch (Exception)
+                {
+                    observability.RecordRollback(
+                        QuizEndpointHelpers.QuizAnswerEndpoint,
+                        QuizOperationTypes.QuizAnswer,
+                        operationId,
+                        userId);
+                    throw;
                 }
 
                 if (processingResult.IsReplay)

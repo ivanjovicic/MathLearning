@@ -508,6 +508,7 @@ try
 
     // Map offline sync endpoints
     app.MapSyncEndpoints();
+    app.MapIdempotencyObservabilityEndpoints();
 
     // Map Adaptive endpoints
     app.MapAdaptiveEndpoints();

@@ -7,12 +7,15 @@ using System.Text.Json;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Api.Endpoints;
 
 public static class DailyRunEndpoints
 {
+    private const string DailyRunChestClaimEndpoint = "POST /api/daily-run/chest/claim";
+    private const string DailyRunChestClaimOperationType = "daily_run_chest_claim";
     private static readonly string[] CosmeticFragments =
     {
         "Comet Frame Fragment",
@@ -33,6 +36,7 @@ public static class DailyRunEndpoints
             DailyRunChestClaimRequest request,
             ApiDbContext db,
             IXpTrackingService xpTrackingService,
+            IdempotencyObservabilityService observability,
             HttpContext ctx,
             CancellationToken ct) =>
         {
@@ -72,6 +76,14 @@ public static class DailyRunEndpoints
 
                 if (resolution.ExistingClaim is not null)
                 {
+                    observability.RecordReplay(
+                        DailyRunChestClaimEndpoint,
+                        DailyRunChestClaimOperationType,
+                        resolution.ExistingClaim.TransactionId,
+                        userId,
+                        resolution.Kind == DailyRunChestClaimIdempotency.ResolutionKind.ReplayByDay
+                            ? "replay_by_day"
+                            : "replay_by_transaction");
                     var profileForRetry = await db.UserProfiles.AsNoTracking()
                         .FirstOrDefaultAsync(x => x.UserId == userId, ct);
                     if (profileForRetry is null)
@@ -136,6 +148,11 @@ public static class DailyRunEndpoints
                 await db.SaveChangesAsync(ct);
                 if (tx is not null)
                     await tx.CommitAsync(ct);
+                observability.RecordFirstSuccess(
+                    DailyRunChestClaimEndpoint,
+                    DailyRunChestClaimOperationType,
+                    claim.TransactionId,
+                    userId);
 
                 return Results.Ok(BuildResponse(claim, profile, false));
             }
@@ -150,6 +167,12 @@ public static class DailyRunEndpoints
 
                 if (fallback is not null)
                 {
+                    observability.RecordReplay(
+                        DailyRunChestClaimEndpoint,
+                        DailyRunChestClaimOperationType,
+                        fallback.TransactionId,
+                        userId,
+                        "replay_after_uniqueness_race");
                     var profile = await db.UserProfiles.AsNoTracking()
                         .FirstOrDefaultAsync(x => x.UserId == userId, ct);
                     if (profile is null)

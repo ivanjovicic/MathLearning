@@ -4,6 +4,7 @@ using System.Text.Json;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -15,11 +16,16 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
 
     private readonly ApiDbContext db;
     private readonly ILogger<CosmeticsIdempotencyService> logger;
+    private readonly IdempotencyObservabilityService observability;
 
-    public CosmeticsIdempotencyService(ApiDbContext db, ILogger<CosmeticsIdempotencyService> logger)
+    public CosmeticsIdempotencyService(
+        ApiDbContext db,
+        ILogger<CosmeticsIdempotencyService> logger,
+        IdempotencyObservabilityService observability)
     {
         this.db = db;
         this.logger = logger;
+        this.observability = observability;
     }
 
     public async Task<CosmeticsIdempotencyBeginResult> BeginOrGetExistingAsync(
@@ -42,6 +48,11 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
 
         if (byOperationId is not null && byIdempotencyKey is not null && byOperationId.Id != byIdempotencyKey.Id)
         {
+            observability.RecordConflict(
+                IdempotencyObservabilityService.ResolveCosmeticsEndpoint(effectiveOperationType),
+                effectiveOperationType,
+                effectiveOperationId,
+                effectiveUserId);
             throw new CosmeticsIdempotencyConflictException(
                 effectiveUserId,
                 effectiveOperationId,
@@ -54,6 +65,11 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
             if (!string.Equals(existing.OperationId, effectiveOperationId, StringComparison.Ordinal) ||
                 !string.Equals(existing.IdempotencyKey, effectiveIdempotencyKey, StringComparison.Ordinal))
             {
+                observability.RecordConflict(
+                    IdempotencyObservabilityService.ResolveCosmeticsEndpoint(effectiveOperationType),
+                    effectiveOperationType,
+                    effectiveOperationId,
+                    effectiveUserId);
                 throw new CosmeticsIdempotencyConflictException(
                     effectiveUserId,
                     effectiveOperationId,
@@ -142,6 +158,11 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
         ledger.UpdatedAtUtc = now;
 
         await db.SaveChangesAsync(cancellationToken);
+        observability.RecordFirstSuccess(
+            IdempotencyObservabilityService.ResolveCosmeticsEndpoint(ledger.OperationType),
+            ledger.OperationType,
+            ledger.OperationId,
+            ledger.UserId);
         return ToState(ledger);
     }
 
@@ -180,6 +201,13 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
         ledger.UpdatedAtUtc = DateTime.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);
+        observability.RecordFailure(
+            IdempotencyObservabilityService.ResolveCosmeticsEndpoint(ledger.OperationType),
+            ledger.OperationType,
+            ledger.OperationId,
+            ledger.UserId,
+            ledger.Status,
+            ledger.ErrorCode);
         return ToState(ledger);
     }
 
@@ -213,6 +241,11 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
     {
         if (!string.Equals(ledger.PayloadHash, payloadHash, StringComparison.Ordinal))
         {
+            observability.RecordConflict(
+                IdempotencyObservabilityService.ResolveCosmeticsEndpoint(ledger.OperationType),
+                ledger.OperationType,
+                ledger.OperationId,
+                ledger.UserId);
             logger.LogWarning(
                 "Cosmetics idempotency payload conflict. UserId={UserId} OperationId={OperationId} IdempotencyKey={IdempotencyKey}",
                 ledger.UserId,
@@ -225,6 +258,12 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
                 ledger.IdempotencyKey);
         }
 
+        observability.RecordReplay(
+            IdempotencyObservabilityService.ResolveCosmeticsEndpoint(ledger.OperationType),
+            ledger.OperationType,
+            ledger.OperationId,
+            ledger.UserId,
+            ledger.Status);
         return ToBeginResult(ledger, isExisting: true, shouldProcess: false);
     }
 

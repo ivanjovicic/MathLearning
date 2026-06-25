@@ -1,5 +1,7 @@
 using MathLearning.Application.Services;
+using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -11,7 +13,7 @@ public sealed class EconomyTransactionServiceTests
     public async Task FirstRequest_CreatesTransaction()
     {
         await using var db = TestDbContextFactory.Create();
-        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+        var service = CreateService(db);
 
         var begin = await service.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
 
@@ -24,7 +26,7 @@ public sealed class EconomyTransactionServiceTests
     public async Task SameIdempotencyKey_ReturnsExistingResult()
     {
         await using var db = TestDbContextFactory.Create();
-        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+        var service = CreateService(db);
 
         var first = await service.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
         await service.CompleteAsync(first.TransactionId, new { success = true, coins = 90 });
@@ -41,7 +43,7 @@ public sealed class EconomyTransactionServiceTests
     public async Task SameIdempotencyKey_DifferentPayload_ThrowsConflict()
     {
         await using var db = TestDbContextFactory.Create();
-        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+        var service = CreateService(db);
 
         await service.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
 
@@ -53,7 +55,7 @@ public sealed class EconomyTransactionServiceTests
     public async Task DifferentUsers_CanUseSameIdempotencyKey()
     {
         await using var db = TestDbContextFactory.Create();
-        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+        var service = CreateService(db);
 
         var first = await service.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
         var second = await service.BeginOrGetExistingAsync("u2", "coins_spend", "k1", new { amount = 10 });
@@ -67,7 +69,7 @@ public sealed class EconomyTransactionServiceTests
     public async Task CompletedTransaction_DoesNotMutateTwice()
     {
         await using var db = TestDbContextFactory.Create();
-        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+        var service = CreateService(db);
 
         var begin = await service.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
         var complete = await service.CompleteAsync(begin.TransactionId, new { success = true, coins = 90 });
@@ -83,7 +85,7 @@ public sealed class EconomyTransactionServiceTests
     public async Task OperationIdAndIdempotencyKey_ResolveSameLedgerEntry()
     {
         await using var db = TestDbContextFactory.Create();
-        var service = new EconomyTransactionService(db, NullLogger<EconomyTransactionService>.Instance);
+        var service = CreateService(db);
 
         var first = await service.BeginOrGetExistingAsync(
             "u1",
@@ -111,4 +113,10 @@ public sealed class EconomyTransactionServiceTests
         Assert.Equal(first.TransactionId, byOperation.TransactionId);
         Assert.Equal(first.TransactionId, byIdempotency.TransactionId);
     }
+
+    private static EconomyTransactionService CreateService(ApiDbContext db)
+        => new(
+            db,
+            NullLogger<EconomyTransactionService>.Instance,
+            new IdempotencyObservabilityService(NullLogger<IdempotencyObservabilityService>.Instance));
 }
