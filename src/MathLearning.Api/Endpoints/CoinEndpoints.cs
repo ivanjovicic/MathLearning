@@ -7,6 +7,9 @@ public static class CoinEndpoints
 {
     public static void MapCoinEndpoints(this IEndpointRouteBuilder app)
     {
+        // Legacy compatibility routes only.
+        // Do not add new backend-authoritative mobile settlement behavior under /api/coins/*.
+        // Canonical authenticated mutation routes live under /api/economy/*.
         var group = app.MapGroup("/api/coins")
                        .RequireAuthorization()
                        .WithTags("Coins");

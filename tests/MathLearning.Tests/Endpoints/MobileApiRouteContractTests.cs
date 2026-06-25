@@ -59,6 +59,10 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
     [Theory]
     [InlineData("/api/analytics/mastery")]
     [InlineData("/api/chase/test")]
+    [InlineData("/api/cosmetics/unlock")]
+    [InlineData("/api/cosmetics/fragments/daily-run")]
+    [InlineData("/api/avatar/purchase")]
+    [InlineData("/api/avatar/update")]
     public async Task UnsupportedMobileRoutes_AreAbsent(string path)
     {
         var response = await _client.GetAsync(path);

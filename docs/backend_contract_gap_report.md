@@ -244,3 +244,82 @@ Daily Run chest remains the deliberate exception to generic conflict semantics:
 - same `transactionId` replay returns settled success
 - same day/new transaction replays prior claim as `alreadyClaimed`
 - no generic `idempotency_conflict` assertion is required for this Policy B flow
+
+## Legacy route deprecation direction (U4)
+
+### Recommendation
+
+Keep a small, documented compatibility surface, but freeze legacy routes and move all new mobile contract work to the
+canonical route families:
+
+- economy settlement: `/api/economy/*`
+- shop settlement: `/api/shop/*`
+- cosmetics runtime authority: `/api/cosmetics/*`
+- current-user profile: `/api/users/profile`
+- public/other-user profile: `/api/user/profile/{userId}`
+
+Do not remove legacy routes blindly in the first pass. Instead:
+
+1. document which ones are compatibility-only
+2. add guard tests for routes that must stay absent
+3. keep alias/equivalence tests for routes that remain intentionally supported
+
+### Route inventory
+
+| Route family | Current status | Known consumer evidence | Direction |
+|---|---|---|---|
+| `/api/economy/*` | Canonical authenticated economy mutation surface | mobile contract docs + contract/idempotency tests | Keep canonical |
+| `/api/shop/streak-freeze/purchase` | Canonical authenticated shop mutation | mobile contract docs + contract/idempotency tests | Keep canonical |
+| `/api/cosmetics/catalog|inventory|avatar|items/{itemKey}/claim|fragments/grant` | Canonical mobile cosmetics/runtime authority surface | mobile contract docs + contract tests | Keep canonical |
+| `/api/coins/earn` | Legacy write route | backend code only; explicitly called legacy in mobile docs | Freeze, do not expand |
+| `/api/coins/spend` | Legacy write route | backend code only; explicitly called legacy in mobile docs | Freeze, do not expand |
+| `/api/coins/balance|history|leaderboard` | Legacy/read-model surface | older compatibility flows possible; no current canonical mobile settlement docs | Keep temporarily as compatibility/read-only surface |
+| `/api/avatar/me` | Legacy current-user avatar read route with non-canonical response shape | backend code + legacy-shape guard test | Keep temporarily, no new behavior; do not treat as canonical mobile contract |
+| `/api/profile/{userId}/appearance` | Compatibility public appearance alias | backend code + new alias equivalence test | Keep temporarily, no new behavior |
+| `/api/cosmetics/items|equip|equip-batch|unequip|purchase|reward-track*` from `AvatarEndpoints.cs` | Older cosmetics platform surface, parallel to current mobile contract | backend code; not part of canonical mobile contract | Keep as platform/legacy surface, do not use for new mobile settlement work |
+| `/api/users/{userId}/profile` | Compatibility alias | existing alias equivalence test | Keep until all consumers are confirmed off it |
+| `/api/cosmetics/unlock` | Unsupported old route | release checklist + docs say do not use | Must stay absent |
+| `/api/cosmetics/fragments/daily-run` | Unsupported old route | release checklist + docs say do not use | Must stay absent |
+| `/api/avatar/purchase` | Unsupported old route family | no route exists; ultra queue explicitly flags confusion risk | Must stay absent |
+| `/api/avatar/update` | Unsupported old route family | no route exists; ultra queue explicitly flags confusion risk | Must stay absent |
+
+### Notes on the original audit concern
+
+- The main mobile confusion risk is real for `/api/coins/*`: legacy write routes still exist beside canonical
+  `/api/economy/*`.
+- The `/api/avatar/*` concern is narrower in current code than older docs implied. There is no legacy write family under
+  `/api/avatar/*`; only `GET /api/avatar/me` remains, and it still returns a legacy read shape (`equipped`) rather than
+  the canonical mobile `slots` shape.
+- Most older avatar mutation behavior actually survives under `AvatarEndpoints.cs` on `/api/cosmetics/*` as a parallel
+  platform surface (`equip`, `purchase`, reward-track flows), not under `/api/avatar/*`.
+
+### Guard/evidence added in this pass
+
+- `MobileApiRouteContractTests.cs` now locks unsupported routes as absent:
+  - `/api/cosmetics/unlock`
+  - `/api/cosmetics/fragments/daily-run`
+  - `/api/avatar/purchase`
+  - `/api/avatar/update`
+- `MobileCompatibilityEndpointsIntegrationTests.cs` now proves remaining read compatibility behavior:
+  - `/api/avatar/me` still exists but remains legacy-shaped (`equipped`) while canonical mobile route is `/api/cosmetics/avatar` with `slots`
+  - `/api/profile/{userId}/appearance` == `/api/cosmetics/avatar/{userId}`
+
+### Safe phased plan
+
+Phase 1:
+
+- Keep behavior unchanged.
+- Mark `/api/coins/*` and `AvatarEndpoints.cs` compatibility routes as frozen in code comments/docs.
+- Keep absent-route guard tests and alias-equivalence tests green.
+
+Phase 2:
+
+- Search server logs / consumer repos for direct use of `/api/coins/earn` and `/api/coins/spend`.
+- Search for remaining uses of `/api/users/{userId}/profile`, `/api/avatar/me`, and `/api/profile/{userId}/appearance`.
+- If no production/mobile consumers remain, move legacy aliases behind explicit compatibility comments or dedicated
+  compatibility files.
+
+Phase 3:
+
+- Remove legacy write routes only after consumer evidence and dedicated removal tests/docs updates.
+- Do not remove compatibility read aliases in the same PR as behavior-changing settlement work.

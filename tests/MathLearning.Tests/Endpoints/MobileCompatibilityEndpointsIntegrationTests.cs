@@ -64,4 +64,34 @@ public sealed class MobileCompatibilityEndpointsIntegrationTests : IClassFixture
         Assert.Equal("VALIDATION_ERROR", result.ErrorCode);
         Assert.Contains("AdaptiveSessionItemId", result.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task AvatarMe_LegacyReadRoute_RemainsDistinctFromCanonicalMobileShape()
+    {
+        var canonical = await _client.GetAsync("/api/cosmetics/avatar");
+        var alias = await _client.GetAsync("/api/avatar/me");
+
+        Assert.Equal(HttpStatusCode.OK, canonical.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, alias.StatusCode);
+
+        var canonicalBody = await canonical.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var aliasBody = await alias.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+
+        Assert.True(canonicalBody.TryGetProperty("slots", out _));
+        Assert.True(aliasBody.TryGetProperty("equipped", out _));
+    }
+
+    [Fact]
+    public async Task PublicAppearance_CompatibilityAlias_MatchesCanonicalRoute()
+    {
+        var canonical = await _client.GetAsync("/api/cosmetics/avatar/1");
+        var alias = await _client.GetAsync("/api/profile/1/appearance");
+
+        Assert.Equal(canonical.StatusCode, alias.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, alias.StatusCode);
+
+        var canonicalBody = await canonical.Content.ReadAsStringAsync();
+        var aliasBody = await alias.Content.ReadAsStringAsync();
+        Assert.Equal(canonicalBody, aliasBody);
+    }
 }

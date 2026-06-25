@@ -8,6 +8,9 @@ public static class AvatarEndpoints
 {
     public static void MapAvatarEndpoints(this IEndpointRouteBuilder app)
     {
+        // Legacy cosmetics/avatar compatibility surface.
+        // Keep read aliases that existing clients/tests depend on, but do not add new canonical mobile
+        // settlement behavior here when /api/cosmetics/* or /api/economy/* already owns the contract.
         var group = app.MapGroup("/api/cosmetics")
             .RequireAuthorization()
             .WithTags("Cosmetics & Avatar");
