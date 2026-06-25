@@ -24,6 +24,7 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
     [Theory]
     [InlineData("GET", "/api/quiz/questions")]
     [InlineData("POST", "/api/quiz/answer")]
+    [InlineData("POST", "/api/quiz/srs/update")]
     [InlineData("GET", "/api/progress/overview")]
     [InlineData("GET", "/api/progress/topics")]
     [InlineData("GET", "/api/adaptive/path")]
@@ -33,10 +34,19 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
     [InlineData("GET", "/api/users/profile")]
     [InlineData("GET", "/api/user/coins")]
     [InlineData("POST", "/api/daily-run/chest/claim")]
+    [InlineData("POST", "/api/economy/coins/spend")]
+    [InlineData("POST", "/api/economy/hints/use")]
+    [InlineData("POST", "/api/economy/rewards/claim")]
+    [InlineData("POST", "/api/shop/streak-freeze/purchase")]
+    [InlineData("POST", "/api/seasons/daily-run-claim")]
+    [InlineData("POST", "/api/seasons/milestones/1/claim")]
+    [InlineData("POST", "/api/cosmetics/fragments/grant")]
+    [InlineData("POST", "/api/cosmetics/items/frame_comet/claim")]
+    [InlineData("PUT", "/api/cosmetics/avatar")]
     public async Task MobileRoutes_Return401WithoutToken(string method, string path)
     {
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method == "POST")
+        if (method is "POST" or "PUT")
         {
             request.Content = JsonContent.Create(new { });
         }

@@ -7,11 +7,11 @@ Mobile contract source: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_con
 
 | Endpoint | Operation type | Status | Evidence |
 |---|---|---|---|
-| `POST /api/quiz/answer` | `quiz_answer` | **Implemented / tested** | `IdempotencyLedger` + `QuizAnswerIdempotencyTests.cs` (5 tests) |
-| `POST /api/quiz/srs/update` | `srs_update` | **Implemented / tested** | `SrsUpdateIdempotencyTests.cs` (5 tests) |
-| `POST /api/daily-run/chest/claim` | `daily_run_chest_claim` | **Verified (domain-table Policy B)** | `DailyRunChestClaimIdempotencyTests.cs` + endpoint integration tests |
-| Economy mutations | various | **Verified** | `EconomyOperationIdIdempotencyTests.cs` + existing settlement/contract tests |
-| Cosmetics mutations | various | **Verified** | `CosmeticsMutationResponseTests.cs` + cosmetics contract tests |
+| `POST /api/quiz/answer` | `quiz_answer` | **Implemented / tested** | `IdempotencyLedger` + `QuizAnswerIdempotencyTests.cs` + `MobileMutationContractIntegrationTests.cs` |
+| `POST /api/quiz/srs/update` | `srs_update` | **Implemented / tested** | `SrsUpdateIdempotencyTests.cs` + `MobileMutationContractIntegrationTests.cs` |
+| `POST /api/daily-run/chest/claim` | `daily_run_chest_claim` | **Verified (domain-table Policy B)** | `DailyRunChestClaimIdempotencyTests.cs` + endpoint integration tests + `MobileMutationContractIntegrationTests.cs` |
+| Economy mutations | various | **Verified** | `EconomyOperationIdIdempotencyTests.cs` + `MobileEconomyContractIntegrationTests.cs` + `MobileMutationContractIntegrationTests.cs` |
+| Cosmetics mutations | various | **Verified** | `CosmeticsMutationResponseTests.cs` + cosmetics contract tests + `MobileApiRouteContractTests.cs` |
 
 ## `POST /api/daily-run/chest/claim` — Policy B (domain-table idempotency)
 
@@ -24,6 +24,7 @@ Mobile contract source: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_con
 - Same `transactionId` + different `date` → replay original claim, not `409 idempotency_conflict` (intentional).
 
 Tests: `DailyRunChestClaimIdempotencyTests.cs`, `DailyRunChestClaimEndpointTests.cs`, `DailyRunEndpointsIntegrationTests.cs`
+Contract coverage: `MobileMutationContractIntegrationTests.cs`, `MobileApiRouteContractTests.cs`
 
 Helper: `DailyRunChestClaimIdempotency.cs`
 
@@ -36,6 +37,7 @@ Helper: `DailyRunChestClaimIdempotency.cs`
 - Covered paths: coins spend, hints use, rewards claim, streak-freeze purchase, season claims, admin grant.
 
 Tests: `EconomyOperationIdIdempotencyTests.cs`, `EconomySettlementEndpointsIntegrationTests.cs`, `MobileEconomyContractIntegrationTests.cs`
+Contract coverage: `MobileMutationContractIntegrationTests.cs`, `MobileApiRouteContractTests.cs`
 
 ## Cosmetics mutations — `cosmetics_idempotency_ledger`
 
@@ -45,6 +47,7 @@ Tests: `EconomyOperationIdIdempotencyTests.cs`, `EconomySettlementEndpointsInteg
 - Fragment grant hash also includes `sourceEvent` when provided.
 
 Tests: `CosmeticsMutationResponseTests.cs`, `MobileCosmeticsApiIntegrationTests.cs`, `MobileCosmeticsContractIntegrationTests.cs`
+Contract coverage: `MobileApiRouteContractTests.cs`
 
 ## `POST /api/quiz/answer` — implemented
 
@@ -56,6 +59,7 @@ Tests: `CosmeticsMutationResponseTests.cs`, `MobileCosmeticsApiIntegrationTests.
 - Requests without `operationId`/`idempotencyKey` keep legacy behavior (no ledger).
 
 Tests: `tests/MathLearning.Tests/Idempotency/QuizAnswerIdempotencyTests.cs`
+Contract coverage: `tests/MathLearning.Tests/Contracts/MobileMutationContractIntegrationTests.cs`, `tests/MathLearning.Tests/Endpoints/MobileApiRouteContractTests.cs`
 
 Migration: `20260625080422_AddIdempotencyLedger`
 
@@ -218,3 +222,25 @@ Intentional exceptions remain only for admin-targeted routes, where:
 - Existing route-scope tests: `UserSettingsEndpointsIntegrationTests.cs`
 - Existing admin actor/target tests: `EconomySettlementEndpointsIntegrationTests.cs`
 - New payload mismatch regression: `SyncServiceTests.cs` (`user_mismatch` rejected)
+
+## Mobile contract HTTP pack (U3)
+
+Focused HTTP-level contract coverage for mobile-facing settlement routes now lives in:
+
+- `tests/MathLearning.Tests/Endpoints/MobileApiRouteContractTests.cs`
+- `tests/MathLearning.Tests/Contracts/MobileMutationContractIntegrationTests.cs`
+- `tests/MathLearning.Tests/Contracts/MobileEconomyContractIntegrationTests.cs`
+- `tests/MathLearning.Tests/Contracts/MobileCosmeticsContractIntegrationTests.cs`
+
+This pack intentionally checks:
+
+- protected mobile routes reject unauthenticated requests
+- canonical mobile request shapes bind and settle successfully
+- duplicate idempotent requests replay settled responses
+- same keys with different payloads return `409` + `idempotency_conflict` where endpoint semantics use generic key/payload conflict
+
+Daily Run chest remains the deliberate exception to generic conflict semantics:
+
+- same `transactionId` replay returns settled success
+- same day/new transaction replays prior claim as `alreadyClaimed`
+- no generic `idempotency_conflict` assertion is required for this Policy B flow
