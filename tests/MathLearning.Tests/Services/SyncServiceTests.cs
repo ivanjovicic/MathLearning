@@ -104,6 +104,47 @@ public class SyncServiceTests
     }
 
     [Fact]
+    public async Task SyncAsync_UserMismatch_IsRejectedWithoutPersistingAnswer()
+    {
+        var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var service = CreateSyncService(db, requireSignatures: false);
+
+        await service.RegisterDeviceAsync(
+            "1",
+            new RegisterSyncDeviceRequest("device-4", "Mismatch phone", "android", "1.0.0"),
+            CancellationToken.None);
+
+        var operation = new SyncOperationDto(
+            Guid.NewGuid(),
+            "device-4",
+            "different-user",
+            1,
+            "submit_answer",
+            DateTime.UtcNow,
+            JsonSerializer.SerializeToElement(new SubmitAnswerSyncPayloadDto(
+                "session-user-mismatch",
+                1,
+                "2",
+                6,
+                DateTime.UtcNow)),
+            null);
+
+        var response = await service.SyncAsync(
+            "1",
+            new SyncRequestDto("device-4", 0, [operation]),
+            CancellationToken.None);
+
+        Assert.Single(response.AcknowledgedOperations);
+        Assert.Equal("Rejected", response.AcknowledgedOperations[0].Status);
+        Assert.Equal("user_mismatch", response.AcknowledgedOperations[0].ErrorCode);
+        Assert.Equal(0, await db.UserAnswers.CountAsync());
+
+        var log = await db.SyncEventLogs.SingleAsync(x => x.OperationId == operation.OperationId);
+        Assert.Equal(Domain.Entities.SyncEventStatuses.Rejected, log.Status);
+        Assert.Equal("user_mismatch", log.ErrorCode);
+    }
+
+    [Fact]
     public async Task RedriveDeadLetterAsync_ReprocessesPendingDeadLetter()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();

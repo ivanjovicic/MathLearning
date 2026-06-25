@@ -155,3 +155,66 @@ High risk:
 - regression tests proving existing `409 idempotency_conflict` behavior does not change
 - regression tests proving completed-row replay returns the same settled body as before
 - explicit test proving Daily Run chest remains outside generic conflict semantics
+
+## Authenticated-user scope audit for mutating endpoints (U2)
+
+### Audit result
+
+Targeted mobile-facing mutating endpoints currently resolve mutation scope from authenticated server user id for
+standard user flows. No P0/P1 mobile mutation endpoint in the audited set was found to trust a request-body `userId`
+or route `userId` as the primary mutation authority.
+
+Intentional exceptions remain only for admin-targeted routes, where:
+
+- the acting user comes from auth context
+- the target user may come from route/body
+- authorization policy is admin-only
+
+### Endpoint audit table
+
+| Endpoint/group | User source for mutation scope | Safe/unsafe | Test coverage | Follow-up |
+|---|---|---|---|---|
+| `POST /api/quiz/answer` | authenticated `userId` from auth claim | Safe | `QuizAnswerIdempotencyTests.cs` | None |
+| `POST /api/quiz/srs/update` | authenticated `userId` from auth claim | Safe | `SrsUpdateIdempotencyTests.cs` | None |
+| `POST /api/quiz/offline-submit` | authenticated `userId` from auth claim | Safe | quiz/sync tests cover user-bound ingest paths | None |
+| `POST /api/quiz/batch-submit` | authenticated `userId` from auth claim | Safe | quiz/sync tests cover user-bound ingest paths | None |
+| `POST /api/daily-run/chest/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | `DailyRunChestClaimIdempotencyTests.cs`, endpoint integration tests | None |
+| `POST /api/economy/coins/spend` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration + idempotency tests | None |
+| `POST /api/economy/hints/use` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration + idempotency tests | None |
+| `POST /api/economy/rewards/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration + contract tests | None |
+| `POST /api/shop/streak-freeze/purchase` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration + idempotency tests | None |
+| `POST /api/seasons/daily-run-claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration + contract tests | None |
+| `POST /api/seasons/milestones/{milestoneId}/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration tests | None |
+| `PUT /api/cosmetics/avatar` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics API/contract tests | None |
+| `POST /api/cosmetics/items/{itemKey}/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics contract + mutation response tests | None |
+| `POST /api/cosmetics/fragments/grant` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics contract + mutation response tests | None |
+| `PATCH /api/users/{userId}/settings` | route `userId` must equal authenticated `userId`; writes use authenticated id | Safe | `UserSettingsEndpointsIntegrationTests.cs` | None |
+| `POST /api/devices/register` | authenticated `userId` passed to service | Safe | `SyncServiceTests.cs` | None |
+| `POST /api/sync` | authenticated `userId`; each operation payload also revalidated against auth user in `ValidateOperationEnvelopeAsync` | Safe | `SyncServiceTests.cs` | Keep rejecting mismatched payload user ids |
+| `POST /api/admin/economy/rewards/grant` | actor from auth; target user from request body | Safe with documented admin exception | `EconomySettlementEndpointsIntegrationTests.cs` | Keep admin-only |
+| `POST /api/leaderboard/admin/add-xp/{userId}` | target user from route; admin-only auth policy | Safe with documented admin exception | admin endpoint coverage is limited | Add explicit admin audit tests if this route becomes release-critical |
+| `POST /api/leaderboard/admin/reset-xp/{userId}` | target user from route; admin-only auth policy | Safe with documented admin exception | admin endpoint coverage is limited | Add explicit admin audit tests if this route becomes release-critical |
+| Legacy `/api/coins/earn` and `/api/coins/spend` | authenticated `userId` from auth claim | Safe but legacy | legacy coverage limited | Keep in deprecation plan; do not expand usage |
+
+### Idempotency ledger scope notes
+
+- `IdempotencyLedgerService` scopes lookup by `userId + operationType + operationId/idempotencyKey`.
+- `EconomyTransactionService` scopes lookup by `userId + transactionType + operationId/idempotencyKey`.
+- `CosmeticsIdempotencyService` scopes lookup by `userId + operationId/idempotencyKey`.
+- `DailyRunChestClaimIdempotency` scopes replay by domain authority: `userId + transactionId` and `userId + day`.
+- Sync transport additionally rejects payloads whose `operation.UserId` differs from authenticated user id before
+  domain processing.
+
+### Findings
+
+- No unsafe cross-user mutation path was found in the audited mobile settlement/profile/sync routes.
+- The strongest defense-in-depth path is sync, where payload user id is explicitly compared against authenticated user
+  id and rejected on mismatch.
+- Admin grant/reset paths intentionally support acting-on-behalf-of behavior and are only acceptable because policy is
+  admin-gated and audit data records the actor.
+
+### Evidence added in this pass
+
+- Existing route-scope tests: `UserSettingsEndpointsIntegrationTests.cs`
+- Existing admin actor/target tests: `EconomySettlementEndpointsIntegrationTests.cs`
+- New payload mismatch regression: `SyncServiceTests.cs` (`user_mismatch` rejected)
