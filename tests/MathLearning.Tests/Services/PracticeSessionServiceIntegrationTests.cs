@@ -157,6 +157,35 @@ public class PracticeSessionServiceIntegrationTests
         Assert.NotEqual("hard", session.RecommendedDifficulty);
     }
 
+    [Fact]
+    public async Task SubmitAnswer_OtherUserSession_ThrowsNotFound()
+    {
+        var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var scheduler = new FakeWeaknessScheduler();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var sut = BuildService(db, scheduler, cache);
+
+        var start = await sut.StartSessionAsync(
+            "owner-user",
+            new StartPracticeSessionRequest(
+                UserId: "attacker-user",
+                SkillNodeId: "fractions_basics",
+                TopicId: 1,
+                SubtopicId: 1,
+                TargetQuestions: 1,
+                PreferredDifficulty: "medium"),
+            CancellationToken.None);
+
+        Assert.NotNull(start.Question);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            sut.SubmitAnswerAsync(
+                "attacker-user",
+                start.SessionId,
+                new SubmitPracticeAnswerRequest(start.Question!.Id, "1", 1000),
+                CancellationToken.None));
+    }
+
     private static PracticeSessionService BuildService(
         Infrastructure.Persistance.ApiDbContext db,
         IWeaknessAnalysisScheduler scheduler,

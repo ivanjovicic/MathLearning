@@ -192,7 +192,13 @@ Intentional exceptions remain only for admin-targeted routes, where:
 | `PUT /api/cosmetics/avatar` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics API/contract tests | None |
 | `POST /api/cosmetics/items/{itemKey}/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics contract + mutation response tests | None |
 | `POST /api/cosmetics/fragments/grant` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics contract + mutation response tests | None |
-| `PATCH /api/users/{userId}/settings` | route `userId` must equal authenticated `userId`; writes use authenticated id | Safe | `UserSettingsEndpointsIntegrationTests.cs` | None |
+| `PATCH /users/{userId}/settings` | route `userId` must equal authenticated `userId`; writes use authenticated id | Safe | `UserSettingsEndpointsIntegrationTests.cs`, `MutationUserScopeIntegrationTests.cs` | None |
+| `PUT /api/users/profile` | authenticated `userId` from auth claim | Safe | `MutationUserScopeIntegrationTests.cs` | None |
+| `POST /api/progress/sync` | authenticated `userId` from auth claim; payload has no trusted `userId` field | Safe | `MutationUserScopeIntegrationTests.cs` | None |
+| `POST /api/practice/session/start` | authenticated `userId`; request `UserId` ignored by service | Safe | `PracticeSessionServiceIntegrationTests.cs` | None |
+| `POST /api/practice/session/{sessionId}/answer` | authenticated `userId` + session ownership filter | Safe | `PracticeSessionServiceIntegrationTests.cs` (`SubmitAnswer_OtherUserSession_ThrowsNotFound`) | None |
+| `POST /api/practice/session/{sessionId}/complete` | authenticated `userId` + session ownership filter | Safe | service ownership filter mirrors answer path | Optional HTTP cross-user test |
+| `POST /users/{id}/avatar` | auth user; route `id` must match authenticated user | Safe | settings/avatar upload path in `UserEndpoints.cs` | Mobile uses string user id against int route — verify mobile caller shape separately |
 | `POST /api/devices/register` | authenticated `userId` passed to service | Safe | `SyncServiceTests.cs` | None |
 | `POST /api/sync` | authenticated `userId`; each operation payload also revalidated against auth user in `ValidateOperationEnvelopeAsync` | Safe | `SyncServiceTests.cs` | Keep rejecting mismatched payload user ids |
 | `POST /api/admin/economy/rewards/grant` | actor from auth; target user from request body | Safe with documented admin exception | `EconomySettlementEndpointsIntegrationTests.cs` | Keep admin-only |
@@ -219,9 +225,11 @@ Intentional exceptions remain only for admin-targeted routes, where:
 
 ### Evidence added in this pass
 
-- Existing route-scope tests: `UserSettingsEndpointsIntegrationTests.cs`
+- Existing route-scope tests: `UserSettingsEndpointsIntegrationTests.cs` (canonical `/users/{userId}/settings` routes)
 - Existing admin actor/target tests: `EconomySettlementEndpointsIntegrationTests.cs`
-- New payload mismatch regression: `SyncServiceTests.cs` (`user_mismatch` rejected)
+- Sync payload mismatch regression: `SyncServiceTests.cs` (`user_mismatch` rejected)
+- U2 scope regression pack: `MutationUserScopeIntegrationTests.cs` (settings forbid, profile scope, progress sync scope)
+- Practice session ownership regression: `PracticeSessionServiceIntegrationTests.cs` (`SubmitAnswer_OtherUserSession_ThrowsNotFound`)
 
 ## Mobile contract HTTP pack (U3)
 

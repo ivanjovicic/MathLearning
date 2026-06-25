@@ -3,50 +3,45 @@ using System.Text.Json;
 using MathLearning.Api;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
-using Microsoft.AspNetCore.Mvc.Testing;
+using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MathLearning.Tests.Endpoints;
 
 public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    private HttpClient _client;
-    private ApiDbContext _dbContext;
+    private readonly CustomWebApplicationFactory<Program> _factory;
+    private HttpClient _client = null!;
     private const string TestUserId = "auth0|test-user-123";
     private const string OtherUserId = "auth0|other-user-456";
 
     public UserSettingsEndpointsIntegrationTests()
     {
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureServices(services =>
-                {
-                    // Remove the existing DbContext
-                    var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApiDbContext>));
-                    if (descriptor != null)
-                        services.Remove(descriptor);
-
-                    // Add in-memory database for testing
-                    services.AddDbContext<ApiDbContext>(options =>
-                        options.UseInMemoryDatabase($"TestDb_{Guid.NewGuid()}"));
-                });
-            });
+        _factory = new CustomWebApplicationFactory<Program>();
     }
 
     public async Task InitializeAsync()
     {
         _client = _factory.CreateClient();
-        _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {CreateTestToken(TestUserId)}");
+        _client.DefaultRequestHeaders.Add("X-Test-UserId", TestUserId);
 
         using var scope = _factory.Services.CreateScope();
-        _dbContext = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        await _dbContext.Database.EnsureCreatedAsync();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        await db.Database.EnsureCreatedAsync();
 
-        // Seed test user profiles
-        _dbContext.UserProfiles.AddRange(
+        if (!await db.Users.AnyAsync(x => x.Id == TestUserId))
+        {
+            db.Users.Add(new IdentityUser { Id = TestUserId, UserName = TestUserId, Email = "test@example.test" });
+        }
+        if (!await db.Users.AnyAsync(x => x.Id == OtherUserId))
+        {
+            db.Users.Add(new IdentityUser { Id = OtherUserId, UserName = OtherUserId, Email = "other@example.test" });
+        }
+
+        db.UserProfiles.AddRange(
             new UserProfile
             {
                 UserId = TestUserId,
@@ -70,21 +65,20 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
                 UpdatedAt = DateTime.UtcNow
             });
 
-        await _dbContext.SaveChangesAsync();
+        await db.SaveChangesAsync();
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
-        await _dbContext.DisposeAsync();
         _client.Dispose();
-        _factory.Dispose();
+        return Task.CompletedTask;
     }
 
     [Fact]
     public async Task GetSettings_WithValidIdentityUserId_Returns200AndSettings()
     {
         // Act
-        var response = await _client.GetAsync($"/api/users/{TestUserId}/settings");
+        var response = await _client.GetAsync($"/users/{TestUserId}/settings");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -102,7 +96,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
     public async Task GetSettings_WithDifferentUserId_Returns403Forbidden()
     {
         // Act
-        var response = await _client.GetAsync($"/api/users/{OtherUserId}/settings");
+        var response = await _client.GetAsync($"/users/{OtherUserId}/settings");
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -111,13 +105,10 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task GetSettings_WithoutAuthToken_Returns401Unauthorized()
     {
-        // Arrange
-        var unauthenticatedClient = _factory.CreateClient();
+        var unauthenticatedClient = new AnonymousWebApplicationFactory().CreateClient();
 
-        // Act
-        var response = await unauthenticatedClient.GetAsync($"/api/users/{TestUserId}/settings");
+        var response = await unauthenticatedClient.GetAsync($"/users/{TestUserId}/settings");
 
-        // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -132,7 +123,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
             "application/json");
 
         // Act
-        var response = await _client.PatchAsync($"/api/users/{TestUserId}/settings", content);
+        var response = await _client.PatchAsync($"/users/{TestUserId}/settings", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -159,7 +150,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
             "application/json");
 
         // Act
-        var response = await _client.PatchAsync($"/api/users/{TestUserId}/settings", content);
+        var response = await _client.PatchAsync($"/users/{TestUserId}/settings", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -178,7 +169,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
             "application/json");
 
         // Act
-        var response = await _client.PatchAsync($"/api/users/{OtherUserId}/settings", content);
+        var response = await _client.PatchAsync($"/users/{OtherUserId}/settings", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -202,7 +193,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
             "application/json");
 
         // Act
-        var response = await _client.PatchAsync($"/api/users/{TestUserId}/settings", content);
+        var response = await _client.PatchAsync($"/users/{TestUserId}/settings", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -242,7 +233,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
             "application/json");
 
         // Act
-        var response = await _client.PatchAsync($"/api/users/{TestUserId}/settings", content);
+        var response = await _client.PatchAsync($"/users/{TestUserId}/settings", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -254,43 +245,68 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task GetSettings_CreatesDefaultSettingsIfNotExist()
     {
-        // Arrange
         var userId = "auth0|new-user-789";
-        var newUserProfile = new UserProfile
+        using (var scope = _factory.Services.CreateScope())
         {
-            UserId = userId,
-            Username = "newuser",
-            DisplayName = "New User",
-            Coins = 0,
-            Level = 1,
-            Xp = 0,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        _dbContext.UserProfiles.Add(newUserProfile);
-        await _dbContext.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.Users.Add(new IdentityUser { Id = userId, UserName = userId, Email = "new@example.test" });
+            db.UserProfiles.Add(new UserProfile
+            {
+                UserId = userId,
+                Username = "newuser",
+                DisplayName = "New User",
+                Coins = 0,
+                Level = 1,
+                Xp = 0,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
 
         var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {CreateTestToken(userId)}");
+        client.DefaultRequestHeaders.Add("X-Test-UserId", userId);
 
-        // Act
-        var response = await client.GetAsync($"/api/users/{userId}/settings");
+        var response = await client.GetAsync($"/users/{userId}/settings");
 
-        // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
         var json = JsonDocument.Parse(content).RootElement;
-        
+
         Assert.Equal(userId, json.GetProperty("userId").GetString());
-        Assert.Equal("sr", json.GetProperty("language").GetString()); // Default
-        Assert.Equal("light", json.GetProperty("theme").GetString()); // Default
+        Assert.Equal("sr", json.GetProperty("language").GetString());
+        Assert.Equal("light", json.GetProperty("theme").GetString());
         Assert.True(json.GetProperty("hintsEnabled").GetBoolean());
     }
 
-    private static string CreateTestToken(string userId)
+    private sealed class AnonymousWebApplicationFactory : CustomWebApplicationFactory<Program>
     {
-        // In a real test, you'd use a proper JWT token generator
-        // For this test, we're mocking the claim via test setup
-        return "test-token";
+        protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddAuthentication("Anonymous")
+                    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, NoAuthHandler>(
+                        "Anonymous",
+                        _ => { });
+            });
+        }
+    }
+
+    private sealed class NoAuthHandler : Microsoft.AspNetCore.Authentication.AuthenticationHandler<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions>
+    {
+        public NoAuthHandler(
+            Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions> options,
+            Microsoft.Extensions.Logging.ILoggerFactory logger,
+            System.Text.Encodings.Web.UrlEncoder encoder)
+            : base(options, logger, encoder)
+        {
+        }
+
+        protected override Task<Microsoft.AspNetCore.Authentication.AuthenticateResult> HandleAuthenticateAsync()
+        {
+            return Task.FromResult(Microsoft.AspNetCore.Authentication.AuthenticateResult.NoResult());
+        }
     }
 }
