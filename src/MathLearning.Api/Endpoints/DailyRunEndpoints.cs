@@ -63,14 +63,18 @@ public static class DailyRunEndpoints
             await gate.WaitAsync(ct);
             try
             {
-                var existingClaimByTransaction = await db.DailyRunChestClaims
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.UserId == userId && x.TransactionId == request.TransactionId, ct);
-                if (existingClaimByTransaction is not null)
+                var resolution = await DailyRunChestClaimIdempotency.ResolveAsync(
+                    db,
+                    userId,
+                    day,
+                    request.TransactionId,
+                    ct);
+
+                if (resolution.ExistingClaim is not null)
                 {
-                    var profileForTransactionRetry = await db.UserProfiles.AsNoTracking()
+                    var profileForRetry = await db.UserProfiles.AsNoTracking()
                         .FirstOrDefaultAsync(x => x.UserId == userId, ct);
-                    if (profileForTransactionRetry is null)
+                    if (profileForRetry is null)
                     {
                         return Results.Json(new
                         {
@@ -79,26 +83,7 @@ public static class DailyRunEndpoints
                         }, statusCode: StatusCodes.Status409Conflict);
                     }
 
-                    return Results.Ok(BuildResponse(existingClaimByTransaction, profileForTransactionRetry, true));
-                }
-
-                var existingClaimForDay = await db.DailyRunChestClaims
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.UserId == userId && x.Day == day, ct);
-                if (existingClaimForDay is not null)
-                {
-                    var profileForDayRetry = await db.UserProfiles.AsNoTracking()
-                        .FirstOrDefaultAsync(x => x.UserId == userId, ct);
-                    if (profileForDayRetry is null)
-                    {
-                        return Results.Json(new
-                        {
-                            error = "User profile not found.",
-                            code = "USER_PROFILE_NOT_FOUND"
-                        }, statusCode: StatusCodes.Status409Conflict);
-                    }
-
-                    return Results.Ok(BuildResponse(existingClaimForDay, profileForDayRetry, true));
+                    return Results.Ok(BuildResponse(resolution.ExistingClaim, profileForRetry, true));
                 }
 
                 var completedDailyRun = await db.UserDailyStats
@@ -261,7 +246,8 @@ public static class DailyRunEndpoints
 
 public sealed record DailyRunChestClaimRequest(
     string? TransactionId,
-    string? Date
+    string? Date,
+    string? IdempotencyKey
 );
 
 public sealed record DailyRunChestClaimResponse(

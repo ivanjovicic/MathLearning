@@ -37,13 +37,18 @@ internal static class EconomyEndpointHelpers
         return Results.Conflict(BusinessError("idempotency_conflict", "Invalid transaction state."));
     }
 
+    public static string ResolveOperationId(string? operationId, string idempotencyKey, string? transactionId = null)
+        => TrimOrNull(operationId) ?? TrimOrNull(transactionId) ?? idempotencyKey;
+
     public static async Task<(EconomyTransactionBeginResult? Begin, IResult? Error)> TryBeginAsync(
         IEconomyTransactionService txService,
         string userId,
         string transactionType,
         string idempotencyKey,
         object requestPayload,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? operationId = null,
+        string? transactionId = null)
     {
         try
         {
@@ -52,6 +57,7 @@ internal static class EconomyEndpointHelpers
                 transactionType,
                 idempotencyKey,
                 requestPayload,
+                operationId: ResolveOperationId(operationId, idempotencyKey, transactionId),
                 cancellationToken: ct);
             return (begin, null);
         }
@@ -119,4 +125,7 @@ internal static class EconomyEndpointHelpers
 
     public static string Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+
+    private static string? TrimOrNull(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

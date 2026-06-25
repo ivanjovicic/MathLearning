@@ -148,6 +148,9 @@ internal static class CosmeticsEndpointHelpers
         var raw = !string.IsNullOrWhiteSpace(source) ? source : sourceType;
         return EconomyEndpointHelpers.Normalize(raw);
     }
+
+    public static string? NormalizeSourceEvent(string? sourceEvent)
+        => TrimOrNull(sourceEvent);
 }
 
 public sealed record CosmeticsMutationConflictResponse(

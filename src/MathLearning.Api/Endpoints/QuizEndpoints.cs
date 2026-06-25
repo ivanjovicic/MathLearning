@@ -165,6 +165,7 @@ public static class QuizEndpoints
             IQuizAttemptIngestService ingestService,
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
+            IIdempotencyLedgerService idempotencyService,
             ILogger<Program> logger) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -198,6 +199,116 @@ public static class QuizEndpoints
             {
                 quizSessionId = Guid.NewGuid();
             }
+
+            var quizIdForPayload = quizSessionId.ToString();
+            var hasIdempotency = QuizEndpointHelpers.TryResolveQuizAnswerKeys(
+                request,
+                out var operationId,
+                out var idempotencyKey);
+
+            if (hasIdempotency)
+            {
+                var idempotencyPayload = QuizEndpointHelpers.BuildQuizAnswerIdempotencyPayload(
+                    quizIdForPayload,
+                    questionId,
+                    answerText!,
+                    timeSpentSeconds);
+
+                IdempotentQuizAnswerResult processingResult;
+                try
+                {
+                    processingResult = await ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync(
+                        db,
+                        logger,
+                        async () =>
+                        {
+                            var beginTuple = await QuizEndpointHelpers.TryBeginQuizAnswerAsync(
+                                idempotencyService,
+                                userId,
+                                operationId,
+                                idempotencyKey,
+                                idempotencyPayload,
+                                ctx.RequestAborted);
+                            if (beginTuple.Error is not null)
+                                throw new IdempotentQuizAnswerEarlyReturnException(beginTuple.Error);
+
+                            var begin = beginTuple.Begin!;
+                            if (!begin.ShouldProcess)
+                            {
+                                if (begin.IsCompleted || begin.IsFailed)
+                                {
+                                    return IdempotentQuizAnswerResult.FromReplay(begin.ResultJson, begin.Ledger.HttpStatus);
+                                }
+
+                                throw new IdempotentQuizAnswerEarlyReturnException(
+                                    QuizEndpointHelpers.HandleIdempotentDecision(begin)!);
+                            }
+
+                            await EnsureQuizSessionAsync(db, userId, quizSessionId, DateTime.UtcNow, ctx.RequestAborted);
+
+                            var attemptResult = await ProcessAnswerAttemptWithinTransactionAsync(
+                                db,
+                                xpTrackingService,
+                                userId,
+                                new AnswerAttemptInput(
+                                    Question: question,
+                                    QuestionId: questionId,
+                                    AnswerText: answerText!,
+                                    TimeSpentSeconds: timeSpentSeconds,
+                                    AnsweredAtUtc: DateTime.UtcNow,
+                                    IsOffline: false,
+                                    Source: "quiz_answer",
+                                    ClientId: clientId,
+                                    HintUsed: hintUsed,
+                                    QuizSessionId: quizSessionId),
+                                xpTrackingOptions.Value.EnableAntiCheat,
+                                ctx.RequestAborted);
+
+                            var responseBody = await BuildSubmitAnswerResponseAsync(
+                                db,
+                                stepAdapter,
+                                lang,
+                                questionId,
+                                attemptResult,
+                                ctx.RequestAborted);
+
+                            await idempotencyService.CompleteAsync(
+                                begin.LedgerId,
+                                responseBody,
+                                StatusCodes.Status200OK,
+                                ctx.RequestAborted);
+
+                            return new IdempotentQuizAnswerResult(
+                                attemptResult,
+                                responseBody,
+                                ShouldIngest: attemptResult.IngestItem != null);
+                        },
+                        ctx.RequestAborted,
+                        uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
+                }
+                catch (IdempotencyLedgerConflictException)
+                {
+                    return QuizEndpointHelpers.IdempotencyConflictResult(operationId, idempotencyKey);
+                }
+                catch (IdempotentQuizAnswerEarlyReturnException early)
+                {
+                    return early.Result;
+                }
+
+                if (processingResult.IsReplay)
+                    return processingResult.ReplayResult!;
+
+                if (processingResult.ShouldIngest && processingResult.AttemptResult?.IngestItem != null)
+                {
+                    await ingestService.IngestAttemptsAsync(
+                        userId,
+                        [processingResult.AttemptResult.IngestItem],
+                        ctx.RequestAborted);
+                }
+
+                return Results.Ok(processingResult.ResponseBody!);
+            }
+
             var answeredAtUtc = DateTime.UtcNow;
             var attemptInput = new AnswerAttemptInput(
                 Question: question,
@@ -211,7 +322,7 @@ public static class QuizEndpoints
                 HintUsed: hintUsed,
                 QuizSessionId: quizSessionId);
 
-            var processingResult = await ExecuteWithSerializableRetryAsync(
+            var legacyProcessingResult = await ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync(
                 db,
                 logger,
                 async () =>
@@ -228,43 +339,26 @@ public static class QuizEndpoints
 
                     return new SingleAnswerTransactionResult(result);
                 },
-                ctx.RequestAborted);
+                ctx.RequestAborted,
+                uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
 
-            if (processingResult.AttemptResult.IngestItem != null)
+            if (legacyProcessingResult.AttemptResult.IngestItem != null)
             {
                 await ingestService.IngestAttemptsAsync(
                     userId,
-                    [processingResult.AttemptResult.IngestItem],
+                    [legacyProcessingResult.AttemptResult.IngestItem],
                     ctx.RequestAborted);
             }
 
-            // Return explanation and steps only on incorrect answer.
-            string? explanation = null;
-            List<StepExplanationDto>? steps = null;
-            if (!processingResult.AttemptResult.IsCorrect)
-            {
-                var questionForFeedback = await db.Questions
-                    .AsNoTracking()
-                    .Include(q => q.Translations)
-                    .Include(q => q.Steps).ThenInclude(s => s.Translations)
-                    .FirstOrDefaultAsync(q => q.Id == questionId);
+            var legacyResponse = await BuildSubmitAnswerResponseAsync(
+                db,
+                stepAdapter,
+                lang,
+                questionId,
+                legacyProcessingResult.AttemptResult,
+                ctx.RequestAborted);
 
-                if (questionForFeedback != null)
-                {
-                    explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
-                        TranslationHelper.GetExplanation(questionForFeedback, lang));
-                    steps = NormalizeStepsForResponse(stepAdapter.GetSteps(questionForFeedback, lang));
-                }
-            }
-
-            return Results.Ok(new SubmitAnswerResponse(
-                processingResult.AttemptResult.IsCorrect,
-                explanation,
-                steps,
-                processingResult.AttemptResult.IsFirstTimeCorrect,
-                processingResult.AttemptResult.AwardedXp,
-                processingResult.AttemptResult.TotalXpAfterAward
-            ));
+            return Results.Ok(legacyResponse);
         });
 
         // ?? OFFLINE BATCH SUBMIT (Improved - Idempotent + Server Validation)
@@ -375,7 +469,41 @@ public static class QuizEndpoints
 
     }
 
-    // ??? Shared helper to map Question entity ? QuestionDto with translation + steps
+    private static async Task<SubmitAnswerResponse> BuildSubmitAnswerResponseAsync(
+        ApiDbContext db,
+        MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
+        string lang,
+        int questionId,
+        AnswerAttemptResult attemptResult,
+        CancellationToken cancellationToken)
+    {
+        string? explanation = null;
+        List<StepExplanationDto>? steps = null;
+        if (!attemptResult.IsCorrect)
+        {
+            var questionForFeedback = await db.Questions
+                .AsNoTracking()
+                .Include(q => q.Translations)
+                .Include(q => q.Steps).ThenInclude(s => s.Translations)
+                .FirstOrDefaultAsync(q => q.Id == questionId, cancellationToken);
+
+            if (questionForFeedback != null)
+            {
+                explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
+                    TranslationHelper.GetExplanation(questionForFeedback, lang));
+                steps = NormalizeStepsForResponse(stepAdapter.GetSteps(questionForFeedback, lang));
+            }
+        }
+
+        return new SubmitAnswerResponse(
+            attemptResult.IsCorrect,
+            explanation,
+            steps,
+            attemptResult.IsFirstTimeCorrect,
+            attemptResult.AwardedXp,
+            attemptResult.TotalXpAfterAward);
+    }
+
     private static QuestionDto MapQuestionDto(Question q, string lang, MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter)
     {
         var options = q.Options
@@ -577,7 +705,7 @@ public static class QuizEndpoints
         bool enableAntiCheat,
         CancellationToken cancellationToken)
     {
-        return await ExecuteWithSerializableRetryAsync(
+        return await ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync(
             db,
             logger,
             async () =>
@@ -641,61 +769,8 @@ public static class QuizEndpoints
 
                 return new OfflineBatchTransactionResult(imported, ingestRows);
             },
-            cancellationToken);
-    }
-
-    private static async Task<T> ExecuteWithSerializableRetryAsync<T>(
-        ApiDbContext db,
-        ILogger logger,
-        Func<Task<T>> action,
-        CancellationToken cancellationToken)
-    {
-        const int maxAttempts = 3;
-
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            db.ChangeTracker.Clear();
-            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-            try
-            {
-                var result = await action();
-                await db.SaveChangesAsync(cancellationToken);
-                await tx.CommitAsync(cancellationToken);
-                return result;
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < maxAttempts)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                logger.LogWarning(
-                    ex,
-                    "Retrying serializable transaction after EF concurrency conflict. Attempt={Attempt}/{MaxAttempts}",
-                    attempt,
-                    maxAttempts);
-            }
-            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SerializationFailure && attempt < maxAttempts)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                logger.LogWarning(
-                    ex,
-                    "Retrying serializable transaction after PostgreSQL serialization failure. Attempt={Attempt}/{MaxAttempts}",
-                    attempt,
-                    maxAttempts);
-            }
-            catch (PostgresException ex) when (
-                ex.SqlState == PostgresErrorCodes.UniqueViolation &&
-                string.Equals(ex.ConstraintName, "UX_UserAnswerAudits_FirstCorrect_PerQuestion", StringComparison.Ordinal) &&
-                attempt < maxAttempts)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                logger.LogWarning(
-                    ex,
-                    "Retrying transaction after first-correct uniqueness conflict. Attempt={Attempt}/{MaxAttempts}",
-                    attempt,
-                    maxAttempts);
-            }
-        }
-
-        throw new InvalidOperationException("Failed to process transaction after max retries.");
+            cancellationToken,
+            uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
     }
 
     private static async Task EnsureQuizSessionAsync(
@@ -862,9 +937,20 @@ public static class QuizEndpoints
         int questionId,
         CancellationToken cancellationToken)
     {
-        var existing = await db.UserQuestionStats
-            .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
-            .FirstOrDefaultAsync(cancellationToken);
+        UserQuestionStat? existing;
+        if (db.Database.IsRelational())
+        {
+            existing = await db.UserQuestionStats
+                .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        else
+        {
+            existing = await db.UserQuestionStats
+                .FirstOrDefaultAsync(
+                    x => x.UserId == userId && x.QuestionId == questionId,
+                    cancellationToken);
+        }
 
         if (existing != null)
             return existing;
@@ -886,9 +972,17 @@ public static class QuizEndpoints
         catch (DbUpdateException)
         {
             db.Entry(created).State = EntityState.Detached;
+            if (db.Database.IsRelational())
+            {
+                return await db.UserQuestionStats
+                    .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                    .SingleAsync(cancellationToken);
+            }
+
             return await db.UserQuestionStats
-                .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
-                .SingleAsync(cancellationToken);
+                .SingleAsync(
+                    x => x.UserId == userId && x.QuestionId == questionId,
+                    cancellationToken);
         }
     }
 
@@ -1123,6 +1217,29 @@ public static class QuizEndpoints
         QuizAttemptIngestItem? IngestItem);
 
     private sealed record SingleAnswerTransactionResult(AnswerAttemptResult AttemptResult);
+
+    private sealed record IdempotentQuizAnswerResult(
+        AnswerAttemptResult? AttemptResult,
+        SubmitAnswerResponse? ResponseBody,
+        bool ShouldIngest,
+        bool IsReplay = false,
+        IResult? ReplayResult = null)
+    {
+        public static IdempotentQuizAnswerResult FromReplay(string? resultJson, int httpStatus)
+        {
+            return new IdempotentQuizAnswerResult(
+                null,
+                null,
+                ShouldIngest: false,
+                IsReplay: true,
+                ReplayResult: QuizEndpointHelpers.ReplayStoredJson(resultJson, httpStatus));
+        }
+    }
+
+    private sealed class IdempotentQuizAnswerEarlyReturnException(IResult result) : Exception
+    {
+        public IResult Result { get; } = result;
+    }
 
     private sealed record OfflineBatchTransactionResult(
         int ImportedCount,

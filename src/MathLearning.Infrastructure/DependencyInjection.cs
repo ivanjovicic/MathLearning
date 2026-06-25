@@ -53,6 +53,8 @@ public static class DependencyInjection
         services.AddScoped<IEconomyTransactionService>(sp => sp.GetRequiredService<EconomyTransactionService>());
         services.AddScoped<CosmeticsIdempotencyService>();
         services.AddScoped<ICosmeticsIdempotencyService>(sp => sp.GetRequiredService<CosmeticsIdempotencyService>());
+        services.AddScoped<IdempotencyLedgerService>();
+        services.AddScoped<IIdempotencyLedgerService>(sp => sp.GetRequiredService<IdempotencyLedgerService>());
         services.AddScoped<CosmeticsFragmentService>();
         services.AddScoped<ICosmeticsFragmentService>(sp => sp.GetRequiredService<CosmeticsFragmentService>());
         services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();

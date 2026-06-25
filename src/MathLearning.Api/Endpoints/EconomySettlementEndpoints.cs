@@ -57,7 +57,8 @@ public static class EconomySettlementEndpoints
                 "economy_coins_spend",
                 request.IdempotencyKey!,
                 request,
-                ct);
+                ct,
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -127,7 +128,8 @@ public static class EconomySettlementEndpoints
                 "economy_hint_use",
                 request.IdempotencyKey!,
                 request with { HintType = hintType, CostCoins = serverCost },
-                ct);
+                ct,
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -289,7 +291,8 @@ public static class EconomySettlementEndpoints
                 "economy_reward_claim",
                 request.IdempotencyKey!,
                 request with { RewardId = normalizedRewardId, RewardType = normalizedRewardType },
-                ct);
+                ct,
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -468,7 +471,8 @@ public static class EconomySettlementEndpoints
                     request.Metadata,
                     ActorUserId = actorUserId
                 },
-                ct);
+                ct,
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -566,7 +570,8 @@ public static class EconomySettlementEndpoints
                 "shop_streak_freeze_purchase",
                 request.IdempotencyKey!,
                 request,
-                ct);
+                ct,
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -646,7 +651,9 @@ public static class EconomySettlementEndpoints
                 "season_daily_run_claim",
                 request.IdempotencyKey!,
                 request,
-                ct);
+                ct,
+                operationId: request.OperationId,
+                transactionId: request.TransactionId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -754,7 +761,8 @@ public static class EconomySettlementEndpoints
                 "season_milestone_claim",
                 request.IdempotencyKey!,
                 new { request.SeasonId, milestoneId },
-                ct);
+                ct,
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -1483,6 +1491,7 @@ public sealed record ApiErrorResponse(
 
 public sealed record CoinSpendRequest(
     string? IdempotencyKey,
+    string? OperationId,
     int Amount,
     string? Reason,
     JsonObject? Metadata
@@ -1500,6 +1509,7 @@ public sealed record CoinSpendResponse(
 
 public sealed record HintUseRequest(
     string? IdempotencyKey,
+    string? OperationId,
     int QuestionId,
     string? HintType,
     int CostCoins
@@ -1518,6 +1528,7 @@ public sealed record HintUseResponse(
 
 public sealed record RewardClaimRequest(
     string? IdempotencyKey,
+    string? OperationId,
     string? RewardId,
     string? RewardType,
     int Coins,
@@ -1567,6 +1578,7 @@ public sealed record RewardClaimResponse(
 
 public sealed record AdminRewardGrantRequest(
     string? IdempotencyKey,
+    string? OperationId,
     string? UserId,
     string? GrantId,
     int Coins,
@@ -1588,6 +1600,7 @@ public sealed record AdminRewardGrantResponse(
 
 public sealed record StreakFreezePurchaseRequest(
     string? IdempotencyKey,
+    string? OperationId,
     int Quantity
 );
 
@@ -1603,6 +1616,7 @@ public sealed record StreakFreezePurchaseResponse(
 
 public sealed record SeasonDailyRunClaimRequest(
     string? IdempotencyKey,
+    string? OperationId,
     string? TransactionId,
     int? SeasonId,
     int? Xp
@@ -1627,6 +1641,7 @@ public sealed record SeasonDailyRunClaimResponse(
 
 public sealed record SeasonMilestoneClaimRequest(
     string? IdempotencyKey,
+    string? OperationId,
     int? SeasonId
 );
 

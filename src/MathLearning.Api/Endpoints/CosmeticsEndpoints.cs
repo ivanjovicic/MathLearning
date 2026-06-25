@@ -251,7 +251,9 @@ public static class CosmeticsEndpoints
 
 
 
-            var source = EconomyEndpointHelpers.Normalize(request.Source);
+            var source = CosmeticsEndpointHelpers.ResolveSource(request.Source, request.SourceType);
+
+            var sourceEvent = CosmeticsEndpointHelpers.NormalizeSourceEvent(request.SourceEvent);
 
             var beginTuple = await CosmeticsEndpointHelpers.TryBeginCosmeticsMutationAsync(
 
@@ -276,6 +278,8 @@ public static class CosmeticsEndpoints
                     itemKey = normalizedItemKey,
 
                     source,
+
+                    sourceEvent,
 
                     request.Metadata
 
@@ -337,7 +341,11 @@ public static class CosmeticsEndpoints
 
                     Source = string.IsNullOrWhiteSpace(source) ? "reward" : source,
 
-                    SourceRef = $"{source}:{idempotencyKey}",
+                    SourceRef = string.IsNullOrWhiteSpace(sourceEvent)
+
+                        ? $"{source}:{idempotencyKey}"
+
+                        : $"{source}:{sourceEvent}",
 
                     GrantReason = "Cosmetic claim endpoint",
 
@@ -350,6 +358,10 @@ public static class CosmeticsEndpoints
                 });
 
             }
+
+
+
+            await db.SaveChangesAsync(ct);
 
 
 
@@ -436,6 +448,7 @@ public static class CosmeticsEndpoints
 
 
             var source = CosmeticsEndpointHelpers.ResolveSource(request.Source, request.SourceType);
+            var sourceEvent = CosmeticsEndpointHelpers.NormalizeSourceEvent(request.SourceEvent);
             var transactionId = DailyRunCosmeticsSettlement.ResolveTransactionId(request.TransactionId, operationId);
             string fragmentName;
             int copies;
@@ -488,6 +501,8 @@ public static class CosmeticsEndpoints
                     copies,
 
                     source,
+
+                    sourceEvent,
 
                     request.Metadata
 
@@ -548,6 +563,10 @@ public static class CosmeticsEndpoints
                 return Results.BadRequest(error);
 
             }
+
+
+
+            await db.SaveChangesAsync(ct);
 
 
 
@@ -667,6 +686,10 @@ public sealed record CosmeticItemClaimRequest(
 
     string? Source,
 
+    string? SourceType,
+
+    string? SourceEvent,
+
     JsonObject? Metadata
 
 );
@@ -712,6 +735,8 @@ public sealed record CosmeticFragmentGrantRequest(
     string? Source,
 
     string? SourceType,
+
+    string? SourceEvent,
 
     JsonObject? Metadata
 

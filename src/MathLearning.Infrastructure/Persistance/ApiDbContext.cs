@@ -37,6 +37,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserSeasonMilestoneClaim> UserSeasonMilestoneClaims => Set<UserSeasonMilestoneClaim>();
     public DbSet<UserCosmeticFragmentProgress> UserCosmeticFragmentProgresses => Set<UserCosmeticFragmentProgress>();
     public DbSet<CosmeticsIdempotencyLedger> CosmeticsIdempotencyLedgers => Set<CosmeticsIdempotencyLedger>();
+    public DbSet<IdempotencyLedger> IdempotencyLedgers => Set<IdempotencyLedger>();
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
     public DbSet<OptionTranslation> OptionTranslations => Set<OptionTranslation>();
@@ -600,6 +601,32 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.UserId, e.IdempotencyKey })
                 .IsUnique()
                 .HasDatabaseName("UX_cosmetics_idempotency_ledger_user_idempotency");
+        });
+
+        builder.Entity<IdempotencyLedger>(entity =>
+        {
+            entity.ToTable("idempotency_ledger");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.OperationType).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.OperationId).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.IdempotencyKey).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Endpoint).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.PayloadHash).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.RequestJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(e => e.ResultJson).HasColumnType("jsonb");
+            entity.Property(e => e.ErrorCode).HasMaxLength(64);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.HttpStatus).IsRequired();
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.UserId, e.OperationType, e.OperationId })
+                .IsUnique()
+                .HasDatabaseName("UX_idempotency_ledger_user_type_operation");
+            entity.HasIndex(e => new { e.UserId, e.OperationType, e.IdempotencyKey })
+                .IsUnique()
+                .HasDatabaseName("UX_idempotency_ledger_user_type_key");
         });
 
         builder.Entity<BugReport>(entity =>

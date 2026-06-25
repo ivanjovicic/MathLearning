@@ -21,19 +21,105 @@ public static class SrsEndpoints
         group.MapPost("/srs/update", async (
             SrsUpdateDto dto,
             ISrsService srs,
+            ApiDbContext db,
+            IIdempotencyLedgerService idempotencyService,
+            ILogger<Program> logger,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
 
-            var result = await srs.UpdateAsync(userId, dto);
+            if (dto.QuestionId <= 0)
+                return Results.BadRequest("QuestionId is required");
 
-            return Results.Ok(new
+            var hasIdempotency = SrsEndpointHelpers.TryResolveSrsUpdateKeys(
+                dto.OperationId,
+                dto.IdempotencyKey,
+                out var operationId,
+                out var idempotencyKey);
+
+            if (!hasIdempotency)
             {
-                questionId = result.QuestionId,
-                nextReview = result.NextReview,
-                streak = result.SuccessStreak,
-                ease = result.Ease
-            });
+                var legacyResult = await srs.UpdateAsync(userId, dto);
+                return Results.Ok(SrsEndpointHelpers.BuildSrsUpdateResponse(
+                    legacyResult.QuestionId,
+                    legacyResult.NextReview,
+                    legacyResult.SuccessStreak,
+                    legacyResult.Ease));
+            }
+
+            var idempotencyPayload = SrsEndpointHelpers.BuildSrsUpdateIdempotencyPayload(
+                dto.QuestionId,
+                dto.IsCorrect,
+                dto.TimeMs);
+
+            IdempotentSrsUpdateResult processingResult;
+            try
+            {
+                processingResult = await ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync(
+                    db,
+                    logger,
+                    async () =>
+                    {
+                        var beginTuple = await SrsEndpointHelpers.TryBeginSrsUpdateAsync(
+                            idempotencyService,
+                            userId,
+                            operationId,
+                            idempotencyKey,
+                            idempotencyPayload,
+                            ctx.RequestAborted);
+                        if (beginTuple.Error is not null)
+                            throw new IdempotentSrsUpdateEarlyReturnException(beginTuple.Error);
+
+                        var begin = beginTuple.Begin!;
+                        if (!begin.ShouldProcess)
+                        {
+                            if (begin.IsCompleted || begin.IsFailed)
+                            {
+                                return IdempotentSrsUpdateResult.FromReplay(
+                                    begin.ResultJson,
+                                    begin.Ledger.HttpStatus);
+                            }
+
+                            throw new IdempotentSrsUpdateEarlyReturnException(
+                                QuizEndpointHelpers.HandleIdempotentDecision(begin)!);
+                        }
+
+                        var questionExists = await db.Questions
+                            .AsNoTracking()
+                            .AnyAsync(q => q.Id == dto.QuestionId, ctx.RequestAborted);
+                        if (!questionExists)
+                            throw new InvalidOperationException($"Question not found: {dto.QuestionId}");
+
+                        var stat = await srs.UpdateAsync(userId, dto);
+                        var responseBody = SrsEndpointHelpers.BuildSrsUpdateResponse(
+                            stat.QuestionId,
+                            stat.NextReview,
+                            stat.SuccessStreak,
+                            stat.Ease);
+
+                        await idempotencyService.CompleteAsync(
+                            begin.LedgerId,
+                            responseBody,
+                            StatusCodes.Status200OK,
+                            ctx.RequestAborted);
+
+                        return new IdempotentSrsUpdateResult(responseBody);
+                    },
+                    ctx.RequestAborted);
+            }
+            catch (IdempotencyLedgerConflictException)
+            {
+                return QuizEndpointHelpers.IdempotencyConflictResult(operationId, idempotencyKey);
+            }
+            catch (IdempotentSrsUpdateEarlyReturnException early)
+            {
+                return early.Result;
+            }
+
+            if (processingResult.IsReplay)
+                return processingResult.ReplayResult!;
+
+            return Results.Ok(processingResult.ResponseBody);
         });
 
         // ?? SRS DAILY
@@ -298,5 +384,24 @@ public static class SrsEndpoints
 
         var acceptLang = ctx.Request.Headers.AcceptLanguage.FirstOrDefault();
         return TranslationHelper.ResolveLanguage(settings?.Language, acceptLang);
+    }
+
+    private sealed record IdempotentSrsUpdateResult(
+        object? ResponseBody,
+        bool IsReplay = false,
+        IResult? ReplayResult = null)
+    {
+        public static IdempotentSrsUpdateResult FromReplay(string? resultJson, int httpStatus)
+        {
+            return new IdempotentSrsUpdateResult(
+                null,
+                IsReplay: true,
+                ReplayResult: QuizEndpointHelpers.ReplayStoredJson(resultJson, httpStatus));
+        }
+    }
+
+    private sealed class IdempotentSrsUpdateEarlyReturnException(IResult result) : Exception
+    {
+        public IResult Result { get; } = result;
     }
 }
