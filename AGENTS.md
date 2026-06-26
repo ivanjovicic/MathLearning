@@ -2,21 +2,24 @@
 
 This file defines the working rules for AI-assisted changes in `ivanjovicic/MathLearning`.
 
-Read this before changing backend code or docs. The goal is to save tokens, avoid rediscovery, and prevent recurring mistakes around auth scope, idempotency, migrations, and mobile contract drift.
+Read this before changing backend code or docs. The goal is to avoid recurring mistakes around auth scope, idempotency, migrations, and mobile contract drift.
+
+Agents fixing backend bugs or changing high-risk backend behavior must also read `docs/BUGFIX_PATTERN_GUARDRAILS.md` before editing.
 
 ---
 
 ## 1. Start here
 
-For almost every backend task, read in this order:
+For most backend tasks, read in this order:
 
-1. `AGENTS.md` — this rulebook.
-2. `docs/DOCS_INDEX.md` — which docs are canonical/status/reference.
-3. `docs/AGENT_QUICKSTART.md` — shortest safe path for common tasks.
-4. `docs/ARCHITECTURE_OVERVIEW.md` — project layout and runtime map.
-5. `docs/API_ENDPOINT_INVENTORY.md` — current endpoint map.
-6. `docs/backend_contract_gap_report.md` — latest backend/mobile contract evidence.
-7. `docs/mobile_contract_idempotency_handoff.md` — idempotency handoff from the mobile contract.
+1. `AGENTS.md`
+2. `docs/DOCS_INDEX.md`
+3. `docs/AGENT_QUICKSTART.md`
+4. `docs/ARCHITECTURE_OVERVIEW.md`
+5. `docs/API_ENDPOINT_INVENTORY.md`
+6. `docs/backend_contract_gap_report.md`
+7. `docs/mobile_contract_idempotency_handoff.md`
+8. `docs/BUGFIX_PATTERN_GUARDRAILS.md` when fixing bugs
 
 Do not reread the whole repository unless the task truly requires it.
 
@@ -90,8 +93,8 @@ Do not create a fourth pattern without documenting why.
 Required behavior for generic idempotent mutations:
 
 - first request mutates once and stores result
-- duplicate same payload replays settled result / `alreadyProcessed` / `alreadyClaimed`
-- same keys with different payload returns `409 idempotency_conflict`
+- duplicate same payload replays settled result
+- same keys with different payload returns a conflict response
 - domain failure must not leave a completed ledger row
 - different users are isolated
 
@@ -103,10 +106,10 @@ Daily Run chest is a documented exception: it uses domain-table Policy B and rep
 
 - Keep endpoint changes synchronized with `docs/API_ENDPOINT_INVENTORY.md`.
 - Keep mobile-facing payload/behavior aligned with `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md`.
-- Do not expand legacy routes such as `/api/coins/*` or legacy avatar/cosmetics routes unless the task explicitly targets compatibility.
+- Do not expand legacy routes unless the task explicitly targets compatibility.
 - Prefer canonical mobile routes:
-  - `/api/economy/*` over `/api/coins/*`
-  - `/api/cosmetics/*` over legacy `/api/avatar/*` mutation paths
+  - `/api/economy/*` over older coin aliases
+  - `/api/cosmetics/*` over older avatar mutation paths
   - `/api/quiz/srs/update` for SRS update
   - `/api/daily-run/chest/claim` for Daily Run chest settlement
 
@@ -117,7 +120,7 @@ Daily Run chest is a documented exception: it uses domain-table Policy B and rep
 - Inspect existing migrations and DbContext mappings before adding a migration.
 - Make unique indexes match idempotency scope exactly.
 - Ledger write and domain mutation should be in the same database transaction where applicable.
-- Do not assume production can auto-migrate. Startup mode and environment determine migration behavior.
+- Do not assume production can auto-migrate.
 - Document new tables/indexes in `docs/backend_contract_gap_report.md` or the relevant architecture doc.
 
 ---
@@ -125,6 +128,8 @@ Daily Run chest is a documented exception: it uses domain-table Policy B and rep
 ## 8. Testing and validation
 
 Use the narrowest test command that proves the change first. Then run broader tests if the touched area warrants it.
+
+Bug fixes require the smallest regression test that would have failed before the fix unless the final response clearly explains why no test was practical in scope.
 
 Common test groups:
 
@@ -139,7 +144,7 @@ Do not claim CI is green unless a GitHub Actions run was found and checked. If n
 
 ## 9. Observability and logs
 
-- Do not log raw answers, tokens, emails, passwords, or full request payload JSON.
+- Do not log full request bodies or sensitive user fields.
 - Idempotency observability should record safe metadata only: endpoint, operation type, safe operation suffix/hash, status, and category.
 - Admin/observability endpoints must remain protected by the correct policy.
 
