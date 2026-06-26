@@ -259,6 +259,8 @@ Daily Run chest remains the deliberate exception to generic conflict semantics:
 - same day/new transaction replays prior claim as `alreadyClaimed`
 - no generic `idempotency_conflict` assertion is required for this Policy B flow
 
+Season daily-run `invalid_season` contract tests must use a fresh `transactionId` when asserting domain errors; reusing a settled `transactionId` with a new idempotency key surfaces `idempotency_conflict` from the economy ledger first.
+
 ## Legacy route deprecation direction (U4)
 
 ### Recommendation

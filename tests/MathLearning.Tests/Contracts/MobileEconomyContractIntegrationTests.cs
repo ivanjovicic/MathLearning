@@ -264,7 +264,7 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
             MobileEconomyContractPayloads.SeasonDailyRunClaim(
                 idempotencyKey: $"season_daily_run/{userId}/999999/tx",
                 seasonId: 999999,
-                transactionId: "season-daily-mobile-tx-1",
+                transactionId: "season-daily-mobile-tx-unused",
                 awardedXp: 30));
         Assert.Equal(HttpStatusCode.Conflict, invalidSeason.StatusCode);
         await AssertBusinessErrorCodeAsync(invalidSeason, "invalid_season");
