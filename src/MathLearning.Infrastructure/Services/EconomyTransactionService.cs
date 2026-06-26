@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -12,8 +9,6 @@ namespace MathLearning.Infrastructure.Services;
 
 public sealed class EconomyTransactionService : IEconomyTransactionService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     private readonly ApiDbContext db;
     private readonly ILogger<EconomyTransactionService> logger;
     private readonly IdempotencyObservabilityService observability;
@@ -36,12 +31,12 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         string? operationId = null,
         CancellationToken cancellationToken = default)
     {
-        var effectiveUserId = RequireValue(userId, nameof(userId));
-        var effectiveTransactionType = RequireValue(transactionType, nameof(transactionType));
-        var effectiveIdempotencyKey = RequireValue(idempotencyKey, nameof(idempotencyKey));
+        var effectiveUserId = IdempotencyPayloadCanonicalizer.RequireValue(userId, nameof(userId));
+        var effectiveTransactionType = IdempotencyPayloadCanonicalizer.RequireValue(transactionType, nameof(transactionType));
+        var effectiveIdempotencyKey = IdempotencyPayloadCanonicalizer.RequireValue(idempotencyKey, nameof(idempotencyKey));
         var effectiveOperationId = string.IsNullOrWhiteSpace(operationId) ? null : operationId.Trim();
-        var requestJson = CanonicalizeToJson(requestPayload);
-        var requestHash = ComputePayloadHash(requestJson);
+        var requestJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(requestPayload);
+        var requestHash = IdempotencyPayloadCanonicalizer.ComputePayloadHash(requestJson);
 
         var byIdempotencyKey = await FindByIdempotencyKeyAsync(
             effectiveUserId,
@@ -179,7 +174,7 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         CancellationToken cancellationToken = default)
     {
         var transaction = await GetRequiredAsync(transactionId, cancellationToken);
-        var resultJson = SerializePayload(resultPayload);
+        var resultJson = IdempotencyPayloadCanonicalizer.SerializePayload(resultPayload);
 
         if (transaction.Status == EconomyTransactionStatus.Completed)
         {
@@ -221,8 +216,8 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         CancellationToken cancellationToken = default)
     {
         var transaction = await GetRequiredAsync(transactionId, cancellationToken);
-        var effectiveErrorCode = RequireValue(errorCode, nameof(errorCode));
-        var resultJson = SerializePayload(resultPayload);
+        var effectiveErrorCode = IdempotencyPayloadCanonicalizer.RequireValue(errorCode, nameof(errorCode));
+        var resultJson = IdempotencyPayloadCanonicalizer.SerializePayload(resultPayload);
 
         if (transaction.Status == EconomyTransactionStatus.Failed)
         {
@@ -342,71 +337,6 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
         bool shouldProcess)
     {
         return new EconomyTransactionBeginResult(ToState(transaction), isExisting, shouldProcess);
-    }
-
-    private static string RequireValue(string value, string paramName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException($"{paramName} is required.", paramName);
-
-        return value.Trim();
-    }
-
-    private static string ComputePayloadHash(string canonicalJson)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson));
-        return Convert.ToHexString(bytes);
-    }
-
-    private static string? SerializePayload(object? payload)
-    {
-        return payload is null ? null : CanonicalizeToJson(payload);
-    }
-
-    private static string CanonicalizeToJson(object? payload)
-    {
-        var element = payload is JsonElement jsonElement
-            ? jsonElement.Clone()
-            : JsonSerializer.SerializeToElement(payload, JsonOptions);
-
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            WriteCanonicalJson(element, writer);
-        }
-
-        return Encoding.UTF8.GetString(buffer.ToArray());
-    }
-
-    private static void WriteCanonicalJson(JsonElement element, Utf8JsonWriter writer)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonicalJson(property.Value, writer);
-                }
-
-                writer.WriteEndObject();
-                break;
-
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                {
-                    WriteCanonicalJson(item, writer);
-                }
-
-                writer.WriteEndArray();
-                break;
-
-            default:
-                element.WriteTo(writer);
-                break;
-        }
     }
 
     private void DetachIfTracked(EconomyTransaction transaction)

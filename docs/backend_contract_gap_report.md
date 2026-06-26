@@ -1,6 +1,6 @@
 # Backend contract gap report
 
-Last updated: 2026-06-25  
+Last updated: 2026-06-26  
 Mobile contract source: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md`
 
 ## Summary
@@ -125,6 +125,12 @@ Suggested follow-up files:
 - `src/MathLearning.Infrastructure/Services/EconomyTransactionService.cs`
 - `src/MathLearning.Infrastructure/Services/Cosmetics/CosmeticsIdempotencyService.cs`
 - `src/MathLearning.Infrastructure/Services/IdempotencyLedgerService.cs`
+
+### Implementation status from this pass
+
+- Shared payload canonicalization / hashing helper extracted to `src/MathLearning.Infrastructure/Services/Idempotency/IdempotencyPayloadCanonicalizer.cs`.
+- `IdempotencyLedgerService`, `EconomyTransactionService`, and `CosmeticsIdempotencyService` now call the shared helper for input validation and canonical payload hashing/serialization.
+- No schema migration, table merge, or endpoint behavior change was introduced.
 
 Suggested rule for future PRs:
 

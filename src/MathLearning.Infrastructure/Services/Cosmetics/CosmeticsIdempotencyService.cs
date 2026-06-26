@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -12,8 +9,6 @@ namespace MathLearning.Infrastructure.Services.Cosmetics;
 
 public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     private readonly ApiDbContext db;
     private readonly ILogger<CosmeticsIdempotencyService> logger;
     private readonly IdempotencyObservabilityService observability;
@@ -36,12 +31,12 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
         object? requestPayload,
         CancellationToken cancellationToken = default)
     {
-        var effectiveUserId = RequireValue(userId, nameof(userId));
-        var effectiveOperationType = RequireValue(operationType, nameof(operationType));
-        var effectiveOperationId = RequireValue(operationId, nameof(operationId));
-        var effectiveIdempotencyKey = RequireValue(idempotencyKey, nameof(idempotencyKey));
-        var requestJson = CanonicalizeToJson(requestPayload);
-        var payloadHash = ComputePayloadHash(requestJson);
+        var effectiveUserId = IdempotencyPayloadCanonicalizer.RequireValue(userId, nameof(userId));
+        var effectiveOperationType = IdempotencyPayloadCanonicalizer.RequireValue(operationType, nameof(operationType));
+        var effectiveOperationId = IdempotencyPayloadCanonicalizer.RequireValue(operationId, nameof(operationId));
+        var effectiveIdempotencyKey = IdempotencyPayloadCanonicalizer.RequireValue(idempotencyKey, nameof(idempotencyKey));
+        var requestJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(requestPayload);
+        var payloadHash = IdempotencyPayloadCanonicalizer.ComputePayloadHash(requestJson);
 
         var byOperationId = await FindByOperationIdAsync(effectiveUserId, effectiveOperationId, cancellationToken);
         var byIdempotencyKey = await FindByIdempotencyKeyAsync(effectiveUserId, effectiveIdempotencyKey, cancellationToken);
@@ -131,7 +126,7 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
         CancellationToken cancellationToken = default)
     {
         var ledger = await GetRequiredAsync(ledgerId, cancellationToken);
-        var resultJson = SerializePayload(resultPayload);
+        var resultJson = IdempotencyPayloadCanonicalizer.SerializePayload(resultPayload);
 
         if (ledger.Status == CosmeticsIdempotencyStatuses.Completed)
         {
@@ -173,8 +168,8 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
         CancellationToken cancellationToken = default)
     {
         var ledger = await GetRequiredAsync(ledgerId, cancellationToken);
-        var effectiveErrorCode = RequireValue(errorCode, nameof(errorCode));
-        var resultJson = SerializePayload(resultPayload);
+        var effectiveErrorCode = IdempotencyPayloadCanonicalizer.RequireValue(errorCode, nameof(errorCode));
+        var resultJson = IdempotencyPayloadCanonicalizer.SerializePayload(resultPayload);
 
         if (ledger.Status == CosmeticsIdempotencyStatuses.Failed)
         {
@@ -289,71 +284,6 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
         bool shouldProcess)
     {
         return new CosmeticsIdempotencyBeginResult(ToState(ledger), isExisting, shouldProcess);
-    }
-
-    private static string RequireValue(string value, string paramName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException($"{paramName} is required.", paramName);
-
-        return value.Trim();
-    }
-
-    private static string ComputePayloadHash(string canonicalJson)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson));
-        return Convert.ToHexString(bytes);
-    }
-
-    private static string? SerializePayload(object? payload)
-    {
-        return payload is null ? null : CanonicalizeToJson(payload);
-    }
-
-    private static string CanonicalizeToJson(object? payload)
-    {
-        var element = payload is JsonElement jsonElement
-            ? jsonElement.Clone()
-            : JsonSerializer.SerializeToElement(payload, JsonOptions);
-
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            WriteCanonicalJson(element, writer);
-        }
-
-        return Encoding.UTF8.GetString(buffer.ToArray());
-    }
-
-    private static void WriteCanonicalJson(JsonElement element, Utf8JsonWriter writer)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonicalJson(property.Value, writer);
-                }
-
-                writer.WriteEndObject();
-                break;
-
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                {
-                    WriteCanonicalJson(item, writer);
-                }
-
-                writer.WriteEndArray();
-                break;
-
-            default:
-                element.WriteTo(writer);
-                break;
-        }
     }
 
     private void DetachIfTracked(CosmeticsIdempotencyLedger ledger)
