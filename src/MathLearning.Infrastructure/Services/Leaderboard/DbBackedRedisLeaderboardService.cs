@@ -35,30 +35,24 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
     {
         var normalizedPeriod = NormalizePeriod(request.Period);
         var query = await BuildScopeQueryAsync(request);
+        var limit = Math.Clamp(request.Limit, 1, 200);
 
-        // Fetch data from the database first
-        var rows = await query
-            .Where(u => u.LeaderboardOptIn)
-            .OrderByDescending(u => u.WeeklyXp) // Simplified ordering for SQL translation
-            .ThenBy(u => u.UserId)
-            .Take(Math.Clamp(request.Limit, 1, 200))
+        var rows = await ProjectScores(
+                OrderByScore(query.Where(u => u.LeaderboardOptIn), normalizedPeriod),
+                normalizedPeriod)
+            .Take(limit)
             .ToListAsync();
 
-        // Perform projection in memory
-        var leaderboard = rows.Select((u, index) =>
-        {
-            return new LeaderboardEntryDto(
+        return rows.Select((u, index) =>
+            new LeaderboardEntryDto(
                 index + 1,
                 u.UserId,
-                u.DisplayName ?? u.Username ?? $"User{u.UserId}",
+                string.IsNullOrWhiteSpace(u.DisplayName) ? $"User{u.UserId}" : u.DisplayName,
                 u.Level,
-                u.WeeklyXp, // Assuming Score = WeeklyXp for simplicity
+                u.Score,
                 u.WeeklyXp,
                 u.Streak
-            );
-        }).ToList();
-
-        return leaderboard;
+            )).ToList();
     }
 
     public async Task<LeaderboardEntryDto?> GetUserRankAsync(LeaderboardRequestDto request)
@@ -237,28 +231,28 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
         {
             "day" => query.Select(x => new LeaderboardProjection(
                 x.UserId,
-                x.DisplayName ?? x.Username ?? $"User{x.UserId}",
+                x.DisplayName ?? x.Username ?? string.Empty,
                 x.Level,
                 x.DailyXp,
                 x.WeeklyXp,
                 x.Streak)),
             "week" => query.Select(x => new LeaderboardProjection(
                 x.UserId,
-                x.DisplayName ?? x.Username ?? $"User{x.UserId}",
+                x.DisplayName ?? x.Username ?? string.Empty,
                 x.Level,
                 x.WeeklyXp,
                 x.WeeklyXp,
                 x.Streak)),
             "month" => query.Select(x => new LeaderboardProjection(
                 x.UserId,
-                x.DisplayName ?? x.Username ?? $"User{x.UserId}",
+                x.DisplayName ?? x.Username ?? string.Empty,
                 x.Level,
                 x.MonthlyXp,
                 x.WeeklyXp,
                 x.Streak)),
             _ => query.Select(x => new LeaderboardProjection(
                 x.UserId,
-                x.DisplayName ?? x.Username ?? $"User{x.UserId}",
+                x.DisplayName ?? x.Username ?? string.Empty,
                 x.Level,
                 x.Xp,
                 x.WeeklyXp,
