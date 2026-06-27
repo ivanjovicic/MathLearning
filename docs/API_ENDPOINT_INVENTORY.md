@@ -102,8 +102,8 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 | POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch questions by posted payload. |
 | POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question for subtopic. |
 | POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `quiz_answer`. |
-| POST | `/api/quiz/offline-submit` | Auth | Offline/sync | Inspect before changing. User scoped by auth. |
-| POST | `/api/quiz/batch-submit` | Auth | Offline/sync | Inspect before changing. User scoped by auth. |
+| POST | `/api/quiz/offline-submit` | Auth | Canonical offline sync | Stable replay path for mobile queue; user scoped by auth. |
+| POST | `/api/quiz/batch-submit` | Auth | Legacy compatibility alias | Thin adapter to offline-submit; resolves sessionId/quizId/batchId/operationId when present. |
 | POST | `/api/quiz/srs/update` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `srs_update`. |
 | GET | `/api/quiz/srs/daily` | Auth | Canonical SRS read | Due SRS cards with mobile fallback padding. |
 | GET | `/api/quiz/srs/mixed` | Auth | Canonical SRS read | Due + random SRS mix. |

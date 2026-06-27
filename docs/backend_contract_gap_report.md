@@ -218,6 +218,9 @@ Intentional exceptions remain only for admin-targeted routes, where:
 - `EconomyTransactionService` scopes lookup by `userId + transactionType + operationId/idempotencyKey`.
 - `CosmeticsIdempotencyService` scopes lookup by `userId + operationId/idempotencyKey`.
 - `DailyRunChestClaimIdempotency` scopes replay by domain authority: `userId + transactionId` and `userId + day`.
+- `/api/quiz/offline-submit` is the canonical offline replay route; `/api/quiz/batch-submit` remains a
+  legacy compatibility adapter that now resolves stable replay keys from `sessionId`, `quizId`,
+  `batchId`, or `operationId` when present.
 - Sync transport additionally rejects payloads whose `operation.UserId` differs from authenticated user id before
   domain processing.
 

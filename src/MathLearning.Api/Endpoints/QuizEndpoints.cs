@@ -383,31 +383,15 @@ public static class QuizEndpoints
             ILogger<Program> logger) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-
-            if (request.Answers == null || !request.Answers.Any())
-                return Results.BadRequest("No answers to import");
-
-            var transactionResult = await ProcessOfflineBatchAsync(
+            return await HandleOfflineBatchSubmitAsync(
+                request,
                 db,
+                ctx,
+                ingestService,
                 xpTrackingService,
-                logger,
-                userId,
-                request.SessionId,
-                request.Answers,
                 xpTrackingOptions.Value.EnableAntiCheat,
-                ctx.RequestAborted);
-
-            if (transactionResult.IngestRows.Count > 0)
-                await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
-
-            var overview = await CalculateUserOverview(db, userId);
-
-            return Results.Ok(new OfflineBatchSubmitResponse(
-                transactionResult.ImportedCount,
-                overview.Xp,
-                overview.Level,
-                overview.Streak
-            ));
+                logger,
+                userId);
         });
 
         // ?? Legacy alias used by mobile app
@@ -453,29 +437,18 @@ public static class QuizEndpoints
                 }
             }
 
-            if (answers.Count == 0)
-                return Results.BadRequest("No answers to import");
+            var sessionToken = ResolveLegacyOfflineBatchSessionToken(payload)
+                ?? Guid.NewGuid().ToString();
 
-            var transactionResult = await ProcessOfflineBatchAsync(
+            return await HandleOfflineBatchSubmitAsync(
+                new OfflineBatchSubmitRequest(sessionToken, answers),
                 db,
+                ctx,
+                ingestService,
                 xpTrackingService,
-                logger,
-                userId,
-                Guid.NewGuid().ToString(),
-                answers,
                 xpTrackingOptions.Value.EnableAntiCheat,
-                ctx.RequestAborted);
-
-            if (transactionResult.IngestRows.Count > 0)
-                await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
-            var overview = await CalculateUserOverview(db, userId);
-
-            return Results.Ok(new OfflineBatchSubmitResponse(
-                transactionResult.ImportedCount,
-                overview.Xp,
-                overview.Level,
-                overview.Streak
-            ));
+                logger,
+                userId);
         });
 
     }
@@ -706,6 +679,42 @@ public static class QuizEndpoints
             .ToList();
     }
 
+    private static async Task<IResult> HandleOfflineBatchSubmitAsync(
+        OfflineBatchSubmitRequest request,
+        ApiDbContext db,
+        HttpContext ctx,
+        IQuizAttemptIngestService ingestService,
+        XpTrackingService xpTrackingService,
+        bool enableAntiCheat,
+        ILogger logger,
+        string userId)
+    {
+        if (request.Answers == null || request.Answers.Count == 0)
+            return Results.BadRequest("No answers to import");
+
+        var transactionResult = await ProcessOfflineBatchAsync(
+            db,
+            xpTrackingService,
+            logger,
+            userId,
+            request.SessionId,
+            request.Answers,
+            enableAntiCheat,
+            ctx.RequestAborted);
+
+        if (transactionResult.IngestRows.Count > 0)
+            await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
+
+        var overview = await CalculateUserOverview(db, userId);
+
+        return Results.Ok(new OfflineBatchSubmitResponse(
+            transactionResult.ImportedCount,
+            overview.Xp,
+            overview.Level,
+            overview.Streak
+        ));
+    }
+
     private static async Task<OfflineBatchTransactionResult> ProcessOfflineBatchAsync(
         ApiDbContext db,
         XpTrackingService xpTrackingService,
@@ -721,9 +730,7 @@ public static class QuizEndpoints
             logger,
             async () =>
             {
-                Guid sessionId;
-                if (!Guid.TryParse(sessionIdRaw, out sessionId))
-                    sessionId = Guid.NewGuid();
+                var sessionId = ResolveOfflineBatchSessionId(userId, sessionIdRaw);
 
                 var session = await db.QuizSessions
                     .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
@@ -739,6 +746,8 @@ public static class QuizEndpoints
                 }
 
                 var questionIds = answers.Select(a => a.QuestionId).Distinct().ToList();
+                var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, answers, cancellationToken);
+                var seenAnswerKeys = new HashSet<string>(existingAnswerKeys, StringComparer.Ordinal);
                 var questions = await db.Questions
                     .Include(q => q.Options)
                     .Where(q => questionIds.Contains(q.Id))
@@ -749,6 +758,10 @@ public static class QuizEndpoints
 
                 foreach (var answer in answers)
                 {
+                    var answerKey = BuildAnswerKey(answer.QuestionId, answer.AnsweredAt);
+                    if (!seenAnswerKeys.Add(answerKey))
+                        continue;
+
                     if (!questions.TryGetValue(answer.QuestionId, out var question))
                         continue;
 
@@ -782,6 +795,28 @@ public static class QuizEndpoints
             },
             cancellationToken,
             uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
+    }
+
+    private static Guid ResolveOfflineBatchSessionId(string userId, string sessionIdRaw)
+    {
+        if (Guid.TryParse(sessionIdRaw, out var parsed))
+            return parsed;
+
+        if (string.IsNullOrWhiteSpace(sessionIdRaw))
+            return Guid.NewGuid();
+
+        return UserIdGuidMapper.FromIdentityUserId($"{userId}:{sessionIdRaw.Trim()}");
+    }
+
+    private static string? ResolveLegacyOfflineBatchSessionToken(JsonElement payload)
+    {
+        foreach (var field in new[] { "sessionId", "quizId", "batchId", "operationId" })
+        {
+            if (TryGetString(payload, field, out var value))
+                return value;
+        }
+
+        return null;
     }
 
     private static async Task EnsureQuizSessionAsync(
