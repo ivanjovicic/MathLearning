@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-06-25  
+Last aligned: 2026-06-27  
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -18,7 +18,9 @@ When docs disagree, use this order:
 5. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
 6. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
 7. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
-8. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
+8. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
+9. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — active backend performance prompt queue.
+10. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
 
 If code/tests and docs disagree, inspect the implementation, then update docs in the same change.
 
@@ -34,6 +36,16 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current API route map and canonical/legacy split | Update whenever routes are added, removed, or changed. |
 | [`BACKEND_CHANGE_CHECKLIST.md`](BACKEND_CHANGE_CHECKLIST.md) | Change checklist | Pre-commit safety gate for backend work | Use for code and docs changes. |
 | [`COMMON_AGENT_PITFALLS.md`](COMMON_AGENT_PITFALLS.md) | Common mistakes | Avoid recurring errors in this repo | Use before implementing broad changes. |
+
+---
+
+## Performance / optimization docs
+
+| Document | Type | Use for | Notes |
+|---|---|---|---|
+| [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) | Performance review | Backend hot-path findings, priority stack, and safe/not-safe optimization boundaries | Current performance planning snapshot. |
+| [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Active prompt queue | Precise BE-PERF prompts for quiz/SRS/answer/leaderboard/startup/observability/route work | Use for future backend optimization work. |
+| [`BACKEND_REVIEW_2026_06_27.md`](BACKEND_REVIEW_2026_06_27.md) | Safety review | Explanation endpoint safety/cache/rate-limit prompt input | Focused on explanations, not general performance. |
 
 ---
 
@@ -53,8 +65,8 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md` | Canonical mobile/backend payload shapes. |
 | `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_backend_contract_status.md` | Mobile-side backend parity matrix. |
 | `ivanjovicic/Mathlearning-Mobile-App/docs/stabilization_status.md` | Mobile stabilization priorities and risk status. |
-| `ivanjovicic/Mathlearning-Mobile-App/docs/prompt_queue.md` | Ordered prompt queue. |
-| `ivanjovicic/Mathlearning-Mobile-App/docs/prompt_queue_ultra.md` | Deeper hardening prompts. |
+| `ivanjovicic/Mathlearning-Mobile-App/docs/prompt_queues/README.md` | Canonical mobile prompt queue router. |
+| `ivanjovicic/Mathlearning-Mobile-App/docs/prompt_queues/backend_contracts.md` | Cross-repo/backend-contract prompt lane from the mobile repo. |
 
 ---
 
@@ -63,8 +75,10 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | File | Use for |
 |---|---|
 | `src/MathLearning.Api/Program.cs` | Startup, middleware, endpoint map order, health/metrics, Hangfire registration. |
+| `src/MathLearning.Api/Startup/ServiceRegistrationExtensions.cs` | DI registration, EF/Redis/Hangfire/OpenTelemetry/CORS/security setup. |
 | `src/MathLearning.Api/Endpoints/*.cs` | Route definitions and HTTP boundary ownership. |
 | `src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs` | EF model ownership and DbSets. |
+| `src/MathLearning.Infrastructure/Services/Leaderboard/DbBackedRedisLeaderboardService.cs` | DB fallback for Redis leaderboard and period/rank behavior. |
 | `src/MathLearning.Infrastructure/Migrations/*` | Current schema and migration history. |
 | `tests/MathLearning.Tests/Idempotency/*` | Idempotency behavior proof. |
 | `tests/MathLearning.Tests/Contracts/*` | Mobile HTTP contract proof. |
@@ -77,9 +91,11 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 Update this index when:
 
 - a backend docs file is added or superseded
+- a prompt queue is added or retired
 - endpoint inventory changes
 - idempotency or auth-scope policy changes
 - new test groups become canonical evidence
 - mobile contract changes affect backend runtime
+- a performance hot path changes behavior, query shape, or budget
 
 Do not duplicate long endpoint payload examples here. Link to the owning doc instead.
