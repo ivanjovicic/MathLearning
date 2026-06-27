@@ -14,13 +14,14 @@ When docs disagree, use this order:
 1. Current backend code and tests.
 2. [`../AGENTS.md`](../AGENTS.md) — backend agent/contributor rules.
 3. [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) — shortest safe path by task type.
-4. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
-5. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
-6. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
-7. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
-8. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
-9. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — active backend performance prompt queue.
-10. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
+4. [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) — historical bug classes and mandatory anti-regression prompt block.
+5. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
+6. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
+7. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
+8. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
+9. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
+10. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — active backend performance prompt queue.
+11. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
 
 If code/tests and docs disagree, inspect the implementation, then update docs in the same change.
 
@@ -32,10 +33,19 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 |---|---|---|---|
 | [`../AGENTS.md`](../AGENTS.md) | Agent rulebook | Rules for safe backend changes | Read first for every prompt. |
 | [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) | Token-saving quickstart | Which files/tests to read for common tasks | Reduces rediscovery and context waste. |
+| [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | Regression guardrails | Historical bug classes, required prompt block, validation matrix | Mandatory for implementation prompts. |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architecture map | Project layout, startup, endpoint ownership, persistence, idempotency, background jobs | Update when runtime architecture changes. |
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current API route map and canonical/legacy split | Update whenever routes are added, removed, or changed. |
 | [`BACKEND_CHANGE_CHECKLIST.md`](BACKEND_CHANGE_CHECKLIST.md) | Change checklist | Pre-commit safety gate for backend work | Use for code and docs changes. |
 | [`COMMON_AGENT_PITFALLS.md`](COMMON_AGENT_PITFALLS.md) | Common mistakes | Avoid recurring errors in this repo | Use before implementing broad changes. |
+
+---
+
+## Regression / bug-prevention docs
+
+| Document | Type | Use for | Notes |
+|---|---|---|---|
+| [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | Mandatory guardrails | Prevent repeated bugs from commit history: migrations, auth scope, idempotency, contract shape, startup, query shape, UTF-8, warnings, admin Blazor, question authoring | Every implementation prompt must name the historical bug class it protects. |
 
 ---
 
@@ -97,5 +107,6 @@ Update this index when:
 - new test groups become canonical evidence
 - mobile contract changes affect backend runtime
 - a performance hot path changes behavior, query shape, or budget
+- a new repeated bug pattern appears in commit history
 
 Do not duplicate long endpoint payload examples here. Link to the owning doc instead.
