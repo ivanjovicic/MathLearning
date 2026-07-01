@@ -5,6 +5,9 @@ namespace MathLearning.Api.Endpoints;
 
 public static class MonitoringLogEndpoints
 {
+    private const int RecentLineLimit = 20;
+    private const int AdvancedLineLimit = 200;
+
     public static void MapMonitoringLogEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/monitoring")
@@ -17,7 +20,7 @@ public static class MonitoringLogEndpoints
             if (!File.Exists(logPath))
                 return Results.Json(Array.Empty<string>());
 
-            var lines = File.ReadLines(logPath).Reverse().Take(20).Reverse();
+            var lines = File.ReadLines(logPath).Reverse().Take(RecentLineLimit).Reverse();
             return Results.Json(LogOutputRedactor.RedactLines(lines));
         })
         .WithName("GetMonitoringLogs")
@@ -29,7 +32,7 @@ public static class MonitoringLogEndpoints
             if (!File.Exists(logPath))
                 return Results.Json(Array.Empty<object>());
 
-            var lines = File.ReadLines(logPath).Reverse().Take(200).Reverse();
+            var lines = File.ReadLines(logPath).Reverse().Take(AdvancedLineLimit).Reverse();
             var entries = new List<object>();
 
             foreach (var line in lines)

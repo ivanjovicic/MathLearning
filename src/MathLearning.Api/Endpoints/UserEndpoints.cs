@@ -12,6 +12,8 @@ namespace MathLearning.Api.Endpoints;
 
 public static class UserEndpoints
 {
+    private const int MaxSearchResults = 20;
+
     private static readonly HashSet<string> SupportedLanguageCodes = new(
         ["en", "sr", "de", "es"],
         StringComparer.OrdinalIgnoreCase);
@@ -233,6 +235,8 @@ public static class UserEndpoints
             {
                 return Results.BadRequest(new { error = "Query must be at least 2 characters" });
             }
+
+            limit = Math.Clamp(limit, 1, MaxSearchResults);
 
             var users = await db.UserProfiles
                 .Where(p => p.Username.Contains(query) ||

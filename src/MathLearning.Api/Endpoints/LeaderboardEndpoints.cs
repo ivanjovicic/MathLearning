@@ -15,6 +15,10 @@ namespace MathLearning.Api.Endpoints;
 
 public static class LeaderboardEndpoints
 {
+    private const int MaxLeaderboardLimit = 200;
+    private const int MaxSchoolLeaderboardNeighbors = 10;
+    private const int MaxSchoolLeaderboardHistoryTake = 120;
+
     public sealed record AddXpRequest(int Amount);
 
     public static void MapLeaderboardEndpoints(this IEndpointRouteBuilder app)
@@ -35,6 +39,9 @@ public static class LeaderboardEndpoints
             bool includeMe = true) =>
         {
             var userId = ctx.User.FindFirst("userId")!.Value;
+            scope = NormalizeLeaderboardScope(scope, "global");
+            period = NormalizeLeaderboardPeriod(period, "all_time");
+            limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
             var leaderboard = await leaderboardService.GetLeaderboardAsync(new LeaderboardRequestDto
             {
                 Scope = scope,
@@ -102,6 +109,8 @@ public static class LeaderboardEndpoints
             string? cursor = null) =>
         {
             var userId = ctx.User.FindFirst("userId")!.Value;
+            period = NormalizeLeaderboardPeriod(period, "week");
+            limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
             var result = await leaderboardService.GetSchoolLeaderboardAsync(userId, period, limit, cursor);
             return Results.Ok(result);
         })
@@ -115,6 +124,8 @@ public static class LeaderboardEndpoints
             int neighbors = 2,
             CancellationToken ct = default) =>
         {
+            period = NormalizeLeaderboardPeriod(period, "week");
+            neighbors = Math.Clamp(neighbors, 1, MaxSchoolLeaderboardNeighbors);
             var result = await schoolLeaderboardService.GetSchoolLeaderboardDetailsAsync(schoolId, period, neighbors, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
         })
@@ -134,6 +145,8 @@ public static class LeaderboardEndpoints
             // Canonical parameters are period and take.
             _ = from;
             _ = to;
+            period = NormalizeLeaderboardPeriod(period, "week");
+            take = Math.Clamp(take, 1, MaxSchoolLeaderboardHistoryTake);
             var result = await schoolLeaderboardService.GetSchoolLeaderboardHistoryAsync(schoolId, period, take, ct);
             return Results.Ok(result);
         })
@@ -149,7 +162,8 @@ public static class LeaderboardEndpoints
             int limit = 50) =>
         {
             var startedAt = DateTime.UtcNow;
-            limit = Math.Clamp(limit, 1, 200);
+            range = NormalizeGlobalLeaderboardRange(range);
+            limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
             var rankedRows = await ToListAsync(
                 CompiledQueries.GetGlobalLeaderboard(db, range, limit),
                 ctx.RequestAborted);
@@ -192,6 +206,9 @@ public static class LeaderboardEndpoints
             string period = "weekly",
             int limit = 50) =>
         {
+            scope = NormalizeLeaderboardScope(scope, "friends");
+            period = NormalizeLeaderboardPeriod(period, "weekly");
+            limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
             return await GetFriendsLeaderboardResultAsync(leaderboardService, appearanceReader, db, ctx, scope, period, limit);
         })
         .WithName("GetFriendsLeaderboard")
@@ -207,6 +224,9 @@ public static class LeaderboardEndpoints
             string period = "weekly",
             int limit = 50) =>
         {
+            scope = NormalizeLeaderboardScope(scope, "friends");
+            period = NormalizeLeaderboardPeriod(period, "weekly");
+            limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
             return await GetFriendsLeaderboardResultAsync(leaderboardService, appearanceReader, db, ctx, scope, period, limit);
         })
         .WithName("GetRivalsLeaderboardCompatibilityAlias")
@@ -223,6 +243,9 @@ public static class LeaderboardEndpoints
             CancellationToken ct = default) =>
         {
             var userId = ctx.User.FindFirst("userId")!.Value;
+            scope = NormalizeLeaderboardScope(scope, "global");
+            period = NormalizeLeaderboardPeriod(period, "all_time");
+            limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
             var result = await studentLeaderboardService.GetLeaderboardAsync(userId, scope, period, limit, cursor, includeMe, ct);
             return Results.Ok(result);
         })
@@ -268,6 +291,51 @@ public static class LeaderboardEndpoints
 
         return results;
     }
+
+    private static string NormalizeLeaderboardScope(string? scope, string fallback)
+    {
+        var trimmed = scope?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return fallback;
+        }
+
+        return IsAllowedValue(trimmed, "global", "school", "faculty", "friends")
+            ? trimmed
+            : fallback;
+    }
+
+    private static string NormalizeLeaderboardPeriod(string? period, string fallback)
+    {
+        var trimmed = period?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return fallback;
+        }
+
+        return IsAllowedValue(trimmed, "day", "daily", "week", "weekly", "month", "monthly", "all", "alltime", "all_time")
+            ? trimmed
+            : fallback;
+    }
+
+    private static string NormalizeGlobalLeaderboardRange(string? range)
+    {
+        var trimmed = range?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return "allTime";
+        }
+
+        return trimmed.ToLowerInvariant() switch
+        {
+            "weekly" or "week" or "day" or "daily" => "weekly",
+            "alltime" or "all_time" or "all" or "all-time" => "allTime",
+            _ => "allTime"
+        };
+    }
+
+    private static bool IsAllowedValue(string value, params string[] allowedValues) =>
+        allowedValues.Any(candidate => string.Equals(candidate, value, StringComparison.OrdinalIgnoreCase));
 
     private static async Task<IResult> GetFriendsLeaderboardResultAsync(
         IRedisLeaderboardService leaderboardService,

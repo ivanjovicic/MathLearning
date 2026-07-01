@@ -90,17 +90,58 @@ public sealed class MonitoringLogAuthorizationTests :
     }
 
     [Fact]
+    public async Task Admin_CanReadDatabaseLogs_ButLimitIsClamped()
+    {
+        for (var i = 0; i < 150; i++)
+        {
+            await SeedApplicationLogAsync($"{SecretEmail}-{i}", $"{SecretToken}-{i}");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/logs/recent?limit=999");
+        request.Headers.Add("X-Test-UserId", "admin-user");
+        request.Headers.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal(100, json.RootElement.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Admin_CanReadMonitoringLogAdvanced_ButItStaysBounded()
+    {
+        WriteMonitoringLogFile(Enumerable.Range(1, 250)
+            .Select(i => $"line {i}: {SecretEmail} {SecretToken}")
+            .ToArray());
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/monitoring/logs-advanced?search=line");
+        request.Headers.Add("X-Test-UserId", "admin-user");
+        request.Headers.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal(200, json.RootElement.GetArrayLength());
+        Assert.DoesNotContain(SecretEmail, body);
+        Assert.DoesNotContain(SecretToken, body);
+    }
+
+    [Fact]
     public async Task HealthAndMetrics_RemainAnonymous()
     {
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/metrics")).StatusCode);
     }
 
-    private void WriteMonitoringLogFile(string line)
+    private void WriteMonitoringLogFile(params string[] lines)
     {
         var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
         Directory.CreateDirectory(logDir);
-        File.WriteAllText(Path.Combine(logDir, "log.txt"), line + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllLines(Path.Combine(logDir, "log.txt"), lines, Encoding.UTF8);
     }
 
     private async Task SeedApplicationLogAsync(string email, string token)

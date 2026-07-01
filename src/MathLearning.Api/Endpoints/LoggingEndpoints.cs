@@ -7,6 +7,11 @@ namespace MathLearning.Api.Endpoints;
 
 public static class LoggingEndpoints
 {
+    private const int RecentLogsLimit = 100;
+    private const int LogsByLevelLimit = 50;
+    private const int SearchLogsLimit = 100;
+    private const int RecentErrorLogsLimit = 50;
+
     public static void MapLoggingEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/logs")
@@ -19,6 +24,7 @@ public static class LoggingEndpoints
             string? level = null,
             int limit = 100) =>
         {
+            limit = Math.Clamp(limit, 1, RecentLogsLimit);
             var query = db.ApplicationLogs.AsQueryable();
 
             if (!string.IsNullOrEmpty(level))
@@ -42,6 +48,7 @@ public static class LoggingEndpoints
             ApiDbContext db,
             int limit = 50) =>
         {
+            limit = Math.Clamp(limit, 1, LogsByLevelLimit);
             var logs = await db.ApplicationLogs
                 .Where(l => l.Level == level.ToUpper())
                 .OrderByDescending(l => l.Timestamp)
@@ -62,6 +69,7 @@ public static class LoggingEndpoints
             string? level = null,
             int limit = 100) =>
         {
+            limit = Math.Clamp(limit, 1, SearchLogsLimit);
             var logsQuery = db.ApplicationLogs.AsQueryable();
 
             if (!string.IsNullOrEmpty(query))
@@ -178,6 +186,7 @@ public static class LoggingEndpoints
             ApiDbContext db,
             int limit = 50) =>
         {
+            limit = Math.Clamp(limit, 1, RecentErrorLogsLimit);
             var last24Hours = DateTime.UtcNow.AddHours(-24);
 
             var errors = await db.ApplicationLogs

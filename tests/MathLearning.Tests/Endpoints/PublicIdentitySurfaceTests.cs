@@ -111,6 +111,46 @@ public sealed class PublicIdentitySurfaceTests : IClassFixture<CustomWebApplicat
         Assert.False(first.TryGetProperty("cosmeticLoadout", out _));
     }
 
+    [Fact]
+    public async Task SearchUsers_LimitIsClampedToMinimumAndMaximum()
+    {
+        var viewerUserId = $"viewer-search-limit-{Guid.NewGuid():N}";
+        var searchToken = Guid.NewGuid().ToString("N");
+
+        await EnsureUserAsync(viewerUserId, "viewer-limit", "Viewer Limit", 10, 100, 5, 1, 2, 3, 4);
+
+        for (var i = 0; i < 25; i++)
+        {
+            await EnsureUserAsync(
+                $"target-search-limit-{i}-{Guid.NewGuid():N}",
+                $"search-{searchToken}-{i:D2}",
+                $"Search Result {i} {searchToken}",
+                10 + i,
+                200 + i,
+                2 + (i % 5),
+                1 + (i % 3),
+                3 + i,
+                4 + i,
+                5 + i);
+        }
+
+        using var minRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/users/search?query={searchToken}&limit=0");
+        minRequest.Headers.Add("X-Test-UserId", viewerUserId);
+        var minResponse = await _client.SendAsync(minRequest);
+        Assert.Equal(HttpStatusCode.OK, minResponse.StatusCode);
+
+        var minPayload = await minResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Single(minPayload.EnumerateArray());
+
+        using var maxRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/users/search?query={searchToken}&limit=999");
+        maxRequest.Headers.Add("X-Test-UserId", viewerUserId);
+        var maxResponse = await _client.SendAsync(maxRequest);
+        Assert.Equal(HttpStatusCode.OK, maxResponse.StatusCode);
+
+        var maxPayload = await maxResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(20, maxPayload.EnumerateArray().Count());
+    }
+
     private async Task EnsureUserAsync(
         string userId,
         string username,

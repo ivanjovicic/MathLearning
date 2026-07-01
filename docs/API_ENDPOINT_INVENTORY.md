@@ -81,7 +81,7 @@ Owner: `UserEndpoints.cs`
 | GET | `/api/users/profile` | Auth | Canonical mobile | Current user's profile + appearance. |
 | PUT | `/api/users/profile` | Auth | Canonical mobile | Update current user's profile. |
 | GET | `/api/users/stats` | Auth | Canonical | Current user's stats/profile aggregate. |
-| GET | `/api/users/search` | Auth | Canonical | Search users by query. |
+| GET | `/api/users/search` | Auth | Canonical | Search users by query. `limit` is capped server-side. |
 | GET | `/api/user/profile/{userId}` | Auth | Legacy/canonical public profile route | Profile by user id with appearance. |
 | GET | `/api/users/{userId}/profile` | Auth | Compatibility alias | Alias for profile-by-id. |
 | GET | `/api/user/coins` | Auth | Legacy read | Current coins/progress summary. |
@@ -206,7 +206,7 @@ Owners: `LeaderboardEndpoints.cs`, `AdaptiveEndpoints.cs`, `AnalyticsEndpoints.c
 
 | Route family | Auth | Owner | Notes |
 |---|---|---|---|
-| `/api/leaderboard*` | Mixed/Auth | `LeaderboardEndpoints.cs` | Global/friends/schools/admin leaderboard surfaces. Inspect file before route changes. |
+| `/api/leaderboard*` | Mixed/Auth | `LeaderboardEndpoints.cs` | Global/friends/schools/admin leaderboard surfaces. `limit`/`take`/`neighbors` are bounded and invalid scope/period/range values normalize to safe defaults. Inspect file before route changes. |
 | `/api/adaptive*` | Auth | `AdaptiveEndpoints.cs` | Adaptive path/recommendation/review surfaces. |
 | `/api/analytics*` | Auth/Admin depending route | `AnalyticsEndpoints.cs` | Analytics/recommendation surfaces. |
 | `/api/explanations*` | Auth | `ExplanationEndpoints.cs` | Explanation generation/read surfaces. |
