@@ -100,4 +100,91 @@ public sealed class DbBackedRedisLeaderboardServiceTests
         Assert.Equal(2, me!.Rank);
         Assert.Equal("1", me.UserId);
     }
+
+    [Fact]
+    public async Task GetUserRankAsync_TiebreakerUsesLexicographicUserId()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        db.Users.AddRange(
+            new IdentityUser { Id = "2", UserName = "u2", Email = "u2@test.local" },
+            new IdentityUser { Id = "10", UserName = "u10", Email = "u10@test.local" });
+        db.UserProfiles.AddRange(
+            new UserProfile
+            {
+                UserId = "2",
+                Username = "u2",
+                DisplayName = "User Two",
+                Level = 1,
+                Xp = 100,
+                WeeklyXp = 100,
+                Streak = 1
+            },
+            new UserProfile
+            {
+                UserId = "10",
+                Username = "u10",
+                DisplayName = "User Ten",
+                Level = 1,
+                Xp = 100,
+                WeeklyXp = 100,
+                Streak = 1
+            });
+        await db.SaveChangesAsync();
+
+        var sut = new DbBackedRedisLeaderboardService(db, NullLogger<DbBackedRedisLeaderboardService>.Instance);
+
+        var userTen = await sut.GetUserRankAsync(new LeaderboardRequestDto
+        {
+            Scope = "global",
+            Period = "weekly",
+            UserId = "10"
+        });
+        var userTwo = await sut.GetUserRankAsync(new LeaderboardRequestDto
+        {
+            Scope = "global",
+            Period = "weekly",
+            UserId = "2"
+        });
+
+        Assert.NotNull(userTen);
+        Assert.NotNull(userTwo);
+        Assert.Equal(1, userTen!.Rank);
+        Assert.Equal(2, userTwo!.Rank);
+    }
+
+    [Fact]
+    public async Task GetNearRivalsAsync_ReturnsFiveUserWindowAroundRank()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        for (var i = 2; i <= 8; i++)
+        {
+            db.Users.Add(new IdentityUser { Id = i.ToString(), UserName = $"u{i}", Email = $"u{i}@test.local" });
+            db.UserProfiles.Add(new UserProfile
+            {
+                UserId = i.ToString(),
+                Username = $"u{i}",
+                DisplayName = $"User {i}",
+                Level = 1,
+                Xp = i * 100,
+                WeeklyXp = i * 100,
+                Streak = 1
+            });
+        }
+
+        await db.SaveChangesAsync();
+
+        var sut = new DbBackedRedisLeaderboardService(db, NullLogger<DbBackedRedisLeaderboardService>.Instance);
+
+        var rivals = await sut.GetNearRivalsAsync(new LeaderboardRequestDto
+        {
+            Scope = "global",
+            Period = "weekly",
+            UserId = "5"
+        });
+
+        Assert.Equal(5, rivals.Count);
+        Assert.Equal(new[] { 2, 3, 4, 5, 6 }, rivals.Select(x => x.Rank).ToArray());
+        Assert.Equal("5", rivals[2].UserId);
+        Assert.Equal(4, rivals[2].Rank);
+    }
 }

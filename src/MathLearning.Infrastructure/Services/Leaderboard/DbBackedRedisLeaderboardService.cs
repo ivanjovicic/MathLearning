@@ -72,18 +72,15 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
         }
 
         var query = await BuildScopeQueryAsync(request, me);
-        var myScore = ScoreSelector.ScoreOf(me, normalizedPeriod);
-        var orderedUserIds = await OrderByScore(query, normalizedPeriod)
-            .Select(x => x.UserId)
-            .ToListAsync();
-        var rank = orderedUserIds.FindIndex(x => x == me.UserId) + 1;
-        if (rank <= 0)
+        var rank = await TryComputeRankAsync(query, me, normalizedPeriod);
+        if (rank is null)
         {
             return null;
         }
 
+        var myScore = LocalScoreOf(me, normalizedPeriod);
         return new LeaderboardEntryDto(
-            rank,
+            rank.Value,
             me.UserId,
             me.DisplayName ?? me.Username ?? $"User{me.UserId}",
             me.Level,
@@ -94,15 +91,28 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
 
     public async Task<List<LeaderboardEntryDto>> GetNearRivalsAsync(LeaderboardRequestDto request)
     {
-        var me = await GetUserRankAsync(request);
-        if (me is null)
+        if (string.IsNullOrWhiteSpace(request.UserId))
         {
             return [];
         }
 
         var normalizedPeriod = NormalizePeriod(request.Period);
-        var query = await BuildScopeQueryAsync(request);
-        var skip = Math.Max(0, me.Rank - 3);
+        var me = await db.UserProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == request.UserId);
+        if (me is null)
+        {
+            return [];
+        }
+
+        var query = await BuildScopeQueryAsync(request, me);
+        var rank = await TryComputeRankAsync(query, me, normalizedPeriod);
+        if (rank is null)
+        {
+            return [];
+        }
+
+        var skip = Math.Max(0, rank.Value - 3);
         var rows = await OrderByScore(query, normalizedPeriod)
             .Skip(skip)
             .Take(5)
@@ -257,6 +267,49 @@ public sealed class DbBackedRedisLeaderboardService : IRedisLeaderboardService
                 x.Xp,
                 x.WeeklyXp,
                 x.Streak))
+        };
+
+    private static async Task<int?> TryComputeRankAsync(
+        IQueryable<UserProfile> scopedQuery,
+        UserProfile me,
+        string normalizedPeriod,
+        CancellationToken ct = default)
+    {
+        var inScope = await scopedQuery.AnyAsync(x => x.UserId == me.UserId, ct);
+        if (!inScope)
+        {
+            return null;
+        }
+
+        var myScore = LocalScoreOf(me, normalizedPeriod);
+        var rankedAbove = await CountRankedAboveAsync(scopedQuery, me, normalizedPeriod, myScore, ct);
+        return rankedAbove + 1;
+    }
+
+    private static Task<int> CountRankedAboveAsync(
+        IQueryable<UserProfile> scopedQuery,
+        UserProfile me,
+        string normalizedPeriod,
+        int myScore,
+        CancellationToken ct)
+        => normalizedPeriod switch
+        {
+            "day" => scopedQuery.CountAsync(
+                u => u.DailyXp > myScore ||
+                     (u.DailyXp == myScore && string.Compare(u.UserId, me.UserId) < 0),
+                ct),
+            "week" => scopedQuery.CountAsync(
+                u => u.WeeklyXp > myScore ||
+                     (u.WeeklyXp == myScore && string.Compare(u.UserId, me.UserId) < 0),
+                ct),
+            "month" => scopedQuery.CountAsync(
+                u => u.MonthlyXp > myScore ||
+                     (u.MonthlyXp == myScore && string.Compare(u.UserId, me.UserId) < 0),
+                ct),
+            _ => scopedQuery.CountAsync(
+                u => u.Xp > myScore ||
+                     (u.Xp == myScore && string.Compare(u.UserId, me.UserId) < 0),
+                ct),
         };
 
     private static string NormalizeScope(string scope) =>
