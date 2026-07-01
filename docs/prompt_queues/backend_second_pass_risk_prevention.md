@@ -81,14 +81,14 @@ Run `BACKEND2-CRIT-008` after authoring policy (`BACKEND2-CRIT-004`) when publis
 
 ## Active prompts
 
-All rows are **Prompt-ready** (not Done).
+Rows include both **Done** and **Prompt-ready** entries.
 
 | ID | Status | Can run in parallel with | Purpose |
 |---|---|---|---|
-| BACKEND2-CRIT-001 | Prompt-ready | BACKEND2-CRIT-005 | Harden forwarded header trust and rate-limit identity. |
-| BACKEND2-CRIT-002 | Prompt-ready | evidence lint only | Make refresh-token rotation single-use under concurrency. |
+| BACKEND2-CRIT-001 | Done (uncommitted, 2026-06-24) | — | Harden forwarded header trust and rate-limit identity. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-001-evidence.md`. Tests: `RateLimitClientIdentityTests`, `InMemorySlidingWindowRateLimitMiddlewareTests`, `ForwardedHeadersProxyTrustIntegrationTests`. Risk: proxy-trust-boundary / rate-limit spoofing. |
+| BACKEND2-CRIT-002 | Done (`55572bd`, 2026-07-01, validated) | — | Make refresh-token rotation single-use under concurrency. Run log: `.ai/runs/2026-07-01-BACKEND2-CRIT-002-evidence.md`. Tests: `AuthRefreshConcurrencyTests`, `AuthRefreshEndpointRegressionTests`. Risk: refresh-token-rotation-race. |
 | BACKEND2-CRIT-003 | Prompt-ready (after CRIT-002 evidence) | evidence lint only | Make mobile registration atomic or compensating. |
-| BACKEND2-CRIT-004 | Prompt-ready | BACKEND2-CRIT-001 | Add explicit admin/content-author policy to question authoring mutations. |
+| BACKEND2-CRIT-004 | Done (uncommitted, 2026-06-24) | — | Add explicit admin/content-author policy to question authoring mutations. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-004-evidence.md`. Tests: `QuestionAuthoringAuthorizationTests`. Risk: authoring-authorization. |
 | BACKEND2-CRIT-005 | Prompt-ready | BACKEND2-CRIT-001 | Bound adaptive answer inputs. |
 | BACKEND2-CRIT-006 | Prompt-ready | evidence lint only | Define/test recurring job idempotency and non-overlap. |
 | BACKEND2-CRIT-007 | Prompt-ready | evidence lint only | Harden production admin seeding/reset behavior. |
