@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-06-24
+Last aligned: 2026-07-01
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -13,16 +13,19 @@ When docs disagree, use this order:
 
 1. Current backend code and tests.
 2. [`../AGENTS.md`](../AGENTS.md) — backend agent/contributor rules.
-3. [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) — mandatory run-log and mistake-learning gate.
-4. [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) — shortest safe path by task type.
-4. [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) — historical bug classes and mandatory anti-regression prompt block.
-5. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
-6. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
-7. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
-8. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
-9. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
-10. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — backend performance prompt queue (BE-PERF-001…008 complete).
-11. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
+3. [`AGENT_SHARED_OPERATING_STANDARD.md`](AGENT_SHARED_OPERATING_STANDARD.md) — shared cross-repo agent rules for prompt shape, token budget, run evidence, score caps, mistake learning, validation honesty, and docs-only truth.
+4. [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) — mandatory run-log and mistake-learning gate.
+5. [`.ai/RUN_LOG_TEMPLATE.md`](../.ai/RUN_LOG_TEMPLATE.md) and [`.ai/runs/README.md`](../.ai/runs/README.md) — mandatory compact run-log format.
+6. [`ai/learning/MISTAKE_LEDGER.md`](ai/learning/MISTAKE_LEDGER.md) — backend mistake memory.
+7. [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) — shortest safe path by task type.
+8. [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) — historical bug classes and mandatory anti-regression prompt block.
+9. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
+10. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
+11. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
+12. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
+13. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
+14. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — backend performance prompt queue.
+15. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
 
 If code/tests and docs disagree, inspect the implementation, then update docs in the same change.
 
@@ -33,13 +36,14 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | Document | Type | Use for | Notes |
 |---|---|---|---|
 | [`../AGENTS.md`](../AGENTS.md) | Agent rulebook | Rules for safe backend changes | Read first for every prompt. |
+| [`AGENT_SHARED_OPERATING_STANDARD.md`](AGENT_SHARED_OPERATING_STANDARD.md) | Shared standard | Common cross-repo prompt/evidence/mistake-learning rules | Aligns backend with Flutter and AgentsWatch while preserving backend-specific validation. |
+| [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | Run-log gate | Mandatory `.ai/runs` evidence, score caps, mistake learning | Every non-trivial prompt. |
 | [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) | Token-saving quickstart | Which files/tests to read for common tasks | Reduces rediscovery and context waste. |
 | [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | Regression guardrails | Historical bug classes, required prompt block, validation matrix | Mandatory for implementation prompts. |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architecture map | Project layout, startup, endpoint ownership, persistence, idempotency, background jobs | Update when runtime architecture changes. |
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current API route map and canonical/legacy split | Update whenever routes are added, removed, or changed. |
 | [`BACKEND_CHANGE_CHECKLIST.md`](BACKEND_CHANGE_CHECKLIST.md) | Change checklist | Pre-commit safety gate for backend work | Use for code and docs changes. |
 | [`COMMON_AGENT_PITFALLS.md`](COMMON_AGENT_PITFALLS.md) | Common mistakes | Avoid recurring errors in this repo | Use before implementing broad changes. |
-| [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | Run-log gate | Mandatory `.ai/runs` evidence, score caps, mistake learning | Every non-trivial prompt. |
 | [`ai/learning/MISTAKE_LEDGER.md`](ai/learning/MISTAKE_LEDGER.md) | Mistake ledger | BACKEND-MISTAKE-* patterns and prevention | Read before start; update before Done. |
 
 ---
@@ -54,6 +58,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md`](ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md) | Lint prompt | Fix misleading Done rows before runtime work | Docs-only. |
 | [`ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md`](ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md) | Rollup prompt | Learn from last 5–8 run logs | Docs-only. |
 | [`ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md`](ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md) | Backfill prompt | Repair missing logs for past commits | No runtime edits by default. |
+| [`ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md`](ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md) | Cross-repo sync prompt | Keep backend, Flutter, and AgentsWatch agent rules aligned | Docs-only. |
 
 ---
 
@@ -102,6 +107,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | `ivanjovicic/Mathlearning-Mobile-App/docs/stabilization_status.md` | Mobile stabilization priorities and risk status. |
 | `ivanjovicic/Mathlearning-Mobile-App/docs/prompt_queues/README.md` | Canonical mobile prompt queue router. |
 | `ivanjovicic/Mathlearning-Mobile-App/docs/prompt_queues/backend_contracts.md` | Cross-repo/backend-contract prompt lane from the mobile repo. |
+| `ivanjovicic/Mathlearning-Mobile-App/docs/AGENT_SHARED_OPERATING_STANDARD.md` | Shared agent rules from the Flutter side. |
 
 ---
 
@@ -118,20 +124,3 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | `tests/MathLearning.Tests/Idempotency/*` | Idempotency behavior proof. |
 | `tests/MathLearning.Tests/Contracts/*` | Mobile HTTP contract proof. |
 | `tests/MathLearning.Tests/Endpoints/*` | Route/auth/scope proof. |
-
----
-
-## Maintenance rules
-
-Update this index when:
-
-- a backend docs file is added or superseded
-- a prompt queue is added or retired
-- endpoint inventory changes
-- idempotency or auth-scope policy changes
-- new test groups become canonical evidence
-- mobile contract changes affect backend runtime
-- a performance hot path changes behavior, query shape, or budget
-- a new repeated bug pattern appears in commit history
-
-Do not duplicate long endpoint payload examples here. Link to the owning doc instead.
