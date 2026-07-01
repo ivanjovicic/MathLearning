@@ -125,3 +125,6 @@ BenchmarkDotNet.Artifacts/
 *.swp
 *.cache
 .tmp*.ps1
+
+# Runtime user uploads (avatars, etc.)
+**/uploads/

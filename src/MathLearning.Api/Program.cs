@@ -582,13 +582,21 @@ try
     // Map Bug endpoints
     app.MapBugEndpoints();
 
-    // Serve uploaded avatars
+    // Legacy uploads may exist under /uploads, but avatar files are auth-gated via UserEndpoints only.
     var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
     Directory.CreateDirectory(uploadsPath);
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new PhysicalFileProvider(uploadsPath),
-        RequestPath = "/uploads"
+        RequestPath = "/uploads",
+        OnPrepareResponse = ctx =>
+        {
+            if (ctx.Context.Request.Path.StartsWithSegments("/uploads/avatars", StringComparison.OrdinalIgnoreCase))
+            {
+                ctx.Context.Response.StatusCode = StatusCodes.Status404NotFound;
+                ctx.Context.Response.ContentLength = 0;
+            }
+        }
     });
 
     app.MapGet("/", () => Results.Ok("MathLearning API is running"));

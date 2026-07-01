@@ -2,6 +2,7 @@ using MathLearning.Application.DTOs.Auth;
 using MathLearning.Application.Services;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.DTOs.Users;
+using MathLearning.Api.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.AspNetCore.StaticFiles;
@@ -404,6 +405,7 @@ public static class UserEndpoints
             int id,
             HttpRequest request,
             ApiDbContext db,
+            IWebHostEnvironment env,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -418,14 +420,17 @@ public static class UserEndpoints
 
             var form = await request.ReadFormAsync();
             var file = form.Files.FirstOrDefault();
-            if (file == null || file.Length == 0)
+            if (file == null)
                 return Results.BadRequest(new { error = "No file uploaded" });
 
-            var uploadsRoot = Path.Combine(AppContext.BaseDirectory, "uploads", "avatars");
+            var validation = await LegacyAvatarUploadValidator.ValidateAsync(file);
+            if (!validation.Success)
+                return Results.BadRequest(new { error = validation.Error });
+
+            var uploadsRoot = Path.Combine(env.ContentRootPath, "uploads", "avatars");
             Directory.CreateDirectory(uploadsRoot);
 
-            var fileExt = Path.GetExtension(file.FileName);
-            var fileName = $"{userId}_{Guid.NewGuid():N}{fileExt}";
+            var fileName = LegacyAvatarUploadValidator.BuildStorageFileName(userId, validation.NormalizedExtension);
             var filePath = Path.Combine(uploadsRoot, fileName);
 
             await using (var stream = File.Create(filePath))
@@ -445,11 +450,15 @@ public static class UserEndpoints
             int id,
             string fileName,
             ApiDbContext db,
+            IWebHostEnvironment env,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             if (id.ToString() != userId)
                 return Results.Forbid();
+
+            if (!LegacyAvatarUploadValidator.IsSafeFileName(userId, fileName))
+                return Results.NotFound(new { error = "Avatar file not found" });
 
             var profile = await db.UserProfiles
                 .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -460,7 +469,7 @@ public static class UserEndpoints
             if (!profile.AvatarUrl.EndsWith($"/{fileName}", StringComparison.OrdinalIgnoreCase))
                 return Results.NotFound(new { error = "Avatar file not found" });
 
-            var filePath = Path.Combine(AppContext.BaseDirectory, "uploads", "avatars", fileName);
+            var filePath = Path.Combine(env.ContentRootPath, "uploads", "avatars", fileName);
 
             if (!File.Exists(filePath))
                 return Results.NotFound(new { error = "Avatar file not found" });

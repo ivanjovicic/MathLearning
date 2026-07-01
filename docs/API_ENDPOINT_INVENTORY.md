@@ -89,7 +89,8 @@ Owner: `UserEndpoints.cs`
 | GET | `/api/user/hints/daily` | Auth | Legacy read | Daily hints alias. |
 | GET | `/users/{userId}/settings` | Auth | Canonical settings | Route user must match auth user. |
 | PATCH | `/users/{userId}/settings` | Auth | Canonical settings | Route user must match auth user. |
-| POST | `/users/{id}/avatar` | Auth | Legacy/profile upload caveat | Verify mobile caller shape before touching. Canonical avatar equip is `/api/cosmetics/avatar`. |
+| POST | `/users/{id}/avatar` | Auth | Legacy/profile upload caveat | Multipart image upload; size/type/content validated; canonical equip is `PUT /api/cosmetics/avatar`. |
+| GET | `/users/{id}/avatar/{fileName}` | Auth | Legacy/profile read | Owner-only; `/uploads/avatars/*` static serving blocked. |
 
 ---
 
