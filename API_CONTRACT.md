@@ -445,10 +445,11 @@ Auth: Required
 
 - POST /api/quiz/start
   - Body: `StartQuizRequest` (SubtopicId, QuestionCount)
+  - QuestionCount is normalized server-side to 1..25
   - Response: `QuizResponse` { quizId, questions[] }
 
-- GET /api/quiz/questions?topic=&subtopicId=&count=10
-- POST /api/quiz/questions (payload)
+- GET /api/quiz/questions?topic=&subtopicId=&count=1..25 (default 10, normalized server-side)
+- POST /api/quiz/questions (payload, count normalized server-side to 1..25)
 - POST /api/quiz/next-question (Body: `NextQuestionRequest`)
 - POST /api/quiz/answer (JSON body) - expects fields: questionId, answer, timeSpentSeconds, hintUsed, quizId/sessionId, clientId
   - Response: `SubmitAnswerResponse` { isCorrect, explanation?, steps?, awardedXp, totalXpAfterAward }

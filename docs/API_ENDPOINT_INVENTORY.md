@@ -97,9 +97,9 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/quiz/start` | Auth | Canonical | Start quiz session. |
-| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch legacy/mobile questions. |
-| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch questions by posted payload. |
+| POST | `/api/quiz/start` | Auth | Canonical | Start quiz session; `QuestionCount` is normalized server-side to 1..25. |
+| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch legacy/mobile questions; `count` is normalized server-side to 1..25. |
+| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch questions by posted payload; `count` is normalized server-side to 1..25. |
 | POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question for subtopic. |
 | POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `quiz_answer`. |
 | POST | `/api/quiz/offline-submit` | Auth | Canonical offline sync | Stable replay path for mobile queue; user scoped by auth. |

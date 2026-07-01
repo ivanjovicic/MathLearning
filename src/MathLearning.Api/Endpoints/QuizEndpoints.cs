@@ -16,6 +16,10 @@ namespace MathLearning.Api.Endpoints;
 
 public static class QuizEndpoints
 {
+    private const int DefaultQuizQuestionCount = 10;
+    private const int MinQuizQuestionCount = 1;
+    private const int MaxQuizQuestionCount = 25;
+
     public static void MapQuizEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/quiz")
@@ -30,7 +34,8 @@ public static class QuizEndpoints
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
+            string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
+            var questionCount = NormalizeQuizQuestionCount(request.QuestionCount);
 
             var quiz = new QuizSession
             {
@@ -42,10 +47,10 @@ public static class QuizEndpoints
             db.QuizSessions.Add(quiz);
 
             var questionIds = await SelectRandomQuestionIdsAsync(
-                db.Questions.Where(q => q.SubtopicId == request.SubtopicId),
-                request.QuestionCount,
+                db.Questions.AsNoTracking().Where(q => q.SubtopicId == request.SubtopicId),
+                questionCount,
                 ctx.RequestAborted);
-            var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
+            var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
 
             var questionDtos = questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList();
 
@@ -60,7 +65,7 @@ public static class QuizEndpoints
             HttpContext ctx,
             string? topic,
             int? subtopicId,
-            int count = 10) =>
+            int count = DefaultQuizQuestionCount) =>
         {
             var topicId = ParseTopicIdFromTopic(topic ?? string.Empty);
             return await BuildLegacyQuestionsResponse(
@@ -76,8 +81,8 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx) =>
         {
-            int count = 10;
-            if (TryGetInt(payload, "count", out var countValue) && countValue > 0)
+            int count = DefaultQuizQuestionCount;
+            if (TryGetInt(payload, "count", out var countValue))
                 count = countValue;
 
             int? subtopicId = null;
@@ -102,7 +107,7 @@ public static class QuizEndpoints
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
+            string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
             var question = await (
                 from q in db.Questions.AsNoTracking()
@@ -171,7 +176,7 @@ public static class QuizEndpoints
             ILogger<Program> logger) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
+            string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
             if (!TryGetInt(request, "questionId", out var questionId) || questionId <= 0)
                 return Results.BadRequest("QuestionId is required");
@@ -560,10 +565,7 @@ public static class QuizEndpoints
             ids.AddRange(wrapAroundIds);
         }
 
-        return ids
-            .Distinct()
-            .Take(count)
-            .ToList();
+        return ids;
     }
 
     private static async Task<IResult> BuildLegacyQuestionsResponse(
@@ -574,7 +576,8 @@ public static class QuizEndpoints
         int? topicId)
     {
         string userId = ctx.User.FindFirst("userId")!.Value;
-        string lang = await ResolveUserLang(db, ctx, userId);
+        string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
+        var normalizedCount = NormalizeQuizQuestionCount(count);
 
         IQueryable<Question> query = db.Questions.AsNoTracking();
 
@@ -589,9 +592,9 @@ public static class QuizEndpoints
 
         var questionIds = await SelectRandomQuestionIdsAsync(
             query,
-            Math.Max(1, count),
+            normalizedCount,
             ctx.RequestAborted);
-        var questions = await LoadQuestionsWithDetailsByIds(db, questionIds);
+        var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
 
         var quizSession = new QuizSession
         {
@@ -656,7 +659,10 @@ public static class QuizEndpoints
 
     // Load full question graph in a deterministic order by pre-selected IDs.
     // This avoids empty collection navigations when random ordering + Take is used.
-    private static async Task<List<Question>> LoadQuestionsWithDetailsByIds(ApiDbContext db, IReadOnlyList<int> orderedQuestionIds)
+    private static async Task<List<Question>> LoadQuestionsWithDetailsByIds(
+        ApiDbContext db,
+        IReadOnlyList<int> orderedQuestionIds,
+        CancellationToken ct)
     {
         if (orderedQuestionIds.Count == 0)
             return new List<Question>();
@@ -668,7 +674,7 @@ public static class QuizEndpoints
             .Include(q => q.Steps).ThenInclude(s => s.Translations)
             .AsNoTracking()
             .AsSplitQuery()
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var orderMap = orderedQuestionIds
             .Select((id, index) => new { id, index })
@@ -1110,7 +1116,11 @@ public static class QuizEndpoints
         => $"{questionId}:{answeredAt.Ticks}";
 
     // ?? Helper za resolving user language
-    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
+    private static async Task<string> ResolveUserLang(
+        ApiDbContext db,
+        HttpContext ctx,
+        string userId,
+        CancellationToken ct)
     {
         var cacheKey = $"req:user-settings:{userId}";
         UserSettings? settings = null;
@@ -1122,7 +1132,7 @@ public static class QuizEndpoints
         {
             settings = await db.UserSettings
                 .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.UserId == userId);
+                .FirstOrDefaultAsync(s => s.UserId == userId, ct);
             if (settings is not null)
             {
                 ctx.Items[cacheKey] = settings;
@@ -1131,6 +1141,16 @@ public static class QuizEndpoints
 
         var acceptLang = ctx.Request.Headers.AcceptLanguage.ToString();
         return TranslationHelper.ResolveLanguage(settings?.LanguageCode ?? settings?.Language, acceptLang);
+    }
+
+    private static int NormalizeQuizQuestionCount(int requestedCount)
+    {
+        if (requestedCount < MinQuizQuestionCount)
+        {
+            return MinQuizQuestionCount;
+        }
+
+        return Math.Min(requestedCount, MaxQuizQuestionCount);
     }
 
     private static int? ParseTopicIdFromTopic(string topic)
