@@ -141,17 +141,14 @@ public static class SrsEndpoints
             int limit = 20) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
+            var nowUtc = DateTime.UtcNow;
+            string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
-            var dueQuestionIds = await db.QuestionStats
-                .AsNoTracking()
-                .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
-                .OrderBy(x => x.Ease)
-                .ThenBy(x => x.QuestionId)
+            var dueQuestionIds = await BuildDueQuestionStatsQuery(db, userId, nowUtc)
                 .Take(limit)
                 .Select(x => x.QuestionId)
-                .ToListAsync();
-            var questions = await LoadQuestionsWithDetailsByIds(db, dueQuestionIds);
+                .ToListAsync(ctx.RequestAborted);
+            var questions = await LoadQuestionsWithDetailsByIds(db, dueQuestionIds, ctx.RequestAborted);
 
             // Legacy/mobile UX fallback:
             // if user has at least one due SRS item, pad the session with random questions
@@ -159,14 +156,13 @@ public static class SrsEndpoints
             int targetCount = Math.Min(limit, 10);
             if (questions.Count > 0 && questions.Count < targetCount)
             {
-                var dueIds = questions.Select(q => q.Id).ToList();
                 int needed = targetCount - questions.Count;
 
                 var randomFillIds = await SelectRandomQuestionIdsAsync(
-                    db.Questions.AsNoTracking().Where(q => !dueIds.Contains(q.Id)),
+                    db.Questions.AsNoTracking().Where(q => !dueQuestionIds.Contains(q.Id)),
                     needed,
                     ctx.RequestAborted);
-                var randomFill = await LoadQuestionsWithDetailsByIds(db, randomFillIds);
+                var randomFill = await LoadQuestionsWithDetailsByIds(db, randomFillIds, ctx.RequestAborted);
 
                 questions.AddRange(randomFill);
             }
@@ -182,18 +178,16 @@ public static class SrsEndpoints
             int count = 15) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId);
+            var nowUtc = DateTime.UtcNow;
+            string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
-            var dueStats = await db.QuestionStats
-                .AsNoTracking()
-                .Where(x => x.UserId == userId && x.NextReview <= DateTime.UtcNow)
-                .OrderBy(x => x.Ease)
+            var dueStats = await BuildDueQuestionStatsQuery(db, userId, nowUtc)
                 .Take(count)
-                .ToListAsync();
+                .ToListAsync(ctx.RequestAborted);
 
             var dueIds = dueStats.Select(x => x.QuestionId).ToList();
 
-            var srsQuestions = await LoadQuestionsWithDetailsByIds(db, dueIds);
+            var srsQuestions = await LoadQuestionsWithDetailsByIds(db, dueIds, ctx.RequestAborted);
 
             int needed = count - srsQuestions.Count;
 
@@ -205,7 +199,7 @@ public static class SrsEndpoints
                     db.Questions.AsNoTracking().Where(x => !dueIds.Contains(x.Id)),
                     needed,
                     ctx.RequestAborted);
-                randomQuestions = await LoadQuestionsWithDetailsByIds(db, randomQuestionIds);
+                randomQuestions = await LoadQuestionsWithDetailsByIds(db, randomQuestionIds, ctx.RequestAborted);
             }
 
             return Results.Ok(new
@@ -305,7 +299,10 @@ public static class SrsEndpoints
 
     // Load full question graph in a deterministic order by pre-selected IDs.
     // This avoids empty collection navigations when random ordering + Take is used.
-    private static async Task<List<Question>> LoadQuestionsWithDetailsByIds(ApiDbContext db, IReadOnlyList<int> orderedQuestionIds)
+    private static async Task<List<Question>> LoadQuestionsWithDetailsByIds(
+        ApiDbContext db,
+        IReadOnlyList<int> orderedQuestionIds,
+        CancellationToken ct)
     {
         if (orderedQuestionIds.Count == 0)
             return new List<Question>();
@@ -317,7 +314,7 @@ public static class SrsEndpoints
             .Include(q => q.Steps).ThenInclude(s => s.Translations)
             .AsNoTracking()
             .AsSplitQuery()
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var orderMap = orderedQuestionIds
             .Select((id, index) => new { id, index })
@@ -326,6 +323,20 @@ public static class SrsEndpoints
         return questions
             .OrderBy(q => orderMap.TryGetValue(q.Id, out var index) ? index : int.MaxValue)
             .ToList();
+    }
+
+    // Keep the due-question scan aligned with the existing UserId + NextReview index.
+    private static IQueryable<QuestionStat> BuildDueQuestionStatsQuery(
+        ApiDbContext db,
+        string userId,
+        DateTime nowUtc)
+    {
+        return db.QuestionStats
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.NextReview <= nowUtc)
+            .OrderBy(x => x.NextReview)
+            .ThenBy(x => x.Ease)
+            .ThenBy(x => x.QuestionId);
     }
 
     private static async Task<List<int>> SelectRandomQuestionIdsAsync(
@@ -374,7 +385,11 @@ public static class SrsEndpoints
     }
 
     // ??? Shared helper for resolving user language
-    private static async Task<string> ResolveUserLang(ApiDbContext db, HttpContext ctx, string userId)
+    private static async Task<string> ResolveUserLang(
+        ApiDbContext db,
+        HttpContext ctx,
+        string userId,
+        CancellationToken ct)
     {
         var cacheKey = $"req:user-settings:{userId}";
         UserSettings? settings = null;
@@ -386,7 +401,7 @@ public static class SrsEndpoints
         {
             settings = await db.UserSettings
                 .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.UserId == userId);
+                .FirstOrDefaultAsync(s => s.UserId == userId, ct);
             if (settings is not null)
             {
                 ctx.Items[cacheKey] = settings;
