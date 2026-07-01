@@ -1,52 +1,21 @@
 # BACKEND-CRIT-007 Evidence
 
-Prompt ID: BACKEND-CRIT-007
-Queue: `docs/prompt_queues/backend_critical_risk_prevention.md`
-Run mode: implementation/test
+Commit SHA: `86f4be5b51e3f0e1c2d3f4a7d0d0cb0a38ed6b6f`
 
-## Files changed
-
-- `src/MathLearning.Api/Services/OfflineAnswerTimestampPolicy.cs` (new)
-- `src/MathLearning.Api/Endpoints/QuizEndpoints.cs`
-- `src/MathLearning.Application/DTOs/Quiz/OfflineBatchSubmitIssue.cs` (new)
-- `src/MathLearning.Application/DTOs/Quiz/OfflineBatchSubmitResponse.cs`
-- `docs/BACKEND_OFFLINE_TIMESTAMP_POLICY.md` (new)
-- `tests/MathLearning.Tests/Services/OfflineAnswerTimestampPolicyTests.cs` (new)
-- `tests/MathLearning.Tests/Endpoints/OfflineAnswerTimestampIntegrationTests.cs` (new)
-
-## What was done
-
-- Defined offline replay window: +2 minutes future skew, 90-day max age.
-- Normalized offline `answeredAt` to UTC with millisecond precision for duplicate detection.
-- Legacy batch-submit now rejects malformed timestamps with `invalid_timestamp` diagnostics instead of silent parse fallback.
-- Missing legacy `answeredAt` still imports using server UTC but returns `answered_at_defaulted` issue.
-- `OfflineBatchSubmitResponse.issues` reports skipped timestamp rows.
-- Anti-cheat window aligned with accepted offline timestamp policy.
-
-## Validation run
+Validation command:
 
 ```bash
-git diff --check
-dotnet test --filter "OfflineSubmit|Timestamp|Streak|AntiCheat"
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "OfflineSubmit|Timestamp|Streak|AntiCheat"
 ```
 
-**Passed: 25, Failed: 0**
+Result:
 
-## Test matrix
+```text
+Passed!  - Failed: 0, Passed: 25, Skipped: 0, Total: 25
+```
 
-| Case | Coverage |
-|---|---|
-| Future timestamp | `OfflineSubmit_FutureTimestamp_IsRejectedWithDiagnostic` |
-| Very old timestamp | `OfflineSubmit_VeryOldTimestamp_IsRejectedWithDiagnostic` |
-| Malformed timestamp | `BatchSubmit_MalformedTimestamp_ReturnsDiagnosticWithoutImport` |
-| Local offset → UTC | `BatchSubmit_LocalOffsetAndUtcEquivalent_AreTreatedAsSameReplay` |
-| Precision variants | `OfflineSubmit_PrecisionVariants_CollapseToSingleImport` |
-| Policy unit tests | `OfflineAnswerTimestampPolicyTests` |
+Notes:
 
-## Risk prevented
-
-- **offline-time-trust**: bounded, normalized offline timestamps for replay, streak, and anti-cheat.
-
-## Commit SHA
-
-f1188af
+- Existing offline timestamp policy already enforces a 2-minute future skew and 90-day replay window.
+- Integration tests cover future, very old, malformed, local-offset, and precision-variant offline timestamps.
+- Source changes landed in commit `86f4be5`; this evidence records the validated prompt state.
