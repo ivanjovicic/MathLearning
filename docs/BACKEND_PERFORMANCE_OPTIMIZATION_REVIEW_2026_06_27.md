@@ -103,6 +103,11 @@ The mobile app may call Daily SRS count/questions frequently. This endpoint need
 
 Prompt: `BE-PERF-002`.
 
+Implementation status:
+
+- `src/MathLearning.Api/Endpoints/SrsEndpoints.cs` now routes the daily and mixed due scans through a shared `BuildDueQuestionStatsQuery(...)` helper ordered by `NextReview`, `Ease`, and `QuestionId` so the existing `UserId + NextReview` index stays aligned with the hot path.
+- `tests/MathLearning.Tests/Endpoints/SrsEndpointsIntegrationTests.cs` now covers due-only, due+random padding, no-due, limit, and mixed disjointness behavior.
+
 ---
 
 ### 3.3 Answer submit / offline replay transaction path
@@ -121,6 +126,31 @@ This is the core correctness path. Optimization must not weaken idempotency, XP 
 
 Prompt: `BE-PERF-003`.
 
+Implementation status:
+
+- `src/MathLearning.Api/Endpoints/QuizEndpoints.cs` now keeps the `/api/quiz/answer` replay path ledger-only until it knows the request is fresh, then loads the question graph and language settings only for real processing.
+- `src/MathLearning.Api/Endpoints/QuizEndpoints.cs` also reads replay-only entities with `AsNoTracking()` in the offline batch session/question lookups and duplicate-answer checks.
+- The transaction timeline is still intentionally serializable:
+  1. `/api/quiz/answer` begins the idempotency-ledger / mutation transaction, checks for replay, and only then loads question data and user language for fresh processing before ensuring the quiz session, updating `UserQuestionStats`, updating `UserProfiles`, inserting `UserAnswers` and `UserAnswerAudits`, saving, committing, and ingesting after commit.
+  2. `/api/quiz/offline-submit` and `/api/quiz/batch-submit` begin a serializable batch transaction, ensure the session, load existing answer keys, load the question graph, loop the accepted answers, save, commit, and then calculate overview / ingest after commit.
+- DB calls that remain required inside the transaction:
+  - idempotency begin/complete and replay state writes;
+  - question graph and language reads for fresh quiz answers only;
+  - `UserQuestionStats` load + update for first-correct uniqueness and attempt accounting;
+  - `UserProfiles` read-modify-write for XP and streak-aware progress;
+  - `UserAnswers` and `UserAnswerAudits` inserts;
+  - `QuizSessions` insert when the batch/session is missing;
+  - offline existing-answer-key lookup, because it protects the batch replay window from double import;
+  - `CalculateUserOverview`, because it can still persist streak roll state.
+- Candidate for later work:
+  - moving incorrect-answer explanation lookup out of the transaction if we can still keep the stored replay body identical.
+  - broader batch ingestion decomposition into smaller commits or a dedicated replay ledger, but only if we can keep duplicate replay, audit rows, and first-correct behavior exactly the same.
+- Coverage already in place for this prompt:
+  - `tests/MathLearning.Tests/Idempotency/QuizAnswerIdempotencyTests.cs`
+  - `tests/MathLearning.Tests/Endpoints/OfflineBatchSubmitCompatibilityTests.cs`
+  - `tests/MathLearning.Tests/Contracts/MobileMutationContractIntegrationTests.cs`
+  - `tests/MathLearning.Tests/Services/XpTrackingConcurrencyIntegrationTests.cs`
+
 ---
 
 ### 3.4 DB-backed leaderboard fallback still has rank inefficiency
@@ -138,6 +168,29 @@ When Redis is missing/down, rank lookup can become O(N) memory work and the lead
 
 Prompt: `BE-PERF-004`.
 
+Implementation status:
+
+- The current `src/MathLearning.Infrastructure/Services/Leaderboard/DbBackedRedisLeaderboardService.cs` implementation already avoids full ordered-id materialization.
+- `GetUserRankAsync`:
+  - loads the current user profile with `AsNoTracking()`;
+  - builds a scope-restricted `IQueryable<UserProfile>`;
+  - checks scope membership with `AnyAsync(...)`;
+  - computes rank with `CountAsync(...)` over only the rows that score higher than the current user, using the period-specific tie-breaker.
+- `GetNearRivalsAsync`:
+  - reuses the same DB-side rank count;
+  - fetches only a 5-row window with `OrderByScore(...).Skip(...).Take(5)`;
+  - materializes only the near-rival slice, not the full scope.
+- DB calls that remain required:
+  - scope lookup for school/faculty/friends;
+  - `AnyAsync` membership check;
+  - `CountAsync` rank calculation;
+  - `Skip/Take` page fetch for the rival window.
+- Candidate for later work:
+  - unify the DB fallback rank helper with the student leaderboard helper or move the comparator into a shared compiled-query path if this becomes a measured hotspot.
+- Coverage already in place for this prompt:
+  - `tests/MathLearning.Tests/Services/DbBackedRedisLeaderboardServiceTests.cs`
+  - `tests/MathLearning.Tests/Endpoints/LeaderboardEndpointsIntegrationTests.cs`
+
 ---
 
 ### 3.5 Redis startup/cold-start behavior
@@ -145,7 +198,7 @@ Prompt: `BE-PERF-004`.
 Code signal:
 
 - Redis is optional; without Redis the app falls back to DB-backed leaderboard.
-- With a Redis connection string, registration uses `ConnectionMultiplexer.Connect(...)` during service factory execution.
+- With a Redis connection string, startup now resolves bounded Redis options before creating the multiplexer and keeps the DB fallback if Redis is absent or misconfigured.
 
 Risk:
 
@@ -154,6 +207,25 @@ Misconfigured or slow Redis can hurt cold start or runtime resolution. Redis sho
 ```
 
 Prompt: `BE-PERF-005`.
+
+Implementation status:
+
+- `src/MathLearning.Api/Startup/ServiceRegistrationExtensions.cs` now resolves Redis through a bounded `ConfigurationOptions` object before creating the multiplexer.
+- Redis connection defaults now come from config keys:
+  - `ConnectionStrings:Redis` or `Redis:ConnectionString`
+  - `Redis:ConnectTimeoutMs` default `2000`
+  - `Redis:SyncTimeoutMs` default `2000`
+  - `Redis:ConnectRetry` default `3`
+  - `Redis:KeepAliveSeconds` default `60`
+  - `Redis:AbortOnConnectFail` default `false`
+  - `Redis:DefaultDatabase` optional
+- If Redis is not configured, the app still registers `DbBackedRedisLeaderboardService`.
+- If Redis configuration fails at startup, the code logs the failure and also falls back to the DB-backed leaderboard service.
+- Test evidence:
+  - `tests/MathLearning.Tests/Infrastructure/RedisConfigurationOptionsTests.cs` verifies the default bounded values and explicit overrides.
+- Manual smoke steps if needed:
+  1. Start the API without Redis settings and confirm `/api/leaderboard` still responds through DB fallback.
+  2. Start with a Redis connection string and intentionally low timeout values to confirm startup remains bounded and the configured values are reflected in logs.
 
 ---
 
@@ -207,6 +279,18 @@ Keeping legacy routes alive is useful for mobile compatibility, but every route 
 
 Prompt: `BE-PERF-008`.
 
+Implementation status:
+
+- `docs/BACKEND_ROUTE_COMPATIBILITY_AUDIT.md` now classifies canonical mobile routes, compatibility aliases, admin/internal support routes, and adjacent/future surfaces.
+- Duplicate-work alias pairs are documented explicitly, including `/api/auth/login` vs `/auth/login`, `/api/quiz/batch-submit` vs `/api/quiz/offline-submit`, `/api/leaderboard/rivals` vs `/api/leaderboard/friends`, and the profile/avatar aliases.
+- Route evidence is tied back to existing tests:
+  - `tests/MathLearning.Tests/Endpoints/MobileApiRouteContractTests.cs`
+  - `tests/MathLearning.Tests/Endpoints/MobileCompatibilityEndpointsIntegrationTests.cs`
+  - `tests/MathLearning.Tests/Endpoints/LeaderboardEndpointsIntegrationTests.cs`
+  - `tests/MathLearning.Tests/Endpoints/AuthDevSeedLoginTests.cs`
+  - `tests/MathLearning.Tests/Endpoints/OfflineBatchSubmitCompatibilityTests.cs`
+- Follow-up only: any legacy-alias removal should wait for consumer evidence and a dedicated removal prompt.
+
 ---
 
 ## 4. Priority stack
@@ -215,12 +299,12 @@ Prompt: `BE-PERF-008`.
 |---:|---|---|
 | P0 | `BE-PERF-001` quiz start query budget | Directly affects first question latency. |
 | P0 | `BE-PERF-002` Daily SRS query budget | Directly affects Daily Review and mobile redirect/cache flow. |
-| P0 | `BE-PERF-003` answer/offline replay transaction audit | Core data integrity and perceived answer speed. |
-| P1 | `BE-PERF-004` leaderboard rank fallback | Prevents DB fallback from becoming O(N). |
+| P0 | `BE-PERF-003` answer/offline replay transaction audit | **Done** — see `docs/QUIZ_ANSWER_TRANSACTION_AUDIT.md`. |
+| P0 | `BE-PERF-004` leaderboard rank fallback | Prevents DB fallback from becoming O(N). |
 | P1 | `BE-PERF-005` Redis startup/fallback policy | Cold-start and reliability. |
 | P1 | `BE-PERF-006` startup/background service budget | Cold-start and Fly/container behavior. |
 | P1 | `BE-PERF-007` explicit performance budgets | Turns instrumentation into actionable guardrails. |
-| P2 | `BE-PERF-008` route compatibility/deprecation audit | Keeps API surface manageable. |
+| P2 | `BE-PERF-008` route compatibility/deprecation audit | **Done** â€” see `docs/BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`. |
 
 ---
 
