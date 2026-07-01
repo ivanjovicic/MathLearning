@@ -14,13 +14,16 @@ For most backend tasks, read in this order:
 
 1. `AGENTS.md`
 2. `docs/DOCS_INDEX.md`
-3. `docs/AGENT_RUN_LOG_ENFORCEMENT.md`
-4. `docs/AGENT_QUICKSTART.md`
-5. `docs/ARCHITECTURE_OVERVIEW.md`
-6. `docs/API_ENDPOINT_INVENTORY.md`
-7. `docs/backend_contract_gap_report.md`
-8. `docs/mobile_contract_idempotency_handoff.md`
-9. `docs/BUGFIX_PATTERN_GUARDRAILS.md` when fixing bugs
+3. `docs/AGENT_SHARED_OPERATING_STANDARD.md`
+4. `docs/AGENT_RUN_LOG_ENFORCEMENT.md`
+5. `.ai/RUN_LOG_TEMPLATE.md` and `.ai/runs/README.md` for non-trivial runs
+6. `docs/ai/learning/MISTAKE_LEDGER.md`
+7. `docs/AGENT_QUICKSTART.md`
+8. `docs/ARCHITECTURE_OVERVIEW.md`
+9. `docs/API_ENDPOINT_INVENTORY.md`
+10. `docs/backend_contract_gap_report.md`
+11. `docs/mobile_contract_idempotency_handoff.md`
+12. `docs/BUGFIX_PATTERN_GUARDRAILS.md` when fixing bugs
 
 Do not reread the whole repository unless the task truly requires it.
 
@@ -107,6 +110,7 @@ Daily Run chest is a documented exception: it uses domain-table Policy B and rep
 
 - Keep endpoint changes synchronized with `docs/API_ENDPOINT_INVENTORY.md`.
 - Keep mobile-facing payload/behavior aligned with `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md`.
+- Contract-touching work must record the shared-standard cross-repo fields in the run log.
 - Do not expand legacy routes unless the task explicitly targets compatibility.
 - Prefer canonical mobile routes:
   - `/api/economy/*` over older coin aliases
@@ -153,8 +157,9 @@ Do not claim CI is green unless a GitHub Actions run was found and checked. If n
 
 ## 10. Run evidence and mistake learning (mandatory)
 
-Agents must follow the same closure gate as the Flutter repo:
+Agents must follow the same closure gate as the Flutter repo and the shared cross-repo standard:
 
+- [docs/AGENT_SHARED_OPERATING_STANDARD.md](docs/AGENT_SHARED_OPERATING_STANDARD.md) — common prompt, evidence, score-cap, validation, and cross-repo rules
 - [docs/AGENT_RUN_LOG_ENFORCEMENT.md](docs/AGENT_RUN_LOG_ENFORCEMENT.md) — hard gate for non-trivial prompts
 - [.ai/RUN_LOG_TEMPLATE.md](.ai/RUN_LOG_TEMPLATE.md) — copy into `.ai/runs/<date>-<prompt-id>-evidence.md`
 - [.ai/runs/README.md](.ai/runs/README.md) — naming and backend-specific rules
@@ -173,6 +178,7 @@ Repair/lint prompts:
 
 - [docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md](docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md)
 - [docs/ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md](docs/ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md)
+- [docs/ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md](docs/ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md)
 
 ---
 
