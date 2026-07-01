@@ -2802,6 +2802,7 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("RevokedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Token")

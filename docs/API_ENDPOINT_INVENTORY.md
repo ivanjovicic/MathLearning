@@ -65,7 +65,7 @@ Owner: `AuthEndpoints.cs`
 | POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, UserProfile, access/refresh tokens. |
 | POST | `/auth/login` | Public | Canonical group route | Login with refresh token issuance. |
 | POST | `/api/auth/login` | Public | Compatibility alias | Mobile/API alias for login. |
-| POST | `/auth/refresh` | Public | Canonical | Rotates refresh token and returns new access token. |
+| POST | `/auth/refresh` | Public | Canonical | Rotates refresh token single-use under concurrency and returns new access token. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
 | POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current user's refresh tokens. |
 | POST | `/auth/register` | Public/legacy | Legacy/admin-era | Existing register path; inspect before mobile use. |
@@ -210,7 +210,13 @@ Owners: `LeaderboardEndpoints.cs`, `AdaptiveEndpoints.cs`, `AnalyticsEndpoints.c
 | `/api/adaptive*` | Auth | `AdaptiveEndpoints.cs` | Adaptive path/recommendation/review surfaces. |
 | `/api/analytics*` | Auth/Admin depending route | `AnalyticsEndpoints.cs` | Analytics/recommendation surfaces. |
 | `/api/explanations*` | Auth | `ExplanationEndpoints.cs` | Explanation generation/read surfaces. |
-| question authoring routes | Auth/Admin depending route | `QuestionAuthoringEndpoints.cs` | Admin/content authoring. |
+| POST | `/api/questions/validate` | Content author (`UiTokensAdmin` or `ContentAuthor`) | `QuestionAuthoringEndpoints.cs` | Dry-run validation only. |
+| POST | `/api/questions/preview` | Content author (`UiTokensAdmin` or `ContentAuthor`) | `QuestionAuthoringEndpoints.cs` | Safe preview only. |
+| POST | `/api/questions/save-draft` | Content author (`UiTokensAdminPolicy` / `ContentAuthorPolicy`) | `QuestionAuthoringEndpoints.cs` | Persists draft rows. |
+| POST | `/api/questions/publish` | Content author (`UiTokensAdminPolicy` / `ContentAuthorPolicy`) | `QuestionAuthoringEndpoints.cs` | Publishes draft/version. |
+| GET | `/api/questions/{id}/versions` | Content author | `QuestionAuthoringEndpoints.cs` | Version history read. |
+| GET | `/api/questions/{id}/validation` | Content author | `QuestionAuthoringEndpoints.cs` | Latest validation read. |
+| POST | `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Re-runs validation audit. |
 | `/api/sync*` | Auth | `SyncEndpoints.cs` | Offline sync transport. Reject mismatched payload user ids. |
 | `/api/maintenance*` | Admin/internal | `MaintenanceEndpoints.cs` | Maintenance operations. |
 | logging routes | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | DB log read/search; output redacted; non-admin denied. |

@@ -302,6 +302,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.Token).IsRequired().HasMaxLength(64);
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ExpiresAt).IsRequired();
+            entity.Property(e => e.RevokedAt)
+                  .IsConcurrencyToken();
             
             // 🚀 Performance indexes
             entity.HasIndex(e => e.Token)

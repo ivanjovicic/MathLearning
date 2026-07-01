@@ -288,6 +288,11 @@ public static class AuthEndpoints
                     Username: user.UserName ?? ""
                 ));
             }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                logger.LogInformation(ex, "Refresh token reuse detected during concurrent rotation.");
+                return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+            }
             catch (Exception ex)
             {
                 return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Refresh token error");

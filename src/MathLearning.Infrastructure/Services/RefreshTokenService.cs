@@ -58,6 +58,7 @@ public class RefreshTokenService
     /// </summary>
     public static void RevokeToken(RefreshToken token)
     {
-        token.RevokedAt = DateTime.UtcNow;
+        if (token.RevokedAt is null)
+            token.RevokedAt = DateTime.UtcNow;
     }
 }
