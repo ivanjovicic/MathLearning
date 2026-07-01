@@ -1018,6 +1018,8 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
 
         var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(25, firstPayload.GetProperty("awardedXp").GetInt32());
+        Assert.Equal(25, firstPayload.GetProperty("season").GetProperty("earnedXp").GetInt32());
+        Assert.Equal(1, firstPayload.GetProperty("season").GetProperty("level").GetInt32());
 
         var retry = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
         {
@@ -1027,6 +1029,18 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             xp = 999
         });
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        var retryPayload = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        var firstSeason = firstPayload.GetProperty("season");
+        var retrySeason = retryPayload.GetProperty("season");
+        Assert.Equal(25, retrySeason.GetProperty("earnedXp").GetInt32());
+        Assert.Equal(1, retrySeason.GetProperty("level").GetInt32());
+        Assert.Equal(25, retryPayload.GetProperty("awardedXp").GetInt32());
+        Assert.True(retryPayload.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(seasonId, firstSeason.GetProperty("seasonId").GetInt32());
+        Assert.Equal(seasonId, retrySeason.GetProperty("seasonId").GetInt32());
+        Assert.Equal(
+            firstSeason.GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()),
+            retrySeason.GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()));
 
         var progress = await GetSeasonProgressAsync(userId, seasonId);
         Assert.Equal(25, progress.EarnedXp);
@@ -1064,6 +1078,13 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             seasonId
         });
         Assert.Equal(HttpStatusCode.OK, success.StatusCode);
+        var firstPayload = await success.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(60, firstPayload.GetProperty("season").GetProperty("earnedXp").GetInt32());
+        Assert.Contains(
+            milestoneId,
+            firstPayload.GetProperty("season").GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()));
+        Assert.Equal(50, firstPayload.GetProperty("reward").GetProperty("coins").GetInt32());
+        Assert.Equal("coins", firstPayload.GetProperty("reward").GetProperty("type").GetString());
 
         var retry = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
         {
@@ -1072,7 +1093,19 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         });
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var retryPayload = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        var retrySeason = retryPayload.GetProperty("season");
+        var retryReward = retryPayload.GetProperty("reward");
         Assert.True(retryPayload.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(60, retrySeason.GetProperty("earnedXp").GetInt32());
+        Assert.Equal(seasonId, retrySeason.GetProperty("seasonId").GetInt32());
+        Assert.Contains(
+            milestoneId,
+            retrySeason.GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()));
+        Assert.Equal(
+            firstPayload.GetProperty("season").GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()),
+            retrySeason.GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()));
+        Assert.Equal(50, retryReward.GetProperty("coins").GetInt32());
+        Assert.Equal("coins", retryReward.GetProperty("type").GetString());
         Assert.Equal(50, await GetCoinsAsync(userId));
 
         var duplicate = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new

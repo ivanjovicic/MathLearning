@@ -87,7 +87,7 @@ BACKEND-CRIT-006 → BACKEND-CRIT-007
 | BACKEND-CRIT-002 | Done 90% (uncommitted, 2026-06-24) | — | Protect/redact monitoring/log endpoints. Run log: `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md`. Tests: `MonitoringLogAuthorizationTests`, `LogOutputRedactorTests`. Risk: monitoring-log-exposure. |
 | BACKEND-CRIT-003 | Prompt-ready | BACKEND-CRIT-008 | Add public identity allowlist for search/profile/leaderboard DTOs. |
 | BACKEND-CRIT-004 | Done (`95156ed`, 2026-06-24) | — | Harden legacy avatar upload and static file serving safety. Run log: `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md`. Tests: `LegacyAvatarUploadSafetyTests`. Risk: avatar-upload-safety. |
-| BACKEND-CRIT-005 | Prompt-ready | BACKEND-CRIT-006 | Test/fix settlement response snapshot truth for season claims. |
+| BACKEND-CRIT-005 | Done (`b11f083`, 2026-06-24) | — | Settlement response snapshot truth for season daily-run and milestone claims. Run log: `.ai/runs/2026-06-24-BACKEND-CRIT-005-evidence.md`. Tests: `EconomySettlementEndpointsIntegrationTests`, `MobileEconomyContractIntegrationTests`. Risk: settlement-snapshot-truth. |
 | BACKEND-CRIT-006 | Prompt-ready (after CRIT-005 evidence) | evidence lint only | Decide/enforce idempotency requirements for retryable mobile mutations. |
 | BACKEND-CRIT-007 | Prompt-ready | BACKEND-CRIT-006 | Add offline timestamp bounds and UTC normalization tests. |
 | BACKEND-CRIT-008 | Prompt-ready | BACKEND-CRIT-003 | Clamp read endpoint limits and validate period/scope/range values. |

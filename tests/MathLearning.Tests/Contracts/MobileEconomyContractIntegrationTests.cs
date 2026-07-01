@@ -241,11 +241,18 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
         var firstResponse = await ReadJsonAsync(first);
         Assert.True(firstResponse.GetProperty("success").GetBoolean());
         Assert.Equal(30, firstResponse.GetProperty("awardedXp").GetInt32());
+        Assert.Equal(30, firstResponse.GetProperty("season").GetProperty("earnedXp").GetInt32());
 
         var replay = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", firstPayload);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
         var replayResponse = await ReadJsonAsync(replay);
-        Assert.True(replayResponse.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(30, replayResponse.GetProperty("awardedXp").GetInt32());
+        Assert.Equal(
+            firstResponse.GetProperty("season").GetProperty("earnedXp").GetInt32(),
+            replayResponse.GetProperty("season").GetProperty("earnedXp").GetInt32());
+        Assert.Equal(
+            firstResponse.GetProperty("awardedXp").GetInt32(),
+            replayResponse.GetProperty("awardedXp").GetInt32());
 
         var conflict = await PostAsUserAsync(
             userId,
@@ -335,11 +342,20 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
         var firstResponse = await ReadJsonAsync(first);
         Assert.True(firstResponse.GetProperty("success").GetBoolean());
         Assert.False(firstResponse.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(40, firstResponse.GetProperty("reward").GetProperty("coins").GetInt32());
+        Assert.Contains(
+            milestoneId,
+            firstResponse.GetProperty("season").GetProperty("claimedMilestoneIds").EnumerateArray().Select(x => x.GetInt32()));
 
         var replay = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", payload);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
         var replayResponse = await ReadJsonAsync(replay);
-        Assert.True(replayResponse.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(
+            firstResponse.GetProperty("reward").GetProperty("coins").GetInt32(),
+            replayResponse.GetProperty("reward").GetProperty("coins").GetInt32());
+        Assert.Equal(
+            firstResponse.GetProperty("season").GetProperty("earnedXp").GetInt32(),
+            replayResponse.GetProperty("season").GetProperty("earnedXp").GetInt32());
 
         var conflict = await PostAsUserAsync(
             userId,

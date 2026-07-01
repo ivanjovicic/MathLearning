@@ -720,7 +720,7 @@ public static class EconomySettlementEndpoints
                 CreatedAtUtc = DateTime.UtcNow
             });
 
-            var seasonState = await BuildSeasonStateAsync(db, userId, season.Id, ct);
+            var seasonState = await BuildSeasonStateAsync(db, userId, season.Id, ct, trackedProgress: progress);
             var fragmentGrant = await DailyRunCosmeticsSettlement.BuildFragmentGrantHintAsync(
                 db, userId, normalizedTxId, ct);
             var response = new SeasonDailyRunClaimResponse(
@@ -954,7 +954,13 @@ public static class EconomySettlementEndpoints
                 ClaimedAtUtc = DateTime.UtcNow
             });
 
-            var seasonState = await BuildSeasonStateAsync(db, userId, season.Id, ct);
+            var seasonState = await BuildSeasonStateAsync(
+                db,
+                userId,
+                season.Id,
+                ct,
+                trackedProgress: progress,
+                additionalClaimedMilestoneIds: new[] { milestoneId });
             var response = new SeasonMilestoneClaimResponse(
                 Success: true,
                 AlreadyClaimed: false,
@@ -1028,9 +1034,15 @@ public static class EconomySettlementEndpoints
         return progress;
     }
 
-    private static async Task<SeasonStateResponse> BuildSeasonStateAsync(ApiDbContext db, string userId, int seasonId, CancellationToken ct)
+    private static async Task<SeasonStateResponse> BuildSeasonStateAsync(
+        ApiDbContext db,
+        string userId,
+        int seasonId,
+        CancellationToken ct,
+        UserSeasonProgress? trackedProgress = null,
+        IReadOnlyCollection<int>? additionalClaimedMilestoneIds = null)
     {
-        var progress = await db.UserSeasonProgresses
+        var progress = trackedProgress ?? await db.UserSeasonProgresses
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == userId && x.SeasonId == seasonId, ct);
 
@@ -1040,6 +1052,19 @@ public static class EconomySettlementEndpoints
             .Select(x => x.MilestoneId)
             .OrderBy(x => x)
             .ToListAsync(ct);
+
+        if (additionalClaimedMilestoneIds is not null)
+        {
+            foreach (var claimedId in additionalClaimedMilestoneIds)
+            {
+                if (!claimedIds.Contains(claimedId))
+                {
+                    claimedIds.Add(claimedId);
+                }
+            }
+
+            claimedIds.Sort();
+        }
 
         return new SeasonStateResponse(
             SeasonId: seasonId,
