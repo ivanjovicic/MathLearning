@@ -208,7 +208,31 @@ For backend runtime changes, prefer targeted `dotnet test --filter ...` first. F
 
 ---
 
-## 10. Final response minimum
+## 10. Mechanical evidence validation
+
+For any prompt that touches prompt queues, `.ai/runs`, `AGENTS.md`, `docs/DOCS_INDEX.md`, run-log enforcement, run-log templates, mistake ledgers, evidence docs, or cross-repo standard docs, run:
+
+```text
+python scripts/validate_agent_evidence.py
+```
+
+For a focused repair/backfill pass, the agent may use:
+
+```text
+python scripts/validate_agent_evidence.py --referenced-run-logs-only
+```
+
+Record the command and result in the run log. If the agent cannot run local commands because it is using only a connector or remote file API, write:
+
+```text
+Validation not run: not run - connector-only docs update, no local checkout
+```
+
+Do not replace this mechanical check with manual reading unless the skip reason is explicit.
+
+---
+
+## 11. Final response minimum
 
 Final response must include:
 
