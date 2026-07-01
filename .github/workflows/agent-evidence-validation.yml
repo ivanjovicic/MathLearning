@@ -16,6 +16,7 @@ on:
 jobs:
   validate-agent-evidence:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,6 +25,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_agent_evidence.py
 
       - name: Validate referenced run logs
         if: ${{ inputs.mode == 'referenced' }}
