@@ -87,7 +87,7 @@ Rows include both **Done** and **Prompt-ready** entries.
 |---|---|---|---|
 | BACKEND2-CRIT-001 | Done (uncommitted, 2026-06-24) | — | Harden forwarded header trust and rate-limit identity. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-001-evidence.md`. Tests: `RateLimitClientIdentityTests`, `InMemorySlidingWindowRateLimitMiddlewareTests`, `ForwardedHeadersProxyTrustIntegrationTests`. Risk: proxy-trust-boundary / rate-limit spoofing. |
 | BACKEND2-CRIT-002 | Done (`79ea851`, 2026-07-01, validated) | — | Make refresh-token rotation single-use under concurrency. Run log: `.ai/runs/2026-07-01-BACKEND2-CRIT-002-evidence.md`. Tests: `AuthRefreshConcurrencyTests`, `AuthRefreshEndpointRegressionTests`. Risk: refresh-token-rotation-race. |
-| BACKEND2-CRIT-003 | Prompt-ready (after CRIT-002 evidence) | evidence lint only | Make mobile registration atomic or compensating. |
+| BACKEND2-CRIT-003 | Done (`b073350`, 2026-07-01, validated) | — | Make mobile registration atomic or compensating. Run log: `.ai/runs/2026-07-01-BACKEND2-CRIT-003-evidence.md`. Tests: `AuthMobileRegistrationAtomicityTests`. Risk: auth-registration-atomicity. |
 | BACKEND2-CRIT-004 | Done (uncommitted, 2026-06-24) | — | Add explicit admin/content-author policy to question authoring mutations. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-004-evidence.md`. Tests: `QuestionAuthoringAuthorizationTests`. Risk: authoring-authorization. |
 | BACKEND2-CRIT-005 | Prompt-ready | BACKEND2-CRIT-001 | Bound adaptive answer inputs. |
 | BACKEND2-CRIT-006 | Prompt-ready | evidence lint only | Define/test recurring job idempotency and non-overlap. |
