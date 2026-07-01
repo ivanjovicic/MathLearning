@@ -57,6 +57,7 @@ Contract coverage: `MobileApiRouteContractTests.cs`
 - Same keys, different payload: `409` + `errorCode: idempotency_conflict`.
 - Failed domain mutation inside serializable transaction rolls back pending ledger row (no `completed` row).
 - Requests without `operationId`/`idempotencyKey` keep legacy behavior (no ledger).
+- Decision note (`BACKEND-CRIT-006`): keep the legacy no-key mode for now; the backend does not hard-reject missing operation identity until the mobile migration removes no-key callers.
 
 Tests: `tests/MathLearning.Tests/Idempotency/QuizAnswerIdempotencyTests.cs`
 Contract coverage: `tests/MathLearning.Tests/Contracts/MobileMutationContractIntegrationTests.cs`, `tests/MathLearning.Tests/Endpoints/MobileApiRouteContractTests.cs`
@@ -83,6 +84,8 @@ Why this is the lowest-risk direction:
   domain-specific exceptions.
 
 Short version: share the algorithm, not the storage table.
+
+Related decision note: `docs/MOBILE_MUTATION_IDEMPOTENCY_REQUIREMENTS_2026_07_01.md`.
 
 ### Pattern comparison
 
