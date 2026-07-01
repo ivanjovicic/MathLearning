@@ -56,7 +56,9 @@ public class QuizEndpointTranslationTests
 
         var dueStats = await db.QuestionStats
             .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
-            .OrderBy(x => x.Ease)
+            .OrderBy(x => x.NextReview)
+            .ThenBy(x => x.Ease)
+            .ThenBy(x => x.QuestionId)
             .Take(15)
             .ToListAsync();
 
@@ -99,7 +101,9 @@ public class QuizEndpointTranslationTests
 
         var dueStats = await db.QuestionStats
             .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
-            .OrderBy(x => x.Ease)
+            .OrderBy(x => x.NextReview)
+            .ThenBy(x => x.Ease)
+            .ThenBy(x => x.QuestionId)
             .Take(15)
             .ToListAsync();
 

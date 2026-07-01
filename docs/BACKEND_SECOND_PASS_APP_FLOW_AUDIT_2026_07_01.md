@@ -1,9 +1,14 @@
 # Backend Second-Pass App Flow Audit — 2026-07-01
 
-Status: static backend repo/code audit  
+> **Static audit only — not fix proof.**
+> This document records second-pass inspection findings and creates **prompt-ready** follow-ups.
+> It does **not** prove runtime fixes landed and did **not** execute `dotnet test`.
+> See `docs/prompt_queues/backend_second_pass_risk_prevention.md` for implementation status.
+
+Status: static backend repo/code audit (audit-created)
 Repo: `ivanjovicic/MathLearning`  
 Scope: second-pass backend/API risks not covered by `BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`  
-Validation: docs/code inspection only through GitHub connector; no `dotnet test` executed in this audit
+Validation: docs/code inspection only; no `dotnet test` executed in this audit
 
 ## Executive verdict
 
@@ -252,9 +257,9 @@ New mandatory themes:
 
 ---
 
-## New prompt queue added
+## New prompt queue added (audit-created only)
 
-Created:
+Created prompt-ready queues — **not** runtime fixes:
 
 - `docs/prompt_queues/backend_second_pass_risk_prevention.md`
 

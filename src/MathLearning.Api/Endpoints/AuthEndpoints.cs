@@ -2,6 +2,7 @@ using MathLearning.Application.DTOs.Auth;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Api.Middleware;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -223,8 +224,12 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Login error for username: {request.Username}");
-                return Results.Json(new { error = ex.Message }, statusCode: 500);
+                return SafeClientErrorResponse.AuthUnexpectedFailure(
+                    ctx,
+                    logger,
+                    ex,
+                    "Login error for username: {Username}",
+                    request.Username);
             }
         }
 
@@ -240,7 +245,8 @@ public static class AuthEndpoints
             UserManager<IdentityUser> userManager,
             ApiDbContext db,
             IConfiguration config,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            ILogger<Program> logger) =>
         {
             try
             {
@@ -284,14 +290,16 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Json(new { error = ex.Message }, statusCode: 500);
+                return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Refresh token error");
             }
         }).WithName("RefreshToken");
 
         // 🚪 LOGOUT (revoke refresh token)
         group.MapPost("/logout", async (
             RevokeTokenRequest request,
-            ApiDbContext db) =>
+            ApiDbContext db,
+            HttpContext ctx,
+            ILogger<Program> logger) =>
         {
             try
             {
@@ -310,14 +318,15 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Json(new { error = ex.Message }, statusCode: 500);
+                return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Logout error");
             }
         }).WithName("Logout");
 
         // 🔒 REVOKE ALL TOKENS (logout from all devices)
         group.MapPost("/revoke-all", async (
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            ILogger<Program> logger) =>
         {
             try
             {
@@ -342,7 +351,7 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Json(new { error = ex.Message }, statusCode: 500);
+                return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Revoke-all tokens error");
             }
         })
         .RequireAuthorization()
@@ -354,7 +363,8 @@ public static class AuthEndpoints
             UserManager<IdentityUser> userManager,
             ApiDbContext db,
             IConfiguration config,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            ILogger<Program> logger) =>
         {
             try
             {
@@ -400,7 +410,7 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Json(new { error = ex.Message }, statusCode: 500);
+                return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Register error");
             }
         });
 

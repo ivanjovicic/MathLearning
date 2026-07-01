@@ -248,6 +248,7 @@ try
     // Database startup is explicit by environment: Development may auto-migrate, higher environments must already be aligned.
     if (!EF.IsDesignTime && databaseStartupMode != DatabaseStartupMode.Skip)
     {
+        var databaseStartupStopwatch = Stopwatch.StartNew();
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var schemaGuard = scope.ServiceProvider.GetRequiredService<DatabaseSchemaVersionGuard>();
@@ -294,6 +295,12 @@ try
 
             var designTokenQueryService = scope.ServiceProvider.GetRequiredService<IDesignTokenQueryService>();
             await designTokenQueryService.EnsureInitializedAsync(CancellationToken.None);
+
+            databaseStartupStopwatch.Stop();
+            Log.Information(
+                "Database startup completed in {ElapsedMs}ms. StartupMode={StartupMode}",
+                databaseStartupStopwatch.ElapsedMilliseconds,
+                databaseStartupMode);
         }
         catch (Exception ex)
         {
@@ -562,42 +569,7 @@ try
     });
 
 
-    app.MapGet("/api/monitoring/logs", () =>
-    {
-        // Cita poslednjih 20 linija iz Serilog log fajla (ako postoji)
-        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
-        if (!System.IO.File.Exists(logPath))
-            return Results.Json(new[] { "Log fajl nije pronaden: " + logPath });
-        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(20).Reverse().ToList();
-        return Results.Json(lines);
-    });
-
-    app.MapGet("/api/monitoring/logs-advanced", (string? search, string? level) =>
-    {
-        var logPath = Path.Combine(AppContext.BaseDirectory, "Logs", "log.txt");
-        if (!System.IO.File.Exists(logPath))
-            return Results.Json(new[] { new { Message = "Log fajl nije pronaden: " + logPath } });
-
-        var lines = System.IO.File.ReadLines(logPath).Reverse().Take(200).Reverse();
-        var entries = new List<object>();
-        foreach (var line in lines)
-        {
-            var msg = line;
-            string? lvl = null;
-            string? stack = null;
-            var idx1 = line.IndexOf('[');
-            var idx2 = line.IndexOf(']');
-            if (idx1 >= 0 && idx2 > idx1)
-                lvl = line.Substring(idx1 + 1, idx2 - idx1 - 1);
-            if (!string.IsNullOrEmpty(level) && !string.Equals(lvl, level, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!string.IsNullOrEmpty(search) && !line.Contains(search, StringComparison.OrdinalIgnoreCase))
-                continue;
-            entries.Add(new { Message = msg, Level = lvl, StackTrace = stack });
-        }
-
-        return Results.Json(entries);
-    });
+    app.MapMonitoringLogEndpoints();
 
     // Map Logging endpoints
     app.MapLoggingEndpoints();

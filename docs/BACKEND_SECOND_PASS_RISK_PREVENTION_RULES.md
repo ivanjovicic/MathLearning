@@ -1,8 +1,12 @@
 # Backend Second-Pass Risk Prevention Rules
 
-Last aligned: 2026-07-01  
-Repo: `ivanjovicic/MathLearning`  
+Last aligned: 2026-07-01
+Repo: `ivanjovicic/MathLearning`
 Scope: second-pass backend/API risk classes not covered by `BACKEND_CRITICAL_RISK_PREVENTION_RULES.md`
+
+> **Prevention rules from static audit — not fix proof.**
+> These rules describe required behavior for **future** implementation prompts (`BACKEND2-CRIT-001..008`).
+> They do not mean the risks are already fixed.
 
 This document is a backend-specific second-pass guardrail addendum. It does not replace:
 

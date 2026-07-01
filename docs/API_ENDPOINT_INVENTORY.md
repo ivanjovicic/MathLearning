@@ -1,9 +1,11 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-06-25  
+Last aligned: 2026-07-01
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
+
+**Route compatibility audit (aliases, dual surfaces, duplicate-work risk):** [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) (`BE-PERF-008`).
 
 Primary source: `src/MathLearning.Api/Program.cs` endpoint map plus endpoint files under `src/MathLearning.Api/Endpoints/`.
 
@@ -49,8 +51,8 @@ Auth legend:
 | GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. Verify exact subroutes in file. |
 | GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock/admin UI monitoring payload. |
-| GET | `/api/monitoring/logs` | Public/internal | `Program.cs` | Reads log file if present. |
-| GET | `/api/monitoring/logs-advanced` | Public/internal | `Program.cs` | Filtered log-file reader. |
+| GET | `/api/monitoring/logs` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted Serilog file tail; anonymous/non-admin denied. |
+| GET | `/api/monitoring/logs-advanced` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted filtered log-file reader; anonymous/non-admin denied. |
 
 ---
 
@@ -171,6 +173,8 @@ Canonical mobile routes:
 
 Legacy/compatibility avatar routes exist in `AvatarEndpoints.cs`. Do not expand them for mobile runtime unless explicitly required. Canonical mobile avatar equip is `PUT /api/cosmetics/avatar`.
 
+**Dual surface warning:** `AvatarEndpoints.cs` and `CosmeticsEndpoints.cs` both mount under `/api/cosmetics` with different subpaths (`items`/`equip` vs `catalog`/`inventory`). See route audit §3.
+
 ---
 
 ## 10. Daily Run
@@ -208,10 +212,12 @@ Owners: `LeaderboardEndpoints.cs`, `AdaptiveEndpoints.cs`, `AnalyticsEndpoints.c
 | question authoring routes | Auth/Admin depending route | `QuestionAuthoringEndpoints.cs` | Admin/content authoring. |
 | `/api/sync*` | Auth | `SyncEndpoints.cs` | Offline sync transport. Reject mismatched payload user ids. |
 | `/api/maintenance*` | Admin/internal | `MaintenanceEndpoints.cs` | Maintenance operations. |
-| logging routes | Admin/internal | `LoggingEndpoints.cs` | Logging/admin support. |
+| logging routes | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | DB log read/search; output redacted; non-admin denied. |
 | bug routes | Mixed | `BugEndpoints.cs` | Bug reporting/support. |
 
 Because these families contain more route variants and some admin/internal behavior, inspect the owning file and tests before changing them. Add precise rows here when a route becomes mobile-critical or release-critical.
+
+**Unwired:** `QuestionEndpoints.cs` defines `MapQuestionEndpoints` but it is not registered in `Program.cs` (see route audit §4).
 
 ---
 

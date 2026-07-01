@@ -1,6 +1,7 @@
 ﻿using MathLearning.Infrastructure.Persistance;
+using MathLearning.Api.Services;
+using MathLearning.Application.Services;
 using Microsoft.EntityFrameworkCore;
-using Serilog;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -9,7 +10,7 @@ public static class LoggingEndpoints
     public static void MapLoggingEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/logs")
-                       .RequireAuthorization() // TODO: Add admin role check
+                       .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
                        .WithTags("Logging");
 
         // 📋 GET RECENT LOGS
@@ -28,20 +29,9 @@ public static class LoggingEndpoints
             var logs = await query
                 .OrderByDescending(l => l.Timestamp)
                 .Take(limit)
-                .Select(l => new
-                {
-                    l.Id,
-                    l.Timestamp,
-                    l.Level,
-                    l.Message,
-                    l.Exception,
-                    l.RequestPath,
-                    l.UserName,
-                    l.MachineName
-                })
                 .ToListAsync();
 
-            return Results.Ok(logs);
+            return Results.Ok(logs.Select(RedactEntity));
         })
         .WithName("GetRecentLogs")
         .WithDescription("Get recent application logs");
@@ -58,7 +48,7 @@ public static class LoggingEndpoints
                 .Take(limit)
                 .ToListAsync();
 
-            return Results.Ok(logs);
+            return Results.Ok(logs.Select(RedactEntity));
         })
         .WithName("GetLogsByLevel")
         .WithDescription("Get logs by severity level (INFO, WARNING, ERROR, FATAL)");
@@ -101,7 +91,7 @@ public static class LoggingEndpoints
                 .Take(limit)
                 .ToListAsync();
 
-            return Results.Ok(logs);
+            return Results.Ok(logs.Select(RedactEntity));
         })
         .WithName("SearchLogs")
         .WithDescription("Search logs with filters");
@@ -178,7 +168,7 @@ public static class LoggingEndpoints
             if (log == null)
                 return Results.NotFound(new { error = "Log not found" });
 
-            return Results.Ok(log);
+            return Results.Ok(RedactEntity(log));
         })
         .WithName("GetLogDetail")
         .WithDescription("Get detailed log entry");
@@ -197,7 +187,7 @@ public static class LoggingEndpoints
                 .Take(limit)
                 .ToListAsync();
 
-            return Results.Ok(errors);
+            return Results.Ok(errors.Select(RedactEntity));
         })
         .WithName("GetRecentErrors")
         .WithDescription("Get recent error and fatal logs");
@@ -221,4 +211,18 @@ public static class LoggingEndpoints
         .WithName("GetLogDistribution")
         .WithDescription("Get log level distribution");
     }
+
+    private static object RedactEntity(Domain.Entities.ApplicationLog log) =>
+        new
+        {
+            log.Id,
+            log.Timestamp,
+            log.Level,
+            Message = LogOutputRedactor.Redact(log.Message),
+            Exception = log.Exception == null ? null : LogOutputRedactor.Redact(log.Exception),
+            log.RequestPath,
+            UserName = log.UserName == null ? null : LogOutputRedactor.Redact(log.UserName),
+            log.MachineName,
+            log.Properties
+        };
 }

@@ -160,7 +160,9 @@ public class QuizEndpointDataTests
 
         var dueQuestions = await db.QuestionStats
             .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
-            .OrderBy(x => x.Ease)
+            .OrderBy(x => x.NextReview)
+            .ThenBy(x => x.Ease)
+            .ThenBy(x => x.QuestionId)
             .ToListAsync();
 
         Assert.Single(dueQuestions);
@@ -193,7 +195,9 @@ public class QuizEndpointDataTests
 
         var dueStats = await db.QuestionStats
             .Where(x => x.UserId == "1" && x.NextReview <= DateTime.UtcNow)
-            .OrderBy(x => x.Ease)
+            .OrderBy(x => x.NextReview)
+            .ThenBy(x => x.Ease)
+            .ThenBy(x => x.QuestionId)
             .Take(count)
             .ToListAsync();
 

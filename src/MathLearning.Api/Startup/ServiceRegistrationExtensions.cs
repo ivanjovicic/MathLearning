@@ -17,6 +17,7 @@ using MathLearning.Infrastructure.Services.Performance;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -208,13 +209,31 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<InMemoryLockService>();
         builder.Services.AddScoped<RequestDataCacheService>();
 
-        var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
-            ?? builder.Configuration["Redis:ConnectionString"];
+        var redisConnectionString = ResolveRedisConnectionString(builder.Configuration);
         if (!string.IsNullOrWhiteSpace(redisConnectionString))
         {
-            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
-            builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
-            Log.Information("?? Redis connection configured for cache-backed features.");
+            try
+            {
+                var redisOptions = BuildRedisConfigurationOptions(builder.Configuration, redisConnectionString);
+                var redisMultiplexer = ConnectionMultiplexer.Connect(redisOptions);
+
+                builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
+                builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
+                Log.Information(
+                    "Redis connection configured for cache-backed features. ConnectTimeoutMs={ConnectTimeoutMs} SyncTimeoutMs={SyncTimeoutMs} ConnectRetry={ConnectRetry} KeepAliveSeconds={KeepAliveSeconds} AbortOnConnectFail={AbortOnConnectFail}",
+                    redisOptions.ConnectTimeout,
+                    redisOptions.SyncTimeout,
+                    redisOptions.ConnectRetry,
+                    redisOptions.KeepAlive,
+                    redisOptions.AbortOnConnectFail);
+            }
+            catch (Exception ex)
+            {
+                builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
+                Log.Warning(
+                    ex,
+                    "Redis startup initialization failed. Falling back to DB-backed leaderboard service.");
+            }
         }
         else
         {
@@ -240,6 +259,30 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<StudentLeaderboardService>();
         builder.Services.AddScoped<IStudentLeaderboardService>(sp => sp.GetRequiredService<StudentLeaderboardService>());
     }
+
+    public static ConfigurationOptions BuildRedisConfigurationOptions(
+        IConfiguration configuration,
+        string redisConnectionString)
+    {
+        var options = ConfigurationOptions.Parse(redisConnectionString);
+        options.AbortOnConnectFail = configuration.GetValue<bool?>("Redis:AbortOnConnectFail") ?? false;
+        options.ConnectTimeout = configuration.GetValue<int?>("Redis:ConnectTimeoutMs") ?? 2000;
+        options.SyncTimeout = configuration.GetValue<int?>("Redis:SyncTimeoutMs") ?? 2000;
+        options.ConnectRetry = configuration.GetValue<int?>("Redis:ConnectRetry") ?? 3;
+        options.KeepAlive = configuration.GetValue<int?>("Redis:KeepAliveSeconds") ?? 60;
+
+        var defaultDatabase = configuration.GetValue<int?>("Redis:DefaultDatabase");
+        if (defaultDatabase.HasValue)
+        {
+            options.DefaultDatabase = defaultDatabase.Value;
+        }
+
+        return options;
+    }
+
+    private static string? ResolveRedisConnectionString(IConfiguration configuration) =>
+        configuration.GetConnectionString("Redis")
+        ?? configuration["Redis:ConnectionString"];
 
     public static void AddSecurityServices(this WebApplicationBuilder builder)
     {

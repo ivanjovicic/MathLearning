@@ -33,11 +33,6 @@ public sealed class GlobalExceptionMiddleware
             context.Response.Clear();
             context.Response.ContentType = "application/json";
 
-            var correlationId =
-                context.Items.TryGetValue(CorrelationIdMiddleware.ItemKey, out var value)
-                    ? value?.ToString()
-                    : null;
-
             var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
             var retryAfter = ResolveRetryAfterSeconds(ex);
             var isRateLimited = ex is MathLearning.Api.Services.RateLimitedOperationException || retryAfter.HasValue;
@@ -51,23 +46,13 @@ public sealed class GlobalExceptionMiddleware
             var problem = isRateLimited
                 ? ApiResult<object>.RateLimited(
                     error: "Too many requests.",
-                    errorDetails: new
-                    {
-                        correlationId,
-                        exceptionType = ex.GetType().Name,
-                        ex.Message
-                    },
+                    errorDetails: SafeClientErrorResponse.BuildClientDetails(context, traceId),
                     traceId: traceId,
                     retryAfterSeconds: retryAfter)
                 : ApiResult<object>.Fail(
-                    error: "Internal server error.",
+                    error: SafeClientErrorResponse.GenericInternalError,
                     errorCode: "INTERNAL_ERROR",
-                    errorDetails: new
-                    {
-                        correlationId,
-                        exceptionType = ex.GetType().Name,
-                        ex.Message
-                    },
+                    errorDetails: SafeClientErrorResponse.BuildClientDetails(context, traceId),
                     traceId: traceId);
 
             await context.Response.WriteAsJsonAsync(problem);

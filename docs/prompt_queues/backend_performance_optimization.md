@@ -1,6 +1,6 @@
 # Backend Performance / Optimization Prompt Queue
 
-Last aligned: 2026-06-27  
+Last aligned: 2026-07-01
 Target repo: `ivanjovicic/MathLearning`  
 Default lane: backend performance / contract-safe optimization
 
@@ -34,14 +34,14 @@ Hard rules:
 
 | ID | Status | Can run in parallel with | Purpose |
 |---|---|---|---|
-| BE-PERF-001 | Ready | docs-only | Quiz start/questions hot-path query budget and test evidence. |
-| BE-PERF-002 | Ready | docs-only | Daily SRS query budget, padding behavior, and duplicate-fetch protection. |
-| BE-PERF-003 | Ready | docs-only | Answer submit/offline replay transaction audit. |
-| BE-PERF-004 | Ready | docs-only | DB-backed leaderboard rank optimization after projection patch. |
-| BE-PERF-005 | Ready | docs-only | Redis startup/fallback resilience and bounded connect/retry policy. |
-| BE-PERF-006 | Ready | docs-only | Cold-start/background-service budget and health evidence. |
-| BE-PERF-007 | Ready | docs-only | Explicit backend performance budgets and observability evidence. |
-| BE-PERF-008 | Ready | docs-only | Route compatibility/deprecation and endpoint bloat audit. |
+| BE-PERF-001 | Done 75% (`12167aa`, backfill 2026-07-01) | — | Quiz start hot-path. Run log: `.ai/runs/2026-07-01-be-perf-001-evidence.md`. Tests added in commit; local run unknown. Mistakes: BACKEND-MISTAKE-EVIDENCE-001. |
+| BE-PERF-002 | Done 75% (`0f6ccd3`, backfill 2026-07-01) | — | SRS daily/mixed index path. Run log: `.ai/runs/2026-07-01-be-perf-002-evidence.md`. Mistakes: BACKEND-MISTAKE-EVIDENCE-001. |
+| BE-PERF-003 | Done 70% (`deb3c28`, backfill 2026-07-01) | — | Answer replay read skip + audit doc. Run log: `.ai/runs/2026-07-01-be-perf-003-evidence.md`. No tests in commit; validation unproven. Mistakes: BACKEND-MISTAKE-EVIDENCE-001. |
+| BE-PERF-004 | Done 75% (`851d961`, backfill 2026-07-01) | — | DB fallback rank SQL (runtime perf). Run log: `.ai/runs/2026-07-01-be-perf-004-evidence.md`. Mistakes: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-AUDIT-001 (queue label fixed). |
+| BE-PERF-005 | Done | docs-only | Redis startup/fallback resilience and bounded connect/retry policy. |
+| BE-PERF-006 | Done | — | Cold-start/background-service budget and health evidence. |
+| BE-PERF-007 | Done | — | Explicit request-path performance budgets and observability mapping. |
+| BE-PERF-008 | Done | — | Route compatibility/deprecation and endpoint bloat audit. |
 
 ---
 

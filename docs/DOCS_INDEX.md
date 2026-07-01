@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-06-27  
+Last aligned: 2026-06-24
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -13,14 +13,15 @@ When docs disagree, use this order:
 
 1. Current backend code and tests.
 2. [`../AGENTS.md`](../AGENTS.md) — backend agent/contributor rules.
-3. [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) — shortest safe path by task type.
+3. [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) — mandatory run-log and mistake-learning gate.
+4. [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) — shortest safe path by task type.
 4. [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) — historical bug classes and mandatory anti-regression prompt block.
 5. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
 6. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
 7. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
 8. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
 9. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
-10. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — active backend performance prompt queue.
+10. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — backend performance prompt queue (BE-PERF-001…008 complete).
 11. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
 
 If code/tests and docs disagree, inspect the implementation, then update docs in the same change.
@@ -38,6 +39,21 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current API route map and canonical/legacy split | Update whenever routes are added, removed, or changed. |
 | [`BACKEND_CHANGE_CHECKLIST.md`](BACKEND_CHANGE_CHECKLIST.md) | Change checklist | Pre-commit safety gate for backend work | Use for code and docs changes. |
 | [`COMMON_AGENT_PITFALLS.md`](COMMON_AGENT_PITFALLS.md) | Common mistakes | Avoid recurring errors in this repo | Use before implementing broad changes. |
+| [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | Run-log gate | Mandatory `.ai/runs` evidence, score caps, mistake learning | Every non-trivial prompt. |
+| [`ai/learning/MISTAKE_LEDGER.md`](ai/learning/MISTAKE_LEDGER.md) | Mistake ledger | BACKEND-MISTAKE-* patterns and prevention | Read before start; update before Done. |
+
+---
+
+## Agent evidence / learning docs
+
+| Document | Type | Use for | Notes |
+|---|---|---|---|
+| [`../.ai/RUN_LOG_TEMPLATE.md`](../.ai/RUN_LOG_TEMPLATE.md) | Run log template | Copy per prompt into `.ai/runs/` | Do not commit filled template as template. |
+| [`../.ai/runs/README.md`](../.ai/runs/README.md) | Run log index | Naming, compactness, backend rules | One log per non-trivial prompt. |
+| [`ai/learning/MISTAKE_CARD_TEMPLATE.md`](ai/learning/MISTAKE_CARD_TEMPLATE.md) | Mistake template | Add new BACKEND-MISTAKE-* cards | Cross-ref run logs. |
+| [`ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md`](ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md) | Lint prompt | Fix misleading Done rows before runtime work | Docs-only. |
+| [`ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md`](ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md) | Rollup prompt | Learn from last 5–8 run logs | Docs-only. |
+| [`ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md`](ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md) | Backfill prompt | Repair missing logs for past commits | No runtime edits by default. |
 
 ---
 
@@ -54,7 +70,16 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | Document | Type | Use for | Notes |
 |---|---|---|---|
 | [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) | Performance review | Backend hot-path findings, priority stack, and safe/not-safe optimization boundaries | Current performance planning snapshot. |
-| [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Active prompt queue | Precise BE-PERF prompts for quiz/SRS/answer/leaderboard/startup/observability/route work | Use for future backend optimization work. |
+| [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Cold-start budget | Blocking vs background startup phases, health evidence, staging smoke steps | BE-PERF-006 evidence. |
+| [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | Request-path budgets | p95 latency/query budgets per mobile flow, log/trace mapping, smoke steps | BE-PERF-007 evidence. |
+| [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) | Route compatibility | Canonical vs legacy aliases, dual surfaces, duplicate-work matrix, follow-up prompts | BE-PERF-008 evidence. |
+| [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue | BE-PERF prompts (001…008 complete/backfilled) | Performance lane. |
+| [`prompt_queues/backend_critical_risk_prevention.md`](prompt_queues/backend_critical_risk_prevention.md) | Critical risk queue | BACKEND-CRIT-001…008 prompt-ready; audit-created, not Done | Security/settlement/idempotency lane. |
+| [`prompt_queues/backend_second_pass_risk_prevention.md`](prompt_queues/backend_second_pass_risk_prevention.md) | Second-pass risk queue | BACKEND2-CRIT-001…008 prompt-ready; audit-created, not Done | Auth/proxy/jobs/authoring lane. |
+| [`BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Critical app-flow findings; creates CRIT prompts | Not fix proof. |
+| [`BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Second-pass findings; creates BACKEND2 prompts | Not fix proof. |
+| [`BACKEND_CRITICAL_RISK_PREVENTION_RULES.md`](BACKEND_CRITICAL_RISK_PREVENTION_RULES.md) | Prevention rules | Risk classes for CRIT implementation prompts | Not fix proof. |
+| [`BACKEND_SECOND_PASS_RISK_PREVENTION_RULES.md`](BACKEND_SECOND_PASS_RISK_PREVENTION_RULES.md) | Prevention rules | Risk classes for BACKEND2 prompts | Not fix proof. |
 | [`BACKEND_REVIEW_2026_06_27.md`](BACKEND_REVIEW_2026_06_27.md) | Safety review | Explanation endpoint safety/cache/rate-limit prompt input | Focused on explanations, not general performance. |
 
 ---

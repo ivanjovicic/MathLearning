@@ -195,7 +195,7 @@ Rules:
 - Prefer projection DTOs over full entity materialization when only a few fields are needed.
 - Cap page sizes and limits.
 - Avoid N+1 count/query loops in admin grids and mobile list endpoints.
-- Record the expected query budget for quiz start, SRS daily, leaderboard, and progress/adaptive reads.
+- Record the expected query budget for quiz start, SRS daily, leaderboard, and progress/adaptive reads (see [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md)).
 
 Recommended validation:
 

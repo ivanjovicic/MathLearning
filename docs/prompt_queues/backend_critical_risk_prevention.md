@@ -18,6 +18,8 @@ Read first:
 - `../backend_contract_gap_report.md`
 - `../BACKEND_CRITICAL_RISK_PREVENTION_RULES.md`
 - `../BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`
+- `../AGENT_RUN_LOG_ENFORCEMENT.md`
+- `../ai/learning/MISTAKE_LEDGER.md`
 
 Hard rules:
 
@@ -34,18 +36,61 @@ Every Done row must name the backend risk prevented and exact integration/contra
 
 ---
 
+## Queue status model
+
+| Status | Meaning |
+|---|---|
+| **Audit-created** | Finding documented in `BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`; no runtime work started. |
+| **Prompt-ready** | Implementation/spec prompt exists below; safe to pick when prerequisites are met. |
+| **Runtime-fixed** | `src/**` or `tests/**` changed under this prompt ID (commit required). |
+| **Validated** | `dotnet test` (or documented equivalent) passed and recorded in `.ai/runs` evidence. |
+
+Creating the audit doc or this queue file is **audit-created / prompt-ready** work only. It is **not** `Runtime-fixed` or `Validated`.
+
+### Done requirements
+
+```text
+Done requires: runtime and/or test commit + `.ai/runs/<date>-<prompt-id>-evidence.md` + validation result recorded.
+Docs-only spec/audit work: max Done 85%; must not claim runtime fix.
+Audit-created rows stay Prompt-ready until an implementation prompt completes with evidence.
+```
+
+### Recommended execution order
+
+Run **security / auth / data-loss** risks first:
+
+```text
+BACKEND-CRIT-001 → BACKEND-CRIT-002 → BACKEND-CRIT-004 → BACKEND-CRIT-005
+```
+
+Then **privacy / public identity**:
+
+```text
+BACKEND-CRIT-003 → BACKEND-CRIT-008
+```
+
+Then **contract bounds / docs-first specs** (may be spec + follow-up implementation):
+
+```text
+BACKEND-CRIT-006 → BACKEND-CRIT-007
+```
+
+`BACKEND-CRIT-006` should follow `BACKEND-CRIT-005` evidence when settlement truth affects idempotency decisions.
+
+---
+
 ## Active prompts
 
 | ID | Status | Can run in parallel with | Purpose |
 |---|---|---|---|
-| BACKEND-CRIT-001 | Ready | docs-only/evidence prompts | Harden backend error responses so raw exception messages do not reach clients. |
-| BACKEND-CRIT-002 | Ready | BACKEND-CRIT-001 | Protect or redact monitoring/log endpoints. |
-| BACKEND-CRIT-003 | Ready | BACKEND-CRIT-008 | Add public identity allowlist for search/profile/leaderboard DTOs. |
-| BACKEND-CRIT-004 | Ready | docs-only/evidence prompts | Harden legacy avatar upload and static file serving safety. |
-| BACKEND-CRIT-005 | Ready | BACKEND-CRIT-006 | Test/fix settlement response snapshot truth for season claims. |
-| BACKEND-CRIT-006 | Ready after BACKEND-CRIT-005 evidence | docs-only/evidence prompts | Decide/enforce idempotency requirements for retryable mobile mutations. |
-| BACKEND-CRIT-007 | Ready | BACKEND-CRIT-006 | Add offline timestamp bounds and UTC normalization tests. |
-| BACKEND-CRIT-008 | Ready | BACKEND-CRIT-003 | Clamp read endpoint limits and validate period/scope/range values. |
+| BACKEND-CRIT-001 | Done 90% (uncommitted, 2026-06-24) | — | Harden backend error responses so raw exception messages do not reach clients. Run log: `.ai/runs/2026-06-24-BACKEND-CRIT-001-evidence.md`. Tests: `GlobalExceptionMiddlewareTests`, `AuthSafeErrorResponseTests`. Risk: backend-error-leak on auth + global middleware. |
+| BACKEND-CRIT-002 | Done 90% (uncommitted, 2026-06-24) | — | Protect/redact monitoring/log endpoints. Run log: `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md`. Tests: `MonitoringLogAuthorizationTests`, `LogOutputRedactorTests`. Risk: monitoring-log-exposure. |
+| BACKEND-CRIT-003 | Prompt-ready | BACKEND-CRIT-008 | Add public identity allowlist for search/profile/leaderboard DTOs. |
+| BACKEND-CRIT-004 | Prompt-ready | evidence lint only | Harden legacy avatar upload and static file serving safety. |
+| BACKEND-CRIT-005 | Prompt-ready | BACKEND-CRIT-006 | Test/fix settlement response snapshot truth for season claims. |
+| BACKEND-CRIT-006 | Prompt-ready (after CRIT-005 evidence) | evidence lint only | Decide/enforce idempotency requirements for retryable mobile mutations. |
+| BACKEND-CRIT-007 | Prompt-ready | BACKEND-CRIT-006 | Add offline timestamp bounds and UTC normalization tests. |
+| BACKEND-CRIT-008 | Prompt-ready | BACKEND-CRIT-003 | Clamp read endpoint limits and validate period/scope/range values. |
 
 ---
 
@@ -97,6 +142,17 @@ Validation:
 dotnet test --filter "Auth|GlobalException|ErrorResponse"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-001-evidence.md` with validation command + result and commit SHA.
+- Queue row may move to Done only after runtime/test commit and run log.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND-CRIT-002 — Monitoring/log endpoint access and redaction
@@ -138,6 +194,17 @@ Validation:
 ```bash
 dotnet test --filter "Monitoring|Logging|Authorization"
 ```
+
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-002-evidence.md` with validation + commit SHA.
+- Update `docs/API_ENDPOINT_INVENTORY.md` auth rows if endpoint policy changes.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
 
 ---
 
@@ -184,6 +251,19 @@ Validation:
 dotnet test --filter "UserSearch|PublicProfile|Leaderboard|Contract"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-003-evidence.md`.
+- If spec-only first: cap Done at 85%; `docs/PUBLIC_IDENTITY_BACKEND_ALLOWLIST.md` does not prove DTO trimming landed.
+- Record cross-repo sync if mobile public fields change.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+- BACKEND-MISTAKE-XREPO-001
+
 ---
 
 ## BACKEND-CRIT-004 — Avatar upload and static serving safety
@@ -228,6 +308,16 @@ Validation:
 dotnet test --filter "Avatar|Upload|StaticFiles|Users"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-004-evidence.md` with upload/static-file tests recorded.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND-CRIT-005 — Settlement response snapshot truth
@@ -270,6 +360,18 @@ Validation:
 ```bash
 dotnet test --filter "SeasonDailyRunClaim|SeasonMilestone|Economy|Idempotency|Contract"
 ```
+
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-005-evidence.md` with settlement/idempotency test proof.
+- Update `docs/backend_contract_gap_report.md` only with test-backed evidence.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+- BACKEND-MISTAKE-XREPO-001
 
 ---
 
@@ -316,6 +418,18 @@ git diff --check
 dotnet test --filter "Idempotency|MobileMutationContract"  # if runtime/tests changed
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-006-evidence.md`.
+- Spec doc `docs/MOBILE_MUTATION_IDEMPOTENCY_REQUIREMENTS_2026_07_01.md` alone = audit/spec (≤85%); implementation prompts required for contract changes.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+- BACKEND-MISTAKE-XREPO-001
+
 ---
 
 ## BACKEND-CRIT-007 — Offline timestamp bounds and UTC normalization
@@ -358,6 +472,17 @@ Validation:
 dotnet test --filter "OfflineSubmit|Timestamp|Streak|AntiCheat"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-007-evidence.md` with offline timestamp test matrix recorded.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+- BACKEND-MISTAKE-XREPO-001
+
 ---
 
 ## BACKEND-CRIT-008 — Bounded read surfaces and enum validation
@@ -398,3 +523,15 @@ Validation:
 ```bash
 dotnet test --filter "UserSearch|Leaderboard|Monitoring|Bounds|Validation"
 ```
+
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND-CRIT-008-evidence.md` with clamp/validation tests recorded.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
+---

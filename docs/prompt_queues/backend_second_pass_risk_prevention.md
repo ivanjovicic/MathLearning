@@ -18,6 +18,8 @@ Read first:
 - `../BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`
 - `../BACKEND_SECOND_PASS_RISK_PREVENTION_RULES.md`
 - `../BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md`
+- `../AGENT_RUN_LOG_ENFORCEMENT.md`
+- `../ai/learning/MISTAKE_LEDGER.md`
 
 Hard rules:
 
@@ -37,18 +39,60 @@ Every Done row must name the backend risk prevented and exact integration/contra
 
 ---
 
+## Queue status model
+
+| Status | Meaning |
+|---|---|
+| **Audit-created** | Finding in `BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md`; no runtime work started. |
+| **Prompt-ready** | Prompt below is ready when prerequisites met. |
+| **Runtime-fixed** | `src/**` or `tests/**` changed under this prompt ID. |
+| **Validated** | Tests passed and recorded in `.ai/runs` evidence. |
+
+### Done requirements
+
+```text
+Done requires: runtime/test commit + `.ai/runs/<date>-<prompt-id>-evidence.md` + validation result.
+Docs/spec-only work: max Done 85%; not Runtime-fixed.
+```
+
+### Recommended execution order
+
+**Security / auth / data-loss** first:
+
+```text
+BACKEND2-CRIT-004 → BACKEND2-CRIT-001 → BACKEND2-CRIT-002 → BACKEND2-CRIT-003 → BACKEND2-CRIT-007
+```
+
+**Privacy / bounds** (where applicable):
+
+```text
+BACKEND2-CRIT-005
+```
+
+**Performance / jobs / docs-first specs**:
+
+```text
+BACKEND2-CRIT-006 → BACKEND2-CRIT-008
+```
+
+Run `BACKEND2-CRIT-008` after authoring policy (`BACKEND2-CRIT-004`) when publish races depend on auth policy.
+
+---
+
 ## Active prompts
+
+All rows are **Prompt-ready** (not Done).
 
 | ID | Status | Can run in parallel with | Purpose |
 |---|---|---|---|
-| BACKEND2-CRIT-001 | Ready | BACKEND2-CRIT-005 | Harden forwarded header trust and rate-limit identity. |
-| BACKEND2-CRIT-002 | Ready | docs-only/evidence prompts | Make refresh-token rotation single-use under concurrency. |
-| BACKEND2-CRIT-003 | Ready after BACKEND2-CRIT-002 evidence | docs-only/evidence prompts | Make mobile registration atomic or compensating. |
-| BACKEND2-CRIT-004 | Ready | BACKEND2-CRIT-001 | Add explicit admin/content-author policy to question authoring mutations. |
-| BACKEND2-CRIT-005 | Ready | BACKEND2-CRIT-001 | Bound adaptive answer inputs. |
-| BACKEND2-CRIT-006 | Ready | docs-only/evidence prompts | Define/test recurring job idempotency and non-overlap. |
-| BACKEND2-CRIT-007 | Ready | docs-only/evidence prompts | Harden production admin seeding/reset behavior. |
-| BACKEND2-CRIT-008 | Ready after authoring policy | docs-only/evidence prompts | Make question draft/version numbering race-safe. |
+| BACKEND2-CRIT-001 | Prompt-ready | BACKEND2-CRIT-005 | Harden forwarded header trust and rate-limit identity. |
+| BACKEND2-CRIT-002 | Prompt-ready | evidence lint only | Make refresh-token rotation single-use under concurrency. |
+| BACKEND2-CRIT-003 | Prompt-ready (after CRIT-002 evidence) | evidence lint only | Make mobile registration atomic or compensating. |
+| BACKEND2-CRIT-004 | Prompt-ready | BACKEND2-CRIT-001 | Add explicit admin/content-author policy to question authoring mutations. |
+| BACKEND2-CRIT-005 | Prompt-ready | BACKEND2-CRIT-001 | Bound adaptive answer inputs. |
+| BACKEND2-CRIT-006 | Prompt-ready | evidence lint only | Define/test recurring job idempotency and non-overlap. |
+| BACKEND2-CRIT-007 | Prompt-ready | evidence lint only | Harden production admin seeding/reset behavior. |
+| BACKEND2-CRIT-008 | Prompt-ready (after CRIT-004 policy) | evidence lint only | Make question draft/version numbering race-safe. |
 
 ---
 
@@ -95,6 +139,16 @@ Validation:
 dotnet test --filter "RateLimit|ForwardedHeaders|Proxy"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-001-evidence.md` with middleware/proxy tests or documented hosting config evidence.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND2-CRIT-002 — Refresh-token rotation race hardening
@@ -139,6 +193,16 @@ Validation:
 dotnet test --filter "RefreshToken|Auth|Concurrency"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-002-evidence.md` with concurrency test proof.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND2-CRIT-003 — Mobile registration atomicity
@@ -181,6 +245,16 @@ Validation:
 ```bash
 dotnet test --filter "MobileRegister|Registration|Auth|Atomicity"
 ```
+
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-003-evidence.md` with atomicity/retry tests.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
 
 ---
 
@@ -226,6 +300,16 @@ Validation:
 dotnet test --filter "QuestionAuthoring|Authorization|Admin"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-004-evidence.md` + `docs/API_ENDPOINT_INVENTORY.md` policy update.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND2-CRIT-005 — Adaptive answer input bounds
@@ -267,6 +351,17 @@ Validation:
 ```bash
 dotnet test --filter "Adaptive|Validation|AnswerBounds"
 ```
+
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-005-evidence.md` with bounds validation tests.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+- BACKEND-MISTAKE-XREPO-001 (if adaptive contract docs change)
 
 ---
 
@@ -311,6 +406,17 @@ Validation:
 dotnet test --filter "Hangfire|BackgroundJob|SchoolLeaderboard|AntiCheat|Aggregation"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-006-evidence.md`.
+- `docs/BACKGROUND_JOB_IDEMPOTENCY_SPEC.md` alone = spec (≤85%); job code changes need tests.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND2-CRIT-007 — Admin seeding production hardening
@@ -352,6 +458,16 @@ Validation:
 dotnet test --filter "SeedAdmin|Startup|Admin"
 ```
 
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-007-evidence.md` with startup/config test or documented production guard proof.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
 ---
 
 ## BACKEND2-CRIT-008 — Question draft/version race safety
@@ -392,3 +508,15 @@ Validation:
 ```bash
 dotnet test --filter "QuestionAuthoring|DraftVersion|Publish|Concurrency"
 ```
+
+Evidence output requirement:
+
+- `.ai/runs/<yyyy-mm-dd>-BACKEND2-CRIT-008-evidence.md` with concurrency tests and migration evidence if indexes added.
+
+Relevant prior mistakes read:
+
+- BACKEND-MISTAKE-AUDIT-001
+- BACKEND-MISTAKE-EVIDENCE-001
+- BACKEND-MISTAKE-VALIDATION-001
+
+---

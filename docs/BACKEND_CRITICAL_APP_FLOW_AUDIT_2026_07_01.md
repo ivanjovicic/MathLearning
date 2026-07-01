@@ -1,9 +1,14 @@
 # Backend Critical App Flow Audit — 2026-07-01
 
-Status: static backend repo/code audit  
+> **Static audit only — not fix proof.**
+> This document records code/doc inspection findings and creates **prompt-ready** follow-ups.
+> It does **not** prove bugs exist in production, does **not** mean runtime fixes landed, and did **not** execute `dotnet test`.
+> A risk is **fixed** only when a separate implementation prompt has a runtime/test commit, passing validation, and `.ai/runs/<prompt-id>-evidence.md`.
+
+Status: static backend repo/code audit (audit-created)
 Repo: `ivanjovicic/MathLearning`  
 Scope: backend/API flows consumed by `ivanjovicic/Mathlearning-Mobile-App`  
-Validation: docs/code inspection only through GitHub connector; no `dotnet test` executed in this audit
+Validation: docs/code inspection only; no `dotnet test` executed in this audit
 
 ## Executive verdict
 
@@ -247,9 +252,9 @@ New mandatory themes:
 
 ---
 
-## New prompt queue added
+## New prompt queue added (audit-created only)
 
-Created:
+Created prompt-ready queues — **not** runtime fixes:
 
 - `docs/prompt_queues/backend_critical_risk_prevention.md`
 

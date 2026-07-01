@@ -1,8 +1,12 @@
 # Backend Critical Risk Prevention Rules
 
-Last aligned: 2026-07-01  
-Repo: `ivanjovicic/MathLearning`  
+Last aligned: 2026-07-01
+Repo: `ivanjovicic/MathLearning`
 Scope: backend/API risk classes for MathLearning mobile-facing flows
+
+> **Prevention rules from static audit — not fix proof.**
+> These rules describe required behavior for **future** implementation prompts (`BACKEND-CRIT-001..008`).
+> They do not mean the risks are already fixed. Evidence of a fix requires runtime/test commit + `.ai/runs` log.
 
 This document is a backend-specific guardrail addendum. It does not replace:
 

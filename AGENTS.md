@@ -14,12 +14,13 @@ For most backend tasks, read in this order:
 
 1. `AGENTS.md`
 2. `docs/DOCS_INDEX.md`
-3. `docs/AGENT_QUICKSTART.md`
-4. `docs/ARCHITECTURE_OVERVIEW.md`
-5. `docs/API_ENDPOINT_INVENTORY.md`
-6. `docs/backend_contract_gap_report.md`
-7. `docs/mobile_contract_idempotency_handoff.md`
-8. `docs/BUGFIX_PATTERN_GUARDRAILS.md` when fixing bugs
+3. `docs/AGENT_RUN_LOG_ENFORCEMENT.md`
+4. `docs/AGENT_QUICKSTART.md`
+5. `docs/ARCHITECTURE_OVERVIEW.md`
+6. `docs/API_ENDPOINT_INVENTORY.md`
+7. `docs/backend_contract_gap_report.md`
+8. `docs/mobile_contract_idempotency_handoff.md`
+9. `docs/BUGFIX_PATTERN_GUARDRAILS.md` when fixing bugs
 
 Do not reread the whole repository unless the task truly requires it.
 
@@ -150,7 +151,32 @@ Do not claim CI is green unless a GitHub Actions run was found and checked. If n
 
 ---
 
-## 10. Commit and push policy
+## 10. Run evidence and mistake learning (mandatory)
+
+Agents must follow the same closure gate as the Flutter repo:
+
+- [docs/AGENT_RUN_LOG_ENFORCEMENT.md](docs/AGENT_RUN_LOG_ENFORCEMENT.md) — hard gate for non-trivial prompts
+- [.ai/RUN_LOG_TEMPLATE.md](.ai/RUN_LOG_TEMPLATE.md) — copy into `.ai/runs/<date>-<prompt-id>-evidence.md`
+- [.ai/runs/README.md](.ai/runs/README.md) — naming and backend-specific rules
+- [docs/ai/learning/MISTAKE_LEDGER.md](docs/ai/learning/MISTAKE_LEDGER.md) — read before start; update before Done
+
+Rules:
+
+- Every non-trivial prompt creates `.ai/runs/<yyyy-mm-dd>-<prompt-id>-evidence.md` before completion.
+- Every Done queue row references that log (or `Run log: fallback <reason>`) and includes model/client, validation, mistakes, waste, missed, follow-up, residual risk, commit SHA.
+- Read `Relevant prior mistakes read` from the mistake ledger; record `Mistakes observed` at end.
+- Runtime commits without evidence must be backfilled via [docs/ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md](docs/ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md) or marked `Needs evidence sync`.
+- Docs-only audits cannot claim runtime fixes; cap completion per enforcement score table.
+- Contract-touching work must record cross-repo sync (`BACKEND-MISTAKE-XREPO-001`).
+
+Repair/lint prompts:
+
+- [docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md](docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md)
+- [docs/ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md](docs/ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md)
+
+---
+
+## 11. Commit and push policy
 
 Default workflow is one completed prompt = committed and pushed work on `main` before the final response.
 
@@ -162,6 +188,8 @@ Exceptions:
 
 Final response must include:
 
+- run-log path (`.ai/runs/...` or fallback reason)
+- mistake IDs from run log or `none`
 - commit SHA(s)
 - files changed
 - validation run or reason skipped

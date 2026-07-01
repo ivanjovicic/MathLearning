@@ -1,6 +1,7 @@
 using MathLearning.Api.Services;
 using MathLearning.Application.DTOs.Practice;
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
 using Hangfire;
 using Hangfire.Common;
@@ -187,7 +188,7 @@ public class PracticeSessionServiceIntegrationTests
     }
 
     private static PracticeSessionService BuildService(
-        Infrastructure.Persistance.ApiDbContext db,
+        ApiDbContext db,
         IWeaknessAnalysisScheduler scheduler,
         IMemoryCache cache)
     {
@@ -215,7 +216,7 @@ public class PracticeSessionServiceIntegrationTests
             NullLogger<PracticeSessionService>.Instance);
     }
 
-    private static async Task<int> GetCorrectOptionIdAsync(Infrastructure.Persistance.ApiDbContext db, int questionId)
+    private static async Task<int> GetCorrectOptionIdAsync(ApiDbContext db, int questionId)
     {
         var question = await db.Questions
             .Include(x => x.Options)
@@ -223,7 +224,7 @@ public class PracticeSessionServiceIntegrationTests
         return question.Options.First(x => x.IsCorrect).Id;
     }
 
-    private static async Task<int> GetWrongOptionIdAsync(Infrastructure.Persistance.ApiDbContext db, int questionId)
+    private static async Task<int> GetWrongOptionIdAsync(ApiDbContext db, int questionId)
     {
         var question = await db.Questions
             .Include(x => x.Options)
