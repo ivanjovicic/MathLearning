@@ -59,6 +59,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md`](ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md) | Rollup prompt | Learn from last 5–8 run logs | Docs-only. |
 | [`ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md`](ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md) | Backfill prompt | Repair missing logs for past commits | No runtime edits by default. |
 | [`ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md`](ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md) | Cross-repo sync prompt | Keep backend, Flutter, and AgentsWatch agent rules aligned | Docs-only. |
+| [`prompt_queues/backend_latest_commit_followups_2026_07_01.md`](prompt_queues/backend_latest_commit_followups_2026_07_01.md) | Latest follow-up queue | Validator/evidence backfill, relational auth verification, and manual workflow smoke after latest auth/evidence commits | Run before claiming the latest auth/evidence batch is fully closed. |
 
 ---
 
@@ -81,6 +82,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue | BE-PERF prompts (001…008 complete/backfilled) | Performance lane. |
 | [`prompt_queues/backend_critical_risk_prevention.md`](prompt_queues/backend_critical_risk_prevention.md) | Critical risk queue | BACKEND-CRIT-001…008 prompt-ready; audit-created, not Done | Security/settlement/idempotency lane. |
 | [`prompt_queues/backend_second_pass_risk_prevention.md`](prompt_queues/backend_second_pass_risk_prevention.md) | Second-pass risk queue | BACKEND2-CRIT-001…008 prompt-ready; audit-created, not Done | Auth/proxy/jobs/authoring lane. |
+| [`prompt_queues/backend_latest_commit_followups_2026_07_01.md`](prompt_queues/backend_latest_commit_followups_2026_07_01.md) | Latest follow-up queue | Evidence/workflow/provider checks after recent auth and validator commits | Use before continuing later BACKEND2 prompts if latest evidence is still unvalidated. |
 | [`BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Critical app-flow findings; creates CRIT prompts | Not fix proof. |
 | [`BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Second-pass findings; creates BACKEND2 prompts | Not fix proof. |
 | [`BACKEND_CRITICAL_RISK_PREVENTION_RULES.md`](BACKEND_CRITICAL_RISK_PREVENTION_RULES.md) | Prevention rules | Risk classes for CRIT implementation prompts | Not fix proof. |
@@ -118,9 +120,3 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | `src/MathLearning.Api/Program.cs` | Startup, middleware, endpoint map order, health/metrics, Hangfire registration. |
 | `src/MathLearning.Api/Startup/ServiceRegistrationExtensions.cs` | DI registration, EF/Redis/Hangfire/OpenTelemetry/CORS/security setup. |
 | `src/MathLearning.Api/Endpoints/*.cs` | Route definitions and HTTP boundary ownership. |
-| `src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs` | EF model ownership and DbSets. |
-| `src/MathLearning.Infrastructure/Services/Leaderboard/DbBackedRedisLeaderboardService.cs` | DB fallback for Redis leaderboard and period/rank behavior. |
-| `src/MathLearning.Infrastructure/Migrations/*` | Current schema and migration history. |
-| `tests/MathLearning.Tests/Idempotency/*` | Idempotency behavior proof. |
-| `tests/MathLearning.Tests/Contracts/*` | Mobile HTTP contract proof. |
-| `tests/MathLearning.Tests/Endpoints/*` | Route/auth/scope proof. |
