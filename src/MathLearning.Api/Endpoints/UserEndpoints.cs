@@ -239,28 +239,21 @@ public static class UserEndpoints
                            (p.DisplayName != null && p.DisplayName.Contains(query)))
                 .OrderBy(p => p.Username)
                 .Take(limit)
-                .Select(p => new
-                {
+                .Select(p => new PublicUserSearchResultDto(
                     p.UserId,
-                    p.Username,
-                    p.DisplayName,
+                    p.DisplayName ?? p.Username,
                     p.Level,
-                    p.Xp
-                })
+                    null,
+                    null))
                 .ToListAsync(ct);
 
             var appearanceMap = await appearanceReader.GetAppearancesAsync(
                 users.Select(x => x.UserId).ToList(),
                 ct);
 
-            var result = users.Select(x => new
+            var result = users.Select(x => x with
             {
-                x.UserId,
-                x.Username,
-                x.DisplayName,
-                x.Level,
-                x.Xp,
-                appearance = appearanceMap.TryGetValue(x.UserId, out var appearance) ? appearance : null
+                Appearance = appearanceMap.TryGetValue(x.UserId, out var appearance) ? appearance : null
             });
 
             return Results.Ok(result);
@@ -518,19 +511,13 @@ private static async Task<IResult> GetDailyHints(ApiDbContext db, HttpContext ct
         }
 
         var appearance = await appearanceReader.GetAppearanceAsync(userId);
-        return Results.Ok(new
-        {
-            profile.UserId,
-            profile.Username,
-            profile.Xp,
-            profile.Level,
-            profile.Streak,
-            profile.DailyXp,
-            profile.WeeklyXp,
-            profile.MonthlyXp,
-            profile.AvatarUrl,
-            appearance
-        });
+        return Results.Ok(new PublicUserProfileDto(
+            UserId: profile.UserId,
+            DisplayName: profile.DisplayName ?? profile.Username,
+            Level: profile.Level,
+            Streak: profile.Streak,
+            AvatarUrl: profile.AvatarUrl,
+            Appearance: appearance));
     }
 }
 
