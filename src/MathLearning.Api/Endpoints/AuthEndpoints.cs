@@ -5,10 +5,12 @@ using MathLearning.Infrastructure.Services;
 using MathLearning.Api.Middleware;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -20,14 +22,69 @@ public static class AuthEndpoints
                        .AllowAnonymous()
                        .WithTags("Authentication");
 
+        static async Task CleanupMobileRegistrationFailureAsync(
+            IServiceScopeFactory scopeFactory,
+            IdentityUser? user,
+            UserProfile? profile,
+            RefreshToken? refreshToken,
+            ILogger<Program> logger,
+            CancellationToken cancellationToken)
+        {
+            await using var cleanupScope = scopeFactory.CreateAsyncScope();
+            var cleanupDb = cleanupScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+            try
+            {
+                if (user != null)
+                {
+                    var persistedUser = await cleanupDb.Users.SingleOrDefaultAsync(u => u.Id == user.Id, cancellationToken);
+                    if (persistedUser != null)
+                        cleanupDb.Users.Remove(persistedUser);
+                }
+
+                if (refreshToken != null)
+                {
+                    var persistedRefreshToken = await cleanupDb.RefreshTokens
+                        .SingleOrDefaultAsync(t => t.Token == refreshToken.Token, cancellationToken);
+                    if (persistedRefreshToken != null)
+                        cleanupDb.RefreshTokens.Remove(persistedRefreshToken);
+                }
+
+                if (profile != null)
+                {
+                    var persistedProfile = await cleanupDb.UserProfiles
+                        .SingleOrDefaultAsync(p => p.UserId == profile.UserId, cancellationToken);
+                    if (persistedProfile != null)
+                        cleanupDb.UserProfiles.Remove(persistedProfile);
+                }
+
+                if (user != null || refreshToken != null || profile != null)
+                    await cleanupDb.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception cleanupEx)
+            {
+                logger.LogWarning(
+                    cleanupEx,
+                    "Cleanup after mobile registration failure hit a database error for user {Username}.",
+                    user?.UserName ?? "<unknown>");
+            }
+        }
+
         // 📱 MOBILE REGISTRATION (Public)
         group.MapPost("/mobile/register", async (
             MobileRegisterRequest request,
             UserManager<IdentityUser> userManager,
             ApiDbContext db,
             IConfiguration config,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            ILogger<Program> logger,
+            IServiceScopeFactory scopeFactory) =>
         {
+            IDbContextTransaction? tx = null;
+            IdentityUser? user = null;
+            UserProfile? profile = null;
+            RefreshToken? refreshToken = null;
+
             try
             {
                 // Validate input
@@ -75,8 +132,10 @@ public static class AuthEndpoints
                     ), statusCode: 409);
                 }
 
+                tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
+
                 // Create Identity user
-                var user = new IdentityUser
+                user = new IdentityUser
                 {
                     UserName = request.Username,
                     Email = request.Email,
@@ -87,6 +146,9 @@ public static class AuthEndpoints
 
                 if (!result.Succeeded)
                 {
+                    if (tx != null)
+                        await tx.RollbackAsync(ctx.RequestAborted);
+
                     var errors = string.Join(", ", result.Errors.Select(e => e.Description));
                     
                     return Results.Json(new MobileRegisterResponse(
@@ -99,7 +161,7 @@ public static class AuthEndpoints
                 string userId = user.Id;
 
                 // Create UserProfile
-                var profile = new UserProfile
+                profile = new UserProfile
                 {
                     UserId = userId,
                     Username = request.Username,
@@ -120,10 +182,13 @@ public static class AuthEndpoints
 
                 var device = ctx.Request.Headers.UserAgent.ToString();
                 var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
-                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
+                refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
+
+                if (tx != null)
+                    await tx.CommitAsync(ctx.RequestAborted);
 
                 return Results.Ok(new MobileRegisterResponse(
                     Success: true,
@@ -149,10 +214,40 @@ public static class AuthEndpoints
             }
             catch (Exception)
             {
+                if (tx != null)
+                {
+                    try
+                    {
+                        await tx.RollbackAsync(ctx.RequestAborted);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        logger.LogWarning(
+                            rollbackEx,
+                            "Rollback after mobile registration failure failed for user {Username}.",
+                            request.Username);
+                    }
+                }
+                else
+                {
+                    await CleanupMobileRegistrationFailureAsync(
+                        scopeFactory,
+                        user,
+                        profile,
+                        refreshToken,
+                        logger,
+                        ctx.RequestAborted);
+                }
+
                 return Results.Json(new MobileRegisterResponse(
                     Success: false,
                     Message: "Registration failed. Please try again."
                 ), statusCode: 500);
+            }
+            finally
+            {
+                if (tx != null)
+                    await tx.DisposeAsync();
             }
         })
         .WithName("MobileRegister")
