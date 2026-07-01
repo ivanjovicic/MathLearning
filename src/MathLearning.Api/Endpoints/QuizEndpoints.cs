@@ -2,6 +2,7 @@ using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Application.DTOs.Progress;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
+using MathLearning.Api.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Idempotency;
@@ -415,6 +416,8 @@ public static class QuizEndpoints
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             var answers = new List<OfflineAnswerDto>();
+            var timestampIssues = new List<OfflineBatchSubmitIssue>();
+            var utcNow = DateTime.UtcNow;
 
             if (payload.TryGetProperty("answers", out var answersNode) &&
                 answersNode.ValueKind == JsonValueKind.Array)
@@ -430,12 +433,21 @@ public static class QuizEndpoints
                         TryGetInt(item, "timeSpentSeconds", out timeSpent);
                     TryGetBool(item, "isCorrectOffline", out var isCorrectOffline);
 
-                    DateTime answeredAt = DateTime.UtcNow;
-                    if (TryGetString(item, "answeredAt", out var answeredAtText) &&
-                        DateTime.TryParse(answeredAtText, out var parsedAnsweredAt))
+                    TryGetString(item, "answeredAt", out var answeredAtText);
+                    if (!OfflineAnswerTimestampPolicy.TryParseLegacy(
+                            answeredAtText,
+                            utcNow,
+                            questionId,
+                            out var answeredAt,
+                            out var issue))
                     {
-                        answeredAt = parsedAnsweredAt;
+                        if (issue is not null)
+                            timestampIssues.Add(issue);
+                        continue;
                     }
+
+                    if (issue is not null)
+                        timestampIssues.Add(issue);
 
                     answers.Add(new OfflineAnswerDto(
                         questionId,
@@ -457,7 +469,8 @@ public static class QuizEndpoints
                 xpTrackingService,
                 xpTrackingOptions.Value.EnableAntiCheat,
                 logger,
-                userId);
+                userId,
+                timestampIssues);
         });
 
     }
@@ -708,20 +721,40 @@ public static class QuizEndpoints
         XpTrackingService xpTrackingService,
         bool enableAntiCheat,
         ILogger logger,
-        string userId)
+        string userId,
+        IReadOnlyList<OfflineBatchSubmitIssue>? upstreamIssues = null)
     {
         if (request.Answers == null || request.Answers.Count == 0)
-            return Results.BadRequest("No answers to import");
+        {
+            if (upstreamIssues is { Count: > 0 })
+            {
+                return Results.Ok(new OfflineBatchSubmitResponse(
+                    0,
+                    0,
+                    1,
+                    0,
+                    upstreamIssues.ToList()));
+            }
 
-        var transactionResult = await ProcessOfflineBatchAsync(
-            db,
-            xpTrackingService,
-            logger,
-            userId,
-            request.SessionId,
-            request.Answers,
-            enableAntiCheat,
-            ctx.RequestAborted);
+            return Results.BadRequest("No answers to import");
+        }
+
+        var utcNow = DateTime.UtcNow;
+        var (normalizedAnswers, timestampIssues) = NormalizeOfflineAnswers(request.Answers, utcNow);
+        if (upstreamIssues is { Count: > 0 })
+            timestampIssues.AddRange(upstreamIssues);
+
+        var transactionResult = normalizedAnswers.Count == 0
+            ? new OfflineBatchTransactionResult(0, Array.Empty<QuizAttemptIngestItem>())
+            : await ProcessOfflineBatchAsync(
+                db,
+                xpTrackingService,
+                logger,
+                userId,
+                request.SessionId,
+                normalizedAnswers,
+                enableAntiCheat,
+                ctx.RequestAborted);
 
         if (transactionResult.IngestRows.Count > 0)
             await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
@@ -732,8 +765,35 @@ public static class QuizEndpoints
             transactionResult.ImportedCount,
             overview.Xp,
             overview.Level,
-            overview.Streak
-        ));
+            overview.Streak,
+            timestampIssues.Count > 0 ? timestampIssues : null));
+    }
+
+    private static (List<OfflineAnswerDto> Answers, List<OfflineBatchSubmitIssue> Issues) NormalizeOfflineAnswers(
+        IReadOnlyList<OfflineAnswerDto> answers,
+        DateTime utcNow)
+    {
+        var normalizedAnswers = new List<OfflineAnswerDto>(answers.Count);
+        var issues = new List<OfflineBatchSubmitIssue>();
+
+        foreach (var answer in answers)
+        {
+            if (!OfflineAnswerTimestampPolicy.TryNormalize(
+                    answer.AnsweredAt,
+                    utcNow,
+                    answer.QuestionId,
+                    out var answeredAtUtc,
+                    out var issue))
+            {
+                if (issue is not null)
+                    issues.Add(issue);
+                continue;
+            }
+
+            normalizedAnswers.Add(answer with { AnsweredAt = answeredAtUtc });
+        }
+
+        return (normalizedAnswers, issues);
     }
 
     private static async Task<OfflineBatchTransactionResult> ProcessOfflineBatchAsync(
@@ -1077,7 +1137,8 @@ public static class QuizEndpoints
         if (!input.IsOffline && input.TimeSpentSeconds <= 0)
             return true;
 
-        if (input.IsOffline && input.AnsweredAtUtc > DateTime.UtcNow.AddMinutes(2))
+        if (input.IsOffline &&
+            !OfflineAnswerTimestampPolicy.IsWithinAcceptedWindow(input.AnsweredAtUtc, DateTime.UtcNow))
             return true;
 
         return false;

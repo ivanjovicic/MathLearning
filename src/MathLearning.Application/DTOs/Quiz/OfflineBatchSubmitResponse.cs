@@ -4,5 +4,5 @@ public record OfflineBatchSubmitResponse(
     int ImportedCount,
     int NewXp,
     int NewLevel,
-    int Streak
-);
+    int Streak,
+    IReadOnlyList<OfflineBatchSubmitIssue>? Issues = null);
