@@ -1,0 +1,38 @@
+name: Agent Evidence Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Validation scope"
+        required: true
+        default: "referenced"
+        type: choice
+        options:
+          - referenced
+          - all
+          - strict-legacy
+
+jobs:
+  validate-agent-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate referenced run logs
+        if: ${{ inputs.mode == 'referenced' }}
+        run: python scripts/validate_agent_evidence.py --referenced-run-logs-only
+
+      - name: Validate all run logs
+        if: ${{ inputs.mode == 'all' }}
+        run: python scripts/validate_agent_evidence.py
+
+      - name: Validate all run logs strictly
+        if: ${{ inputs.mode == 'strict-legacy' }}
+        run: python scripts/validate_agent_evidence.py --strict-legacy
