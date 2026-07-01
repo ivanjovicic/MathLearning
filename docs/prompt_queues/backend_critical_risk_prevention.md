@@ -90,7 +90,7 @@ BACKEND-CRIT-006 → BACKEND-CRIT-007
 | BACKEND-CRIT-005 | Done (`b11f083`, 2026-06-24) | — | Settlement response snapshot truth for season daily-run and milestone claims. Run log: `.ai/runs/2026-06-24-BACKEND-CRIT-005-evidence.md`. Tests: `EconomySettlementEndpointsIntegrationTests`, `MobileEconomyContractIntegrationTests`. Risk: settlement-snapshot-truth. |
 | BACKEND-CRIT-006 | Done 85% (2026-07-01, docs/spec, commit `1e53f1c`) | evidence lint only | Decide/enforce idempotency requirements for retryable mobile mutations. Run log: `.ai/runs/2026-07-01-BACKEND-CRIT-006-evidence.md`. Tests: docs-only validation. Risk: legacy no-key compatibility remains until a migration prompt hardens the mobile contract. |
 | BACKEND-CRIT-007 | Prompt-ready | BACKEND-CRIT-006 | Add offline timestamp bounds and UTC normalization tests. |
-| BACKEND-CRIT-008 | Prompt-ready | BACKEND-CRIT-003 | Clamp read endpoint limits and validate period/scope/range values. |
+| BACKEND-CRIT-008 | Done (f27e1f1, 2026-07-01, validated) | BACKEND-CRIT-003 | Clamp read endpoint limits and validate period/scope/range values. Run log: `.ai/runs/2026-07-01-BACKEND-CRIT-008-evidence.md`. Tests: `LeaderboardReadBoundsTests`, `PublicIdentitySurfaceTests.SearchUsers_LimitIsClampedToMinimumAndMaximum`, `MonitoringLogAuthorizationTests.Admin_CanReadDatabaseLogs_ButLimitIsClamped`, `MonitoringLogAuthorizationTests.Admin_CanReadMonitoringLogAdvanced_ButItStaysBounded`. |
 
 ---
 
