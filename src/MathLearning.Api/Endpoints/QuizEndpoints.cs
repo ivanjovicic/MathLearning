@@ -176,7 +176,6 @@ public static class QuizEndpoints
             ILogger<Program> logger) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
-            string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
             if (!TryGetInt(request, "questionId", out var questionId) || questionId <= 0)
                 return Results.BadRequest("QuestionId is required");
@@ -186,14 +185,6 @@ public static class QuizEndpoints
                 timeSpentSeconds = 0;
             var hintUsed = TryGetBool(request, "hintUsed", out var parsedHintUsed) && parsedHintUsed;
             var clientId = TryGetString(request, "clientId", out var parsedClientId) ? parsedClientId : null;
-
-            var question = await db.Questions
-                .AsNoTracking()
-                .Include(q => q.Options)
-                .FirstOrDefaultAsync(q => q.Id == questionId);
-
-            if (question == null)
-                return Results.NotFound("Question not found");
 
             Guid quizSessionId;
             string? quizIdRaw = null;
@@ -212,7 +203,6 @@ public static class QuizEndpoints
                 request,
                 out var operationId,
                 out var idempotencyKey);
-
             if (hasIdempotency)
             {
                 var idempotencyPayload = QuizEndpointHelpers.BuildQuizAnswerIdempotencyPayload(
@@ -250,6 +240,15 @@ public static class QuizEndpoints
                                 throw new IdempotentQuizAnswerEarlyReturnException(
                                     QuizEndpointHelpers.HandleIdempotentDecision(begin)!);
                             }
+
+                            var question = await LoadQuestionForAnswerAsync(db, questionId, ctx.RequestAborted);
+                            if (question == null)
+                            {
+                                throw new IdempotentQuizAnswerEarlyReturnException(
+                                    Results.NotFound("Question not found"));
+                            }
+
+                            var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
                             await EnsureQuizSessionAsync(db, userId, quizSessionId, DateTime.UtcNow, ctx.RequestAborted);
 
@@ -325,6 +324,10 @@ public static class QuizEndpoints
                 return Results.Ok(processingResult.ResponseBody!);
             }
 
+            var question = await LoadQuestionForAnswerAsync(db, questionId, ctx.RequestAborted);
+            if (question == null)
+                return Results.NotFound("Question not found");
+
             var answeredAtUtc = DateTime.UtcNow;
             var attemptInput = new AnswerAttemptInput(
                 Question: question,
@@ -366,6 +369,7 @@ public static class QuizEndpoints
                     ctx.RequestAborted);
             }
 
+            var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
             var legacyResponse = await BuildSubmitAnswerResponseAsync(
                 db,
                 stepAdapter,
@@ -657,6 +661,17 @@ public static class QuizEndpoints
             .ToList();
     }
 
+    private static async Task<Question?> LoadQuestionForAnswerAsync(
+        ApiDbContext db,
+        int questionId,
+        CancellationToken ct)
+    {
+        return await db.Questions
+            .AsNoTracking()
+            .Include(q => q.Options)
+            .FirstOrDefaultAsync(q => q.Id == questionId, ct);
+    }
+
     // Load full question graph in a deterministic order by pre-selected IDs.
     // This avoids empty collection navigations when random ordering + Take is used.
     private static async Task<List<Question>> LoadQuestionsWithDetailsByIds(
@@ -739,6 +754,7 @@ public static class QuizEndpoints
                 var sessionId = ResolveOfflineBatchSessionId(userId, sessionIdRaw);
 
                 var session = await db.QuizSessions
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
                 if (session == null)
                 {
@@ -755,6 +771,7 @@ public static class QuizEndpoints
                 var existingAnswerKeys = await LoadExistingAnswerKeysAsync(db, userId, answers, cancellationToken);
                 var seenAnswerKeys = new HashSet<string>(existingAnswerKeys, StringComparer.Ordinal);
                 var questions = await db.Questions
+                    .AsNoTracking()
                     .Include(q => q.Options)
                     .Where(q => questionIds.Contains(q.Id))
                     .ToDictionaryAsync(q => q.Id, cancellationToken);
@@ -833,6 +850,7 @@ public static class QuizEndpoints
         CancellationToken cancellationToken)
     {
         var existingSession = await db.QuizSessions
+            .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == quizSessionId && s.UserId == userId, cancellationToken);
 
         if (existingSession != null)
@@ -854,14 +872,17 @@ public static class QuizEndpoints
         bool enableAntiCheat,
         CancellationToken cancellationToken)
     {
-        var existingAnswer = await db.UserAnswers.FirstOrDefaultAsync(x =>
-            x.UserId == userId &&
-            x.QuestionId == input.QuestionId &&
-            x.AnsweredAt == input.AnsweredAtUtc, cancellationToken);
+        var existingAnswer = await db.UserAnswers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId &&
+                x.QuestionId == input.QuestionId &&
+                x.AnsweredAt == input.AnsweredAtUtc, cancellationToken);
 
         if (existingAnswer != null)
         {
             var existingAudit = await db.UserAnswerAudits
+                .AsNoTracking()
                 .Where(a =>
                     a.UserId == userId &&
                     a.QuestionId == input.QuestionId &&
