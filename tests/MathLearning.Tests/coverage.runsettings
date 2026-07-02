@@ -9,7 +9,7 @@
           <SkipAutoProps>true</SkipAutoProps>
           <UseSourceLink>true</UseSourceLink>
           <Exclude>[MathLearning.Tests]*</Exclude>
-          <ExcludeByFile>**/Migrations/**;**/obj/**;**/*.g.cs;**/*.Designer.cs</ExcludeByFile>
+          <ExcludeByFile>**/Migrations/**,**/obj/**,**/*.g.cs,**/*.Designer.cs</ExcludeByFile>
         </Configuration>
       </DataCollector>
     </DataCollectors>
