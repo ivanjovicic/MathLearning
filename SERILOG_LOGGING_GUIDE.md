@@ -1,30 +1,30 @@
-# ?? Serilog Logging System - Complete Guide
+﻿# 📝 Serilog Logging System - Complete Guide
 
-## ?? Overview
+## 🎯 Overview
 
-Implementiran **production-ready logging sistem** sa Serilog-om koji omogucava:
-- ?? **Structured logging** - JSON format
-- ?? **Multiple sinks** - Console, File, Database
-- ?? **Admin dashboard** - View logs u Blazor Admin-u
-- ?? **Log analytics** - Statistics, search, filtering
-- ??? **Auto cleanup** - Delete old logs
+Implementiran **production-ready logging sistem** sa Serilog-om koji omogućava:
+- 📝 **Structured logging** - JSON format
+- 💾 **Multiple sinks** - Console, File, Database
+- 🔍 **Admin dashboard** - View logs u Blazor Admin-u
+- 📊 **Log analytics** - Statistics, search, filtering
+- 🗑️ **Auto cleanup** - Delete old logs
 
 ---
 
-## ??? Components
+## 🛠️ Components
 
 ### 1. Serilog Configuration
 **Location**: `Program.cs`
 
 **Sinks**:
-- ? **Console** - Development debugging
-- ? **File** - Rolling daily logs (30 days retention)
-- ? **PostgreSQL** - Database storage (via custom sink)
+- ✅ **Console** - Development debugging
+- ✅ **File** - Rolling daily logs (30 days retention)
+- ✅ **PostgreSQL** - Database storage (via custom sink)
 
 **Enrichers**:
-- ? **FromLogContext** - Contextual properties
-- ? **WithMachineName** - Server identification
-- ? **WithThreadId** - Multi-threading debugging
+- ✅ **FromLogContext** - Contextual properties
+- ✅ **WithMachineName** - Server identification
+- ✅ **WithThreadId** - Multi-threading debugging
 
 ### 2. ApplicationLog Entity
 ```csharp
@@ -45,10 +45,10 @@ public class ApplicationLog {
 **Location**: `MathLearning.Api/Logging/PostgreSqlSink.cs`
 
 **Features**:
-- ? Async database writes
-- ? Silent failure (doesn't break app)
-- ? Property serialization
-- ? Request context enrichment
+- ✅ Async database writes
+- ✅ Silent failure (doesn't break app)
+- ✅ Property serialization
+- ✅ Request context enrichment
 
 ### 4. Admin API Endpoints
 **Location**: `LoggingEndpoints.cs`
@@ -65,7 +65,7 @@ public class ApplicationLog {
 
 ---
 
-## ?? API Endpoints
+## 📊 API Endpoints
 
 ### GET /api/logs/recent?level={level}&limit={limit}
 **Description**: Get recent logs with optional level filter
@@ -255,14 +255,14 @@ GET /api/logs/search?query=database&level=Error&from=2026-01-23T00:00:00Z&limit=
 
 ---
 
-## ?? Logging Best Practices
+## 📝 Logging Best Practices
 
 ### Structured Logging
 ```csharp
-// ? BAD - String interpolation
+// ❌ BAD - String interpolation
 Log.Information($"User {userId} logged in");
 
-// ? GOOD - Structured properties
+// ✅ GOOD - Structured properties
 Log.Information("User {UserId} logged in", userId);
 ```
 
@@ -308,14 +308,14 @@ catch (Exception ex) {
 
 ---
 
-## ?? Blazor Admin Dashboard (Example)
+## 🎨 Blazor Admin Dashboard (Example)
 
 ### Logs View Page
 ```razor
 @page "/admin/logs"
 @inject HttpClient Http
 
-<MudText Typo="Typo.h3">?? Application Logs</MudText>
+<MudText Typo="Typo.h3">📝 Application Logs</MudText>
 
 <MudDataGrid Items="@logs" Loading="@loading">
     <Columns>
@@ -438,7 +438,7 @@ catch (Exception ex) {
 
 ---
 
-## ??? Database Schema
+## 🗄️ Database Schema
 
 ### ApplicationLogs Table
 ```sql
@@ -460,13 +460,13 @@ CREATE INDEX "IX_ApplicationLogs_Level_Timestamp" ON "ApplicationLogs" ("Level",
 ```
 
 **Indexes Benefit**:
-- ? Fast filtering by level
-- ? Fast time-range queries
-- ? Efficient cleanup of old logs
+- ✅ Fast filtering by level
+- ✅ Fast time-range queries
+- ✅ Efficient cleanup of old logs
 
 ---
 
-## ?? Log Retention Strategy
+## 📊 Log Retention Strategy
 
 ### Default Configuration
 - **Console**: Real-time (development)
@@ -510,7 +510,7 @@ public class LogCleanupBackgroundService : BackgroundService
 
 ---
 
-## ?? Testing
+## 🧪 Testing
 
 ### Test 1: Check Recent Logs
 ```bash
@@ -544,7 +544,7 @@ curl -X DELETE "https://mathlearning-api.fly.dev/api/logs/cleanup?daysToKeep=30"
 
 ---
 
-## ?? Deployment
+## 🚀 Deployment
 
 ```bash
 # 1. Apply migration
@@ -564,17 +564,17 @@ curl https://mathlearning-api.fly.dev/api/logs/recent \
 
 ---
 
-## ?? Performance Considerations
+## 📊 Performance Considerations
 
 ### Database Impact
 **Worst Case**: 1000 requests/minute = ~1000 log entries
-**Storage**: ~500 bytes per log � 1000 = 500 KB/minute = 21 GB/month
+**Storage**: ~500 bytes per log × 1000 = 500 KB/minute = 21 GB/month
 
 **Mitigation**:
-- ? Log only Important, Warning, Error, Fatal (skip Debug/Verbose)
-- ? 30-day retention (auto cleanup)
-- ? Indexed timestamp for fast queries
-- ? Async writes (non-blocking)
+- ✅ Log only Important, Warning, Error, Fatal (skip Debug/Verbose)
+- ✅ 30-day retention (auto cleanup)
+- ✅ Indexed timestamp for fast queries
+- ✅ Async writes (non-blocking)
 
 ### Query Performance
 ```sql
@@ -589,16 +589,16 @@ LIMIT 100;
 
 ---
 
-## ?? Best Practices Summary
+## 🎯 Best Practices Summary
 
-### ? DO
+### ✅ DO
 1. **Use structured logging** - `Log.Information("User {UserId} ...", userId)`
 2. **Log exceptions** - `Log.Error(ex, "Context message")`
 3. **Use appropriate levels** - Information, Warning, Error, Fatal
 4. **Enrich with context** - RequestPath, UserName, etc.
 5. **Monitor errors** - Alert on Fatal/Error spikes
 
-### ? DON'T
+### ❌ DON'T
 1. **Don't log sensitive data** - Passwords, tokens, credit cards
 2. **Don't over-log** - Avoid Debug level in production
 3. **Don't ignore exceptions** - Always log before throwing
@@ -607,13 +607,13 @@ LIMIT 100;
 
 ---
 
-## ?? Conclusion
+## 🏆 Conclusion
 
 **Serilog Logging System** provides:
-- ? **Production-ready** - Multiple sinks, structured logging
-- ? **Admin-friendly** - REST API for logs viewing
-- ? **Performance-optimized** - Indexed, async, auto-cleanup
-- ? **Debugging power** - Search, filter, statistics
-- ? **Scalable** - Handles high traffic
+- ✅ **Production-ready** - Multiple sinks, structured logging
+- ✅ **Admin-friendly** - REST API for logs viewing
+- ✅ **Performance-optimized** - Indexed, async, auto-cleanup
+- ✅ **Debugging power** - Search, filter, statistics
+- ✅ **Scalable** - Handles high traffic
 
-Build successful ? - Ready for production! ????
+Build successful ✅ - Ready for production! 📝🚀

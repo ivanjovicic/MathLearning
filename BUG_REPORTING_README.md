@@ -1,4 +1,4 @@
-# Bug Reporting System
+﻿# Bug Reporting System
 
 Sistem za prijavljivanje i upravljanje bagovima prijavljenim iz mobilne aplikacije.
 
@@ -71,7 +71,7 @@ Lista svih bugova sa paging i filterima.
 - `severity` (optional): `low`, `medium`, `high`, `critical`
 
 #### GET /api/bugs/{id}
-Preuzmi pojedinacan bug report.
+Preuzmi pojedinačan bug report.
 
 #### PATCH /api/bugs/{id}
 Promeni status buga.
@@ -106,24 +106,24 @@ Features:
 
 ### Trenutno: Local File Storage
 - Lokacija: `uploads/screenshots/`
-- Max velicina: 5MB
+- Max veličina: 5MB
 - Format: PNG, JPEG
 - URL format: `/uploads/screenshots/{userId}_{guid}.png`
 
-### Preporuka: Object Storage (buducnost)
-Za production okru�enje, preporucuje se prebacivanje na cloud object storage:
+### Preporuka: Object Storage (budućnost)
+Za production okruženje, preporučuje se prebacivanje na cloud object storage:
 - **Azure Blob Storage**
 - **AWS S3**
 - **Cloudinary** (ima image optimization)
 
 **Prednosti:**
-- Neogranicen storage
+- Neograničen storage
 - CDN integration
 - Automatska optimizacija slika
 - Bolje performanse
 
 **Implementacija:**
-Kreiraj `CloudScreenshotStorageService : IScreenshotStorageService` sa upload metodom koja vraca public URL.
+Kreiraj `CloudScreenshotStorageService : IScreenshotStorageService` sa upload metodom koja vraća public URL.
 
 ---
 

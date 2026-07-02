@@ -1,4 +1,4 @@
-# Fly.io Secrets Management Guide
+Ôªø# Fly.io Secrets Management Guide
 
 ## Trenutni Secrets na mathlearning-api
 
@@ -18,12 +18,12 @@
 fly secrets list -a mathlearning-api
 ```
 
-### Dodavanje/Aûuriranje jednog secret-a
+### Dodavanje/A≈æuriranje jednog secret-a
 ```bash
 fly secrets set "SECRET_NAME=value" -a mathlearning-api
 ```
 
-### Dodavanje/Aûuriranje viöe secrets-a odjednom
+### Dodavanje/A≈æuriranje vi≈°e secrets-a odjednom
 ```bash
 fly secrets set "SECRET1=value1" "SECRET2=value2" -a mathlearning-api
 ```
@@ -84,22 +84,22 @@ fly secrets set "JwtSettings__Audience=..." -a mathlearning-api
 }
 ```
 
-**Fly.io secrets (napomena: tacka se ne moûe koristiti u nazivu):**
+**Fly.io secrets (napomena: taƒçka se ne mo≈æe koristiti u nazivu):**
 ```bash
 fly secrets set "Logging__LogLevel__Default=Information" -a mathlearning-api
 fly secrets set "Logging__LogLevel__MicrosoftAspNetCore=Warning" -a mathlearning-api
 ```
 
-## Vaûne napomene
+## Va≈æne napomene
 
-1. **Automatsko ponovno pokretanje**: Kada postaviö secret, Fly.io automatski restartuje sve instance aplikacije
+1. **Automatsko ponovno pokretanje**: Kada postavi≈° secret, Fly.io automatski restartuje sve instance aplikacije
 
-2. **Escape specijalni karakteri**: Ako vrednost sadrûi specijalne karaktere, stavi je u navodnike:
+2. **Escape specijalni karakteri**: Ako vrednost sadr≈æi specijalne karaktere, stavi je u navodnike:
    ```bash
    fly secrets set "KEY=value with spaces" -a mathlearning-api
    ```
 
-3. **Tacka u nazivu**: Fly.io ne dozvoljava tacku (`.`) u nazivu secret-a. Umesto `Microsoft.AspNetCore` koristi `MicrosoftAspNetCore`
+3. **Taƒçka u nazivu**: Fly.io ne dozvoljava taƒçku (`.`) u nazivu secret-a. Umesto `Microsoft.AspNetCore` koristi `MicrosoftAspNetCore`
 
 4. **Prioritet konfiguracije**: Environment varijable/Secrets imaju prioritet nad appsettings.json
 
@@ -107,7 +107,7 @@ fly secrets set "Logging__LogLevel__MicrosoftAspNetCore=Warning" -a mathlearning
 
 ## Sinhronizacija sa appsettings.json
 
-Kada dodajeö novi setting u `appsettings.json`, ne zaboravi da ga dodaö i na Fly.io:
+Kada dodaje≈° novi setting u `appsettings.json`, ne zaboravi da ga doda≈° i na Fly.io:
 
 1. Dodaj setting u `src/MathLearning.Api/appsettings.json`
 2. Pretvori JSON putanju u Fly.io format (zameni `.` sa `__`)
@@ -117,7 +117,7 @@ Kada dodajeö novi setting u `appsettings.json`, ne zaboravi da ga dodaö i na Fly
 ## Primer kompletne sinhronizacije
 
 ```bash
-# 1. Procitaj trenutne secrets
+# 1. Proƒçitaj trenutne secrets
 fly secrets list -a mathlearning-api
 
 # 2. Dodaj nove secrets ako postoje novi u appsettings.json
@@ -130,15 +130,15 @@ fly deploy -a mathlearning-api
 ## Troubleshooting
 
 ### Problem: Secret nije prepoznat
-**Reöenje**: Proveri da li koristiö `__` (dva underscore) za hijerarhiju
+**Re≈°enje**: Proveri da li koristi≈° `__` (dva underscore) za hijerarhiju
 
 ### Problem: Aplikacija ne vidi secret
-**Reöenje**: Restartuj aplikaciju:
+**Re≈°enje**: Restartuj aplikaciju:
 ```bash
 fly apps restart mathlearning-api
 ```
 
-### Problem: Ne mogu da settujem secret sa tackom
-**Reöenje**: Ukloni tacku iz naziva:
-- ? `Microsoft.AspNetCore`
-- ? `MicrosoftAspNetCore`
+### Problem: Ne mogu da settujem secret sa taƒçkom
+**Re≈°enje**: Ukloni taƒçku iz naziva:
+- ‚ùå `Microsoft.AspNetCore`
+- ‚úÖ `MicrosoftAspNetCore`

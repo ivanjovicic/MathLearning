@@ -1,6 +1,6 @@
-# Unique Index for Duplicate Prevention
+﻿# Unique Index for Duplicate Prevention
 
-## ?? Database-Level Protection
+## 🔐 Database-Level Protection
 
 ### SQL Index
 ```sql
@@ -8,7 +8,7 @@ CREATE UNIQUE INDEX "UX_UserAnswers_NoDuplicate"
 ON "UserAnswers" ("UserId", "QuestionId", "AnsweredAt");
 ```
 
-## ?? Kako Radi?
+## 🎯 Kako Radi?
 
 ### Concept: Composite Unique Constraint
 
@@ -17,28 +17,28 @@ ON "UserAnswers" ("UserId", "QuestionId", "AnsweredAt");
 - `QuestionId` (koje pitanje)
 - `AnsweredAt` (kada je odgovoreno)
 
-### Primer: �ta Je Dozvoljeno?
+### Primer: Šta Je Dozvoljeno?
 
 ```sql
--- ? DOZVOL?ENO - Razliciti timestamp
+-- ✅ DOZVOLЈENO - Različiti timestamp
 UserId | QuestionId | AnsweredAt
    1   |     5      | 2026-01-22 10:00:00.000
-   1   |     5      | 2026-01-22 10:00:00.001  -- OK! Razlicit za 1ms
+   1   |     5      | 2026-01-22 10:00:00.001  -- OK! Različit za 1ms
 
--- ? DOZVOLJENO - Razlicit korisnik
+-- ✅ DOZVOLJENO - Različit korisnik
    1   |     5      | 2026-01-22 10:00:00
    2   |     5      | 2026-01-22 10:00:00  -- OK! Drugi user
 
--- ? DOZVOLJENO - Razlicito pitanje
+-- ✅ DOZVOLJENO - Različito pitanje
    1   |     5      | 2026-01-22 10:00:00
    1   |     6      | 2026-01-22 10:00:00  -- OK! Drugo pitanje
 
--- ? ODBIJENO - Identicna kombinacija
+-- ❌ ODBIJENO - Identična kombinacija
    1   |     5      | 2026-01-22 10:00:00
    1   |     5      | 2026-01-22 10:00:00  -- ERROR! Duplikat
 ```
 
-## ?? Defense in Depth: Tri Sloja Za�tite
+## 📊 Defense in Depth: Tri Sloja Zaštite
 
 ### Layer 1: Application Check (QuizEndpoints.cs)
 ```csharp
@@ -53,9 +53,9 @@ if (exists)
 ```
 
 **Benefit**: 
-- ? Brzo - provera pre insert-a
-- ? Izbjegava exception
-- ? Ne �titi od race conditions
+- ✅ Brzo - provera pre insert-a
+- ✅ Izbjegava exception
+- ❌ Ne štiti od race conditions
 
 ### Layer 2: Unique Index (Database)
 ```sql
@@ -68,10 +68,10 @@ VALUES (1, 5, '2026-01-22 10:00:00');  -- ERROR!
 ```
 
 **Benefit**:
-- ? **100% garantovano** - baza fizicki ne dozvoljava duplikat
-- ? �titi od race conditions
-- ? �titi od bugova u kodu
-- ? Baca exception (DbUpdateException)
+- ✅ **100% garantovano** - baza fizički ne dozvoljava duplikat
+- ✅ Štiti od race conditions
+- ✅ Štiti od bugova u kodu
+- ❌ Baca exception (DbUpdateException)
 
 ### Layer 3: Transaction Rollback
 ```csharp
@@ -86,11 +86,11 @@ catch (DbUpdateException ex) {
 ```
 
 **Benefit**:
-- ? Atomicnost - svi odgovori ili nijedan
-- ? Graceful error handling
-- ? Omogucava retry
+- ✅ Atomičnost - svi odgovori ili nijedan
+- ✅ Graceful error handling
+- ✅ Omogućava retry
 
-## ?? Race Condition Scenario
+## 🔄 Race Condition Scenario
 
 ### Problem Bez Unique Index
 
@@ -100,42 +100,42 @@ catch (DbUpdateException ex) {
 bool exists = await db.UserAnswers.AnyAsync(...); // false
 // T2: Insert
 db.UserAnswers.Add(...);
-await db.SaveChangesAsync(); // ? OK
+await db.SaveChangesAsync(); // ✅ OK
 ```
 
 **Thread 2** (u isto vreme):
 ```csharp
-// T1: Check duplicate (PRE nego �to Thread 1 commit-uje)
+// T1: Check duplicate (PRE nego što Thread 1 commit-uje)
 bool exists = await db.UserAnswers.AnyAsync(...); // false!
 // T2: Insert
 db.UserAnswers.Add(...);
-await db.SaveChangesAsync(); // ? OK (DUPLIKAT!)
+await db.SaveChangesAsync(); // ✅ OK (DUPLIKAT!)
 ```
 
-**Result**: **2 identicna reda** u bazi! ?
+**Result**: **2 identična reda** u bazi! ❌
 
-### Re�enje Sa Unique Index
+### Rešenje Sa Unique Index
 
 **Thread 1**:
 ```csharp
-await db.SaveChangesAsync(); // ? OK
+await db.SaveChangesAsync(); // ✅ OK
 ```
 
 **Thread 2** (paralelno):
 ```csharp
-await db.SaveChangesAsync(); // ? DbUpdateException!
-// Index fizicki blokira duplikat
+await db.SaveChangesAsync(); // ❌ DbUpdateException!
+// Index fizički blokira duplikat
 ```
 
-**Result**: **Samo 1 red** u bazi! ?
+**Result**: **Samo 1 red** u bazi! ✅
 
-## ?? Implementacija
+## 🎯 Implementacija
 
 ### 1. EF Core Configuration (ApiDbContext.cs)
 ```csharp
 builder.Entity<UserAnswer>(entity =>
 {
-    // Unique index za za�titu od duplikata
+    // Unique index za zaštitu od duplikata
     entity.HasIndex(e => new { e.UserId, e.QuestionId, e.AnsweredAt })
           .IsUnique()
           .HasDatabaseName("UX_UserAnswers_NoDuplicate");
@@ -190,7 +190,7 @@ catch (DbUpdateException ex) when (IsDuplicateKeyError(ex))
 }
 ```
 
-## ?? Performance Impact
+## 📊 Performance Impact
 
 ### Index Overhead
 
@@ -214,37 +214,37 @@ With Unique Index:
 ### Index Size
 
 ```sql
--- Prosecna velicina indexa
+-- Prosečna veličina indexa
 -- (UserId: 4 bytes) + (QuestionId: 4 bytes) + (AnsweredAt: 8 bytes) = 16 bytes per row
 -- Za 1M odgovora: ~16 MB indexa
 ```
 
 **Negligible** overhead za moderne baze.
 
-## ?? Testing
+## 🧪 Testing
 
 ### Test 1: Insert Duplicate (Should Fail)
 ```sql
 -- Prvi insert
 INSERT INTO "UserAnswers" ("UserId", "QuestionId", "AnsweredAt", ...)
 VALUES (1, 5, '2026-01-22 10:00:00', ...);
--- Result: ? OK
+-- Result: ✅ OK
 
--- Drugi insert (identican)
+-- Drugi insert (identičan)
 INSERT INTO "UserAnswers" ("UserId", "QuestionId", "AnsweredAt", ...)
 VALUES (1, 5, '2026-01-22 10:00:00', ...);
--- Result: ? ERROR - duplicate key value violates unique constraint
+-- Result: ❌ ERROR - duplicate key value violates unique constraint
 ```
 
 ### Test 2: Different Timestamp (Should Pass)
 ```sql
 INSERT INTO "UserAnswers" ("UserId", "QuestionId", "AnsweredAt", ...)
 VALUES (1, 5, '2026-01-22 10:00:00.000', ...);
--- Result: ? OK
+-- Result: ✅ OK
 
 INSERT INTO "UserAnswers" ("UserId", "QuestionId", "AnsweredAt", ...)
 VALUES (1, 5, '2026-01-22 10:00:00.001', ...);
--- Result: ? OK (razlicit timestamp)
+-- Result: ✅ OK (različit timestamp)
 ```
 
 ### Test 3: Concurrent Batch Submit
@@ -258,15 +258,15 @@ curl -X POST /api/quiz/offline-submit \
   -d '{"answers": [{"questionId": 1, "answeredAt": "2026-01-22T10:00:00Z"}]}'
 
 # Expected Result:
-# - Thread 1: ? importedCount = 1
-# - Thread 2: ?? importedCount = 0 (duplicate skipped by unique index)
+# - Thread 1: ✅ importedCount = 1
+# - Thread 2: ⚠️ importedCount = 0 (duplicate skipped by unique index)
 ```
 
-## ?? Edge Cases
+## ⚠️ Edge Cases
 
 ### Case 1: Timestamp Precision
 
-**Problem**: Client i server imaju razlicitu precision
+**Problem**: Client i server imaju različitu precision
 ```typescript
 // Client (JavaScript Date)
 answeredAt: "2026-01-22T10:00:00.123Z"  // milliseconds
@@ -305,7 +305,7 @@ answeredAt: new Date().toISOString(); // UTC
 AnsweredAt = answer.AnsweredAt.ToUniversalTime();
 ```
 
-## ?? Deployment Steps
+## 🚀 Deployment Steps
 
 ### 1. Apply Migration
 ```bash
@@ -337,11 +337,11 @@ curl -X POST /api/quiz/offline-submit \
 # Expected: importedCount = 1 (second skipped)
 ```
 
-## ?? Best Practices
+## 📝 Best Practices
 
-### ? DO
+### ✅ DO
 ```csharp
-// 1. Koristi unique index za kriticne data
+// 1. Koristi unique index za kritične data
 entity.HasIndex(e => new { e.UserId, e.QuestionId, e.AnsweredAt })
       .IsUnique();
 
@@ -355,44 +355,44 @@ bool exists = await db.UserAnswers.AnyAsync(...);
 if (!exists) db.UserAnswers.Add(...);
 ```
 
-### ? DON'T
+### ❌ DON'T
 ```csharp
-// 1. Ne ignori�i DbUpdateException
+// 1. Ne ignoriši DbUpdateException
 catch (DbUpdateException) {
-    // ? Ni�ta! Silent failure
+    // ❌ Ništa! Silent failure
 }
 
 // 2. Ne pravi prevelike composite indexe
 entity.HasIndex(e => new { e.Col1, e.Col2, e.Col3, e.Col4, e.Col5 })
       .IsUnique();
-// ? Prevelik index = sporiji inserts
+// ❌ Prevelik index = sporiji inserts
 
 // 3. Ne zaboravi timezone handling
-AnsweredAt = DateTime.Now; // ? Local time!
-AnsweredAt = DateTime.UtcNow; // ? UTC
+AnsweredAt = DateTime.Now; // ❌ Local time!
+AnsweredAt = DateTime.UtcNow; // ✅ UTC
 ```
 
-## ?? Summary
+## 🎯 Summary
 
 | Feature | Application Check | Unique Index | Combined |
 |---------|------------------|--------------|----------|
-| **Protection** | ?? Partial | ? Complete | ? **Best** |
-| **Race Conditions** | ? Vulnerable | ? Protected | ? **Protected** |
-| **Performance** | ? Fast | ? Faster | ? **Fastest** |
-| **Code Bugs** | ? Can fail | ? Always works | ? **Resilient** |
-| **Maintenance** | ?? Manual | ? Automatic | ? **Automatic** |
+| **Protection** | ⚠️ Partial | ✅ Complete | ✅ **Best** |
+| **Race Conditions** | ❌ Vulnerable | ✅ Protected | ✅ **Protected** |
+| **Performance** | ✅ Fast | ✅ Faster | ✅ **Fastest** |
+| **Code Bugs** | ❌ Can fail | ✅ Always works | ✅ **Resilient** |
+| **Maintenance** | ⚠️ Manual | ✅ Automatic | ✅ **Automatic** |
 
-## ?? Conclusion
+## 🏆 Conclusion
 
 **Unique Index** je:
-- ? **Best practice** za duplicate prevention
-- ? **Database-enforced** - 100% guaranteed
-- ? **Performance boost** - eliminates SELECT queries
-- ? **Race condition safe** - atomicnost garantovana
-- ? **Code-bug proof** - radi cak i ako aplikacija failuje
+- ✅ **Best practice** za duplicate prevention
+- ✅ **Database-enforced** - 100% guaranteed
+- ✅ **Performance boost** - eliminates SELECT queries
+- ✅ **Race condition safe** - atomičnost garantovana
+- ✅ **Code-bug proof** - radi čak i ako aplikacija failuje
 
 **Recommendation**: 
-1. ? Kreiraj unique index (done!)
-2. ? Zadr�i application-level check (optimization)
-3. ? Handle DbUpdateException gracefully
-4. ? Deploy na production
+1. ✅ Kreiraj unique index (done!)
+2. ✅ Zadrži application-level check (optimization)
+3. ✅ Handle DbUpdateException gracefully
+4. ✅ Deploy na production

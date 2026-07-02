@@ -1,9 +1,9 @@
-# Rate Limiting Implementation Guide
+﻿# Rate Limiting Implementation Guide
 
-## ?? Overview
-Implementiran je rate limiting sistem koji sprecava spam poku�aje odgovaranja na ista pitanja.
+## 📋 Overview
+Implementiran je rate limiting sistem koji sprečava spam pokušaje odgovaranja na ista pitanja.
 
-## ? �ta je dodato
+## ✅ Šta je dodato
 
 ### 1. **UserQuestionAttempt Entity**
 ```csharp
@@ -16,27 +16,27 @@ public class UserQuestionAttempt
 }
 ```
 
-**Svrha**: Bele�i svaki poku�aj odgovora na pitanje (ne ceka se validacija, cim zahtev stigne).
+**Svrha**: Beleži svaki pokušaj odgovora na pitanje (ne čeka se validacija, čim zahtev stigne).
 
 ### 2. **Rate Limiting Logika**
-- **Limit**: Max **10 poku�aja po pitanju u 1 minutu**
+- **Limit**: Max **10 pokušaja po pitanju u 1 minutu**
 - **Response**: HTTP 429 (Too Many Requests)
 - **Poruka**: "Too many attempts. Please slow down."
 
 ### 3. **Performance Indexes**
 ```sql
--- Kompozitni index za brzo pretra�ivanje
+-- Kompozitni index za brzo pretraživanje
 IX_UserQuestionAttempts_UserId_QuestionId_AttemptedAt
 
 -- Index za cleanup operacije
 IX_UserQuestionAttempts_AttemptedAt
 ```
 
-## ?? Implementacija u Submit Answer Endpoint
+## 🔧 Implementacija u Submit Answer Endpoint
 
 ### Pre validacije odgovora:
 ```csharp
-// ?? RATE LIMITING - Max 10 attempts per question per minute
+// 🚦 RATE LIMITING - Max 10 attempts per question per minute
 var oneMinuteAgo = DateTime.UtcNow.AddMinutes(-1);
 var recentAttemptsCount = await db.UserQuestionAttempts
     .CountAsync(a =>
@@ -61,19 +61,19 @@ db.UserQuestionAttempts.Add(new UserQuestionAttempt
 });
 ```
 
-## ??? Database Schema
+## 🗂️ Database Schema
 
 ### Table: UserQuestionAttempts
 | Column | Type | Description |
 |--------|------|-------------|
 | Id | int | Primary key |
-| UserId | int | User koji poku�ava |
+| UserId | int | User koji pokušava |
 | QuestionId | int | Pitanje na koje se odgovara |
-| AttemptedAt | timestamp | Vreme poku�aja (UTC) |
+| AttemptedAt | timestamp | Vreme pokušaja (UTC) |
 
-## ?? Kako radi
+## 📊 Kako radi
 
-### Scenario 1: Normalno kori�cenje
+### Scenario 1: Normalno korišćenje
 ```
 User odgovara na pitanje ID=5
 -> Count attempts za User/Question u poslednjih 60s
@@ -84,25 +84,25 @@ User odgovara na pitanje ID=5
 
 ### Scenario 2: Spam detektovan
 ```
-User �alje 11. request za pitanje ID=5 u roku od 1 minute
+User šalje 11. request za pitanje ID=5 u roku od 1 minute
 -> Count attempts = 10
 -> REJECT sa 429 Too Many Requests
 -> Ne procesira odgovor, ne dodaje attempt zapis
 ```
 
-## ?? Cleanup Strategija
+## 🧹 Cleanup Strategija
 
-### Opcija 1: Background Job (preporuceno za production)
+### Opcija 1: Background Job (preporučeno za production)
 ```csharp
 // U Program.cs dodaj:
 builder.Services.AddHostedService<AttemptCleanupService>();
 
-// Cleanup service bri�e zapise starije od 24h svaki sat
+// Cleanup service briše zapise starije od 24h svaki sat
 ```
 
 ### Opcija 2: Manual cleanup (za development)
 ```sql
--- Bri�i poku�aje starije od 24h
+-- Briši pokušaje starije od 24h
 DELETE FROM "UserQuestionAttempts"
 WHERE "AttemptedAt" < NOW() - INTERVAL '24 hours';
 ```
@@ -113,7 +113,7 @@ WHERE "AttemptedAt" < NOW() - INTERVAL '24 hours';
 -- Konfiguracija za auto-cleanup starih particija
 ```
 
-## ?? Deployment Steps
+## 🚀 Deployment Steps
 
 1. **Primeni migration**:
 ```bash
@@ -122,7 +122,7 @@ dotnet ef database update --project src/MathLearning.Infrastructure --startup-pr
 
 2. **Testiraj rate limiting**:
 ```bash
-# Po�alji 11 zahteva brzo za isto pitanje
+# Pošalji 11 zahteva brzo za isto pitanje
 for i in {1..11}; do
   curl -X POST https://localhost:5001/api/quiz/answer \
     -H "Authorization: Bearer $TOKEN" \
@@ -131,11 +131,11 @@ done
 ```
 
 3. **Proveri logs**:
-Ocekivano: prvih 10 zahteva prolaze, 11. vraca 429.
+Očekivano: prvih 10 zahteva prolaze, 11. vraća 429.
 
-## ?? Configuration Options (opciono)
+## ⚙️ Configuration Options (opciono)
 
-Mo�e� dodati konfiguraciju umesto hardcoded vrednosti:
+Možeš dodati konfiguraciju umesto hardcoded vrednosti:
 
 ```csharp
 // appsettings.json
@@ -151,63 +151,63 @@ var config = ctx.RequestServices.GetRequiredService<IConfiguration>();
 int maxAttempts = config.GetValue<int>("RateLimiting:MaxAttemptsPerMinute");
 ```
 
-## ?? Sigurnost
+## 🔒 Sigurnost
 
 ### Prednosti:
-? Sprecava brute-force attacking (nasumicno probavanje odgovora)  
-? �tedi server resurse (CPU, DB connections)  
-? Cini botove/skripte te�e izvodljivim  
-? Ne utice na normalne korisnike (10 poku�aja u 1 min je dovoljno)
+✅ Sprečava brute-force attacking (nasumično probavanje odgovora)  
+✅ Štedi server resurse (CPU, DB connections)  
+✅ Čini botove/skripte teže izvodljivim  
+✅ Ne utiče na normalne korisnike (10 pokušaja u 1 min je dovoljno)
 
 ### Dodatni slojevi (opciono):
 - **Global rate limit** - Max requests per user per minute (svi endpointi)
 - **IP-based rate limit** - Limit po IP adresi (pre autentifikacije)
-- **CAPTCHA** - Ako se detektuje spam, zatra�i CAPTCHA
+- **CAPTCHA** - Ako se detektuje spam, zatraži CAPTCHA
 
-## ?? Testing Scenarios
+## 📝 Testing Scenarios
 
 ### Test 1: Normal usage
 ```
-? 5 attempts in 2 minutes ? All pass
+✅ 5 attempts in 2 minutes → All pass
 ```
 
 ### Test 2: Rapid attempts
 ```
-? 11 attempts in 30 seconds ? First 10 pass, 11th returns 429
+❌ 11 attempts in 30 seconds → First 10 pass, 11th returns 429
 ```
 
 ### Test 3: Different questions
 ```
-? 10 attempts on Q1, 10 attempts on Q2 ? All pass (different questions)
+✅ 10 attempts on Q1, 10 attempts on Q2 → All pass (different questions)
 ```
 
 ### Test 4: Window expiry
 ```
-? 10 attempts, wait 61 seconds, 10 more attempts ? All pass
+✅ 10 attempts, wait 61 seconds, 10 more attempts → All pass
 ```
 
-## ?? Troubleshooting
+## 🐛 Troubleshooting
 
 ### Problem: Rate limit hit prematurely
 **Uzrok**: Clock skew ili stari zapisi nisu obrisani  
-**Re�enje**: Proveri `AttemptedAt` u bazi, osiguraj da je cleanup aktivan
+**Rešenje**: Proveri `AttemptedAt` u bazi, osiguraj da je cleanup aktivan
 
 ### Problem: Performance degradacija
-**Uzrok**: Previ�e zapisa u tabeli  
-**Re�enje**: Pokreni cleanup, dodaj composite index
+**Uzrok**: Previše zapisa u tabeli  
+**Rešenje**: Pokreni cleanup, dodaj composite index
 
 ### Problem: False positives
-**Uzrok**: Vi�e korisnika na istoj ma�ini (shared account)  
-**Re�enje**: Uvedi IP-based tracking ili relaksiraj limit
+**Uzrok**: Više korisnika na istoj mašini (shared account)  
+**Rešenje**: Uvedi IP-based tracking ili relaksiraj limit
 
-## ?? Metrics to Track
+## 📈 Metrics to Track
 
 - **Average attempts per question** (da bi se podesio optimalni limit)
-- **429 response rate** (koliko cesto ljudi pogadaju limit)
+- **429 response rate** (koliko često ljudi pogađaju limit)
 - **Table growth rate** (da bi se odredio cleanup interval)
 
 ---
 
-**Status**: ? Implementirano  
-**Build**: ? Successful  
-**Migration**: ?? Ready to apply
+**Status**: ✅ Implementirano  
+**Build**: ✅ Successful  
+**Migration**: 📋 Ready to apply

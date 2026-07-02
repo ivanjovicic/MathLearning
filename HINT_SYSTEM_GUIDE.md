@@ -1,13 +1,13 @@
-# Hint System - Complete Guide
+﻿# Hint System - Complete Guide
 
-## ?? Overview
+## 💡 Overview
 
-Implementiran **completan Hint sistem** koji omogucava korisnicima da dobiju pomoc za pitanja kroz tri tipa hint-ova:
-1. **Formula** - Matematicka formula potrebna za re�avanje
-2. **Clue** - Hint koji vodi ka re�enju
-3. **Solution** - Kompletno obja�njenje (najte�i hint)
+Implementiran **completan Hint sistem** koji omogućava korisnicima da dobiju pomoć za pitanja kroz tri tipa hint-ova:
+1. **Formula** - Matematička formula potrebna za rešavanje
+2. **Clue** - Hint koji vodi ka rešenju
+3. **Solution** - Kompletno objašnjenje (najteži hint)
 
-## ?? System Components
+## 📊 System Components
 
 ### 1. Question Hints
 **Added to Questions table**:
@@ -19,12 +19,12 @@ ADD COLUMN "HintDifficulty" INT DEFAULT 1;
 ```
 
 **Properties**:
-- `HintFormula` - Matematicka formula (npr. "a� + b� = c�")
+- `HintFormula` - Matematička formula (npr. "a² + b² = c²")
 - `HintClue` - Hint (npr. "Koristi Pitagorinu teoremu")
-- `HintDifficulty` - Te�ina hint-a (1-3)
+- `HintDifficulty` - Težina hint-a (1-3)
   - 1 = Easy (formula je dovoljna)
   - 2 = Medium (potreban je clue)
-  - 3 = Hard (potrebno kompletno obja�njenje)
+  - 3 = Hard (potrebno kompletno objašnjenje)
 
 ### 2. UserHints Table
 **Tracks hint usage**:
@@ -45,30 +45,30 @@ CREATE TABLE "UserHints" (
 
 ---
 
-## ?? Hint Flow
+## 🔄 Hint Flow
 
 ### Request Hint
 ```
-User ? POST /api/hints/get { questionId, hintType }
-?
+User → POST /api/hints/get { questionId, hintType }
+↓
 Server checks:
   1. Does question exist?
   2. Is hint type valid?
   3. Does hint content exist?
-?
+↓
 Server records usage in UserHints
-?
-Server ? { hintType, hintContent, hintDifficulty, success }
+↓
+Server → { hintType, hintContent, hintDifficulty, success }
 ```
 
 ### Hint Types
-1. **formula** ? `question.HintFormula`
-2. **clue** ? `question.HintClue`
-3. **solution** ? `question.Explanation`
+1. **formula** → `question.HintFormula`
+2. **clue** → `question.HintClue`
+3. **solution** → `question.Explanation`
 
 ---
 
-## ??? API Endpoints
+## 🛠️ API Endpoints
 
 ### POST /api/hints/get
 **Description**: Get a hint for a question
@@ -85,7 +85,7 @@ Server ? { hintType, hintContent, hintDifficulty, success }
 ```json
 {
   "hintType": "formula",
-  "hintContent": "a� + b� = c�",
+  "hintContent": "a² + b² = c²",
   "hintDifficulty": 1,
   "success": true
 }
@@ -143,7 +143,7 @@ Server ? { hintType, hintContent, hintDifficulty, success }
   {
     "id": 122,
     "questionId": 4,
-    "questionText": "Re�ite jednacinu: 2x + 5 = 15",
+    "questionText": "Rešite jednačinu: 2x + 5 = 15",
     "hintType": "clue",
     "usedAt": "2026-01-23T10:25:00Z"
   }
@@ -181,7 +181,7 @@ Server ? { hintType, hintContent, hintDifficulty, success }
 
 ---
 
-## ?? Example Usage
+## 📝 Example Usage
 
 ### Scenario: User Stuck on Question
 
@@ -215,7 +215,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/hints/get \
 ```json
 {
   "hintType": "formula",
-  "hintContent": "a� + b� = c�",
+  "hintContent": "a² + b² = c²",
   "hintDifficulty": 1,
   "success": true
 }
@@ -232,7 +232,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/hints/get \
 ```json
 {
   "hintType": "clue",
-  "hintContent": "Primeni Pitagorinu teoremu. Treci ugao je 90�.",
+  "hintContent": "Primeni Pitagorinu teoremu. Treći ugao je 90°.",
   "hintDifficulty": 2,
   "success": true
 }
@@ -249,7 +249,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/hints/get \
 ```json
 {
   "hintType": "solution",
-  "hintContent": "Koristi Pitagorinu teoremu: a� + b� = c�. Za stranice 3 i 4, hipotenuza je v(3� + 4�) = v25 = 5.",
+  "hintContent": "Koristi Pitagorinu teoremu: a² + b² = c². Za stranice 3 i 4, hipotenuza je √(3² + 4²) = √25 = 5.",
   "hintDifficulty": 3,
   "success": true
 }
@@ -257,29 +257,29 @@ curl -X POST https://mathlearning-api.fly.dev/api/hints/get \
 
 ---
 
-## ?? Hint Strategy (Progressive Disclosure)
+## 🎯 Hint Strategy (Progressive Disclosure)
 
 ### Level 1: Formula (Easiest)
 **When to use**: User needs mathematical formula
 **Example**: 
-- Question: "Izracunaj hipotenuzu trougla sa stranicama 3 i 4"
-- Formula: "a� + b� = c�"
+- Question: "Izračunaj hipotenuzu trougla sa stranicama 3 i 4"
+- Formula: "a² + b² = c²"
 
 ### Level 2: Clue (Medium)
 **When to use**: User needs direction/approach
 **Example**:
-- Question: "Re�ite: 2x + 5 = 15"
+- Question: "Rešite: 2x + 5 = 15"
 - Clue: "Oduzmi 5 sa obe strane, zatim podeli sa 2"
 
 ### Level 3: Solution (Hardest)
 **When to use**: User completely stuck
 **Example**:
-- Question: "Re�ite: 2x + 5 = 15"
-- Solution: "2x + 5 = 15 ? 2x = 10 ? x = 5"
+- Question: "Rešite: 2x + 5 = 15"
+- Solution: "2x + 5 = 15 → 2x = 10 → x = 5"
 
 ---
 
-## ?? Analytics & Insights
+## 📊 Analytics & Insights
 
 ### Hint Usage Patterns
 ```sql
@@ -310,7 +310,7 @@ ORDER BY SolutionPercentage DESC;
 
 ---
 
-## ?? Client Implementation
+## 💻 Client Implementation
 
 ### React/TypeScript Example
 ```typescript
@@ -370,19 +370,19 @@ const QuestionHintButton: React.FC<{ questionId: number }> = ({ questionId }) =>
       
       {availableHints?.availableHints.formula.available && !availableHints.availableHints.formula.used && (
         <button onClick={() => requestHint('formula')}>
-          ?? Show Formula
+          💡 Show Formula
         </button>
       )}
       
       {availableHints?.availableHints.clue.available && !availableHints.availableHints.clue.used && (
         <button onClick={() => requestHint('clue')}>
-          ?? Get Clue
+          🔍 Get Clue
         </button>
       )}
       
       {availableHints?.availableHints.solution.available && !availableHints.availableHints.solution.used && (
         <button onClick={() => requestHint('solution')}>
-          ?? Show Solution
+          📖 Show Solution
         </button>
       )}
 
@@ -411,7 +411,7 @@ const QuestionHintButton: React.FC<{ questionId: number }> = ({ questionId }) =>
             <MudButton OnClick="() => RequestHint('formula')" 
                        Variant="Variant.Filled" 
                        Color="Color.Primary">
-                ?? Show Formula
+                💡 Show Formula
             </MudButton>
         }
         
@@ -420,7 +420,7 @@ const QuestionHintButton: React.FC<{ questionId: number }> = ({ questionId }) =>
             <MudButton OnClick="() => RequestHint('clue')" 
                        Variant="Variant.Filled" 
                        Color="Color.Info">
-                ?? Get Clue
+                🔍 Get Clue
             </MudButton>
         }
         
@@ -429,7 +429,7 @@ const QuestionHintButton: React.FC<{ questionId: number }> = ({ questionId }) =>
             <MudButton OnClick="() => RequestHint('solution')" 
                        Variant="Variant.Filled" 
                        Color="Color.Warning">
-                ?? Show Solution
+                📖 Show Solution
             </MudButton>
         }
     }
@@ -466,7 +466,7 @@ const QuestionHintButton: React.FC<{ questionId: number }> = ({ questionId }) =>
 
 ---
 
-## ?? Gamification Ideas
+## 🎓 Gamification Ideas
 
 ### Hint Economy
 **Reward users for not using hints**:
@@ -490,7 +490,7 @@ Solution used: +10 XP
 
 ---
 
-## ?? Testing
+## 🧪 Testing
 
 ### Test 1: Get Formula Hint
 ```bash
@@ -519,7 +519,7 @@ curl http://localhost:5000/api/hints/history?limit=10 \
 
 ---
 
-## ?? Deployment
+## 🚀 Deployment
 
 ```bash
 # 1. Apply migration
@@ -535,7 +535,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/hints/get ...
 
 ---
 
-## ?? Database Schema
+## 📊 Database Schema
 
 ### Questions Table (Updated)
 ```sql
@@ -576,13 +576,13 @@ CREATE INDEX "IX_UserHints_UsedAt" ON "UserHints" ("UsedAt");
 
 ---
 
-## ?? Conclusion
+## 🏆 Conclusion
 
 **Hint System** provides:
-- ? **Better Learning** - Progressive help for students
-- ? **Reduced Frustration** - Students don't get stuck
-- ? **Analytics** - Track which questions are hard
-- ? **Gamification** - Reward hint-free solving
-- ? **Production-ready** - Scalable, indexed, tracked
+- ✅ **Better Learning** - Progressive help for students
+- ✅ **Reduced Frustration** - Students don't get stuck
+- ✅ **Analytics** - Track which questions are hard
+- ✅ **Gamification** - Reward hint-free solving
+- ✅ **Production-ready** - Scalable, indexed, tracked
 
-Build successful ? - Ready for production! ??
+Build successful ✅ - Ready for production! 🚀

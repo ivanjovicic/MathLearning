@@ -1,24 +1,24 @@
-# ?? Fly.io Deployment Guide
+﻿# 🚀 Fly.io Deployment Guide
 
-## ? Problem
+## ❌ Problem
 
 ```bash
 PS C:\Users\Alex\source\repos\Mathlearning\MathLearning\src\MathLearning.Infrastructure> fly deploy
 Error: the config for your app is missing an app name, add an app field to the fly.toml file or specify with the -a flag
 ```
 
-**Uzrok**: Pogre�an direktorijum! Mora� biti u **root** direktorijumu gde se nalazi `fly.toml`.
+**Uzrok**: Pogrešan direktorijum! Moraš biti u **root** direktorijumu gde se nalazi `fly.toml`.
 
 ---
 
-## ? Re�enje
+## ✅ Rešenje
 
 ### Step 1: Navigiraj do Root Direktorijuma
 ```bash
-# Trenutno si ovde (POGRE�NO):
+# Trenutno si ovde (POGREŠNO):
 PS C:\Users\Alex\source\repos\Mathlearning\MathLearning\src\MathLearning.Infrastructure>
 
-# Idi ovde (TACNO):
+# Idi ovde (TAČNO):
 cd ..\..
 # Ili
 cd C:\Users\Alex\source\repos\Mathlearning\MathLearning
@@ -42,9 +42,9 @@ fly deploy
 
 ---
 
-## ?? Pre-Deployment Checklist
+## 📋 Pre-Deployment Checklist
 
-### 1. ? Verifikuj Connection String
+### 1. ✅ Verifikuj Connection String
 **Lokacija**: Fly.io Secrets (ne u kodu!)
 
 ```bash
@@ -52,19 +52,19 @@ fly deploy
 fly secrets set ConnectionStrings__Default="Host=ep-wispy-smoke-ag4qtxhe-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Username=neondb_owner;Password=<NEON_PASSWORD>;Database=neondb;SSL Mode=Require;Trust Server Certificate=true;"
 ```
 
-### 2. ? Set JWT Settings
+### 2. ✅ Set JWT Settings
 ```bash
 fly secrets set JwtSettings__SecretKey="YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
 fly secrets set JwtSettings__Issuer="MathLearningAPI"
 fly secrets set JwtSettings__Audience="MathLearningApp"
 ```
 
-### 3. ? Set ASPNETCORE_ENVIRONMENT
+### 3. ✅ Set ASPNETCORE_ENVIRONMENT
 ```bash
 fly secrets set ASPNETCORE_ENVIRONMENT="Production"
 ```
 
-### 4. ? Verifikuj Migrations
+### 4. ✅ Verifikuj Migrations
 ```bash
 # Apply all pending migrations
 cd src/MathLearning.Infrastructure
@@ -72,16 +72,16 @@ dotnet ef database update --context ApiDbContext --startup-project ../MathLearni
 ```
 
 **Expected migrations**:
-- ? `InitialCreate`
-- ? `AddRefreshTokens`
-- ? `AddHintSystem`
-- ? `AddUserProfilesAndCoins`
-- ? `AddApplicationLogging`
-- ? `AddPerformanceIndexes`
+- ✅ `InitialCreate`
+- ✅ `AddRefreshTokens`
+- ✅ `AddHintSystem`
+- ✅ `AddUserProfilesAndCoins`
+- ✅ `AddApplicationLogging`
+- ✅ `AddPerformanceIndexes`
 
 ---
 
-## ?? Deployment Steps
+## 🚀 Deployment Steps
 
 ### Complete Deployment Command Sequence
 ```bash
@@ -110,7 +110,7 @@ fly logs
 
 ---
 
-## ?? Deployment Process
+## 📊 Deployment Process
 
 ### What Happens During `fly deploy`?
 
@@ -148,7 +148,7 @@ fly logs
 
 ---
 
-## ?? Troubleshooting
+## 🔍 Troubleshooting
 
 ### Issue 1: "Error: the config for your app is missing an app name"
 **Solution**: Wrong directory. Go to root where `fly.toml` is located.
@@ -189,7 +189,7 @@ dotnet ef database update --context ApiDbContext --startup-project ../MathLearni
 
 ---
 
-## ?? fly.toml Configuration
+## 📋 fly.toml Configuration
 
 ```toml
 app = "mathlearning-api"
@@ -222,19 +222,19 @@ primary_region = "ams"
 
 ---
 
-## ?? Security Best Practices
+## 🔒 Security Best Practices
 
 ### 1. Never Commit Secrets
 ```bash
-# ? DON'T do this:
+# ❌ DON'T do this:
 # appsettings.json
 {
   "ConnectionStrings": {
-    "Default": "Host=...;Password=mypassword;"  // ? NEVER!
+    "Default": "Host=...;Password=mypassword;"  // ❌ NEVER!
   }
 }
 
-# ? DO this:
+# ✅ DO this:
 fly secrets set ConnectionStrings__Default="..."
 ```
 
@@ -255,7 +255,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default");
 
 ---
 
-## ?? Post-Deployment Verification
+## 📊 Post-Deployment Verification
 
 ### 1. Check App Status
 ```bash
@@ -312,7 +312,7 @@ fly dashboard
 
 ---
 
-## ?? Common Deployment Scenarios
+## 🎯 Common Deployment Scenarios
 
 ### Scenario 1: First-Time Deployment
 ```bash
@@ -343,29 +343,29 @@ fly releases rollback v4
 
 ---
 
-## ?? Success Indicators
+## 🏆 Success Indicators
 
 After successful deployment, you should see:
 
-? **Build Success**:
+✅ **Build Success**:
 ```
 --> Image: registry.fly.io/mathlearning-api:deployment-...
 --> Pushing image done
 ```
 
-? **Deploy Success**:
+✅ **Deploy Success**:
 ```
 ==> Deploying
 --> v5 deployed successfully
 ```
 
-? **Health Check Pass**:
+✅ **Health Check Pass**:
 ```
 --> Monitoring deployment
 --> App is healthy!
 ```
 
-? **API Accessible**:
+✅ **API Accessible**:
 ```bash
 curl https://mathlearning-api.fly.dev/
 # Response: "MathLearning API is running"
@@ -373,7 +373,7 @@ curl https://mathlearning-api.fly.dev/
 
 ---
 
-## ?? Quick Reference Commands
+## 📝 Quick Reference Commands
 
 ```bash
 # Deploy app
@@ -412,15 +412,15 @@ fly releases rollback v3
 
 ---
 
-## ?? Conclusion
+## 🎓 Conclusion
 
 **Correct Deployment Steps**:
-1. ? Navigate to **root directory** (`cd C:\Users\...\MathLearning`)
-2. ? Verify `fly.toml` exists (`ls fly.toml`)
-3. ? Set secrets (`fly secrets set ...`)
-4. ? Deploy (`fly deploy`)
-5. ? Verify (`fly status`, `fly logs`)
+1. ✅ Navigate to **root directory** (`cd C:\Users\...\MathLearning`)
+2. ✅ Verify `fly.toml` exists (`ls fly.toml`)
+3. ✅ Set secrets (`fly secrets set ...`)
+4. ✅ Deploy (`fly deploy`)
+5. ✅ Verify (`fly status`, `fly logs`)
 
 **Common Mistake**: Running `fly deploy` from wrong directory (src/MathLearning.Infrastructure instead of root).
 
-Happy deploying! ??
+Happy deploying! 🚀

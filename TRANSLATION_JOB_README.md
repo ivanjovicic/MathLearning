@@ -1,4 +1,4 @@
-# MathLearning Translation Job
+﻿# MathLearning Translation Job
 
 This console application automatically generates translations for questions and options using external translation APIs.
 
@@ -67,8 +67,8 @@ scripts\run-translation-job.bat sr google
 ```
 Starting translation job: sr using google
 Found 8 questions without 'sr' translation.
-? Translated Q=1 ? sr
-? Translated Q=2 ? sr
+✓ Translated Q=1 → sr
+✓ Translated Q=2 → sr
 ...
 Completed: 8 translated, 0 errors
 ```

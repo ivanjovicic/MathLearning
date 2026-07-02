@@ -1,17 +1,17 @@
-# ?? Mobile User Registration System - Complete Guide
+﻿# 📱 Mobile User Registration System - Complete Guide
 
-## ?? Overview
+## 🎯 Overview
 
-Implementiran **kompletan sistem za registraciju mobilnih korisnika** koji omogucava:
-- ?? **Public registration** - Bilo ko mo�e da kreira nalog
-- ?? **Automatic authentication** - Auto-login nakon registracije
-- ?? **Welcome bonus** - 100 coins za nove korisnike
-- ?? **User profiles** - Username, DisplayName, Stats
-- ?? **Secure** - Password hashing, JWT tokens, Refresh tokens
+Implementiran **kompletan sistem za registraciju mobilnih korisnika** koji omogućava:
+- 📱 **Public registration** - Bilo ko može da kreira nalog
+- 🔐 **Automatic authentication** - Auto-login nakon registracije
+- 💰 **Welcome bonus** - 100 coins za nove korisnike
+- 👤 **User profiles** - Username, DisplayName, Stats
+- 🔒 **Secure** - Password hashing, JWT tokens, Refresh tokens
 
 ---
 
-## ??? API Endpoints
+## 🛠️ API Endpoints
 
 ### POST /auth/mobile/register
 **Description**: Register new mobile user (public endpoint)
@@ -200,20 +200,20 @@ Authorization: Bearer <accessToken>
 
 ---
 
-## ?? Complete Mobile App Flow
+## 🔄 Complete Mobile App Flow
 
 ### 1. Registration Flow
 ```
 User opens app (first time)
-?
+↓
 User fills registration form:
   - Username: "john_doe"
   - Email: "john@example.com"
   - Password: "SecurePass123"
   - Display Name: "John Doe"
-?
-App ? POST /auth/mobile/register
-?
+↓
+App → POST /auth/mobile/register
+↓
 Server:
   1. Validates input
   2. Checks username/email uniqueness
@@ -222,9 +222,9 @@ Server:
   5. Generates Access Token (30 min)
   6. Generates Refresh Token (14 days)
   7. Stores Refresh Token in database
-?
-Server ? { success: true, tokens: {...}, profile: {...} }
-?
+↓
+Server → { success: true, tokens: {...}, profile: {...} }
+↓
 App:
   1. Stores Access Token in memory
   2. Stores Refresh Token in SecureStorage
@@ -235,38 +235,38 @@ App:
 ### 2. Auto-Login on Subsequent Opens
 ```
 User opens app (has Refresh Token stored)
-?
+↓
 App checks SecureStorage
-?
+↓
 Refresh Token found!
-?
-App ? POST /auth/refresh { refreshToken: "..." }
-?
-Server ? { accessToken: "...", refreshToken: "..." }
-?
+↓
+App → POST /auth/refresh { refreshToken: "..." }
+↓
+Server → { accessToken: "...", refreshToken: "..." }
+↓
 App updates tokens
-?
+↓
 App navigates to Home Screen (auto-logged in)
 ```
 
 ### 3. Profile Update Flow
 ```
 User navigates to Settings
-?
+↓
 User changes Display Name to "MathMaster"
-?
-App ? PUT /api/users/profile { displayName: "MathMaster" }
-?
+↓
+App → PUT /api/users/profile { displayName: "MathMaster" }
+↓
 Server updates UserProfile.DisplayName
-?
-Server ? Updated profile
-?
+↓
+Server → Updated profile
+↓
 App updates UI
 ```
 
 ---
 
-## ?? Mobile Client Implementation (Flutter/Dart)
+## 💻 Mobile Client Implementation (Flutter/Dart)
 
 ### Registration
 ```dart
@@ -360,7 +360,7 @@ class UserService {
 
 ---
 
-## ?? Security Features
+## 🔐 Security Features
 
 ### 1. Password Hashing
 ```csharp
@@ -406,7 +406,7 @@ if (existing != null) return Conflict("Username taken");
 
 ---
 
-## ?? Database Schema Updates
+## 📊 Database Schema Updates
 
 ### UserProfiles Table (Updated)
 ```sql
@@ -424,7 +424,7 @@ ON "UserProfiles" ("DisplayName");
 
 ---
 
-## ?? Testing
+## 🧪 Testing
 
 ### Test 1: Register New User
 ```bash
@@ -474,7 +474,7 @@ curl "http://localhost:5000/api/users/search?query=test"
 
 ---
 
-## ?? Deployment
+## 🚀 Deployment
 
 ```bash
 # 1. Apply migration
@@ -492,7 +492,7 @@ curl -X POST https://mathlearning-api.fly.dev/auth/mobile/register \
 
 ---
 
-## ?? Validation Rules Summary
+## 📋 Validation Rules Summary
 
 | Field | Min Length | Max Length | Format | Unique | Required |
 |-------|-----------|-----------|--------|--------|----------|
@@ -503,16 +503,16 @@ curl -X POST https://mathlearning-api.fly.dev/auth/mobile/register \
 
 ---
 
-## ?? Best Practices
+## 🎯 Best Practices
 
-### ? DO
+### ✅ DO
 1. **Store Refresh Token securely** - Use SecureStorage/Keychain
 2. **Validate on server** - Never trust client validation
 3. **Use HTTPS** - Always encrypt traffic
 4. **Handle errors gracefully** - Show user-friendly messages
 5. **Auto-login** - Check Refresh Token on app start
 
-### ? DON'T
+### ❌ DON'T
 1. **Don't store passwords** - Only tokens
 2. **Don't expose sensitive data** - Password hashes, etc.
 3. **Don't skip validation** - Always validate input
@@ -521,14 +521,14 @@ curl -X POST https://mathlearning-api.fly.dev/auth/mobile/register \
 
 ---
 
-## ?? Conclusion
+## 🏆 Conclusion
 
 **Mobile User Registration System** provides:
-- ? **Public registration** - Anyone can create account
-- ? **Secure authentication** - JWT + Refresh tokens
-- ? **Welcome bonus** - 100 coins for new users
-- ? **User profiles** - Username, DisplayName, Stats
-- ? **Auto-login** - Seamless user experience
-- ? **Production-ready** - Validated, secured, tested
+- ✅ **Public registration** - Anyone can create account
+- ✅ **Secure authentication** - JWT + Refresh tokens
+- ✅ **Welcome bonus** - 100 coins for new users
+- ✅ **User profiles** - Username, DisplayName, Stats
+- ✅ **Auto-login** - Seamless user experience
+- ✅ **Production-ready** - Validated, secured, tested
 
-Build successful ? - Ready for mobile app integration! ????
+Build successful ✅ - Ready for mobile app integration! 📱🚀
