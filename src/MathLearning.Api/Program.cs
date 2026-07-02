@@ -357,11 +357,9 @@ try
     // Seed default admin user (only in Development or when explicitly enabled)
     try
     {
-        var seedAdminEnabled =
-            app.Environment.IsDevelopment()
-            || app.Configuration.GetValue<bool>("SeedAdmin:Enabled");
+        var seedAdminPolicy = SeedAdminStartupPolicy.Evaluate(app.Environment, app.Configuration);
 
-        if (seedAdminEnabled)
+        if (seedAdminPolicy.ShouldSeed)
         {
             if (!databaseStartupSucceeded)
             {
@@ -373,8 +371,19 @@ try
             }
             else
             {
-                await SeedAdminUser(app);
+                if (seedAdminPolicy.SuppressedPasswordReset)
+                {
+                    Log.Warning(
+                        "SeedAdmin:ResetPasswordOnStart ignored in {Environment}. Set SeedAdmin__AllowEmergencyPasswordReset=true only for an explicit one-time emergency reset.",
+                        app.Environment.EnvironmentName);
+                }
+
+                await SeedAdminUser(app, seedAdminPolicy);
             }
+        }
+        else if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("SeedAdmin:Enabled"))
+        {
+            Log.Warning(seedAdminPolicy.SkipReason ?? "SeedAdmin skipped.");
         }
         else
         {
@@ -419,12 +428,13 @@ try
     // Configure the HTTP request pipeline.
     // Fly terminates TLS at the edge and forwards to the app over HTTP.
     // Forwarded headers are required so ASP.NET Core can correctly detect scheme/host and avoid HTTPS redirect loops.
-    var forwardedHeadersOptions = new ForwardedHeadersOptions
-    {
-        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-    };
-    forwardedHeadersOptions.KnownNetworks.Clear();
-    forwardedHeadersOptions.KnownProxies.Clear();
+    // Physical peer IP is captured before forwarded headers so rate limiting cannot be bypassed via spoofed X-Forwarded-For.
+    app.UseMiddleware<MathLearning.Api.Middleware.ConnectionRemoteIpMiddleware>();
+
+    var forwardedHeadersOptions = MathLearning.Api.Startup.ForwardedHeadersConfiguration.CreateOptions(app.Configuration);
+    MathLearning.Api.Startup.ForwardedHeadersConfiguration.ValidateProductionTrustBoundary(
+        app.Environment,
+        forwardedHeadersOptions);
     app.UseForwardedHeaders(forwardedHeadersOptions);
 
     if (app.Environment.IsDevelopment())
@@ -444,10 +454,11 @@ try
     // Enable CORS
     app.UseCors();
 
-    // Sliding-window in-memory rate-limiter (single-node)
+    app.UseAuthentication();
+
+    // Sliding-window in-memory rate-limiter (single-node); keys authenticated users by user id, anonymous by physical peer IP.
     app.UseMiddleware<MathLearning.Api.Middleware.InMemorySlidingWindowRateLimitMiddleware>();
 
-    app.UseAuthentication();
     app.UseAuthorization();
 
     // Health endpoint for Fly.io / uptime checks
@@ -662,7 +673,7 @@ finally
 }
 
 // Seed admin user method
-static async Task SeedAdminUser(WebApplication app)
+static async Task SeedAdminUser(WebApplication app, SeedAdminStartupPolicy.Evaluation policy)
 {
     using var scope = app.Services.CreateScope();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
@@ -682,7 +693,7 @@ static async Task SeedAdminUser(WebApplication app)
             var resetResult = await userManager.ResetPasswordAsync(user, resetToken, password);
             if (!resetResult.Succeeded)
             {
-                Log.Warning($"? Failed to reset password for '{user.UserName}': {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
+                Log.Warning("Failed to reset password for admin user '{AdminUsername}'.", user.UserName);
             }
         }
         else
@@ -690,26 +701,14 @@ static async Task SeedAdminUser(WebApplication app)
             var addResult = await userManager.AddPasswordAsync(user, password);
             if (!addResult.Succeeded)
             {
-                Log.Warning($"? Failed to add password for '{user.UserName}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+                Log.Warning("Failed to add password for admin user '{AdminUsername}'.", user.UserName);
             }
         }
     }
-    
-    // ?? Seed Admin User
-    var adminUsername = app.Configuration["SeedAdmin:Username"] ?? "admin";
-    var adminPassword =
-        app.Configuration["SeedAdmin:Password"]
-        ?? (app.Environment.IsDevelopment() ? "UcimMatu!123" : null);
 
-    var resetAdminPasswordOnStart =
-        app.Environment.IsDevelopment()
-        || app.Configuration.GetValue<bool>("SeedAdmin:ResetPasswordOnStart");
-
-    if (string.IsNullOrWhiteSpace(adminPassword))
-    {
-        Log.Warning("SeedAdmin enabled but `SeedAdmin__Password` not set. Skipping admin seeding.");
-        return;
-    }
+    var adminUsername = policy.Username;
+    var adminPassword = policy.Password!;
+    var resetAdminPasswordOnStart = policy.ResetPasswordOnStart;
 
     var existingAdmin = await userManager.FindByNameAsync(adminUsername);
     
@@ -718,7 +717,7 @@ static async Task SeedAdminUser(WebApplication app)
         var admin = new IdentityUser
         {
             UserName = adminUsername,
-            Email = app.Configuration["SeedAdmin:Email"] ?? "admin@mathlearning.com",
+            Email = policy.Email,
             EmailConfirmed = true
         };
         
@@ -726,10 +725,9 @@ static async Task SeedAdminUser(WebApplication app)
         
         if (result.Succeeded)
         {
-            Log.Information("? Admin user created successfully!");
+            Log.Information("Admin user '{AdminUsername}' created during startup bootstrap.", adminUsername);
             await userManager.AddToRoleAsync(admin, DesignTokenSecurity.AdminRole);
             
-            // Create UserProfile for admin (UserId matches Identity key)
             string adminUserId = admin.Id;
              
             if (!await db.UserProfiles.AnyAsync(p => p.UserId == adminUserId))
@@ -748,17 +746,17 @@ static async Task SeedAdminUser(WebApplication app)
                 };
                 db.UserProfiles.Add(adminProfile);
                 await db.SaveChangesAsync();
-                Log.Information("? Admin user profile created!");
+                Log.Information("Admin user profile created for '{AdminUsername}'.", adminUsername);
             }
         }
         else
         {
-            Log.Warning($"? Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            Log.Warning("Failed to create admin user '{AdminUsername}'.", adminUsername);
         }
     }
     else
     {
-        Log.Information("? Admin user already exists.");
+        Log.Information("Admin user '{AdminUsername}' already exists.", adminUsername);
         if (!await userManager.IsInRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole))
         {
             await userManager.AddToRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole);
@@ -766,7 +764,9 @@ static async Task SeedAdminUser(WebApplication app)
         if (resetAdminPasswordOnStart)
         {
             await EnsurePasswordAsync(userManager, existingAdmin, adminPassword);
-            Log.Information("? Admin password ensured on startup (SeedAdmin:ResetPasswordOnStart).");
+            Log.Information(
+                "Admin password reset completed for '{AdminUsername}' during startup bootstrap.",
+                adminUsername);
         }
     }
 }

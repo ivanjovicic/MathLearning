@@ -95,6 +95,8 @@ public sealed class PracticeHangfireJobs : IPracticeHangfireJobs
         await facade.GetAdaptiveRecommendationsAsync(userId, CancellationToken.None);
     }
 
+    [AutomaticRetry(Attempts = 3)]
+    [DisableConcurrentExecution(timeoutInSeconds: 6 * 60 * 60)]
     public async Task DailyAggregationJob()
     {
         using var scope = _scopeFactory.CreateScope();

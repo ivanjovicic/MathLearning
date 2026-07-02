@@ -24,6 +24,7 @@ public sealed class SchoolLeaderboardHangfireJobs : ISchoolLeaderboardHangfireJo
     }
 
     [AutomaticRetry(Attempts = 3)]
+    [DisableConcurrentExecution(timeoutInSeconds: 15 * 60)]
     public async Task RefreshAllCurrentPeriodsJob()
     {
         _logger.LogInformation("Refreshing school leaderboard aggregates for all active periods.");
@@ -40,6 +41,7 @@ public sealed class SchoolLeaderboardHangfireJobs : ISchoolLeaderboardHangfireJo
     }
 
     [AutomaticRetry(Attempts = 3)]
+    [DisableConcurrentExecution(timeoutInSeconds: 30 * 60)]
     public async Task CaptureSnapshotJob(string period)
     {
         _logger.LogInformation("Capturing school leaderboard snapshot for period {Period}.", period);

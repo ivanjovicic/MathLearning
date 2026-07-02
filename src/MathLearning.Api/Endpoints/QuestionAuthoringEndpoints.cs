@@ -10,7 +10,7 @@ public static class QuestionAuthoringEndpoints
     public static void MapQuestionAuthoringEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/questions")
-            .RequireAuthorization()
+            .RequireAuthorization(DesignTokenSecurity.ContentAuthorPolicy)
             .WithTags("Question Authoring");
 
         group.MapPost("/validate", async (

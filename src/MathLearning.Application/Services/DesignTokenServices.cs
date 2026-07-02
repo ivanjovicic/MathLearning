@@ -85,4 +85,6 @@ public static class DesignTokenSecurity
 {
     public const string AdminRole = "UiTokensAdmin";
     public const string AdminPolicy = "UiTokensAdminPolicy";
+    public const string ContentAuthorRole = "ContentAuthor";
+    public const string ContentAuthorPolicy = "ContentAuthorPolicy";
 }

@@ -23,6 +23,7 @@ public sealed class AntiCheatHangfireJobs : IAntiCheatHangfireJobs
     }
 
     [AutomaticRetry(Attempts = 3)]
+    [DisableConcurrentExecution(timeoutInSeconds: 10 * 60)]
     public async Task RunMlReviewSweepJob(int take = 0)
     {
         var processed = await antiCheatMlReviewService.ProcessPendingReviewsAsync(take);

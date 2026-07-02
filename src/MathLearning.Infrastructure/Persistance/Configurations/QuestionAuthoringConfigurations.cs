@@ -85,6 +85,10 @@ public sealed class QuestionVersionConfiguration : IEntityTypeConfiguration<Ques
             .IsUnique()
             .HasDatabaseName("UX_question_versions_question_version");
 
+        builder.HasIndex(x => x.SourceDraftId)
+            .IsUnique()
+            .HasDatabaseName("UX_question_versions_source_draft");
+
         builder.HasIndex(x => new { x.QuestionId, x.PublishedAtUtc })
             .HasDatabaseName("IX_question_versions_question_published_at");
 

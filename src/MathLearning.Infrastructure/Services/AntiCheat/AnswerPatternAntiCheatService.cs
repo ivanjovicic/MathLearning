@@ -401,15 +401,25 @@ public sealed class AnswerPatternAntiCheatService : IAnswerPatternAntiCheatServi
 
     public async Task<AntiCheatDetectionItemDto> ProcessReviewAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = await db.AnswerPatternDetectionLogs
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            ?? throw new InvalidOperationException($"Anti-cheat detection '{id}' was not found.");
+        if (!await TryClaimMlReviewAsync(id, cancellationToken))
+        {
+            var existing = await db.AnswerPatternDetectionLogs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+                ?? throw new InvalidOperationException($"Anti-cheat detection '{id}' was not found.");
 
-        entity.MlReviewStatus = AntiCheatMlReviewStatuses.Processing;
-        entity.MlReviewAttempts++;
-        entity.MlLastAttemptAtUtc = DateTime.UtcNow;
-        entity.MlLastError = null;
-        await db.SaveChangesAsync(cancellationToken);
+            if (existing.MlReviewStatus is AntiCheatMlReviewStatuses.Completed
+                or AntiCheatMlReviewStatuses.Processing)
+            {
+                return ToDetectionItemDto(existing);
+            }
+
+            throw new InvalidOperationException(
+                $"Anti-cheat detection '{id}' is not eligible for ML review (status={existing.MlReviewStatus}).");
+        }
+
+        var entity = await db.AnswerPatternDetectionLogs
+            .FirstAsync(x => x.Id == id, cancellationToken);
 
         try
         {
@@ -432,7 +442,49 @@ public sealed class AnswerPatternAntiCheatService : IAnswerPatternAntiCheatServi
             throw;
         }
 
-        return new AntiCheatDetectionItemDto(
+        return ToDetectionItemDto(entity);
+    }
+
+    private async Task<bool> TryClaimMlReviewAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (db.Database.IsRelational())
+        {
+            var claimed = await db.AnswerPatternDetectionLogs
+                .Where(x => x.Id == id
+                    && (x.MlReviewStatus == AntiCheatMlReviewStatuses.Queued
+                        || x.MlReviewStatus == AntiCheatMlReviewStatuses.Failed)
+                    && x.MlReviewAttempts < options.MlReviewMaxAttempts)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.MlReviewStatus, AntiCheatMlReviewStatuses.Processing)
+                    .SetProperty(x => x.MlReviewAttempts, x => x.MlReviewAttempts + 1)
+                    .SetProperty(x => x.MlLastAttemptAtUtc, DateTime.UtcNow)
+                    .SetProperty(x => x.MlLastError, (string?)null),
+                    cancellationToken);
+
+            return claimed > 0;
+        }
+
+        var entity = await db.AnswerPatternDetectionLogs
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (entity is null
+            || (entity.MlReviewStatus != AntiCheatMlReviewStatuses.Queued
+                && entity.MlReviewStatus != AntiCheatMlReviewStatuses.Failed)
+            || entity.MlReviewAttempts >= options.MlReviewMaxAttempts)
+        {
+            return false;
+        }
+
+        entity.MlReviewStatus = AntiCheatMlReviewStatuses.Processing;
+        entity.MlReviewAttempts++;
+        entity.MlLastAttemptAtUtc = DateTime.UtcNow;
+        entity.MlLastError = null;
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private static AntiCheatDetectionItemDto ToDetectionItemDto(AnswerPatternDetectionLog entity) =>
+        new(
             entity.Id,
             entity.UserId,
             entity.SourceType,
@@ -461,7 +513,6 @@ public sealed class AnswerPatternAntiCheatService : IAnswerPatternAntiCheatServi
             entity.MlReviewedAtUtc,
             entity.MlLastError,
             entity.MlReviewOutputJson);
-    }
 
     private async Task<List<HistoricalAnswerSignal>> LoadHistoryAsync(
         string userId,

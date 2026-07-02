@@ -1038,17 +1038,8 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
 
     private static void ValidateAnswerRequest(AdaptiveAnswerRequest request)
     {
-        if (request.QuestionId <= 0)
-            throw new ArgumentException("QuestionId must be a positive integer.", nameof(request.QuestionId));
-
-        if (request.AdaptiveSessionId == Guid.Empty)
-            throw new ArgumentException("AdaptiveSessionId is required.", nameof(request.AdaptiveSessionId));
-
-        if (request.AdaptiveSessionItemId == Guid.Empty)
-            throw new ArgumentException("AdaptiveSessionItemId is required.", nameof(request.AdaptiveSessionItemId));
-
-        if (string.IsNullOrWhiteSpace(request.Answer))
-            throw new ArgumentException("Answer is required.", nameof(request.Answer));
+        if (!AdaptiveAnswerInputBounds.TryValidateRequest(request, DateTime.UtcNow, out var error))
+            throw new ArgumentException(error);
     }
 
     private static string GetRecommendationCacheKey(string userId) =>

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using MathLearning.Api;
 using MathLearning.Application.DTOs.Questions;
+using MathLearning.Application.Services;
 using MathLearning.Tests.Helpers;
 
 namespace MathLearning.Tests.Endpoints;
@@ -13,6 +14,8 @@ public class QuestionAuthoringEndpointsIntegrationTests : IClassFixture<CustomWe
     public QuestionAuthoringEndpointsIntegrationTests(CustomWebApplicationFactory<Program> factory)
     {
         client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-UserId", "authoring-admin-user");
+        client.DefaultRequestHeaders.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
     }
 
     [Fact]

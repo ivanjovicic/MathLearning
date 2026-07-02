@@ -92,11 +92,44 @@ public sealed partial class MathQuestionAuthoringService :
         string? actorUserId,
         CancellationToken cancellationToken)
     {
+        for (var attempt = 1; attempt <= QuestionAuthoringConcurrencySupport.MaxVersionAllocationAttempts; attempt++)
+        {
+            try
+            {
+                return await SaveDraftCoreAsync(request, actorUserId, cancellationToken);
+            }
+            catch (DbUpdateException ex) when (
+                QuestionAuthoringConcurrencySupport.IsVersionNumberConflict(ex)
+                && attempt < QuestionAuthoringConcurrencySupport.MaxVersionAllocationAttempts)
+            {
+                db.ChangeTracker.Clear();
+                logger.LogWarning(
+                    ex,
+                    "Draft version allocation conflict for question {QuestionId}. Retrying attempt {Attempt}.",
+                    request.Content.QuestionId,
+                    attempt + 1);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Could not allocate a unique draft version for question {request.Content.QuestionId}.");
+    }
+
+    private async Task<SaveQuestionDraftResponse> SaveDraftCoreAsync(
+        SaveQuestionDraftRequest request,
+        string? actorUserId,
+        CancellationToken cancellationToken)
+    {
         if (request.Content.QuestionId is { } questionId &&
             !await db.Questions.AnyAsync(x => x.Id == questionId, cancellationToken))
         {
             throw new InvalidOperationException($"Question {questionId} was not found.");
         }
+
+        var useTransaction = db.Database.IsRelational();
+        await using var transaction = useTransaction
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
 
         var pipeline = await RunPipelineAsync(request.Content, cancellationToken);
         var latestDraft = await db.QuestionDrafts
@@ -122,15 +155,12 @@ public sealed partial class MathQuestionAuthoringService :
             UpdatedAtUtc = DateTime.UtcNow
         };
 
-        db.QuestionDrafts.Add(draft);
-        await db.SaveChangesAsync(cancellationToken);
-
         var validationEntity = CreateValidationResultEntity(draft.Id, pipeline);
         draft.LatestValidationResultId = validationEntity.Id;
+
+        db.QuestionDrafts.Add(draft);
         db.QuestionValidationResults.Add(validationEntity);
         db.QuestionValidationIssues.AddRange(validationEntity.Issues);
-
-        await UpsertPreviewCacheAsync(draft.Id, pipeline.ContentHash, pipeline.Preview, cancellationToken);
         db.QuestionAuthoringAuditLogs.Add(new QuestionAuthoringAuditLog
         {
             DraftId = draft.Id,
@@ -152,7 +182,13 @@ public sealed partial class MathQuestionAuthoringService :
             }
         }
 
+        await UpsertPreviewCacheAsync(draft.Id, pipeline.ContentHash, pipeline.Preview, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         logger.LogInformation(
             "Saved question draft {DraftId} for question {QuestionId}. Status={Status} Errors={ErrorCount} Warnings={WarningCount}",
@@ -174,11 +210,68 @@ public sealed partial class MathQuestionAuthoringService :
         string? actorUserId,
         CancellationToken cancellationToken)
     {
+        for (var attempt = 1; attempt <= QuestionAuthoringConcurrencySupport.MaxVersionAllocationAttempts; attempt++)
+        {
+            try
+            {
+                return await PublishCoreAsync(request, actorUserId, cancellationToken);
+            }
+            catch (DbUpdateException ex) when (
+                QuestionAuthoringConcurrencySupport.IsVersionNumberConflict(ex)
+                && attempt < QuestionAuthoringConcurrencySupport.MaxVersionAllocationAttempts)
+            {
+                db.ChangeTracker.Clear();
+                logger.LogWarning(
+                    ex,
+                    "Publish version allocation conflict for draft {DraftId}. Retrying attempt {Attempt}.",
+                    request.DraftId,
+                    attempt + 1);
+            }
+        }
+
+        var existingVersion = await db.QuestionVersions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.SourceDraftId == request.DraftId, cancellationToken);
+
+        if (existingVersion is not null)
+        {
+            return new PublishQuestionResponse(
+                true,
+                existingVersion.QuestionId,
+                existingVersion.Id,
+                existingVersion.VersionNumber,
+                QuestionPublishStates.Published,
+                new QuestionValidationSummaryDto(true, "valid", 0, 0, Array.Empty<ValidationIssueDto>()));
+        }
+
+        throw new InvalidOperationException($"Could not publish draft {request.DraftId} with a unique version number.");
+    }
+
+    private async Task<PublishQuestionResponse> PublishCoreAsync(
+        PublishQuestionRequest request,
+        string? actorUserId,
+        CancellationToken cancellationToken)
+    {
         var draft = await db.QuestionDrafts
             .Include(x => x.LatestValidationResult)
             .ThenInclude(x => x!.Issues)
             .FirstOrDefaultAsync(x => x.Id == request.DraftId, cancellationToken)
             ?? throw new InvalidOperationException($"Draft {request.DraftId} was not found.");
+
+        var existingPublishedVersion = await db.QuestionVersions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.SourceDraftId == draft.Id, cancellationToken);
+
+        if (existingPublishedVersion is not null)
+        {
+            return new PublishQuestionResponse(
+                true,
+                existingPublishedVersion.QuestionId,
+                existingPublishedVersion.Id,
+                existingPublishedVersion.VersionNumber,
+                QuestionPublishStates.Published,
+                new QuestionValidationSummaryDto(true, "valid", 0, 0, Array.Empty<ValidationIssueDto>()));
+        }
 
         var authoringRequest = DeserializeDraft(draft);
         var pipeline = await RunPipelineAsync(authoringRequest, cancellationToken);

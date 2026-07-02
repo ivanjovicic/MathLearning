@@ -1,5 +1,6 @@
 using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.AntiCheat;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
@@ -125,7 +126,39 @@ public sealed class AnswerPatternAntiCheatServiceTests
         Assert.NotNull(detection.MlModelName);
     }
 
-    private static AnswerPatternAntiCheatService CreateService(MathLearning.Infrastructure.Persistance.ApiDbContext db)
+    [Fact]
+    public async Task ProcessReviewAsync_ReprocessingCompletedDetection_DoesNotIncrementAttempts()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var detectionId = Guid.NewGuid();
+        db.AnswerPatternDetectionLogs.Add(new AnswerPatternDetectionLog
+        {
+            Id = detectionId,
+            UserId = "1",
+            SourceType = "quiz_offline_submit",
+            QuestionId = 42,
+            AnsweredAtUtc = DateTime.UtcNow,
+            ResponseTimeMs = 1200,
+            IsCorrect = true,
+            RiskScore = 80,
+            Severity = AntiCheatDetectionSeverities.High,
+            ReviewStatus = AntiCheatReviewStatuses.Pending,
+            MlReviewStatus = AntiCheatMlReviewStatuses.Queued,
+            DetectedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var sut = CreateService(db);
+        await sut.ProcessReviewAsync(detectionId, CancellationToken.None);
+        await sut.ProcessReviewAsync(detectionId, CancellationToken.None);
+
+        await db.Entry(db.AnswerPatternDetectionLogs.Single(x => x.Id == detectionId)).ReloadAsync();
+        var detection = await db.AnswerPatternDetectionLogs.SingleAsync(x => x.Id == detectionId);
+        Assert.Equal(AntiCheatMlReviewStatuses.Completed, detection.MlReviewStatus);
+        Assert.Equal(1, detection.MlReviewAttempts);
+    }
+
+    private static AnswerPatternAntiCheatService CreateService(ApiDbContext db)
         => new(
             db,
             Options.Create(new AntiCheatOptions

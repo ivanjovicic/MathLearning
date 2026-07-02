@@ -21,7 +21,14 @@ Startup responsibilities:
 - application/infrastructure services
 - JWT/security services
 - Swagger/API docs
-- middleware: exception handler, correlation id, request performance logging, forwarded headers, CORS, rate limit, auth/authorization
+- middleware: exception handler, correlation id, request performance logging, physical peer IP capture, forwarded headers (configured proxy trust), CORS, authentication, rate limit (user id or physical IP), authorization
+
+Production admin bootstrap (`SeedAdmin`):
+
+- Development seeds `admin` automatically with the local default password.
+- Production requires `SeedAdmin__Enabled=true` and an explicit `SeedAdmin__Password` (Development default password is rejected).
+- `SeedAdmin__ResetPasswordOnStart` in production is ignored unless `SeedAdmin__AllowEmergencyPasswordReset=true` for a one-time emergency recovery.
+- Startup audit logs include admin username only; passwords are never logged.
 - health, metrics, endpoint mapping, static uploaded avatars, Hangfire recurring jobs
 
 Endpoint mapping order is visible in `Program.cs` and currently includes:

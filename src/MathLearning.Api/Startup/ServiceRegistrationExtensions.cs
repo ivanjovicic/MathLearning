@@ -286,6 +286,8 @@ public static class ServiceRegistrationExtensions
 
     public static void AddSecurityServices(this WebApplicationBuilder builder)
     {
+        builder.Services.AddSingleton<MathLearning.Api.Middleware.IRateLimitCounterStore, MathLearning.Api.Middleware.InMemoryRateLimitCounterStore>();
+
         builder.Services.AddIdentityCore<IdentityUser>(options =>
         {
             options.Password.RequireDigit = false;
@@ -324,6 +326,14 @@ public static class ServiceRegistrationExtensions
             {
                 policy.RequireAuthenticatedUser();
                 policy.RequireRole(DesignTokenSecurity.AdminRole);
+            });
+
+            options.AddPolicy(DesignTokenSecurity.ContentAuthorPolicy, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.RequireRole(
+                    DesignTokenSecurity.AdminRole,
+                    DesignTokenSecurity.ContentAuthorRole);
             });
         });
     }

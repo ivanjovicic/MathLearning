@@ -149,23 +149,69 @@ public static class AdaptiveEndpoints
             return false;
         }
 
-        var responseTimeSeconds = 0;
-        if (TryReadInt(props, "responseTimeSeconds", out var parsedSeconds) && parsedSeconds >= 0)
+        var confidence = 0.5d;
+        if (props.TryGetValue("confidence", out var confidenceElement))
         {
+            if (!TryReadDouble(confidenceElement, out var parsedConfidence))
+            {
+                error = "Confidence must be a finite number between 0 and 1.";
+                return false;
+            }
+
+            confidence = parsedConfidence;
+        }
+
+        var responseTimeSeconds = 0;
+        if (props.TryGetValue("responseTimeSeconds", out var responseTimeSecondsElement))
+        {
+            if (!TryReadInt(responseTimeSecondsElement, out var parsedSeconds))
+            {
+                error = "ResponseTimeSeconds must be a non-negative integer.";
+                return false;
+            }
+
+            if (!AdaptiveAnswerInputBounds.TryValidateResponseTimeSeconds(parsedSeconds, out error))
+                return false;
+
             responseTimeSeconds = parsedSeconds;
         }
-        else if (TryReadInt(props, "responseTimeMs", out var parsedMs) && parsedMs >= 0)
+        else if (props.TryGetValue("responseTimeMs", out var responseTimeMsElement))
         {
+            if (!TryReadInt(responseTimeMsElement, out var parsedMs))
+            {
+                error = "ResponseTimeMs must be a non-negative integer.";
+                return false;
+            }
+
+            if (!AdaptiveAnswerInputBounds.TryValidateResponseTimeMilliseconds(parsedMs, out error))
+                return false;
+
             responseTimeSeconds = (int)Math.Round(parsedMs / 1000d, MidpointRounding.AwayFromZero);
+            if (!AdaptiveAnswerInputBounds.TryValidateResponseTimeSeconds(responseTimeSeconds, out error))
+                return false;
         }
 
-        var confidence = 0.5d;
-        if (TryReadDouble(props, "confidence", out var parsedConfidence))
-            confidence = parsedConfidence;
-
         DateTime? answeredAt = null;
-        if (TryReadDateTime(props, "answeredAt", out var parsedAnsweredAt))
-            answeredAt = parsedAnsweredAt;
+        if (props.TryGetValue("answeredAt", out var answeredAtElement))
+        {
+            if (answeredAtElement.ValueKind != JsonValueKind.String
+                || !DateTime.TryParse(answeredAtElement.GetString(), out var parsedAnsweredAt))
+            {
+                error = "answeredAt is malformed.";
+                return false;
+            }
+
+            if (!AdaptiveAnswerInputBounds.TryValidateAnsweredAt(parsedAnsweredAt, DateTime.UtcNow, out error))
+                return false;
+
+            answeredAt = OfflineAnswerTimestampPolicy.NormalizeToUtcMilliseconds(parsedAnsweredAt);
+        }
+
+        if (!AdaptiveAnswerInputBounds.TryValidateAnswer(answer, out error))
+            return false;
+
+        if (!AdaptiveAnswerInputBounds.TryValidateConfidence(confidence, out error))
+            return false;
 
         request = new AdaptiveAnswerRequest
         {
@@ -199,6 +245,30 @@ public static class AdaptiveEndpoints
         if (!props.TryGetValue(key, out var element))
             return false;
 
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out value))
+            return true;
+
+        if (element.ValueKind == JsonValueKind.String && int.TryParse(element.GetString(), out value))
+            return true;
+
+        return false;
+    }
+
+    private static bool TryReadDouble(JsonElement element, out double value)
+    {
+        value = 0;
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out value))
+            return true;
+
+        if (element.ValueKind == JsonValueKind.String && double.TryParse(element.GetString(), out value))
+            return true;
+
+        return false;
+    }
+
+    private static bool TryReadInt(JsonElement element, out int value)
+    {
+        value = 0;
         if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out value))
             return true;
 

@@ -89,10 +89,10 @@ Rows include both **Done** and **Prompt-ready** entries.
 | BACKEND2-CRIT-002 | Done (`79ea851`, 2026-07-01, validated) | — | Make refresh-token rotation single-use under concurrency. Run log: `.ai/runs/2026-07-01-BACKEND2-CRIT-002-evidence.md`. Tests: `AuthRefreshConcurrencyTests`, `AuthRefreshEndpointRegressionTests`. Risk: refresh-token-rotation-race. |
 | BACKEND2-CRIT-003 | Done (`b073350`, 2026-07-01, validated) | — | Make mobile registration atomic or compensating. Run log: `.ai/runs/2026-07-01-BACKEND2-CRIT-003-evidence.md`. Tests: `AuthMobileRegistrationAtomicityTests`. Risk: auth-registration-atomicity. |
 | BACKEND2-CRIT-004 | Done (uncommitted, 2026-06-24) | — | Add explicit admin/content-author policy to question authoring mutations. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-004-evidence.md`. Tests: `QuestionAuthoringAuthorizationTests`. Risk: authoring-authorization. |
-| BACKEND2-CRIT-005 | Prompt-ready | BACKEND2-CRIT-001 | Bound adaptive answer inputs. |
-| BACKEND2-CRIT-006 | Prompt-ready | evidence lint only | Define/test recurring job idempotency and non-overlap. |
-| BACKEND2-CRIT-007 | Prompt-ready | evidence lint only | Harden production admin seeding/reset behavior. |
-| BACKEND2-CRIT-008 | Prompt-ready (after CRIT-004 policy) | evidence lint only | Make question draft/version numbering race-safe. |
+| BACKEND2-CRIT-005 | Done (uncommitted, 2026-06-24) | — | Bound adaptive answer inputs. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-005-evidence.md`. Tests: `AdaptiveAnswerInputBoundsTests`, `AdaptiveAnswerBoundsEndpointTests`. Risk: adaptive-input-bounds. |
+| BACKEND2-CRIT-006 | Done (uncommitted, 2026-06-24) | — | Define/test recurring job idempotency and non-overlap. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-006-evidence.md`. Tests: `PracticeHangfireJobsTests`, `SchoolLeaderboardSnapshotIdempotencyTests`, `AnswerPatternAntiCheatServiceTests`. Risk: recurring-job-overlap. |
+| BACKEND2-CRIT-007 | Done (uncommitted, 2026-06-24) | — | Harden production admin seeding/reset behavior. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-007-evidence.md`. Tests: `SeedAdminStartupPolicyTests`. Risk: admin-seed-hardening. |
+| BACKEND2-CRIT-008 | Done (uncommitted, 2026-06-24) | — | Make question draft/version numbering race-safe. Run log: `.ai/runs/2026-06-24-BACKEND2-CRIT-008-evidence.md`. Tests: `QuestionAuthoringVersionConcurrencyTests`, `QuestionAuthoringPipelineTests`. Migration: `20260702152409_AddQuestionVersionSourceDraftUniqueIndex`. Risk: authoring-version-race. |
 
 ---
 

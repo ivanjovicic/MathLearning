@@ -46,8 +46,12 @@ dotnet test --filter "Monitoring|Logging|Authorization"
 
 ## Completion %
 
-90% (runtime + tests validated; commit SHA pending)
+95% (runtime + tests validated)
+
+## Residual risk
+
+- Log endpoints remain admin-only; new log surfaces must reuse `LogOutputRedactor`.
 
 ## Commit SHA
 
-uncommitted
+67173f4

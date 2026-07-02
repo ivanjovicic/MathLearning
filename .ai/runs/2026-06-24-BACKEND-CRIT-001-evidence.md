@@ -78,7 +78,7 @@ git diff --check
 
 ## Completion %
 
-90% (runtime + tests validated; commit SHA pending)
+90% (runtime + tests validated; commit SHA synced 2026-06-24 lint)
 
 ## Residual risk
 
@@ -87,4 +87,4 @@ git diff --check
 
 ## Commit SHA
 
-uncommitted
+67173f4
