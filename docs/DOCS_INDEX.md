@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-07-01
+Last aligned: 2026-07-02
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -19,13 +19,14 @@ When docs disagree, use this order:
 6. [`ai/learning/MISTAKE_LEDGER.md`](ai/learning/MISTAKE_LEDGER.md) — backend mistake memory.
 7. [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) — shortest safe path by task type.
 8. [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) — historical bug classes and mandatory anti-regression prompt block.
-9. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
-10. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
-11. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
-12. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
-13. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
-14. [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) — backend performance prompt queue.
-15. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
+9. [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) — risk-based test layers, coverage targets, and CI evidence rules.
+10. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — repo/runtime architecture map.
+11. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) — current endpoint map.
+12. [`backend_contract_gap_report.md`](backend_contract_gap_report.md) — backend/mobile contract evidence snapshot.
+13. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) — backend-side idempotency handoff.
+14. [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) — current backend performance/optimization review and priority stack.
+15. Active prompt queues under `docs/prompt_queues/`.
+16. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
 
 If code/tests and docs disagree, inspect the implementation, then update docs in the same change.
 
@@ -40,11 +41,23 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | Run-log gate | Mandatory `.ai/runs` evidence, score caps, mistake learning | Every non-trivial prompt. |
 | [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) | Token-saving quickstart | Which files/tests to read for common tasks | Reduces rediscovery and context waste. |
 | [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | Regression guardrails | Historical bug classes, required prompt block, validation matrix | Mandatory for implementation prompts. |
+| [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Test strategy | Risk-first unit/integration/relational/contract coverage and staged thresholds | Read before broad backend test work. |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architecture map | Project layout, startup, endpoint ownership, persistence, idempotency, background jobs | Update when runtime architecture changes. |
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current API route map and canonical/legacy split | Update whenever routes are added, removed, or changed. |
 | [`BACKEND_CHANGE_CHECKLIST.md`](BACKEND_CHANGE_CHECKLIST.md) | Change checklist | Pre-commit safety gate for backend work | Use for code and docs changes. |
 | [`COMMON_AGENT_PITFALLS.md`](COMMON_AGENT_PITFALLS.md) | Common mistakes | Avoid recurring errors in this repo | Use before implementing broad changes. |
 | [`ai/learning/MISTAKE_LEDGER.md`](ai/learning/MISTAKE_LEDGER.md) | Mistake ledger | BACKEND-MISTAKE-* patterns and prevention | Read before start; update before Done. |
+
+---
+
+## Test coverage and quality
+
+| Document | Type | Use for | Notes |
+|---|---|---|---|
+| [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Coverage strategy | Priorities, test layers, quality rules, staged CI thresholds | Coverage percentage is secondary to critical branch proof. |
+| [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Test queue | BACKEND-TEST-CORE-001 and follow-up critical test packages | Current first package is `Needs validation`. |
+| [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection and generated-file exclusions | Used by database-validation CI. |
+| [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Release build, PostgreSQL schema validation, full tests, coverage artifacts, startup smoke | Source of executable CI evidence. |
 
 ---
 
@@ -71,7 +84,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 
 ---
 
-## Performance / optimization docs
+## Performance / optimization and risk queues
 
 | Document | Type | Use for | Notes |
 |---|---|---|---|
@@ -79,6 +92,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Cold-start budget | Blocking vs background startup phases, health evidence, staging smoke steps | BE-PERF-006 evidence. |
 | [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | Request-path budgets | p95 latency/query budgets per mobile flow, log/trace mapping, smoke steps | BE-PERF-007 evidence. |
 | [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) | Route compatibility | Canonical vs legacy aliases, dual surfaces, duplicate-work matrix, follow-up prompts | BE-PERF-008 evidence. |
+| [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Test coverage queue | Critical test packages ordered by data-loss/security/contract risk | Test lane. |
 | [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue | BE-PERF prompts (001…008 complete/backfilled) | Performance lane. |
 | [`prompt_queues/backend_critical_risk_prevention.md`](prompt_queues/backend_critical_risk_prevention.md) | Critical risk queue | BACKEND-CRIT-001…008 prompt-ready; audit-created, not Done | Security/settlement/idempotency lane. |
 | [`prompt_queues/backend_second_pass_risk_prevention.md`](prompt_queues/backend_second_pass_risk_prevention.md) | Second-pass risk queue | BACKEND2-CRIT-001…008 prompt-ready; audit-created, not Done | Auth/proxy/jobs/authoring lane. |
