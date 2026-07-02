@@ -35,6 +35,9 @@ Phase time breakdown: unknown-not-recorded
 - `src/MathLearning.Api/Endpoints/CosmeticsEndpointHelpers.cs`
 - `src/MathLearning.Infrastructure/Services/EconomyTransactionService.cs`
 - `src/MathLearning.Infrastructure/Services/RefreshTokenService.cs`
+- `src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs`
+- `src/MathLearning.Infrastructure/Migrations/Api/20260210114958_IncreaseRefreshTokenLength.cs`
+- `src/MathLearning.Infrastructure/Migrations/Api/ApiDbContextModelSnapshot.cs`
 - idempotency and Daily Run EF model configuration
 
 ## Files changed
@@ -49,6 +52,7 @@ Phase time breakdown: unknown-not-recorded
 - `.github/workflows/database-validation.yml`
 - `docs/BACKEND_TEST_COVERAGE_STRATEGY.md`
 - `docs/prompt_queues/backend_test_coverage.md`
+- `docs/ai/learning/MISTAKE_LEDGER.md`
 - `docs/DOCS_INDEX.md`
 - this run log
 
@@ -70,69 +74,81 @@ Phase time breakdown: unknown-not-recorded
 - Added SQLite relational tests for economy, Daily Run, and cosmetics unique constraints.
 - Added Cobertura/JSON coverage settings and CI test/coverage artifact retention.
 - Added risk-based coverage strategy and follow-up queue.
+- Found and documented refresh-token model/migration drift as `BACKEND-MISTAKE-AUTH-001` and `BACKEND-TEST-012`.
 
 ## What was missed
 
 - No executable local `dotnet build` or `dotnet test` result was available in this environment.
-- GitHub combined status returned no statuses for the latest commit.
+- GitHub combined status returned no statuses for the latest checked commit.
 - Push-triggered workflow runs are not exposed by the available commit workflow query.
 - Coverage baseline and thresholds cannot be set honestly until the first artifact is produced.
+- `BACKEND-TEST-012` model/snapshot fix was not applied because the connector only supports full-file replacement for the 1,600-line `ApiDbContext.cs`; a risky broad rewrite was intentionally avoided.
 - Remaining P0/P1 test packages are queued, not implemented in this run.
 
 ## Validation run
 
-- Static code/model inspection against current implementations and existing test patterns.
-- GitHub compare: branch is 12 commits ahead of the starting commit, with 5 new test files plus CI/docs support.
-- GitHub combined status: no statuses returned for latest commit.
+- Static code/model inspection against current implementations, migration history, and existing test patterns.
+- GitHub compare confirmed five new test files plus CI/docs support in the initial batch.
+- GitHub combined status: no statuses returned for the checked latest commit.
+- Refresh-token drift verified across generator, migration, EF model, and model snapshot.
 
 ## Validation not run
 
 - `dotnet build MathLearning.slnx` — not run; direct clone unavailable due container DNS/network restriction.
 - `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj` — not run for the same reason.
 - Coverage generation — pending next GitHub Actions or local .NET run.
+- PostgreSQL schema-from-zero after refresh-token fix — fix is queued, not implemented.
 
 ## Waste categories
 
 - environment/network limitation
 - connector workflow-visibility limitation
+- connector full-file replacement limitation
 
 ## Mistakes observed
 
-Mistakes observed: none
+- `BACKEND-MISTAKE-AUTH-001` — refresh-token generator/migration/model length drift.
 
 ## Where time/context was wasted
 
 - One local clone attempt failed because the execution environment could not resolve GitHub.
 - Several searches confirmed existing coverage before new tests were selected; this avoided duplicate tests but increased inspection cost.
+- Model/snapshot investigation found a real bug but the safe targeted patch could not be applied with the available connector write shape.
 
 ## Why waste happened
 
 - Container network/DNS is unavailable for direct Git clone.
 - Repository already has broad tests, so gap analysis was necessary before adding non-duplicative tests.
+- GitHub connector updates require complete file content, making a one-line patch to a very large central context unsafe.
 
 ## What the next agent should avoid
 
 - Do not retry local clone repeatedly in the same environment.
 - Do not duplicate existing Daily Run claim/reward replay tests.
 - Do not set arbitrary global coverage thresholds before measuring the first stable artifact.
+- Do not create a redundant refresh-token migration before reconciling current model, snapshot, and existing `IncreaseRefreshTokenLength` migration.
 
 ## Docs/rules updated to prevent repeat
 
 - Added `docs/BACKEND_TEST_COVERAGE_STRATEGY.md` with test-layer and coverage-gate rules.
 - Updated `docs/DOCS_INDEX.md`.
+- Added `BACKEND-MISTAKE-AUTH-001` to the mistake ledger.
 
 ## Queue updated
 
 - Added `docs/prompt_queues/backend_test_coverage.md`.
 - `BACKEND-TEST-CORE-001` is `Needs validation`.
+- `BACKEND-TEST-009` is `Partial / Needs validation`.
+- Added `BACKEND-TEST-012` for refresh-token model/migration drift.
 
-## New optimized prompt added
+## New optimized prompts added
 
 - `BACKEND-TEST-002` — settlement snapshot truth: prove first response and exact replay include newly persisted season/milestone state.
+- `BACKEND-TEST-012` — align refresh-token EF model/snapshot to 128 and add a model metadata regression test.
 
 ## Follow-up prompt
 
-- Run the Release build and the full test project with coverage settings. Fix only compile/test failures introduced by `BACKEND-TEST-CORE-001`, record TRX/Cobertura evidence, then change the queue row from `Needs validation` to a truthful completion status.
+- Run the Release build and full test project with coverage settings. Fix only compile/test failures introduced by `BACKEND-TEST-CORE-001`, record TRX/Cobertura evidence, then change the queue row from `Needs validation` to a truthful completion status. After that, run `BACKEND-TEST-012` with schema-from-zero validation.
 
 ## Completion %
 
@@ -141,6 +157,7 @@ Mistakes observed: none
 ## Residual risk
 
 - The test design is broad and risk-focused, but compilation, runtime behavior, PostgreSQL CI, and coverage numbers remain unproven until executable validation runs.
+- Refresh-token model/snapshot drift remains open and may affect future migrations or relational persistence.
 
 ## Cross-repo sync
 
@@ -160,3 +177,6 @@ Mistakes observed: none
 - `8b81327bce366c488196b48b3adc02cb5f6af236` — test coverage queue
 - `680702a24ec0362b8ae8edab0fb8b46b4b9aace9` — relational constraint tests
 - `547d9faf98045635325e5315d269f51a6ab6f929` — docs index
+- `ea039d9d3bedeedb9f62811e7622857933b8d5e5` — coverage exclusion fix
+- `5ae8820bb2314baabecab5980e8dbd7543eb57cf` — queue status and auth drift follow-up
+- `6dcef5d25a1e0f5b24ce7b21e3748c60593b7b6f` — auth mistake card
