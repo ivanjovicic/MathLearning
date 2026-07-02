@@ -1,7 +1,7 @@
 # Backend Agent Mistake Ledger
 
 Status: active agent-learning memory  
-Last aligned: 2026-06-24  
+Last aligned: 2026-07-02  
 Scope: `ivanjovicic/MathLearning`
 
 ## Purpose
@@ -158,6 +158,37 @@ Prevention:
 
 Next check:
 Any P0 mutation or route audit prompt must record cross-repo sync in its run log before Done.
+
+---
+
+### BACKEND-MISTAKE-AUTH-001 — Refresh token generator and EF model length drift
+
+Severity: P0/P1  
+Status: Open  
+First seen: `BACKEND-TEST-CORE-001` on 2026-07-02  
+Evidence: `RefreshTokenService.GenerateRefreshToken()` creates Base64 from 64 random bytes (88 characters); migration `20260210114958_IncreaseRefreshTokenLength` changed the column to 128; current `ApiDbContext` and model snapshot declare max length 64.
+
+Problem:
+The runtime token generator, migration history, EF model, and model snapshot disagree about the maximum refresh-token length.
+
+Impact:
+- schema-from-zero or a future migration can regress the column to 64;
+- relational persistence can reject generated 88-character tokens;
+- InMemory auth tests may pass while PostgreSQL fails;
+- refresh/login flows can become unavailable.
+
+Root cause:
+An inline EF configuration retained `HasMaxLength(64)` after the migration increased the column to 128, and no model-metadata regression test locked the intended length.
+
+Prevention:
+- `BACKEND-TEST-012` in `docs/prompt_queues/backend_test_coverage.md`.
+- Align EF configuration and model snapshot to 128.
+- Add a model metadata test proving generated token length fits the configured maximum.
+- Run schema-from-zero validation and refresh-token tests.
+- Treat migration/model snapshot drift as a blocking auth regression.
+
+Next check:
+Do not mark `BACKEND-TEST-012` Done until model, snapshot, migration history, generated token length, PostgreSQL schema validation, and a regression test agree.
 
 ---
 
