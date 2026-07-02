@@ -1,10 +1,10 @@
-﻿# Offline Quiz Support - API Documentation
+# Offline Quiz Support - API Documentation
 
-## 📱 Offline Functionality
+## ?? Offline Functionality
 
-API sada podržava offline rad kroz batch sinhronizaciju odgovora. Kada korisnik radi offline, može da čuva odgovore lokalno i da ih sinhronizuje kasnije kada se vrati online.
+API sada podr�ava offline rad kroz batch sinhronizaciju odgovora. Kada korisnik radi offline, mo�e da cuva odgovore lokalno i da ih sinhronizuje kasnije kada se vrati online.
 
-## 📤 Offline Batch Submit Endpoint
+## ?? Offline Batch Submit Endpoint
 
 ### Endpoint
 ```
@@ -47,14 +47,14 @@ Bearer Token (JWT) required
 }
 ```
 
-## 🔧 Request DTO Definition
+## ?? Request DTO Definition
 
 ### OfflineAnswerDto
 ```csharp
 public record OfflineAnswerDto(
     int QuestionId,           // ID pitanja
     string Answer,            // Odgovor korisnika
-    bool IsCorrectOffline,    // Da li je offline validacija pokazala tačan odgovor
+    bool IsCorrectOffline,    // Da li je offline validacija pokazala tacan odgovor
     int TimeSpent,            // Vreme provedeno u sekundama
     DateTime AnsweredAt       // Kada je odgovor dat (UTC)
 );
@@ -71,21 +71,21 @@ public record OfflineBatchSubmitRequest(
 ### OfflineBatchSubmitResponse
 ```csharp
 public record OfflineBatchSubmitResponse(
-    int ImportedCount,    // Broj uspešno importovanih odgovora
+    int ImportedCount,    // Broj uspe�no importovanih odgovora
     int NewXp,            // Ukupan XP nakon sinhronizacije
     int NewLevel,         // Novi level korisnika
     int Streak           // Trenutni streak (broj uzastopnih dana)
 );
 ```
 
-## 🎯 Kako Radi
+## ?? Kako Radi
 
 ### 1. Client Side (Offline)
 ```typescript
 // 1. Korisnik radi kviz offline
 const offlineAnswers: OfflineAnswerDto[] = [];
 
-// 2. Čuvaj svaki odgovor lokalno
+// 2. Cuvaj svaki odgovor lokalno
 offlineAnswers.push({
   questionId: 1,
   answer: "42",
@@ -112,46 +112,46 @@ await fetch('/api/quiz/offline-submit', {
 1. **Validacija Session**: Proveri da li session postoji, ako ne - kreiraj novi
 2. **Server-side Validacija**: Ne veruj `isCorrectOffline` od klijenta - validuj ponovo na serveru
 3. **Batch Insert**: Dodaj sve odgovore odjednom u `UserAnswers` tabelu
-4. **Update Stats**: Ažuriraj `UserQuestionStats` za sva pitanja
-5. **Calculate Metrics**: Izračunaj XP, Level i Streak
+4. **Update Stats**: A�uriraj `UserQuestionStats` za sva pitanja
+5. **Calculate Metrics**: Izracunaj XP, Level i Streak
 6. **Return Summary**: Vrati statistiku korisniku
 
-## 🔐 Sigurnosne Mere
+## ?? Sigurnosne Mere
 
 1. **Server-side Validacija**: 
-   - `isCorrectOffline` se ignoriše
+   - `isCorrectOffline` se ignori�e
    - Server ponovo validira svaki odgovor sa pravim pitanjem iz baze
 
 2. **User Authorization**: 
-   - Samo autorizovani korisnici mogu da šalju odgovore
+   - Samo autorizovani korisnici mogu da �alju odgovore
    - Session mora pripadati trenutnom korisniku
 
 3. **Data Integrity**:
    - Provera da li pitanje postoji u bazi
    - Validacija tipa odgovora (multiple choice vs. free text)
 
-## 📊 Optimizacije
+## ?? Optimizacije
 
 ### Batch Operations
 - **Bulk Insert**: Svi odgovori se dodaju odjednom pre `SaveChangesAsync()`
-- **Dictionary Lookup**: Pitanja se učitavaju jednom i čuvaju u dictionary-ju
-- **Single Stats Query**: Statistike se učitavaju za sva pitanja odjednom
+- **Dictionary Lookup**: Pitanja se ucitavaju jednom i cuvaju u dictionary-ju
+- **Single Stats Query**: Statistike se ucitavaju za sva pitanja odjednom
 
 ### Performance
 ```csharp
-// ✅ Dobro - Batch operacija
+// ? Dobro - Batch operacija
 var questions = await db.Questions
     .Include(q => q.Options)
     .Where(q => questionIds.Contains(q.Id))
     .ToDictionaryAsync(q => q.Id);
 
-// ❌ Loše - N+1 problem
+// ? Lo�e - N+1 problem
 foreach (var answer in answers) {
     var question = await db.Questions.FindAsync(answer.QuestionId);
 }
 ```
 
-## 🧪 Testing
+## ?? Testing
 
 ### Test Case 1: Basic Offline Submit
 ```bash
@@ -174,7 +174,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
 
 ### Test Case 2: Multiple Answers
 ```bash
-# Multiple odgovora sa različitim vremenima
+# Multiple odgovora sa razlicitim vremenima
 curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
@@ -200,7 +200,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
   }'
 ```
 
-## 🔄 Client Implementation Example
+## ?? Client Implementation Example
 
 ### React/TypeScript
 ```typescript
@@ -266,15 +266,15 @@ class OfflineQuizManager {
 }
 ```
 
-## 📝 Best Practices
+## ?? Best Practices
 
-1. **Periodic Sync**: Sinhronizuj periodično (npr. svaki sat) ako je online
+1. **Periodic Sync**: Sinhronizuj periodicno (npr. svaki sat) ako je online
 2. **Retry Logic**: Implementiraj retry sa exponential backoff
-3. **Local Storage**: Čuvaj odgovore u localStorage/IndexedDB
+3. **Local Storage**: Cuvaj odgovore u localStorage/IndexedDB
 4. **Validation**: Validuj odgovore i offline (za UX) i online (za sigurnost)
 5. **Timestamp Precision**: Koristi UTC timestamp za cross-timezone compatibility
 
-## 🚀 Future Improvements
+## ?? Future Improvements
 
 - [ ] Conflict resolution za duplirane odgovore
 - [ ] Partial sync - sinhronizuj samo nesinhronizovane odgovore

@@ -1,14 +1,14 @@
-﻿# Offline Batch Submit - Final Implementation
+# Offline Batch Submit - Final Implementation
 
-## 🎯 Konačno Rešenje: Hybrid Pristup
+## ?? Konacno Re�enje: Hybrid Pristup
 
 Implementirao sam **najbolji endpoint** koji kombinuje prednosti oba pristupa:
 
-### ✅ Što je Uključeno
+### ? �to je Ukljuceno
 
 #### 1. **Idempotency (iz tvog predloga)**
 ```csharp
-// Proveri da li već postoji identičan answer
+// Proveri da li vec postoji identican answer
 bool exists = await db.UserAnswers
     .AnyAsync(x =>
         x.UserId == userId &&
@@ -19,7 +19,7 @@ if (exists)
     continue; // Skip duplicate
 ```
 
-**Benefit**: Sigurno retry-ovanje - klijent može poslati isti batch više puta bez dupliciranja podataka.
+**Benefit**: Sigurno retry-ovanje - klijent mo�e poslati isti batch vi�e puta bez dupliciranja podataka.
 
 #### 2. **Server-side Validation (iz mog predloga)**
 ```csharp
@@ -34,17 +34,17 @@ bool isCorrectServer = question.Type == "multiple_choice"
 IsCorrect = isCorrectServer
 ```
 
-**Benefit**: Sigurnost - klijent ne može da lažira tačne odgovore.
+**Benefit**: Sigurnost - klijent ne mo�e da la�ira tacne odgovore.
 
 #### 3. **Batch Optimizacije**
 ```csharp
-// Učitaj sva pitanja odjednom (Dictionary lookup)
+// Ucitaj sva pitanja odjednom (Dictionary lookup)
 var questions = await db.Questions
     .Include(q => q.Options)
     .Where(q => questionIds.Contains(q.Id))
     .ToDictionaryAsync(q => q.Id);
 
-// Učitaj sve statistike odjednom
+// Ucitaj sve statistike odjednom
 var existingStats = await db.UserQuestionStats
     .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
     .ToDictionaryAsync(s => s.QuestionId);
@@ -62,7 +62,7 @@ private static async Task<(int Xp, int Level, int Streak)> CalculateUserOverview
 }
 ```
 
-**Benefit**: Reusability - Može se koristiti u drugim endpointima (npr. `/api/progress/overview`).
+**Benefit**: Reusability - Mo�e se koristiti u drugim endpointima (npr. `/api/progress/overview`).
 
 #### 5. **Session Tracking**
 ```csharp
@@ -81,37 +81,37 @@ if (session == null)
 }
 ```
 
-**Benefit**: Tracking - Održava vezu sa quiz session-om za analytics.
+**Benefit**: Tracking - Odr�ava vezu sa quiz session-om za analytics.
 
-## 📊 Poređenje sa Originalnim Predlozima
+## ?? Poredenje sa Originalnim Predlozima
 
 | Feature | Tvoj `/batch-submit` | Moj `/offline-submit` | **Finalni Hybrid** |
 |---------|---------------------|----------------------|-------------------|
-| Idempotency | ✅ Yes | ❌ No | ✅ **Yes** |
-| Server Validation | ❌ No (veruje klijentu) | ✅ Yes | ✅ **Yes** |
-| Batch Optimizations | ⚠️ Partial | ✅ Yes | ✅ **Yes** |
-| Helper Method | ✅ Yes (external) | ❌ No (inline) | ✅ **Yes (internal)** |
-| Session Tracking | ❌ null | ✅ Yes | ✅ **Yes** |
-| Security | ❌ Low (client trust) | ✅ High | ✅ **High** |
-| Performance | ✅ Fast | ⚠️ Medium | ✅ **Fast** |
+| Idempotency | ? Yes | ? No | ? **Yes** |
+| Server Validation | ? No (veruje klijentu) | ? Yes | ? **Yes** |
+| Batch Optimizations | ?? Partial | ? Yes | ? **Yes** |
+| Helper Method | ? Yes (external) | ? No (inline) | ? **Yes (internal)** |
+| Session Tracking | ? null | ? Yes | ? **Yes** |
+| Security | ? Low (client trust) | ? High | ? **High** |
+| Performance | ? Fast | ?? Medium | ? **Fast** |
 
-## 🔐 Sigurnost
+## ?? Sigurnost
 
-### Zašto NE verovati `IsCorrectOffline`?
+### Za�to NE verovati `IsCorrectOffline`?
 
-**Problem**: Klijent može hakovati aplikaciju i poslati:
+**Problem**: Klijent mo�e hakovati aplikaciju i poslati:
 ```json
 {
   "questionId": 1,
-  "answer": "pogrešan odgovor",
-  "isCorrectOffline": true  // ⚠️ Lažiran!
+  "answer": "pogre�an odgovor",
+  "isCorrectOffline": true  // ?? La�iran!
 }
 ```
 
-**Rešenje**: Server UVEK validira odgovor:
+**Re�enje**: Server UVEK validira odgovor:
 ```csharp
 bool isCorrectServer = ValidateAnswer(question, answer.Answer);
-// Ignorišemo answer.IsCorrectOffline
+// Ignori�emo answer.IsCorrectOffline
 ```
 
 ### Kada je `IsCorrectOffline` koristan?
@@ -120,16 +120,16 @@ bool isCorrectServer = ValidateAnswer(question, answer.Answer);
 ```typescript
 // Client side - instant feedback
 const isCorrectOffline = checkAnswer(question, userAnswer);
-showFeedback(isCorrectOffline ? "✓" : "✗");
+showFeedback(isCorrectOffline ? "?" : "?");
 
-// Server će validirati ponovo kada se sinhronizuje
+// Server ce validirati ponovo kada se sinhronizuje
 ```
 
-## 🚀 Performanse
+## ?? Performanse
 
 ### N+1 Problem - Izbjegnut
 
-**❌ Loše (N+1)**:
+**? Lo�e (N+1)**:
 ```csharp
 foreach (var answer in request.Answers) {
     var question = await db.Questions
@@ -138,7 +138,7 @@ foreach (var answer in request.Answers) {
 }
 ```
 
-**✅ Dobro (Batch)**:
+**? Dobro (Batch)**:
 ```csharp
 // 1 query za sva pitanja
 var questions = await db.Questions
@@ -156,7 +156,7 @@ foreach (var answer in request.Answers) {
 
 ### Stats Update - Optimizovan
 
-**❌ Loše**:
+**? Lo�e**:
 ```csharp
 foreach (var answer in request.Answers) {
     var stat = await db.UserQuestionStats
@@ -164,7 +164,7 @@ foreach (var answer in request.Answers) {
 }
 ```
 
-**✅ Dobro**:
+**? Dobro**:
 ```csharp
 // 1 query za sve stats
 var existingStats = await db.UserQuestionStats
@@ -181,11 +181,11 @@ foreach (var answer in request.Answers) {
 }
 ```
 
-## 🧪 Testing
+## ?? Testing
 
 ### Test 1: Idempotency
 ```bash
-# Pošalji isti batch 2 puta
+# Po�alji isti batch 2 puta
 curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
   -H "Authorization: Bearer TOKEN" \
   -d '{
@@ -207,7 +207,7 @@ curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
 
 ### Test 2: Security - Fake Correct Answer
 ```bash
-# Pokušaj da lažiraš tačan odgovor
+# Poku�aj da la�ira� tacan odgovor
 curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
   -H "Authorization: Bearer TOKEN" \
   -d '{
@@ -215,21 +215,21 @@ curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
     "answers": [
       {
         "questionId": 1,
-        "answer": "pogrešan odgovor",
-        "isCorrectOffline": true,  // Lažirano!
+        "answer": "pogre�an odgovor",
+        "isCorrectOffline": true,  // La�irano!
         "timeSpent": 15,
         "answeredAt": "2026-01-22T10:00:00Z"
       }
     ]
   }'
 
-# Server će markirat kao NETAČAN (ignoriše isCorrectOffline)
+# Server ce markirat kao NETACAN (ignori�e isCorrectOffline)
 ```
 
 ### Test 3: Batch Performance
 ```bash
-# Pošalji 50 odgovora odjednom
-# Trebalo bi da se izvrši za < 1 sekund
+# Po�alji 50 odgovora odjednom
+# Trebalo bi da se izvr�i za < 1 sekund
 curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
   -H "Authorization: Bearer TOKEN" \
   -d '{
@@ -240,26 +240,26 @@ curl -X POST https://mathlearning-api.fly.dev/api/quiz/offline-submit \
   }'
 ```
 
-## 📝 Zaključak
+## ?? Zakljucak
 
-### Zašto je Hybrid Najbolji?
+### Za�to je Hybrid Najbolji?
 
-1. **✅ Sigurnost**: Server-side validacija sprečava varanje
-2. **✅ Pouzdanost**: Idempotency omogućava sigurno retry-ovanje
-3. **✅ Performanse**: Batch optimizacije za brze inserte
-4. **✅ Održivost**: Helper metoda za reusable logiku
-5. **✅ Tracking**: Session povezivanje za analytics
+1. **? Sigurnost**: Server-side validacija sprecava varanje
+2. **? Pouzdanost**: Idempotency omogucava sigurno retry-ovanje
+3. **? Performanse**: Batch optimizacije za brze inserte
+4. **? Odr�ivost**: Helper metoda za reusable logiku
+5. **? Tracking**: Session povezivanje za analytics
 
-### Kada Koristiti Šta?
+### Kada Koristiti �ta?
 
 - **Online real-time**: `/api/quiz/answer` - Instant validacija
 - **Offline batch sync**: `/api/quiz/offline-submit` - Sinhronizacija kada se vrati online
 - **Progress tracking**: Helper metoda `CalculateUserOverview` - Reusable metrics
 
-## 🔜 Future Improvements
+## ?? Future Improvements
 
-- [ ] **Partial sync**: Označi koje odgovore su već sinhronizovani (lokalno u IndexedDB)
-- [ ] **Conflict resolution**: Šta ako isti odgovor postoji sa različitim `answeredAt`?
+- [ ] **Partial sync**: Oznaci koje odgovore su vec sinhronizovani (lokalno u IndexedDB)
+- [ ] **Conflict resolution**: �ta ako isti odgovor postoji sa razlicitim `answeredAt`?
 - [ ] **Compression**: Za velike batch-ove (>100 odgovora) kompresuj payload
-- [ ] **Rate limiting**: Ograniči na 100 odgovora po batch-u
-- [ ] **Analytics**: Loguj koliko često se koristi offline mode
+- [ ] **Rate limiting**: Ogranici na 100 odgovora po batch-u
+- [ ] **Analytics**: Loguj koliko cesto se koristi offline mode

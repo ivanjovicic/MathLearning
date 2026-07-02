@@ -1,24 +1,24 @@
-﻿# 💰 Coin System + Enhanced Hints - Complete Guide
+# ?? Coin System + Enhanced Hints - Complete Guide
 
-## 🎯 Overview
+## ?? Overview
 
 Implementiran **kompletan coin-based hint sistem** koji dodaje gamification layer kroz:
-- 💰 **Coin economy** - Earn & spend coins
-- 💡 **4 tipa hint-ova** - Formula, Clue, Eliminate, Solution
-- 🏆 **Leaderboards** - Richest users
-- 📊 **Coin tracking** - Earned vs Spent
+- ?? **Coin economy** - Earn & spend coins
+- ?? **4 tipa hint-ova** - Formula, Clue, Eliminate, Solution
+- ?? **Leaderboards** - Richest users
+- ?? **Coin tracking** - Earned vs Spent
 
 ---
 
-## 💰 Coin Economy
+## ?? Coin Economy
 
 ### Starting Balance
 - New users start with **100 coins**
 - Coins can be earned through:
-  - ✅ Correct answers (+10 coins)
-  - 🔥 Streak bonuses (+5 coins per day)
-  - 🎯 Level up rewards (+50 coins)
-  - 🎁 Daily login (+20 coins)
+  - ? Correct answers (+10 coins)
+  - ?? Streak bonuses (+5 coins per day)
+  - ?? Level up rewards (+50 coins)
+  - ?? Daily login (+20 coins)
 
 ### Coin Costs
 
@@ -31,7 +31,7 @@ Implementiran **kompletan coin-based hint sistem** koji dodaje gamification laye
 
 ---
 
-## 🛠️ API Endpoints
+## ??? API Endpoints
 
 ### Hint Endpoints
 
@@ -46,7 +46,7 @@ Authorization: Bearer <token>
 **Response** (Success - First Time):
 ```json
 {
-  "formula": "a² + b² = c²",
+  "formula": "a� + b� = c�",
   "available": true,
   "cost": 5,
   "remainingCoins": 95
@@ -56,7 +56,7 @@ Authorization: Bearer <token>
 **Response** (Already Used):
 ```json
 {
-  "formula": "a² + b² = c²",
+  "formula": "a� + b� = c�",
   "available": true,
   "alreadyUsed": true,
   "cost": 0
@@ -81,7 +81,7 @@ Authorization: Bearer <token>
 **Response**:
 ```json
 {
-  "clue": "Primeni Pitagorinu teoremu za rešavanje",
+  "clue": "Primeni Pitagorinu teoremu za re�avanje",
   "available": true,
   "cost": 10,
   "remainingCoins": 85
@@ -119,7 +119,7 @@ Authorization: Bearer <token>
 **Response**:
 ```json
 {
-  "solution": "Koristi Pitagorinu teoremu: a² + b² = c². Za stranice 3 i 4, hipotenuza je √(3² + 4²) = √25 = 5.",
+  "solution": "Koristi Pitagorinu teoremu: a� + b� = c�. Za stranice 3 i 4, hipotenuza je v(3� + 4�) = v25 = 5.",
   "available": true,
   "cost": 20,
   "remainingCoins": 50
@@ -266,7 +266,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 📊 Database Schema
+## ?? Database Schema
 
 ### UserProfiles Table (New)
 ```sql
@@ -293,39 +293,39 @@ CREATE UNIQUE INDEX "UX_UserProfiles_Username" ON "UserProfiles" ("Username");
 
 ---
 
-## 🎮 Gamification Flow
+## ?? Gamification Flow
 
 ### Complete Quiz Flow with Coins
 
 ```
 1. User starts quiz
-   ↓
+   ?
 2. User encounters difficult question
-   ↓
+   ?
 3. User checks available hints:
    GET /api/hints/question/5
-   → { formula: 5 coins, clue: 10 coins, eliminate: 15 coins }
-   ↓
+   ? { formula: 5 coins, clue: 10 coins, eliminate: 15 coins }
+   ?
 4. User uses formula hint:
    GET /api/hints/questions/5/formula
-   → { formula: "a² + b² = c²", cost: 5, remainingCoins: 95 }
-   ↓
+   ? { formula: "a� + b� = c�", cost: 5, remainingCoins: 95 }
+   ?
 5. Still stuck? Use clue:
    GET /api/hints/questions/5/clue
-   → { clue: "Apply Pythagorean theorem", cost: 10, remainingCoins: 85 }
-   ↓
+   ? { clue: "Apply Pythagorean theorem", cost: 10, remainingCoins: 85 }
+   ?
 6. Still stuck? Eliminate wrong option:
    POST /api/hints/questions/5/eliminate
-   → { remainingOptions: ["13", "15"], cost: 15, remainingCoins: 70 }
-   ↓
+   ? { remainingOptions: ["13", "15"], cost: 15, remainingCoins: 70 }
+   ?
 7. User answers correctly!
    POST /api/coins/earn?amount=10&reason=correct_answer
-   → { newBalance: 80, totalEarned: 110 }
+   ? { newBalance: 80, totalEarned: 110 }
 ```
 
 ---
 
-## 💡 Hint Strategy (Progressive Cost)
+## ?? Hint Strategy (Progressive Cost)
 
 ### Why Progressive Pricing?
 
@@ -351,7 +351,7 @@ CREATE UNIQUE INDEX "UX_UserProfiles_Username" ON "UserProfiles" ("Username");
 
 ---
 
-## 🎯 Coin Earning Strategies
+## ?? Coin Earning Strategies
 
 ### 1. Answer Questions Correctly
 ```
@@ -382,7 +382,7 @@ Level 10: +200 coins
 
 ---
 
-## 📊 Example Scenarios
+## ?? Example Scenarios
 
 ### Scenario 1: Smart User
 ```
@@ -423,7 +423,7 @@ Day 2:
 
 ---
 
-## 🧪 Testing
+## ?? Testing
 
 ### Test 1: Get Formula Hint
 ```bash
@@ -456,7 +456,7 @@ curl https://mathlearning-api.fly.dev/api/coins/leaderboard?limit=10
 
 ---
 
-## 💻 Client Implementation
+## ?? Client Implementation
 
 ### React/TypeScript Example
 ```typescript
@@ -532,7 +532,7 @@ const QuizQuestion: React.FC<{ question: Question }> = ({ question }) => {
       <h2>{question.text}</h2>
       
       <div className="coin-display">
-        💰 {coins} coins
+        ?? {coins} coins
       </div>
 
       <div className="hint-buttons">
@@ -541,7 +541,7 @@ const QuizQuestion: React.FC<{ question: Question }> = ({ question }) => {
             onClick={() => useHint('formula')}
             disabled={!hints.availableHints.formula.affordable}
           >
-            💡 Formula (5 coins)
+            ?? Formula (5 coins)
           </button>
         )}
         
@@ -550,7 +550,7 @@ const QuizQuestion: React.FC<{ question: Question }> = ({ question }) => {
             onClick={() => useHint('eliminate')}
             disabled={!hints.availableHints.eliminate.affordable}
           >
-            ❌ Eliminate (15 coins)
+            ? Eliminate (15 coins)
           </button>
         )}
       </div>
@@ -561,7 +561,7 @@ const QuizQuestion: React.FC<{ question: Question }> = ({ question }) => {
 
 ---
 
-## 🏆 Achievements & Rewards
+## ?? Achievements & Rewards
 
 ### Coin-Based Achievements
 - **Thrifty**: Solve 50 questions without using hints (+100 coins)
@@ -571,7 +571,7 @@ const QuizQuestion: React.FC<{ question: Question }> = ({ question }) => {
 
 ---
 
-## 🚀 Deployment
+## ?? Deployment
 
 ```bash
 # 1. Apply migration
@@ -598,16 +598,16 @@ WHERE NOT EXISTS (
 
 ---
 
-## 🎯 Best Practices
+## ?? Best Practices
 
-### ✅ DO
+### ? DO
 1. **Show coin cost** before using hint
 2. **Confirm expensive hints** (solution = 20 coins)
 3. **Display remaining coins** prominently
 4. **Encourage earning** - Show ways to earn coins
 5. **Track spending** - Show coin history
 
-### ❌ DON'T
+### ? DON'T
 1. **Don't let coins go negative** - Check before deducting
 2. **Don't charge for already-used hints** - Free on repeat use
 3. **Don't make coins too easy** - Balance is key
@@ -615,14 +615,14 @@ WHERE NOT EXISTS (
 
 ---
 
-## 🏆 Conclusion
+## ?? Conclusion
 
 **Coin System** provides:
-- ✅ **Gamification** - Engaging economy
-- ✅ **Strategic Thinking** - When to use hints?
-- ✅ **Learning Incentive** - Rewards for solving without hints
-- ✅ **Fairness** - Everyone starts with 100 coins
-- ✅ **Progression** - Earn more as you level up
-- ✅ **Production-ready** - Scalable, indexed, tracked
+- ? **Gamification** - Engaging economy
+- ? **Strategic Thinking** - When to use hints?
+- ? **Learning Incentive** - Rewards for solving without hints
+- ? **Fairness** - Everyone starts with 100 coins
+- ? **Progression** - Earn more as you level up
+- ? **Production-ready** - Scalable, indexed, tracked
 
-Build successful ✅ - Ready for production! 💰🚀
+Build successful ? - Ready for production! ????

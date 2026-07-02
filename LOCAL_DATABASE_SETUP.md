@@ -1,10 +1,10 @@
-﻿# Local Database Setup
+# Local Database Setup
 
-Uputstvo za podešavanje lokalne PostgreSQL baze umesto Neon cloud baze.
+Uputstvo za pode�avanje lokalne PostgreSQL baze umesto Neon cloud baze.
 
 ## Preduslov
 
-Instaliraj **Docker Desktop** na svom računaru:
+Instaliraj **Docker Desktop** na svom racunaru:
 - Windows/Mac: https://www.docker.com/products/docker-desktop
 - Linux: `sudo apt-get install docker-compose`
 
@@ -12,14 +12,14 @@ Instaliraj **Docker Desktop** na svom računaru:
 
 ## Brzi Start
 
-### 1️⃣ Pokreni PostgreSQL kontejner
+### 1?? Pokreni PostgreSQL kontejner
 
 ```powershell
 # Windows PowerShell
 .\scripts\setup-local-db.ps1
 ```
 
-Ili ručno:
+Ili rucno:
 
 ```bash
 # Pokreni Docker Compose
@@ -32,7 +32,7 @@ docker ps
 docker logs mathlearning-postgres
 ```
 
-### 2️⃣ Primeni EF Core migracije
+### 2?? Primeni EF Core migracije
 
 ```powershell
 # Admin baza
@@ -44,7 +44,7 @@ cd ../MathLearning.Infrastructure
 dotnet ef database update --context ApiDbContext --startup-project ../MathLearning.Api/MathLearning.Api.csproj
 ```
 
-### 3️⃣ Pokreni aplikaciju
+### 3?? Pokreni aplikaciju
 
 ```powershell
 # API
@@ -60,7 +60,7 @@ dotnet run
 
 ## Connection String Konfiguracija
 
-### appsettings.json (već ažurirano)
+### appsettings.json (vec a�urirano)
 
 **API** (`src/MathLearning.Api/appsettings.json`):
 ```json
@@ -101,7 +101,7 @@ dotnet run
 docker-compose down
 ```
 
-### Zaustavi i obriši podatke
+### Zaustavi i obri�i podatke
 ```bash
 docker-compose down -v
 ```
@@ -135,7 +135,7 @@ docker exec -it mathlearning-postgres psql -U postgres -d mathlearning
    - Password: `postgres`
 
 ### DBeaver
-1. New Database Connection → PostgreSQL
+1. New Database Connection ? PostgreSQL
 2. Host: `localhost`
 3. Port: `5433`
 4. Database: `mathlearning`
@@ -148,14 +148,14 @@ docker exec -it mathlearning-postgres psql -U postgres -d mathlearning
 
 ### Port 5433 already in use
 ```bash
-# Pronađi proces koji koristi port
+# Pronadi proces koji koristi port
 netstat -ano | findstr :5433
 
 # Zaustavi Docker kontejner
 docker-compose down
 
 # Promeni port u docker-compose.yml (npr. 5434)
-# Onda ažuriraj appsettings.json connection strings
+# Onda a�uriraj appsettings.json connection strings
 ```
 
 ### Container won't start
@@ -163,7 +163,7 @@ docker-compose down
 # Proveri logove
 docker logs mathlearning-postgres
 
-# Pokušaj rebuild
+# Poku�aj rebuild
 docker-compose down -v
 docker-compose up -d --build
 ```
@@ -173,11 +173,11 @@ docker-compose up -d --build
 # Proveri da li je baza dostupna
 docker exec -it mathlearning-postgres psql -U postgres -c "SELECT version();"
 
-# Ručno kreiraj bazu ako ne postoji
+# Rucno kreiraj bazu ako ne postoji
 docker exec -it mathlearning-postgres psql -U postgres -c "CREATE DATABASE mathlearning;"
 docker exec -it mathlearning-postgres psql -U postgres -c "CREATE DATABASE mathlearning_admin;"
 
-# Pokušaj ponovo migration
+# Poku�aj ponovo migration
 dotnet ef database update --context ApiDbContext
 ```
 
@@ -217,19 +217,19 @@ docker exec -i mathlearning-postgres psql -U postgres mathlearning_admin < backu
 |---------|------------|------------------|
 | Setup | Online account | Docker Desktop |
 | Cost | Free tier / Paid | Free |
-| Performance | Network latency | Local (brže) |
+| Performance | Network latency | Local (br�e) |
 | Availability | 99.9% SLA | Zavisi od Docker-a |
 | Backups | Automatic | Manual |
 | SSL | Required | Ne treba |
 | Scaling | Automatic | Manual |
 | Development | Sporo (network) | Brzo |
-| Production | ✅ Preporučeno | ❌ Ne preporučuje se |
+| Production | ? Preporuceno | ? Ne preporucuje se |
 
 ---
 
 ## Preporuka za Production
 
-Za **production**, nastavi da koristiš **Neon** ili prebaci na:
+Za **production**, nastavi da koristi� **Neon** ili prebaci na:
 - **Azure Database for PostgreSQL**
 - **AWS RDS PostgreSQL**
 - **Google Cloud SQL**
@@ -240,13 +240,13 @@ Lokalna baza je **samo za development**!
 
 ## Seed Data (Opcionalno)
 
-Ako želiš da seeduješ testne podatke:
+Ako �eli� da seeduje� testne podatke:
 
 ```powershell
 # Pokreni seed script (ako postoji)
 cd src/MathLearning.Infrastructure
 dotnet run --project ../MathLearning.Api -- --seed
 
-# Ili ručno izvršavaj SQL
+# Ili rucno izvr�avaj SQL
 docker exec -i mathlearning-postgres psql -U postgres mathlearning < seed.sql
 ```

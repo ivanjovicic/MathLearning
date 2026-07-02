@@ -1,10 +1,10 @@
-﻿# Refresh Token Authentication System
+# Refresh Token Authentication System
 
-## 🔐 Overview
+## ?? Overview
 
 Implementiran **kompletan Refresh Token sistem** za sigurnu, user-friendly autentifikaciju sa automatskim refresh-om tokena.
 
-## 📊 Token Types
+## ?? Token Types
 
 ### 1. Access Token (Short-lived)
 **Lifetime**: 30 minutes  
@@ -34,47 +34,47 @@ Example: "Ug8v7w9y$B@E(H+MbQeThWmZq4t7w!z%C*F-JaNdRgUkXp2s5v8y/A?D(G+KbPe"
 
 ---
 
-## 🔄 Authentication Flow
+## ?? Authentication Flow
 
 ### Initial Login
 ```
-1. User → POST /auth/login { username, password }
+1. User ? POST /auth/login { username, password }
 2. Server validates credentials
 3. Server generates:
    - Access Token (30 min)
    - Refresh Token (14 days)
 4. Server stores Refresh Token in database
-5. Server → { accessToken, refreshToken, expiresIn, userId, username }
+5. Server ? { accessToken, refreshToken, expiresIn, userId, username }
 6. Client stores tokens:
-   - Access Token → Memory (React state, Blazor service)
-   - Refresh Token → HttpOnly Cookie or Secure Storage
+   - Access Token ? Memory (React state, Blazor service)
+   - Refresh Token ? HttpOnly Cookie or Secure Storage
 ```
 
 ### Token Refresh Flow
 ```
 1. Access Token expires (after 30 min)
-2. Client → POST /auth/refresh { refreshToken }
+2. Client ? POST /auth/refresh { refreshToken }
 3. Server validates Refresh Token:
    - Exists in database?
    - Not expired?
    - Not revoked?
 4. Server generates new tokens
 5. Server revokes old Refresh Token
-6. Server → { accessToken, refreshToken, expiresIn, userId, username }
+6. Server ? { accessToken, refreshToken, expiresIn, userId, username }
 7. Client updates tokens
 ```
 
 ### Logout Flow
 ```
-1. Client → POST /auth/logout { refreshToken }
+1. Client ? POST /auth/logout { refreshToken }
 2. Server marks Refresh Token as revoked
-3. Server → { message: "Logged out successfully" }
+3. Server ? { message: "Logged out successfully" }
 4. Client clears tokens
 ```
 
 ---
 
-## 🛠️ API Endpoints
+## ??? API Endpoints
 
 ### POST /auth/login
 **Description**: User login with username & password
@@ -174,7 +174,7 @@ Authorization: Bearer <accessToken>
 
 ---
 
-## 🗄️ Database Schema
+## ??? Database Schema
 
 ### RefreshTokens Table
 ```sql
@@ -201,7 +201,7 @@ CREATE INDEX "IX_RefreshTokens_User_Expires" ON "RefreshTokens" ("UserId", "Expi
 
 ---
 
-## 🔒 Security Features
+## ?? Security Features
 
 ### 1. Cryptographically Secure Token Generation
 ```csharp
@@ -254,7 +254,7 @@ await db.SaveChangesAsync();
 
 ---
 
-## 💻 Client Implementation
+## ?? Client Implementation
 
 ### React/TypeScript Example
 ```typescript
@@ -441,7 +441,7 @@ public class TokenService
 
 ---
 
-## 🧪 Testing
+## ?? Testing
 
 ### Test 1: Login
 ```bash
@@ -496,7 +496,7 @@ curl -X POST http://localhost:5000/auth/revoke-all \
 
 ---
 
-## 📊 Migration Applied
+## ?? Migration Applied
 
 ```csharp
 public partial class AddRefreshTokens : Migration
@@ -543,7 +543,7 @@ public partial class AddRefreshTokens : Migration
 
 ---
 
-## 🚀 Deployment
+## ?? Deployment
 
 ```bash
 # 1. Apply migration
@@ -559,9 +559,9 @@ curl -X POST https://mathlearning-api.fly.dev/auth/login ...
 
 ---
 
-## 🎯 Best Practices
+## ?? Best Practices
 
-### ✅ DO
+### ? DO
 1. **Store Access Token in memory** - NOT localStorage (XSS protection)
 2. **Store Refresh Token securely** - HttpOnly Cookie or Secure Storage
 3. **Rotate Refresh Tokens** - Generate new on every refresh
@@ -569,7 +569,7 @@ curl -X POST https://mathlearning-api.fly.dev/auth/login ...
 5. **Set long Refresh Token lifetime** - 7-30 days
 6. **Validate tokens thoroughly** - Check expiry, revocation, user exists
 
-### ❌ DON'T
+### ? DON'T
 1. **Don't store Access Token in localStorage** - XSS vulnerability
 2. **Don't reuse Refresh Tokens** - Always rotate
 3. **Don't set long Access Token lifetime** - Defeats the purpose
@@ -578,7 +578,7 @@ curl -X POST https://mathlearning-api.fly.dev/auth/login ...
 
 ---
 
-## 🔮 Future Enhancements
+## ?? Future Enhancements
 
 - [ ] **Token families** - Detect stolen tokens via family tree
 - [ ] **Refresh Token cleanup** - Background service to delete expired
@@ -588,13 +588,13 @@ curl -X POST https://mathlearning-api.fly.dev/auth/login ...
 
 ---
 
-## 🏆 Conclusion
+## ?? Conclusion
 
 **Refresh Token System** provides:
-- ✅ **Better UX** - No login prompts for 14 days
-- ✅ **Better Security** - Short-lived Access Tokens
-- ✅ **Flexibility** - Logout from all devices
-- ✅ **Auditability** - Device & IP tracking
-- ✅ **Production-ready** - Industry standard pattern
+- ? **Better UX** - No login prompts for 14 days
+- ? **Better Security** - Short-lived Access Tokens
+- ? **Flexibility** - Logout from all devices
+- ? **Auditability** - Device & IP tracking
+- ? **Production-ready** - Industry standard pattern
 
-Build successful ✅ - Ready for production! 🚀
+Build successful ? - Ready for production! ??

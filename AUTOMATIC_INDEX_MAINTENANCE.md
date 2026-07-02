@@ -1,28 +1,28 @@
-﻿# Automatic Index Maintenance System
+# Automatic Index Maintenance System
 
-## 🔧 Overview
+## ?? Overview
 
 Implementiran **automatski sistem** za detekciju i rekreaciju pokvarenih (corrupted/bloated) indexa u PostgreSQL bazi.
 
-## 📊 Components
+## ?? Components
 
 ### 1. IndexMaintenanceService
 **Location**: `MathLearning.Infrastructure/Maintenance/IndexMaintenanceService.cs`
 
 **Features**:
-- ✅ Detektuje **fragmentirane** (bloated) indexe
-- ✅ Detektuje **nekorišćene** (unused) indexe
-- ✅ **Automatski rekreira** indexe sa >30% bloat-a
-- ✅ Ažurira **statistike** za query optimizer
-- ✅ Proverava **zdravlje** svih indexa
+- ? Detektuje **fragmentirane** (bloated) indexe
+- ? Detektuje **nekori�cene** (unused) indexe
+- ? **Automatski rekreira** indexe sa >30% bloat-a
+- ? A�urira **statistike** za query optimizer
+- ? Proverava **zdravlje** svih indexa
 
 ### 2. IndexMaintenanceBackgroundService
 **Location**: `MathLearning.Api/Services/IndexMaintenanceBackgroundService.cs`
 
 **Features**:
-- ⏰ **Automatsko pokretanje** svaki dan u 3 AM UTC
-- 📊 **Logging** svih operacija
-- 🔄 **Graceful** handling errors-a
+- ? **Automatsko pokretanje** svaki dan u 3 AM UTC
+- ?? **Logging** svih operacija
+- ?? **Graceful** handling errors-a
 
 ### 3. MaintenanceEndpoints
 **Location**: `MathLearning.Api/Endpoints/MaintenanceEndpoints.cs`
@@ -34,7 +34,7 @@ Implementiran **automatski sistem** za detekciju i rekreaciju pokvarenih (corrup
 
 ---
 
-## 🚀 How It Works
+## ?? How It Works
 
 ### Automatic Mode (Background Service)
 
@@ -151,7 +151,7 @@ curl https://mathlearning-api.fly.dev/api/maintenance/index-stats \
 
 ---
 
-## 🔍 Index Bloat Detection
+## ?? Index Bloat Detection
 
 ### What is Index Bloat?
 
@@ -163,9 +163,9 @@ curl https://mathlearning-api.fly.dev/api/maintenance/index-stats \
 - No `VACUUM` runs
 
 **Impact**:
-- ⚠️ **Slower queries** (more pages to scan)
-- ⚠️ **More disk space** (wasted storage)
-- ⚠️ **More RAM** (larger working set)
+- ?? **Slower queries** (more pages to scan)
+- ?? **More disk space** (wasted storage)
+- ?? **More RAM** (larger working set)
 
 ### Bloat Calculation
 
@@ -182,26 +182,26 @@ ORDER BY bloat_percentage DESC;
 ```
 
 **Thresholds**:
-- `< 15%` - ✅ **HEALTHY** - No action needed
-- `15-30%` - ⚠️ **WATCH** - Monitor closely
-- `> 30%` - ❌ **NEEDS_REBUILD** - Rebuild recommended
+- `< 15%` - ? **HEALTHY** - No action needed
+- `15-30%` - ?? **WATCH** - Monitor closely
+- `> 30%` - ? **NEEDS_REBUILD** - Rebuild recommended
 
 ---
 
-## 🛠️ REINDEX Strategies
+## ??? REINDEX Strategies
 
 ### 1. REINDEX INDEX (Blocks Writes)
 ```sql
 REINDEX INDEX "IX_UserAnswers_UserId";
 ```
 **Pros**: Fast  
-**Cons**: ❌ **Locks table** - blocks writes during rebuild
+**Cons**: ? **Locks table** - blocks writes during rebuild
 
 ### 2. REINDEX INDEX CONCURRENTLY (No Downtime)
 ```sql
 REINDEX INDEX CONCURRENTLY "IX_UserAnswers_UserId";
 ```
-**Pros**: ✅ **No downtime** - writes continue  
+**Pros**: ? **No downtime** - writes continue  
 **Cons**: Slower (2x time)
 
 **Our Choice**: `CONCURRENTLY` - **Zero downtime** is critical
@@ -214,24 +214,24 @@ REINDEX TABLE "UserAnswers";
 
 ---
 
-## 📊 Monitoring & Alerts
+## ?? Monitoring & Alerts
 
 ### Logs
 ```
-2026-01-23 03:00:00 [INFO] 🔧 Index Maintenance Service started
-2026-01-23 03:00:01 [INFO] 🔍 Running index maintenance...
-2026-01-23 03:00:05 [INFO] 📊 Maintenance Report:
+2026-01-23 03:00:00 [INFO] ?? Index Maintenance Service started
+2026-01-23 03:00:01 [INFO] ?? Running index maintenance...
+2026-01-23 03:00:05 [INFO] ?? Maintenance Report:
 2026-01-23 03:00:05 [INFO]   - Bloated indexes: 5
 2026-01-23 03:00:05 [INFO]   - Unused indexes: 2
 2026-01-23 03:00:05 [INFO]   - Rebuilt indexes: 3
-2026-01-23 03:00:05 [INFO]   ✅ Rebuilt indexes:
+2026-01-23 03:00:05 [INFO]   ? Rebuilt indexes:
 2026-01-23 03:00:05 [INFO]     - IX_UserAnswers_User_Answered
 2026-01-23 03:00:05 [INFO]     - IX_Questions_Subtopic_Difficulty
 2026-01-23 03:00:05 [INFO]     - IX_UserQuestionStats_User_LastAttempt
-2026-01-23 03:00:05 [WARN]   ⚠️ Unused indexes (consider removing):
+2026-01-23 03:00:05 [WARN]   ?? Unused indexes (consider removing):
 2026-01-23 03:00:05 [WARN]     - public.IX_OldFeature_Column
-2026-01-23 03:00:10 [INFO] ✅ Index maintenance completed
-2026-01-23 03:00:10 [INFO] ⏰ Next maintenance scheduled at 2026-01-24 03:00:00 UTC
+2026-01-23 03:00:10 [INFO] ? Index maintenance completed
+2026-01-23 03:00:10 [INFO] ? Next maintenance scheduled at 2026-01-24 03:00:00 UTC
 ```
 
 ### Fly.io Monitoring
@@ -245,7 +245,7 @@ fly logs -a mathlearning-api | grep "Maintenance Report"
 
 ---
 
-## ⚙️ Configuration
+## ?? Configuration
 
 ### Change Schedule
 **Current**: Daily at 3 AM UTC
@@ -273,7 +273,7 @@ foreach (var index in bloatedIndexes.Where(i => i.BloatPercentage > 50))
 
 ---
 
-## 🧪 Testing
+## ?? Testing
 
 ### Test Locally
 ```bash
@@ -313,13 +313,13 @@ WHERE tablename = 'UserAnswers';
 
 ---
 
-## 📋 Deployment Checklist
+## ?? Deployment Checklist
 
 - [x] Created `IndexMaintenanceService.cs`
 - [x] Created `IndexMaintenanceBackgroundService.cs`
 - [x] Created `MaintenanceEndpoints.cs`
 - [x] Registered services in `Program.cs`
-- [x] Build successful ✅
+- [x] Build successful ?
 - [ ] Test locally
 - [ ] Deploy to Fly.io
 - [ ] Monitor first run (3 AM UTC next day)
@@ -327,14 +327,14 @@ WHERE tablename = 'UserAnswers';
 
 ---
 
-## 🚨 Alerts & Notifications (Future)
+## ?? Alerts & Notifications (Future)
 
 ### Slack Notification
 ```csharp
 // After maintenance run
 if (report.RebuiltIndexes.Count > 5)
 {
-    await SendSlackNotification($"⚠️ Rebuilt {report.RebuiltIndexes.Count} indexes!");
+    await SendSlackNotification($"?? Rebuilt {report.RebuiltIndexes.Count} indexes!");
 }
 ```
 
@@ -353,7 +353,7 @@ await SendEmailReport("admin@example.com", summary);
 
 ---
 
-## 📊 Expected Results
+## ?? Expected Results
 
 ### Before Automatic Maintenance
 ```
@@ -366,24 +366,24 @@ Query Time: 150ms
 ### After Automatic Maintenance
 ```
 Index: IX_UserAnswers_User_Answered
-Size: 16 MB ✅ (-36% size reduction)
-Bloat: 5% ✅
-Query Time: 80ms ✅ (47% faster!)
+Size: 16 MB ? (-36% size reduction)
+Bloat: 5% ?
+Query Time: 80ms ? (47% faster!)
 ```
 
 **Impact**: **30-50% query speedup** after rebuilding bloated indexes!
 
 ---
 
-## 🎯 Best Practices
+## ?? Best Practices
 
-### ✅ DO
+### ? DO
 1. **Monitor logs** - Check maintenance reports weekly
 2. **Run manual rebuild** - If query performance degrades
 3. **Update statistics** - Always after bulk operations
 4. **Test locally** - Before deploying to production
 
-### ❌ DON'T
+### ? DON'T
 1. **Don't rebuild during peak hours** - Schedule at 3 AM
 2. **Don't rebuild ALL indexes** - Only bloated ones (>30%)
 3. **Don't ignore unused indexes** - Consider removing them
@@ -391,7 +391,7 @@ Query Time: 80ms ✅ (47% faster!)
 
 ---
 
-## 🔗 Resources
+## ?? Resources
 
 - **PostgreSQL REINDEX**: https://www.postgresql.org/docs/current/sql-reindex.html
 - **Index Bloat Detection**: https://wiki.postgresql.org/wiki/Show_database_bloat
@@ -399,7 +399,7 @@ Query Time: 80ms ✅ (47% faster!)
 
 ---
 
-## 🎓 Troubleshooting
+## ?? Troubleshooting
 
 ### Issue: "REINDEX CONCURRENTLY failed"
 **Solution**: Check PostgreSQL version (requires 12+)
@@ -423,13 +423,13 @@ REINDEX TABLE "UserAnswers";
 
 ---
 
-## 🏆 Conclusion
+## ?? Conclusion
 
 **Automatic Index Maintenance** ensures:
-- ✅ **Consistent performance** - No gradual slowdown
-- ✅ **Zero downtime** - CONCURRENTLY rebuild
-- ✅ **Proactive monitoring** - Detect issues early
-- ✅ **Automatic healing** - Self-fixing system
+- ? **Consistent performance** - No gradual slowdown
+- ? **Zero downtime** - CONCURRENTLY rebuild
+- ? **Proactive monitoring** - Detect issues early
+- ? **Automatic healing** - Self-fixing system
 
 **Next Steps**:
 1. Deploy to Fly.io

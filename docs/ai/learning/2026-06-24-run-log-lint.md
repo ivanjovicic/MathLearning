@@ -30,19 +30,21 @@ Linted Done rows in:
 
 ## Rows needing evidence sync
 
-None after this lint pass (pending runtime commit for BACKEND2-CRIT-001,004-008 uncommitted work).
+None after this lint pass.
 
 ## Score-cap corrections
 
 - BACKEND-CRIT-001/002 raised from 90% → 95% after commit SHA sync.
-- BACKEND2 uncommitted prompts committed as `85a87c6`.
+- BACKEND2 uncommitted prompts committed as `aa83a3a`.
 
-## Commit SHA
-
-85a87c6
+## Mistake IDs
 
 - BACKEND-MISTAKE-EVIDENCE-001 — repeated stale `uncommitted` in evidence after commit `67173f4`; corrected in lint.
 - No new mistake cards added.
+
+## Commit SHA
+
+Runtime batch: `aa83a3a`. Lint/docs sync: `dae87d1`.
 
 ## Residual risk
 
