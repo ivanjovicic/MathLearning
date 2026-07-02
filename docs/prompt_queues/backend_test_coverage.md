@@ -29,7 +29,7 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 
 | ID | Status | Purpose |
 |---|---|---|
-| BACKEND-TEST-CORE-001 | Needs validation | Daily Run/cosmetics trust boundary, economy state machine, refresh-token primitives, CI coverage artifacts. |
+| BACKEND-TEST-CORE-001 | Needs validation | Daily Run/cosmetics trust boundary, economy state machine, refresh-token primitives, relational constraints, CI coverage artifacts. Run log: `.ai/runs/2026-07-02-BACKEND-TEST-CORE-001-evidence.md`. |
 | BACKEND-TEST-002 | Ready | Settlement snapshot truth: first response and replay include newly persisted season/milestone state. |
 | BACKEND-TEST-003 | Ready | Required operation identity for P0 quiz/offline/SRS mutations and safe legacy behavior. |
 | BACKEND-TEST-004 | Ready | Offline timestamp UTC normalization, future/old/malformed bounds, equivalent timestamp dedupe. |
@@ -37,9 +37,10 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 | BACKEND-TEST-006 | Ready | Monitoring/log authorization and redaction for anonymous and non-admin callers. |
 | BACKEND-TEST-007 | Ready | Public identity allowlists across search/profile/leaderboard/rivals/school surfaces. |
 | BACKEND-TEST-008 | Ready | Avatar upload size/type/content checks and static-file access policy. |
-| BACKEND-TEST-009 | Ready | SQLite relational tests for unique idempotency indexes and transaction rollback. |
+| BACKEND-TEST-009 | Partial / Needs validation | SQLite unique-index tests added; transaction rollback and true concurrent settlement cases remain. |
 | BACKEND-TEST-010 | Ready | Read bounds and enum validation for search, leaderboard, history, and monitoring endpoints. |
 | BACKEND-TEST-011 | Ready after coverage artifact | Measure baseline and propose progressive line/branch thresholds. |
+| BACKEND-TEST-012 | Ready / P0-P1 | Repair RefreshToken model/snapshot max length drift (64 vs existing 128 migration), add model metadata regression test, and verify schema-from-zero. |
 
 ## BACKEND-TEST-002 — Settlement snapshot truth
 
@@ -85,10 +86,35 @@ Cover:
 Run mode: tests  
 Token budget: medium
 
-Use SQLite or PostgreSQL-backed tests for:
+Implemented in this batch:
 
 - unique user/type/idempotency-key scope;
 - unique user/type/operation-id scope;
+- multiple null operation IDs with different keys;
 - Daily Run user/day uniqueness;
+- Daily Run user/transaction uniqueness;
+- cosmetics user/operation and user/key uniqueness;
+- different-user isolation.
+
+Still required:
+
 - rollback does not leave completed ledger state;
-- concurrent duplicate requests settle once.
+- true concurrent duplicate requests settle once against a relational provider.
+
+## BACKEND-TEST-012 — Refresh-token model length drift
+
+Run mode: bugfix + tests  
+Token budget: low
+
+Evidence:
+
+- `RefreshTokenService.GenerateRefreshToken()` emits Base64 for 64 random bytes (88 characters).
+- migration `20260210114958_IncreaseRefreshTokenLength` changed the DB column to 128.
+- current EF configuration and model snapshot declare max length 64.
+
+Required:
+
+- align EF configuration and model snapshot to 128 without creating a redundant shrink/expand migration;
+- add a model metadata test proving generated tokens fit the configured maximum;
+- run schema-from-zero validation and refresh-token tests;
+- add/update a `BACKEND-MISTAKE-AUTH-*` or `BACKEND-MISTAKE-MIGRATION-*` card.
