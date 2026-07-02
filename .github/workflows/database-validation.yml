@@ -50,8 +50,24 @@ jobs:
             -DatabaseName "mathlearning_ci_validation" `
             -KeepDatabase
 
-      - name: Run test suite
-        run: dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-build
+      - name: Run test suite with coverage
+        run: >-
+          dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj
+          -c Release
+          --no-build
+          --logger "trx;LogFileName=mathlearning-tests.trx"
+          --results-directory artifacts/test-results
+          --collect:"XPlat Code Coverage"
+          --settings tests/MathLearning.Tests/coverage.runsettings
+
+      - name: Upload test and coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mathlearning-test-results
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Generate idempotent artifact
         run: |
