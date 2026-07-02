@@ -10,7 +10,7 @@ Elapsed time: unknown-not-recorded
 Relevant prior mistakes read: BACKEND-MISTAKE-VALIDATION-001
 How this run avoids prior mistakes: endpoint + unit bounds tests with VALIDATION_ERROR contract
 
-Commit SHA: pending (see batch commit)
+Commit SHA: 85a87c6
 Validation command:
 
 ```bash
@@ -59,4 +59,4 @@ none
 
 ## Commit SHA
 
-pending (see batch commit)
+85a87c6

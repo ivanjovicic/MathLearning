@@ -35,9 +35,11 @@ None after this lint pass (pending runtime commit for BACKEND2-CRIT-001,004-008 
 ## Score-cap corrections
 
 - BACKEND-CRIT-001/002 raised from 90% → 95% after commit SHA sync.
-- BACKEND2 uncommitted prompts remain at 95% until commit SHA recorded in evidence.
+- BACKEND2 uncommitted prompts committed as `85a87c6`.
 
-## Mistake IDs
+## Commit SHA
+
+85a87c6
 
 - BACKEND-MISTAKE-EVIDENCE-001 — repeated stale `uncommitted` in evidence after commit `67173f4`; corrected in lint.
 - No new mistake cards added.

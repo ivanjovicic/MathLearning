@@ -11,7 +11,7 @@ Elapsed time: unknown-not-recorded
 Relevant prior mistakes read: BACKEND-MISTAKE-AUDIT-001, BACKEND-MISTAKE-EVIDENCE-001
 How this run avoids prior mistakes: authorization integration tests before Done
 
-Commit SHA: pending (see batch commit)
+Commit SHA: 85a87c6
 Validation command:
 
 ```bash
@@ -56,4 +56,4 @@ none
 
 ## Commit SHA
 
-pending (see batch commit)
+85a87c6
