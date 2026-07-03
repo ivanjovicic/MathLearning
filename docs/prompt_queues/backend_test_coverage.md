@@ -7,10 +7,14 @@ Target repo: `ivanjovicic/MathLearning`
 
 Increase backend confidence by risk, not by chasing superficial coverage percentage.
 
+Coverage audit: [`../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md)  
+New prompt-ready gaps: [`backend_test_followups_2026_07_03.md`](backend_test_followups_2026_07_03.md)
+
 ## Read first
 
 - `../../AGENTS.md`
 - `../BACKEND_TEST_COVERAGE_STRATEGY.md`
+- `../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`
 - `../BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`
 - `../BACKEND_REGRESSION_GUARDRAILS.md`
 - `../AGENT_RUN_LOG_ENFORCEMENT.md`
@@ -24,73 +28,81 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 - Use SQLite/PostgreSQL for relational guarantees.
 - Record exact validation or why it did not run.
 - Do not mark Done without `.ai/runs` evidence.
-- Reconcile this queue before adding tests; several earlier Ready rows were already covered by validated BACKEND-CRIT packages.
-- Failure-injection tests for transaction atomicity should fail after SQL is issued but before commit when that branch is material.
+- A committed test remains **Implemented / Needs validation** until `dotnet test` or checked CI evidence exists.
+- Failure-injection tests for transaction atomicity should fail after SQL is issued but before commit when that branch matters.
+- Explicit anonymous tests must use `X-Test-Anonymous: true`; no-header requests are authenticated by the test handler for compatibility.
+- Do not set arbitrary coverage thresholds before a successful baseline artifact is reviewed.
 
 ## Active prompts
 
 | ID | Status | Purpose |
 |---|---|---|
-| BACKEND-TEST-CORE-001 | Needs validation | Daily Run/cosmetics trust boundary, economy state machine, refresh-token primitives, relational constraints, CI coverage artifacts. Run log: `.ai/runs/2026-07-02-BACKEND-TEST-CORE-001-evidence.md`. |
-| BACKEND-TEST-002 | Covered / Needs validation | Settlement snapshot truth is already asserted in endpoint and mobile-contract season tests; avoid duplicate tests unless a distinct transaction/concurrency gap is found. |
-| BACKEND-TEST-003 | Implemented / Needs validation | Single-key promotion, missing-key legacy behavior, and empty offline-session replay characterization. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-003-evidence.md`. |
-| BACKEND-TEST-004 | Validated | Offline timestamp UTC normalization, future/old/malformed bounds, and equivalent timestamp dedupe. Existing focused result: 25 passed, 0 failed. |
-| BACKEND-TEST-005 | Validated | Safe auth/global error responses. Existing result: 41 passed, 0 failed; focused safe-error subset 6 passed, 0 failed. |
-| BACKEND-TEST-006 | Validated | Monitoring/log authorization, redaction, and bounds. Existing result: 9 passed, 0 failed. |
-| BACKEND-TEST-007 | Validated | Public identity allowlists for search/profile/leaderboard surfaces. Existing result: 10 passed, 0 failed. |
-| BACKEND-TEST-008 | Validated | Avatar upload size/type/content checks, path safety, cross-user denial, and static-file bypass prevention. Existing result: 43 passed, 0 failed. |
-| BACKEND-TEST-009 | Implemented / Needs validation | SQLite unique constraints plus transactional rollback and deterministic two-context duplicate-insert recovery tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`. |
-| BACKEND-TEST-010 | Validated | Read bounds and enum normalization for search, leaderboard, history, logs, and monitoring. Existing result: 70 passed, 0 failed. |
-| BACKEND-TEST-011 | Ready after coverage artifact | Measure baseline and propose progressive line/branch thresholds. |
-| BACKEND-TEST-012 | Confirmed drift / Needs safe patch | RefreshToken model/snapshot max length is 64 while generator emits 88 chars and migration history widened the column to 128. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-012-evidence.md`. |
-| BACKEND-TEST-013 | Ready / P0 decision | Decide and enforce required operation identity for retryable quiz/SRS/offline mutations while keeping any intentional legacy compatibility explicit and bounded. |
-| BACKEND-TEST-014 | Implemented / Needs validation | Direct shared/cosmetics idempotency service state machines and canonical payload semantics; 30 new test scenarios. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`. |
-| BACKEND-TEST-015 | Implemented / Needs validation | Real `/auth/refresh` concurrent rotation through HTTP against file-backed SQLite with deterministic two-context save coordination. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-015-evidence.md`. |
-| BACKEND-TEST-016 | Implemented / Needs validation | Direct SQLite proof for transaction-helper commit, rollback-after-SQL, concurrency retry, retry exhaustion, and cancellation. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-016-evidence.md`. |
-| BACKEND-TEST-017 | Implemented / Needs validation | Real HTTP mobile-registration rollback after relational Profile/RefreshToken saves plus retry without duplicate account or welcome grant. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-017-evidence.md`. |
-| BACKEND-TEST-018 | Implemented / Needs validation | Real offline-submit rollback after SQL writes plus retry/replay proving one answer, one stat update, and one XP award. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-018-evidence.md`. |
+| BACKEND-TEST-CORE-001 | Needs validation | Daily Run/cosmetics trust boundary, economy state machine, refresh-token primitives, relational constraints and initial CI coverage collection. Run log: `.ai/runs/2026-07-02-BACKEND-TEST-CORE-001-evidence.md`. |
+| BACKEND-TEST-002 | Covered / Needs validation | Season settlement response snapshot and exact replay-body truth. |
+| BACKEND-TEST-003 | Implemented / Needs validation | Operation identity helper/HTTP characterization and empty offline-session replay behavior. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-003-evidence.md`. |
+| BACKEND-TEST-004 | Validated | Offline timestamp UTC normalization, future/old/malformed bounds and equivalent timestamp dedupe: 25 passed. |
+| BACKEND-TEST-005 | Validated | Safe auth/global error responses: 41 passed; focused safe-error subset 6 passed. |
+| BACKEND-TEST-006 | Validated / anonymous branch strengthened | Monitoring/log authorization, redaction and bounds: 9 passed previously; explicit anonymous mode added in 2026-07-03 audit and needs rerun. |
+| BACKEND-TEST-007 | Validated | Public identity allowlists: 10 passed. |
+| BACKEND-TEST-008 | Validated | Avatar upload/static-serving safety: 43 passed. |
+| BACKEND-TEST-009 | Implemented / Needs validation | Relational uniqueness, rollback and deterministic two-context duplicate-insert recovery. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`. |
+| BACKEND-TEST-010 | Validated | Read bounds and enum normalization: 70 passed. |
+| BACKEND-TEST-011 | Implemented / Workflow validation needed | CI now publishes ReportGenerator Markdown/HTML/Cobertura coverage summary; baseline and thresholds remain pending. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-011-evidence.md`. |
+| BACKEND-TEST-012 | Confirmed drift / Needs safe patch | Refresh-token generator emits 88 chars while EF model/snapshot declare 64 and migration history says 128. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-012-evidence.md`. |
+| BACKEND-TEST-013 | Ready / P0 contract decision | Require, gate or explicitly isolate missing operation identity for quiz/SRS/offline mutation paths. |
+| BACKEND-TEST-014 | Implemented / Needs validation | Shared/cosmetics idempotency state machines and canonical payload semantics: 30 new scenarios. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`. |
+| BACKEND-TEST-015 | Implemented / Needs validation | Real HTTP refresh-token race against file-backed SQLite. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-015-evidence.md`. |
+| BACKEND-TEST-016 | Implemented / Needs validation | Transaction-helper commit, rollback-after-SQL, retry, exhaustion and cancellation. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-016-evidence.md`. |
+| BACKEND-TEST-017 | Implemented / Needs validation | Relational mobile-registration rollback and retry without orphan state/double welcome grant. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-017-evidence.md`. |
+| BACKEND-TEST-018 | Implemented / Needs validation | Offline-submit relational rollback, retry and replay. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-018-evidence.md`. |
+| BACKEND-TEST-019 | Implemented / Needs validation | Direct relational QuizAttempt ingest aggregation, rollback, cancellation and scheduler-order tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-019-evidence.md`. |
+| BACKEND-TEST-020 | Runtime-fixed / Needs validation | Bug report submission is authenticated and global list/detail/update routes require admin policy; four endpoint authorization tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-020-evidence.md`. |
+| BACKEND-TEST-021 | Runtime-fixed / Needs validation | Maintenance routes require admin policy; HTTP denial and endpoint-metadata tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-021-evidence.md`. |
+| BACKEND-TEST-022…035 | Prompt-ready | Durable ingest, outbox concurrency, maintenance semantics, bug input/storage, public diagnostics, dead routes, pagination, analytics/explanations, scheduler, PostgreSQL, cancellation, aliases and auth-test audit. See `backend_test_followups_2026_07_03.md`. |
 
-## BACKEND-TEST-002 — Settlement snapshot truth
+## Existing validated coverage — do not duplicate blindly
 
-Run mode: tests/bugfix if required  
-Token budget: medium
+| Area | Evidence |
+|---|---|
+| Offline timestamps | `.ai/runs/2026-07-01-BACKEND-CRIT-007-evidence.md` — 25 passed. |
+| Safe errors | `.ai/runs/2026-06-24-BACKEND-CRIT-001-evidence.md` — 41 passed; focused subset 6 passed. |
+| Monitoring/log security | `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md` — 9 passed before explicit-anonymous infrastructure change. |
+| Public identity | `.ai/runs/2026-07-01-BACKEND-CRIT-003-evidence.md` — 10 passed. |
+| Avatar safety | `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md` — 43 passed. |
+| Bounded reads | `.ai/runs/2026-07-01-BACKEND-CRIT-008-evidence.md` — 70 passed. |
+| Proxy/authoring/adaptive/jobs/admin seed/version race | `.ai/runs/2026-06-24-BACKEND2-*` evidence — 82 targeted tests. |
 
-Existing coverage confirmed:
+## Implemented package details
+
+### BACKEND-TEST-002 — Settlement snapshot truth
+
+Existing coverage confirms:
 
 - first season Daily Run response includes newly awarded XP;
-- first milestone response includes newly claimed milestone and reward;
-- exact retry replays the same authoritative response;
-- tracked progress and additional claimed milestone IDs prevent no-tracking snapshot omissions.
+- first milestone response includes the new claim/reward;
+- exact retry replays the same authoritative body;
+- tracked progress prevents no-tracking snapshot omissions.
 
-Evidence files:
+Evidence:
 
 - `tests/MathLearning.Tests/Endpoints/EconomySettlementEndpointsIntegrationTests.cs`
 - `tests/MathLearning.Tests/Contracts/MobileEconomyContractIntegrationTests.cs`
 
-Validation still required:
+Validation:
 
 ```text
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~Season"
 ```
 
-## BACKEND-TEST-003 — Required P0 operation identity characterization
-
-Run mode: tests/investigation  
-Token budget: medium
+### BACKEND-TEST-003 — Operation identity characterization
 
 Implemented:
 
-- helper branch tests for missing, whitespace, single, and distinct quiz/SRS identity fields;
-- HTTP tests proving a single `operationId` or `idempotencyKey` is promoted to both ledger dimensions;
-- replay tests proving single-key retries settle once;
-- HTTP characterization that quiz/SRS requests with no identity still use legacy non-ledger paths;
-- offline characterization proving an empty session ID does not duplicate the answer/XP mutation, but creates independent session rows per replay.
-
-Evidence files:
-
-- `tests/MathLearning.Tests/Endpoints/OperationIdentityResolutionTests.cs`
-- `tests/MathLearning.Tests/Contracts/OperationIdentityContractIntegrationTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-003-evidence.md`
+- missing, whitespace, single and distinct quiz/SRS identity-field helper branches;
+- single-key promotion to both ledger dimensions;
+- exact replay settles once;
+- missing-key legacy non-ledger behavior;
+- empty offline-session identity creates independent session rows despite answer/XP dedupe.
 
 Validation:
 
@@ -98,227 +110,207 @@ Validation:
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~OperationIdentity"
 ```
 
-Follow-up decision:
+Follow-up: BACKEND-TEST-013 must choose strict rejection, version/header gating or explicit legacy-route isolation.
 
-- BACKEND-TEST-013 must decide whether missing identity is rejected, version-gated, or retained only on an explicit legacy route.
+### BACKEND-TEST-009 — Relational idempotency guarantees
 
-## BACKEND-TEST-004…008 and 010 — Existing validated coverage
+Implemented:
 
-Do not add duplicate tests unless a new branch or endpoint is identified.
+- shared-ledger and economy transaction/domain rollback;
+- deterministic two-context duplicate-insert recovery;
+- single persisted row and winner replay;
+- relational unique-scope constraints and user isolation.
 
-Evidence:
-
-- offline timestamps: `.ai/runs/2026-07-01-BACKEND-CRIT-007-evidence.md` — 25 passed;
-- safe error responses: `.ai/runs/2026-06-24-BACKEND-CRIT-001-evidence.md` — 41 passed, focused subset 6 passed;
-- monitoring/log security: `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md` — 9 passed;
-- public identity minimization: `.ai/runs/2026-07-01-BACKEND-CRIT-003-evidence.md` — 10 passed;
-- avatar safety: `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md` — 43 passed;
-- bounded reads: `.ai/runs/2026-07-01-BACKEND-CRIT-008-evidence.md` — 70 passed.
-
-## BACKEND-TEST-009 — Relational idempotency guarantees
-
-Run mode: tests  
-Token budget: medium
-
-Previously implemented:
-
-- unique user/type/idempotency-key scope;
-- unique user/type/operation-id scope;
-- multiple null operation IDs with different keys;
-- Daily Run user/day uniqueness;
-- Daily Run user/transaction uniqueness;
-- cosmetics user/operation and user/key uniqueness;
-- different-user isolation.
-
-Added in the relational package:
-
-- shared-ledger completion and domain mutation roll back atomically;
-- economy completion and balance mutation roll back atomically;
-- deterministic two-context shared-ledger duplicate-insert recovery;
-- deterministic two-context economy duplicate-insert recovery;
-- winner completion is replayed from the single persisted row.
-
-Evidence files:
-
-- `tests/MathLearning.Tests/Idempotency/RelationalIdempotencyConstraintTests.cs`
-- `tests/MathLearning.Tests/Idempotency/RelationalIdempotencyTransactionTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`
-
-Validation required:
+Validation:
 
 ```text
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~RelationalIdempotency"
 ```
 
-PostgreSQL follow-up:
+PostgreSQL remains the authority for serialization semantics.
 
-- run the same test project in `database-validation.yml` against PostgreSQL schema-from-zero;
-- do not describe SQLite as proof of PostgreSQL serialization semantics.
+### BACKEND-TEST-011 — Coverage visibility
 
-## BACKEND-TEST-012 — Refresh-token model length drift
+Implemented in `.github/workflows/database-validation.yml`:
 
-Run mode: bugfix + tests  
-Token budget: low
+- raw TRX, Cobertura and JSON collection retained;
+- ReportGenerator Markdown summary appended to GitHub job summary;
+- HTML and merged Cobertura report uploaded;
+- no blocking threshold until a successful stable baseline is reviewed.
 
-Confirmed evidence:
+Workflow validation required on `main`/PR.
 
-- `RefreshTokenService.GenerateRefreshToken()` emits Base64 for 64 random bytes: 88 characters;
-- migration `20260210114958_IncreaseRefreshTokenLength` changed the DB column to 128;
-- current `ApiDbContext` and `ApiDbContextModelSnapshot` still declare max length 64.
+### BACKEND-TEST-012 — Refresh-token model drift
 
-Required safe patch:
+Confirmed:
 
-- change `RefreshToken.Token` fluent max length from 64 to 128;
-- change the current model snapshot max length/column type from 64 to 128;
-- do not create a redundant migration;
-- add a model metadata regression test proving generated token length fits the configured maximum;
-- add a relational persistence test for a generated token;
-- run schema-from-zero validation and refresh-token tests.
+- generated token length: 88;
+- migration target: 128;
+- current runtime model/snapshot: 64.
 
-Connector limitation recorded in the run log: the current GitHub contents action only supports complete-file replacement, while the two EF files are approximately 1,600 and 5,800 lines. A local targeted patch is safer than rewriting either file through the connector.
+Required safe local patch:
 
-## BACKEND-TEST-013 — Enforce or explicitly bound missing operation identity
+- change fluent model and snapshot to 128;
+- do not create a redundant widening migration;
+- add metadata and relational persistence regression tests;
+- run pending-model-change and schema-from-zero validation.
 
-Run mode: contract decision + implementation + tests  
-Token budget: medium
+### BACKEND-TEST-014 — Direct idempotency state machines
 
-Current characterized behavior:
+Implemented 30 scenarios across:
 
-- quiz answer and SRS update without `operationId`/`idempotencyKey` bypass the ledger;
-- exact client retries can therefore re-enter mutable legacy paths;
-- offline submit with an empty session ID deduplicates by answer timestamp but creates a new quiz-session row on each replay.
+- `IdempotencyLedgerServiceTests`;
+- `CosmeticsIdempotencyServiceTests`;
+- `IdempotencyPayloadCanonicalizerTests`.
 
-Required decision and proof:
-
-- choose strict rejection, version/header gating, or explicit legacy-route compatibility;
-- canonical mobile routes must require stable operation identity after the compatibility decision;
-- empty offline session identity must not create unbounded session rows;
-- add positive, replay, rejection, and legacy compatibility tests;
-- synchronize backend and mobile contract docs if behavior changes.
-
-## BACKEND-TEST-014 — Direct idempotency service state machines
-
-Run mode: tests  
-Token budget: medium
-
-Implemented:
-
-- shared `IdempotencyLedgerService` first-process, completed replay, failed replay, canonical payload equivalence, payload conflict, dual-key collision, user/type isolation, illegal transitions, missing-ledger and required-scope tests;
-- `CosmeticsIdempotencyService` first-process, completed replay, failed replay, canonical payload equivalence, payload conflict, dual-key collision, user isolation, illegal transitions, missing-ledger and required-scope tests;
-- canonical JSON/hash tests for recursive ordering, equivalent object order, array-order significance, web naming, `JsonElement`, null/primitives, serialization and SHA-256 stability.
-
-Evidence files:
-
-- `tests/MathLearning.Tests/Services/IdempotencyLedgerServiceTests.cs`
-- `tests/MathLearning.Tests/Services/CosmeticsIdempotencyServiceTests.cs`
-- `tests/MathLearning.Tests/Services/IdempotencyPayloadCanonicalizerTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`
-
-Validation required:
+Validation:
 
 ```text
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~IdempotencyLedgerServiceTests|FullyQualifiedName~CosmeticsIdempotencyServiceTests|FullyQualifiedName~IdempotencyPayloadCanonicalizerTests"
 ```
 
-## BACKEND-TEST-015 — Relational auth refresh rotation
+### BACKEND-TEST-015 — Relational refresh rotation
 
-Run mode: relational HTTP integration tests  
-Token budget: medium
+Implemented real login/refresh HTTP race with two request scopes, deterministic save coordination, one success, one unauthorized result and no losing third token.
 
-Implemented:
-
-- real `/api/auth/login` and `/auth/refresh` HTTP flow;
-- two concurrent requests using independent request scopes and `ApiDbContext` instances;
-- deterministic interceptor coordination so both requests load the active token before either relational save;
-- first writer finishes before the second is released, forcing EF's `RevokedAt` concurrency check;
-- exactly one `200 OK`, one `401 Unauthorized`, one active descendant, and no losing third token.
-
-Evidence files:
-
-- `tests/MathLearning.Tests/Endpoints/AuthRefreshRelationalConcurrencyTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-015-evidence.md`
-
-Validation required:
+Validation:
 
 ```text
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~AuthRefreshRelationalConcurrencyTests"
 ```
 
-## BACKEND-TEST-016 — Transaction helper relational semantics
-
-Run mode: direct SQLite relational tests  
-Token budget: medium
+### BACKEND-TEST-016 — Transaction helper semantics
 
 Implemented:
 
-- successful action commits durable state and returns its result;
-- exception after an inner `SaveChangesAsync` rolls back SQL already issued inside the transaction;
-- first `DbUpdateConcurrencyException` retries from a cleared change tracker and persists only the second attempt;
-- three consecutive conflicts stop after exactly three attempts with no partial rows;
-- pre-cancelled operation commits nothing.
+- durable success;
+- rollback after inner SQL save;
+- one conflict then successful clean retry;
+- three-conflict exhaustion;
+- cancellation without persistence.
 
-Evidence files:
-
-- `tests/MathLearning.Tests/Endpoints/ApiDbTransactionHelpersRelationalTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-016-evidence.md`
-
-Validation required:
+Validation:
 
 ```text
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~ApiDbTransactionHelpersRelationalTests"
 ```
 
-## BACKEND-TEST-017 — Relational mobile registration atomicity
-
-Run mode: real HTTP + SQLite failure injection  
-Token budget: medium
+### BACKEND-TEST-017 — Registration relational atomicity
 
 Implemented:
 
-- failure after Profile SQL is issued rolls back the Identity user and profile;
-- failure after RefreshToken SQL is issued rolls back Identity, profile, and token;
-- client receives the generic registration error without the injected internal secret;
-- retry after rollback creates exactly one Identity user, one profile, one refresh token, and exactly 100 welcome coins.
+- fail after profile SQL and roll back Identity/profile;
+- fail after refresh-token SQL and roll back all account state;
+- retry creates one user/profile/token and exactly 100 welcome coins;
+- internal failure secret is not exposed.
 
-Evidence files:
-
-- `tests/MathLearning.Tests/Endpoints/AuthMobileRegistrationRelationalAtomicityTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-017-evidence.md`
-
-Validation required:
+Validation:
 
 ```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests"
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests|FullyQualifiedName~AuthMobileRegistrationAtomicityTests"
 ```
 
-## BACKEND-TEST-018 — Offline batch relational rollback and retry
-
-Run mode: real authenticated HTTP + SQLite failure injection  
-Token budget: medium
+### BACKEND-TEST-018 — Offline batch relational rollback
 
 Implemented:
 
-- failure is injected from `SavedChangesAsync` after answer/audit SQL is issued but before transaction commit;
-- rollback removes quiz session, user answer, answer audit, question stat, XP state, and activity-day mutation;
-- internal injected error text is not returned to the client;
-- retry imports exactly one answer and awards exactly 10 XP once;
-- exact replay imports zero and leaves one session, one answer, one audit, one stat attempt, and unchanged XP.
+- fail after answer/audit SQL and roll back session, answer, audit, stat, XP and activity state;
+- retry awards/imports exactly once;
+- exact replay imports zero and keeps authoritative state unchanged.
 
-Evidence files:
-
-- `tests/MathLearning.Tests/Endpoints/OfflineBatchRelationalAtomicityTests.cs`
-- `.ai/runs/2026-07-03-BACKEND-TEST-018-evidence.md`
-
-Validation required:
+Validation:
 
 ```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~OfflineBatchRelationalAtomicityTests"
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~OfflineBatchRelationalAtomicityTests|OfflineSubmit|OfflineBatch|OfflineAnswerTimestamp"
 ```
 
-Combined focused validation:
+### BACKEND-TEST-019 — QuizAttempt ingest service
+
+Implemented:
+
+- empty batch no-op;
+- durable attempt writes and negative-time normalization;
+- topic/subtopic aggregate creation;
+- existing aggregate accumulation and monotonic LastAttempt;
+- rollback after SQL was issued;
+- cancellation with no durable state;
+- scheduler invoked only after successful commit.
+
+Files:
+
+- `tests/MathLearning.Tests/Services/QuizAttemptIngestServiceRelationalTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-019-evidence.md`
+
+Validation:
 
 ```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~ApiDbTransactionHelpersRelationalTests|FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests|FullyQualifiedName~OfflineBatchRelationalAtomicityTests"
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~QuizAttemptIngestServiceRelationalTests"
 ```
 
-Do not move BACKEND-TEST-016 through 018 to Done until this focused command passes and PostgreSQL-backed validation is recorded for provider-sensitive behavior.
+Important: this does not fix the post-authoritative-commit delivery gap. BACKEND-TEST-022 owns durable delivery/idempotent recovery.
+
+### BACKEND-TEST-020 — Bug endpoint authorization
+
+Runtime fix:
+
+- `/api/bugs/report` and `/api/bugs/mine` explicitly require authentication;
+- global list/detail/update routes require `UiTokensAdminPolicy`;
+- ordinary learners cannot invoke admin service methods.
+
+Tests:
+
+- explicit anonymous denial;
+- learner report/mine ownership and page normalization;
+- learner denial for list/detail/update;
+- admin success and bounded paging.
+
+Validation:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~BugEndpointAuthorizationTests"
+```
+
+### BACKEND-TEST-021 — Maintenance authorization
+
+Runtime fix:
+
+- every `/api/maintenance/*` route requires `UiTokensAdminPolicy`.
+
+Tests:
+
+- explicit anonymous denial for all three routes;
+- authenticated learner receives 403;
+- route metadata contains the exact admin policy.
+
+Validation:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~MaintenanceEndpointAuthorizationTests"
+```
+
+Positive admin behavior and GET side-effect removal remain in BACKEND-TEST-024.
+
+## Combined validation for the 2026-07-03 audit package
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~QuizAttemptIngestServiceRelationalTests|FullyQualifiedName~BugEndpointAuthorizationTests|FullyQualifiedName~MaintenanceEndpointAuthorizationTests|FullyQualifiedName~MonitoringLogAuthorizationTests"
+
+dotnet build MathLearning.slnx -c Release
+```
+
+Then run the full suite with coverage:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --logger "trx;LogFileName=mathlearning-tests.trx" --results-directory artifacts/test-results --collect:"XPlat Code Coverage" --settings tests/MathLearning.Tests/coverage.runsettings
+```
+
+## Next execution order
+
+1. Execute and repair all Implemented / Needs validation packages.
+2. Apply BACKEND-TEST-012 refresh-token model/snapshot correction.
+3. Run BACKEND-TEST-022 durable ingest delivery.
+4. Run BACKEND-TEST-023 outbox multi-instance safety.
+5. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
+6. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+7. Continue BACKEND-TEST-024…031 and 033…035 by risk order.
+8. Review the first coverage summary and only then define progressive thresholds.
