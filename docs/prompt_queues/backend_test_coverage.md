@@ -44,6 +44,7 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 | BACKEND-TEST-012 | Confirmed drift / Needs safe patch | RefreshToken model/snapshot max length is 64 while generator emits 88 chars and migration history widened the column to 128. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-012-evidence.md`. |
 | BACKEND-TEST-013 | Ready / P0 decision | Decide and enforce required operation identity for retryable quiz/SRS/offline mutations while keeping any intentional legacy compatibility explicit and bounded. |
 | BACKEND-TEST-014 | Implemented / Needs validation | Direct shared/cosmetics idempotency service state machines and canonical payload semantics; 30 new test scenarios. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`. |
+| BACKEND-TEST-015 | Implemented / Needs validation | Real `/auth/refresh` concurrent rotation through HTTP against file-backed SQLite with deterministic two-context save coordination. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-015-evidence.md`. |
 
 ## BACKEND-TEST-002 — Settlement snapshot truth
 
@@ -216,3 +217,34 @@ dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQu
 ```
 
 Do not move to Done until the focused command passes and the result is recorded in the run log. Follow with relational concurrency coverage under BACKEND-TEST-009 rather than treating EF InMemory as proof of database uniqueness.
+
+## BACKEND-TEST-015 — Relational auth refresh rotation
+
+Run mode: relational HTTP integration tests  
+Token budget: medium
+
+Implemented:
+
+- real `/api/auth/login` and `/auth/refresh` HTTP flow;
+- two concurrent requests using independent request scopes and `ApiDbContext` instances;
+- deterministic interceptor coordination so both requests load the active token before either relational save;
+- first writer finishes before the second is released, forcing the second relational update through EF's `RevokedAt` concurrency check;
+- exactly one `200 OK` and one `401 Unauthorized`;
+- exactly two total tokens after the race, one active descendant, original token revoked, and no losing third token persisted;
+- safe public error contract for the losing request.
+
+Evidence files:
+
+- `tests/MathLearning.Tests/Endpoints/AuthRefreshRelationalConcurrencyTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-015-evidence.md`
+
+Validation required:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~AuthRefreshRelationalConcurrencyTests"
+```
+
+PostgreSQL follow-up:
+
+- run the focused test and full auth suite in the PostgreSQL-backed database validation workflow;
+- keep the existing InMemory tests for fast feedback, but do not use them as the sole proof of relational concurrency.
