@@ -60,12 +60,42 @@ jobs:
           --collect:"XPlat Code Coverage"
           --settings tests/MathLearning.Tests/coverage.runsettings
 
+      - name: Install ReportGenerator
+        if: always()
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage summary
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/coverage-report
+          COVERAGE_FILES=$(find artifacts/test-results -type f -name 'coverage.cobertura.xml' -print | paste -sd ';' -)
+          if [ -z "$COVERAGE_FILES" ]; then
+            echo "## Backend test coverage" >> "$GITHUB_STEP_SUMMARY"
+            echo "No Cobertura coverage file was produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          reportgenerator \
+            "-reports:$COVERAGE_FILES" \
+            "-targetdir:artifacts/coverage-report" \
+            "-reporttypes:Html;Cobertura;MarkdownSummaryGithub"
+
+          if [ -f artifacts/coverage-report/SummaryGithub.md ]; then
+            cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Backend test coverage" >> "$GITHUB_STEP_SUMMARY"
+            echo "Coverage files were found, but the Markdown summary was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload test and coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mathlearning-test-results
-          path: artifacts/test-results
+          path: |
+            artifacts/test-results
+            artifacts/coverage-report
           if-no-files-found: warn
           retention-days: 14
 
