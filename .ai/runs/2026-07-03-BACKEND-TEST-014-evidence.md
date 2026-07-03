@@ -46,8 +46,8 @@ Residual risk if validation cannot run: compile/runtime behavior remains unverif
 - `tests/MathLearning.Tests/Services/IdempotencyLedgerServiceTests.cs`
 - `tests/MathLearning.Tests/Services/CosmeticsIdempotencyServiceTests.cs`
 - `tests/MathLearning.Tests/Services/IdempotencyPayloadCanonicalizerTests.cs`
-- `docs/prompt_queues/backend_test_coverage.md` (pending final queue commit)
-- this run log
+- `docs/prompt_queues/backend_test_coverage.md`
+- `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`
 
 ## Commands run
 
@@ -63,6 +63,7 @@ Residual risk if validation cannot run: compile/runtime behavior remains unverif
 - Added 30 new test scenarios total.
 - Covered first processing, completed replay, failed replay, equivalent payload ordering, payload conflict, operation/key collisions, user and operation-type isolation where applicable, illegal transitions, unknown ledger IDs, required scope values, array-order significance, naming policy, `JsonElement`, null/primitives and SHA-256 stability.
 - Confirmed existing season settlement snapshot tests already cover the stale queue concern, avoiding duplicate tests.
+- Added BACKEND-TEST-014 to the coverage queue with an exact focused validation command and relational-boundary warning.
 
 ## What was missed
 
@@ -110,7 +111,8 @@ Mistakes observed: none
 
 ## Queue updated
 
-- Pending final BACKEND-TEST-014 queue entry.
+- Added BACKEND-TEST-014 as `Implemented / Needs validation`.
+- Preserved the parallel agent's BACKEND-TEST-003 and BACKEND-TEST-013 entries.
 
 ## New optimized prompt added
 
@@ -139,4 +141,7 @@ Mobile docs touched: none
 - `f34daeca40f0070f28b72e287564745c327d03c8` — shared ledger service tests
 - `ca9fa2133d51490f71d2aa7e707091bb9de75ddc` — cosmetics ledger service tests
 - `e25dd16761953fe8476cb76837949ed5b695af9a` — canonical payload/hash tests
-- queue and final evidence commits pending
+- `1b8d7d669069c8f070f82def634ff53d00981ee3` — corrected BACKEND-TEST-014 evidence path
+- `383fd4f6a89dc70e1407de5c9d268bf1f053b842` — removed superseded BACKEND-TEST-013 evidence path
+- `3e0a06ceae42d9dd9f386fa826a9610f368fd4eb` — queue update
+- final evidence commit: this update
