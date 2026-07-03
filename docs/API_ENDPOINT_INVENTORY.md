@@ -1,6 +1,6 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-07-01
+Last aligned: 2026-07-03
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
@@ -43,14 +43,14 @@ Auth legend:
 | GET | `/health` | Public | `Program.cs` | ASP.NET health checks. |
 | GET | `/health/background-jobs` | Public | `Program.cs` | Hangfire/background job startup state. |
 | GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias for background job startup state. |
-| GET | `/metrics` | Public/internal | `Program.cs` | Minimal runtime metrics; no Prometheus dependency. |
+| GET | `/metrics` | Public/internal | `Program.cs` | Minimal runtime metrics; no Prometheus dependency. Public-detail minimization is tracked by BACKEND-TEST-026. |
 | GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
-| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB connectivity and schema summary. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness: DB, schema, data counts. |
-| GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Schema/migration state. |
+| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB connectivity and schema summary; detailed public fields are under review in BACKEND-TEST-026. |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness: DB, schema, data counts; public-detail minimization is pending. |
+| GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Schema/migration state; public-detail minimization is pending. |
 | GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. Verify exact subroutes in file. |
-| GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock/admin UI monitoring payload. |
+| GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock/admin UI monitoring payload; protection/removal is tracked by BACKEND-TEST-026. |
 | GET | `/api/monitoring/logs` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted Serilog file tail; anonymous/non-admin denied. |
 | GET | `/api/monitoring/logs-advanced` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted filtered log-file reader; anonymous/non-admin denied. |
 
@@ -105,7 +105,7 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 | POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch questions by posted payload; `count` is normalized server-side to 1..25. |
 | POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question for subtopic. |
 | POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `quiz_answer`. |
-| POST | `/api/quiz/offline-submit` | Auth | Canonical offline sync | Stable replay path for mobile queue; user scoped by auth. |
+| POST | `/api/quiz/offline-submit` | Auth | Canonical offline sync | Stable replay path for mobile queue; user scoped by auth. Durable analytics ingest handoff remains open under BACKEND-TEST-022. |
 | POST | `/api/quiz/batch-submit` | Auth | Legacy compatibility alias | Thin adapter to offline-submit; resolves sessionId/quizId/batchId/operationId when present. |
 | POST | `/api/quiz/srs/update` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `srs_update`. |
 | GET | `/api/quiz/srs/daily` | Auth | Canonical SRS read | Due SRS cards with mobile fallback padding. |
@@ -208,8 +208,8 @@ Owners: `LeaderboardEndpoints.cs`, `AdaptiveEndpoints.cs`, `AnalyticsEndpoints.c
 |---|---|---|---|
 | `/api/leaderboard*` | Mixed/Auth | `LeaderboardEndpoints.cs` | Global/friends/schools/admin leaderboard surfaces. `limit`/`take`/`neighbors` are bounded and invalid scope/period/range values normalize to safe defaults. Inspect file before route changes. |
 | `/api/adaptive*` | Auth | `AdaptiveEndpoints.cs` | Adaptive path/recommendation/review surfaces. |
-| `/api/analytics*` | Auth/Admin depending route | `AnalyticsEndpoints.cs` | Analytics/recommendation surfaces. |
-| `/api/explanations*` | Auth | `ExplanationEndpoints.cs` | Explanation generation/read surfaces. |
+| `/api/analytics*` | Auth | `AnalyticsEndpoints.cs` | Analytics/recommendation surfaces. Endpoint contract coverage is tracked by BACKEND-TEST-029. |
+| `/api/explanations*` | Auth | `ExplanationEndpoints.cs` | Explanation generation/read surfaces. Safe-error/cancellation coverage is tracked by BACKEND-TEST-030. |
 | POST | `/api/questions/validate` | Content author (`UiTokensAdmin` or `ContentAuthor`) | `QuestionAuthoringEndpoints.cs` | Dry-run validation only. |
 | POST | `/api/questions/preview` | Content author (`UiTokensAdmin` or `ContentAuthor`) | `QuestionAuthoringEndpoints.cs` | Safe preview only. |
 | POST | `/api/questions/save-draft` | Content author (`UiTokensAdminPolicy` / `ContentAuthorPolicy`) | `QuestionAuthoringEndpoints.cs` | Persists draft rows. |
@@ -218,13 +218,19 @@ Owners: `LeaderboardEndpoints.cs`, `AdaptiveEndpoints.cs`, `AnalyticsEndpoints.c
 | GET | `/api/questions/{id}/validation` | Content author | `QuestionAuthoringEndpoints.cs` | Latest validation read. |
 | POST | `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Re-runs validation audit. |
 | `/api/sync*` | Auth | `SyncEndpoints.cs` | Offline sync transport. Reject mismatched payload user ids. |
-| `/api/maintenance*` | Admin/internal | `MaintenanceEndpoints.cs` | Maintenance operations. |
+| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Manual index rebuild; anonymous and ordinary users denied. Positive admin/overlap tests remain under BACKEND-TEST-024. |
+| GET | `/api/maintenance/index-health` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Index health details; anonymous and ordinary users denied. |
+| GET | `/api/maintenance/index-stats` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Currently calls rebuild implementation; read-only refactor tracked by BACKEND-TEST-024. |
 | logging routes | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | DB log read/search; output redacted; non-admin denied. |
-| bug routes | Mixed | `BugEndpoints.cs` | Bug reporting/support. |
+| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Creates a report for the authenticated user; input/storage hardening tracked by BACKEND-TEST-025. |
+| GET | `/api/bugs/mine` | Auth | `BugEndpoints.cs` | Returns only authenticated user's reports; paging bounded. |
+| GET | `/api/bugs/` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | List all reports; learner denied. |
+| GET | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Read any report; learner denied. |
+| PATCH | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Update report status/assignee; learner denied. |
 
 Because these families contain more route variants and some admin/internal behavior, inspect the owning file and tests before changing them. Add precise rows here when a route becomes mobile-critical or release-critical.
 
-**Unwired:** `QuestionEndpoints.cs` defines `MapQuestionEndpoints` but it is not registered in `Program.cs` (see route audit §4).
+**Unwired:** `QuestionEndpoints.cs` defines `MapQuestionEndpoints` but it is not registered in `Program.cs` (see route audit §4 and BACKEND-TEST-027).
 
 ---
 
