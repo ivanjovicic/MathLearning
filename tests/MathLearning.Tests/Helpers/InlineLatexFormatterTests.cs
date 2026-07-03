@@ -62,8 +62,8 @@ public sealed class InlineLatexFormatterTests
     [Fact]
     public void NormalizeMixedInlineMath_MixedExistingAndPlainMathPreservesExistingAndWrapsOnlyPlainSegment()
     {
-        const string input = "Za $x=1$ i f(x)=2x+3 dobijamo $f(1)=5$.";
-        const string expected = "Za $x=1$ i $f(x)=2x+3 dobijamo $f(1)=5$.";
+        const string input = "Za $x=1$ i f(x)=2x+3, dobijamo $f(1)=5$.";
+        const string expected = "Za $x=1$ i $f(x)=2x+3$, dobijamo $f(1)=5$.";
 
         var result = InlineLatexFormatter.NormalizeMixedInlineMath(input);
 
