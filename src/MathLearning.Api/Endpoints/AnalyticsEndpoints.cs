@@ -26,7 +26,7 @@ public static class AnalyticsEndpoints
 
             var paging = PaginationBounds.Normalize(
                 page,
-                pageSize,
+                Math.Clamp(pageSize, 1, 50),
                 defaultPageSize: 5,
                 maxPageSize: 50,
                 maxPage: MaxAnalyticsPage);
@@ -61,7 +61,7 @@ public static class AnalyticsEndpoints
 
             var paging = PaginationBounds.Normalize(
                 page,
-                pageSize,
+                Math.Clamp(pageSize, 1, 100),
                 defaultPageSize: 10,
                 maxPageSize: 100,
                 maxPage: MaxAnalyticsPage);
@@ -102,7 +102,7 @@ public static class AnalyticsEndpoints
 
             var paging = PaginationBounds.Normalize(
                 page,
-                pageSize,
+                Math.Clamp(pageSize, 1, 100),
                 defaultPageSize: 10,
                 maxPageSize: 100,
                 maxPage: MaxAnalyticsPage);
