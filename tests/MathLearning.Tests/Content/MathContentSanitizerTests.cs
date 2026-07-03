@@ -40,6 +40,45 @@ public sealed class MathContentSanitizerTests
         Assert.DoesNotContain("steal", result, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("<div onclick=steal()>Safe</div>", "<div>Safe</div>")]
+    [InlineData("<img onerror=alert(1)>", "<img>")]
+    [InlineData("<span ONMOUSEOVER='steal()'>Safe</span>", "<span>Safe</span>")]
+    public void NormalizeMathContent_RemovesQuotedAndUnquotedEventHandlers(
+        string input,
+        string expected)
+    {
+        var result = sanitizer.NormalizeMathContent(input, ContentFormat.Html);
+
+        Assert.Equal(expected, result);
+        Assert.DoesNotContain("onerror", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onclick", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onmouseover", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("<a href=javascript:alert(1)>click</a>", "<a>click</a>")]
+    [InlineData("<a href=\" JAVASCRIPT:alert(1)\">click</a>", "<a>click</a>")]
+    [InlineData("<img src='data:text/html;base64,PHNjcmlwdD4='>", "<img>")]
+    public void NormalizeMathContent_RemovesJavascriptAndDataUrlAttributes(
+        string input,
+        string expected)
+    {
+        var result = sanitizer.NormalizeMathContent(input, ContentFormat.Html);
+
+        Assert.Equal(expected, result);
+        Assert.DoesNotContain("javascript:", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("data:", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NormalizeMathContent_PreservesSafeHttpUrlAttributes()
+    {
+        const string input = "<a href=\"https://example.test/math\">math</a>";
+
+        Assert.Equal(input, sanitizer.NormalizeMathContent(input, ContentFormat.Html));
+    }
+
     [Fact]
     public void NormalizeMathContent_StripsHtmlOutsideHtmlFormat()
     {
