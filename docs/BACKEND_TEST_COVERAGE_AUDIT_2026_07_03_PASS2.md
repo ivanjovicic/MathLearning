@@ -8,12 +8,13 @@ Prompt status/addendum: `prompt_queues/backend_test_followups_pass2_2026_07_03.m
 
 ## Executive result
 
-This pass added **36 new executable test cases** across four previously weak backend surfaces:
+This pass added **36 new executable test cases** across previously weak backend surfaces:
 
 - maintenance positive admin/read-only contracts;
 - analytics/recommendation HTTP contracts;
 - explanation validation and safe-error contracts;
-- pagination overflow/bounds and direct test-auth infrastructure.
+- pagination overflow/bounds;
+- direct test-auth infrastructure.
 
 It also made three runtime hardening changes:
 
@@ -31,7 +32,7 @@ Runtime changes:
 - registered a singleton implementation shared by endpoint and hosted worker;
 - split `GetIndexStatisticsAsync` from `RebuildCorruptedIndexesAsync`;
 - GET routes no longer execute `REINDEX` or `ANALYZE`;
-- cancellation tokens flow through endpoint, service, Npgsql open/read/execute calls;
+- cancellation tokens flow through endpoint, service and Npgsql calls;
 - in-process rebuilds share a `SemaphoreSlim` non-overlap guard;
 - identifiers used in `REINDEX`/`ANALYZE` are quoted with `NpgsqlCommandBuilder`;
 - hosted service uses DI instead of constructing a separate service instance.
@@ -47,9 +48,9 @@ Existing anonymous/non-admin/metadata tests remain.
 
 Residual risk:
 
-- semaphore prevents overlap only within one process, not across multiple replicas;
-- positive real PostgreSQL `REINDEX CONCURRENTLY` behavior is not exercised;
-- operator actor/correlation audit is not yet persisted;
+- semaphore prevents overlap only within one process, not across replicas;
+- real PostgreSQL `REINDEX CONCURRENTLY` behavior is not exercised;
+- operator actor/correlation audit is not persisted;
 - item error strings are still returned to admins.
 
 ### BACKEND-TEST-029 — Analytics/recommendation HTTP contracts
@@ -62,12 +63,12 @@ New endpoint tests: 5
 - details and recommendations page slicing/field contracts;
 - unexpected service error returns generic global 500 with trace id and no raw message.
 
-The fake service also records cancellation-token forwarding and requested take counts.
+The fake service records cancellation-token forwarding and requested take counts.
 
 Residual risk:
 
-- service interfaces still fetch all rows up to `page * pageSize` and slice in memory;
-- bounded page 100 limits damage but cursor/true database paging would scale better;
+- service interfaces still fetch all rows up to the bounded fetch window and slice in memory;
+- page 100 limits damage, but database/cursor paging would scale better;
 - PostgreSQL query shape and performance remain unmeasured.
 
 ### BACKEND-TEST-030 — Explanation validation and safe errors
@@ -90,10 +91,10 @@ New endpoint test cases: 9
 
 Residual risk:
 
-- generate request does not visibly bound student/expected answer fields;
+- generate request does not visibly bound student/expected-answer fields;
 - mistake request does not visibly bound topic/subtopic/expected answer;
 - grade and positive problem-id ranges are not enforced;
-- expensive generate/mistake routes need explicit rate/cost policy.
+- expensive routes need explicit rate/cost policy.
 
 ### BACKEND-TEST-035 — Test authentication infrastructure
 
@@ -101,7 +102,7 @@ New direct tests: 3
 
 - no headers preserve the historical authenticated `test-user` compatibility behavior;
 - `X-Test-Anonymous: true` returns no authentication result;
-- explicit user and comma-separated roles create the expected claims.
+- explicit user and comma-separated roles create expected claims.
 
 This makes future 401-vs-403 security tests independent from endpoint side effects.
 
@@ -111,9 +112,10 @@ Runtime changes:
 
 - added shared `PaginationBounds.Normalize` and `PaginationWindow` in Application;
 - uses validated configuration and checked arithmetic;
-- default max page is 1,000;
-- analytics uses a stricter max page of 100;
-- bug endpoint and `BugReportService` both normalize paging for defense-in-depth.
+- default maximum page is 1,000;
+- analytics uses a stricter maximum page of 100;
+- bug endpoint and `BugReportService` normalize paging for defense-in-depth;
+- endpoint-specific page-size semantics are preserved: analytics clamps to 1..max, while invalid bug page sizes return to their established defaults.
 
 New test cases: 15
 
@@ -121,14 +123,14 @@ New test cases: 15
 - custom analytics cap produces safe skip/fetch values;
 - invalid helper configuration throws;
 - analytics `int.MaxValue` query is capped at page 100/page size 50/take 5,000;
-- user and admin bug routes cap at page 1,000/page size 100;
+- user/admin bug routes cap page at 1,000 and normalize invalid sizes to established defaults;
 - direct bug service calls with `int.MaxValue` cannot overflow.
 
 Residual risk:
 
 - high pages remain offset-based and can still be slower than cursor paging;
-- only analytics and bug-report surfaces were migrated in this pass;
-- remaining page-based endpoints should be searched and migrated to the shared helper.
+- only analytics and bug-report surfaces were migrated;
+- remaining page-based endpoints need inventory and migration.
 
 ## Coverage status after pass 2
 
@@ -154,19 +156,21 @@ Residual risk:
 6. **BACKEND-TEST-025** — bug-report input/screenshot validation and orphan-file compensation.
 7. **BACKEND-TEST-026** — public health/metrics/schema/job information minimization.
 8. **BACKEND-TEST-031** — weakness scheduler durability, deduplication and backpressure.
-9. **BACKEND-TEST-033** — cancellation/rollback matrix for all canonical P0 mutations.
+9. **BACKEND-TEST-033** — cancellation/rollback matrix for canonical P0 mutations.
 10. **BACKEND-TEST-034** — legacy alias parity and retirement.
 
 ## New prompt-ready findings from this pass
 
 Detailed prompts are in `backend_test_followups_pass2_2026_07_03.md`:
 
-- BACKEND-TEST-036 — distributed maintenance lock, operator audit and safe error projection;
-- BACKEND-TEST-037 — explanation abuse/cost/input-bound hardening;
-- BACKEND-TEST-038 — deterministic maintenance scheduler clock/restart tests;
-- BACKEND-TEST-039 — database-level/cursor analytics pagination;
-- BACKEND-TEST-040 — remaining page-based endpoint inventory and migration;
-- BACKEND-TEST-041 — automated privileged-route authorization metadata audit.
+- BACKEND-TEST-042 — distributed maintenance lock, operator audit and safe error projection;
+- BACKEND-TEST-043 — explanation abuse/cost/input-bound hardening;
+- BACKEND-TEST-044 — deterministic maintenance scheduler clock/restart tests;
+- BACKEND-TEST-045 — database-level/cursor analytics pagination;
+- BACKEND-TEST-046 — remaining page-based endpoint inventory and migration;
+- BACKEND-TEST-047 — automated privileged-route authorization metadata audit.
+
+IDs 036–041 are intentionally not reused because parallel coverage work already occupies that range.
 
 ## Validation status
 
@@ -183,4 +187,4 @@ Then run the full suite with coverage and inspect the ReportGenerator job summar
 
 ## Honest conclusion
 
-The project is materially better protected at HTTP, authorization, pagination and maintenance boundaries, but the most dangerous distributed/transactional risks remain durable ingest, outbox concurrency, PostgreSQL provider behavior, refresh-token schema drift and missing operation identity. These should remain ahead of cosmetic coverage-percentage work.
+The project is materially better protected at HTTP, authorization, pagination and maintenance boundaries, but the most dangerous distributed/transactional risks remain durable ingest, outbox concurrency, PostgreSQL provider behavior, refresh-token schema drift and missing operation identity. These stay ahead of cosmetic coverage-percentage work.
