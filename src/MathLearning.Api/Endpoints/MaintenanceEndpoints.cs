@@ -1,5 +1,5 @@
-﻿using MathLearning.Infrastructure.Maintenance;
-using Microsoft.AspNetCore.Authorization;
+using MathLearning.Application.Services;
+using MathLearning.Infrastructure.Maintenance;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -8,10 +8,9 @@ public static class MaintenanceEndpoints
     public static void MapMaintenanceEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/maintenance")
-                       .RequireAuthorization() // TODO: Add admin role check
-                       .WithTags("Maintenance");
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+            .WithTags("Maintenance");
 
-        // 🔧 REBUILD CORRUPTED INDEXES
         group.MapPost("/rebuild-indexes", async (
             IConfiguration config,
             ILogger<IndexMaintenanceService> logger) =>
@@ -19,12 +18,11 @@ public static class MaintenanceEndpoints
             var connectionString = config.GetConnectionString("Default");
             var service = new IndexMaintenanceService(connectionString!);
 
-            logger.LogInformation("🔧 Manual index rebuild triggered");
+            logger.LogInformation("Manual index rebuild triggered");
 
             var report = await service.RebuildCorruptedIndexesAsync();
 
-            logger.LogInformation($"✅ Rebuilt {report.RebuiltIndexes.Count} indexes");
-
+            logger.LogInformation("Rebuilt {RebuiltIndexesCount} indexes", report.RebuiltIndexes.Count);
             return Results.Ok(new
             {
                 success = true,
@@ -39,15 +37,12 @@ public static class MaintenanceEndpoints
         .WithName("RebuildIndexes")
         .WithDescription("Manually trigger index rebuild for bloated/corrupted indexes");
 
-        // 🔍 CHECK INDEX HEALTH
-        group.MapGet("/index-health", async (
-            IConfiguration config) =>
+        group.MapGet("/index-health", async (IConfiguration config) =>
         {
             var connectionString = config.GetConnectionString("Default");
             var service = new IndexMaintenanceService(connectionString!);
 
             var healthInfo = await service.CheckIndexHealthAsync();
-
             return Results.Ok(new
             {
                 totalIndexes = healthInfo.Count,
@@ -60,15 +55,12 @@ public static class MaintenanceEndpoints
         .WithName("CheckIndexHealth")
         .WithDescription("Check health status of all database indexes");
 
-        // 📊 INDEX STATISTICS
-        group.MapGet("/index-stats", async (
-            IConfiguration config) =>
+        group.MapGet("/index-stats", async (IConfiguration config) =>
         {
             var connectionString = config.GetConnectionString("Default");
             var service = new IndexMaintenanceService(connectionString!);
 
             var report = await service.RebuildCorruptedIndexesAsync();
-
             return Results.Ok(new
             {
                 bloatedIndexes = report.BloatedIndexes.Select(i => new
