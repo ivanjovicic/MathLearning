@@ -1,7 +1,7 @@
 # Backend Agent Mistake Ledger
 
 Status: active agent-learning memory  
-Last aligned: 2026-07-02  
+Last aligned: 2026-07-03  
 Scope: `ivanjovicic/MathLearning`
 
 ## Purpose
@@ -189,6 +189,90 @@ Prevention:
 
 Next check:
 Do not mark `BACKEND-TEST-012` Done until model, snapshot, migration history, generated token length, PostgreSQL schema validation, and a regression test agree.
+
+---
+
+### BACKEND-MISTAKE-AUTH-002 — Privileged endpoint group protected by generic authentication only
+
+Severity: P1  
+Status: Mitigated / Watching  
+First seen: `BugEndpoints` and `MaintenanceEndpoints` during `BACKEND-TEST-AUDIT-002`
+
+Problem:
+Routes that list/update all bug reports or run/read database maintenance operations used `.RequireAuthorization()` without an explicit admin policy. Any authenticated learner could pass the route-level authorization check.
+
+Impact:
+- cross-user support data exposure or mutation;
+- ordinary users triggering operational database work;
+- disclosure of database index details;
+- false confidence because route names/comments called the routes “admin”.
+
+Root cause:
+Authorization intent existed only in comments/group naming, not executable policy metadata, and focused endpoint authorization tests were absent.
+
+Prevention:
+- `BugEndpoints` and `MaintenanceEndpoints` now require `DesignTokenSecurity.AdminPolicy`.
+- `BugEndpointAuthorizationTests` and `MaintenanceEndpointAuthorizationTests` assert learner denial.
+- Maintenance tests also inspect endpoint metadata so a future refactor cannot silently downgrade to generic auth.
+- New admin/internal routes must name the exact policy in `API_ENDPOINT_INVENTORY.md`.
+
+Next check:
+Run the focused authorization suite and audit remaining `adminGroup`/maintenance/logging routes for generic `.RequireAuthorization()` without a policy.
+
+---
+
+### BACKEND-MISTAKE-IDEM-001 — Authoritative mutation commits before non-durable downstream ingest
+
+Severity: P0  
+Status: Open  
+First seen: offline/quiz attempt flow during `BACKEND-TEST-AUDIT-002`
+
+Problem:
+Authoritative answer/XP state commits before `IQuizAttemptIngestService` runs. If ingest fails after commit, the client can receive an error while a retry is deduplicated and produces no new ingest rows.
+
+Impact:
+- permanent analytics/weakness gaps despite correct authoritative progress;
+- retry behavior disagrees with the returned error;
+- operators cannot reliably distinguish pending, lost, and completed ingest;
+- adding retries directly can duplicate `QuizAttempt` and aggregate counters because no stable natural key is enforced.
+
+Root cause:
+The downstream analytics write is a synchronous best-effort side effect after the authoritative transaction rather than a durable, idempotent handoff.
+
+Prevention:
+- `BACKEND-TEST-019` adds direct ingest aggregation/rollback tests but does not claim delivery is fixed.
+- `BACKEND-TEST-022` requires same-transaction durable command/outbox creation and idempotent consumer tests.
+- Never return a retriable failure after an authoritative mutation unless the retry can recover every dependent effect safely.
+
+Next check:
+Do not close the ingest risk until fail-after-commit, restart recovery, duplicate delivery and two-consumer race tests pass.
+
+---
+
+### BACKEND-MISTAKE-VALIDATION-002 — Test auth silently turns no-header requests into authenticated users
+
+Severity: P1  
+Status: Mitigated / Watching  
+First seen: authorization coverage review during `BACKEND-TEST-AUDIT-002`
+
+Problem:
+`TestAuthHandler` defaulted requests without test headers to an authenticated `test-user`. Tests named “Anonymous” could actually exercise the authenticated non-admin path and accept 403 instead of proving a 401 challenge.
+
+Impact:
+- false anonymous-access coverage;
+- public/authenticated route regressions can be missed;
+- tests conflate authentication and authorization failures.
+
+Root cause:
+The convenient default principal had no explicit opt-out for anonymous HTTP tests.
+
+Prevention:
+- `TestAuthHandler.AnonymousHeader` now supports `X-Test-Anonymous: true` and returns `AuthenticateResult.NoResult()`.
+- New bug/maintenance tests and existing monitoring anonymous tests use explicit anonymous mode.
+- `BACKEND-TEST-035` audits older authorization tests and adds direct handler coverage.
+
+Next check:
+Every security test should distinguish explicit anonymous 401/challenge behavior from authenticated non-admin 403 behavior unless the production contract intentionally allows either.
 
 ---
 
