@@ -6,6 +6,8 @@ namespace MathLearning.Api.Endpoints;
 
 public static class AnalyticsEndpoints
 {
+    private const int MaxAnalyticsPage = 100;
+
     public static void MapAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
         var analytics = app.MapGroup("/api/analytics")
@@ -22,12 +24,14 @@ public static class AnalyticsEndpoints
             if (!TryGetAnalyticsUserId(ctx, out var userId))
                 return Results.Unauthorized();
 
-            page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 1, 50);
-
-            var take = page * pageSize;
-            var all = await service.GetWeakTopicsAsync(userId, take, ct);
-            var items = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            var paging = PaginationBounds.Normalize(
+                page,
+                pageSize,
+                defaultPageSize: 5,
+                maxPageSize: 50,
+                maxPage: MaxAnalyticsPage);
+            var all = await service.GetWeakTopicsAsync(userId, paging.FetchCount, ct);
+            var items = all.Skip(paging.Skip).Take(paging.PageSize).ToList();
 
             return Results.Ok(new
             {
@@ -39,8 +43,8 @@ public static class AnalyticsEndpoints
                     weaknessLevel = x.WeaknessLevel,
                     confidence = x.Confidence
                 }),
-                page,
-                pageSize,
+                page = paging.Page,
+                pageSize = paging.PageSize,
                 returned = items.Count
             });
         });
@@ -55,26 +59,28 @@ public static class AnalyticsEndpoints
             if (!TryGetAnalyticsUserId(ctx, out var userId))
                 return Results.Unauthorized();
 
-            page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 1, 100);
-            var take = page * pageSize;
-            var skip = (page - 1) * pageSize;
+            var paging = PaginationBounds.Normalize(
+                page,
+                pageSize,
+                defaultPageSize: 10,
+                maxPageSize: 100,
+                maxPage: MaxAnalyticsPage);
 
-            var topics = (await service.GetWeakTopicsAsync(userId, take, ct))
-                .Skip(skip)
-                .Take(pageSize)
+            var topics = (await service.GetWeakTopicsAsync(userId, paging.FetchCount, ct))
+                .Skip(paging.Skip)
+                .Take(paging.PageSize)
                 .ToList();
-            var subtopics = (await service.GetWeakSubtopicsAsync(userId, take, ct))
-                .Skip(skip)
-                .Take(pageSize)
+            var subtopics = (await service.GetWeakSubtopicsAsync(userId, paging.FetchCount, ct))
+                .Skip(paging.Skip)
+                .Take(paging.PageSize)
                 .ToList();
 
             return Results.Ok(new
             {
                 weakTopics = topics.Select(MapTopicDetail),
                 weakSubtopics = subtopics.Select(MapSubtopicDetail),
-                page,
-                pageSize,
+                page = paging.Page,
+                pageSize = paging.PageSize,
                 returnedTopics = topics.Count,
                 returnedSubtopics = subtopics.Count
             });
@@ -94,21 +100,25 @@ public static class AnalyticsEndpoints
             if (!TryGetAnalyticsUserId(ctx, out var userId))
                 return Results.Unauthorized();
 
-            page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 1, 100);
-            var take = page * pageSize;
-            var skip = (page - 1) * pageSize;
-
-            var recommendationsRows = (await service.GeneratePracticeRecommendationsAsync(userId, take, ct))
-                .Skip(skip)
-                .Take(pageSize)
+            var paging = PaginationBounds.Normalize(
+                page,
+                pageSize,
+                defaultPageSize: 10,
+                maxPageSize: 100,
+                maxPage: MaxAnalyticsPage);
+            var recommendationRows = (await service.GeneratePracticeRecommendationsAsync(
+                    userId,
+                    paging.FetchCount,
+                    ct))
+                .Skip(paging.Skip)
+                .Take(paging.PageSize)
                 .ToList();
 
             return Results.Ok(new PracticeRecommendationsResponse(
-                Recommendations: recommendationsRows,
-                Page: page,
-                PageSize: pageSize,
-                Returned: recommendationsRows.Count));
+                Recommendations: recommendationRows,
+                Page: paging.Page,
+                PageSize: paging.PageSize,
+                Returned: recommendationRows.Count));
         });
     }
 
