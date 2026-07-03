@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using MathLearning.Tests.Helpers;
+using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,6 +76,7 @@ public sealed class TestAuthHandlerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<UrlEncoder>(UrlEncoder.Default);
         services.AddAuthentication("Test")
             .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
         return services.BuildServiceProvider();
