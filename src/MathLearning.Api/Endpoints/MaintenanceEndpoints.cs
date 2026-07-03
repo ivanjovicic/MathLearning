@@ -12,20 +12,21 @@ public static class MaintenanceEndpoints
             .WithTags("Maintenance");
 
         group.MapPost("/rebuild-indexes", async (
-            IConfiguration config,
-            ILogger<IndexMaintenanceService> logger) =>
+            IIndexMaintenanceService service,
+            ILogger<IndexMaintenanceService> logger,
+            CancellationToken cancellationToken) =>
         {
-            var connectionString = config.GetConnectionString("Default");
-            var service = new IndexMaintenanceService(connectionString!);
-
             logger.LogInformation("Manual index rebuild triggered");
+            var report = await service.RebuildCorruptedIndexesAsync(cancellationToken);
 
-            var report = await service.RebuildCorruptedIndexesAsync();
+            logger.LogInformation(
+                "Manual index rebuild completed. Rebuilt={RebuiltIndexesCount} Errors={ErrorCount}",
+                report.RebuiltIndexes.Count,
+                report.Errors.Count);
 
-            logger.LogInformation("Rebuilt {RebuiltIndexesCount} indexes", report.RebuiltIndexes.Count);
             return Results.Ok(new
             {
-                success = true,
+                success = report.Errors.Count == 0,
                 message = $"Rebuilt {report.RebuiltIndexes.Count} indexes",
                 bloatedIndexes = report.BloatedIndexes.Count,
                 unusedIndexes = report.UnusedIndexes.Count,
@@ -37,12 +38,11 @@ public static class MaintenanceEndpoints
         .WithName("RebuildIndexes")
         .WithDescription("Manually trigger index rebuild for bloated/corrupted indexes");
 
-        group.MapGet("/index-health", async (IConfiguration config) =>
+        group.MapGet("/index-health", async (
+            IIndexMaintenanceService service,
+            CancellationToken cancellationToken) =>
         {
-            var connectionString = config.GetConnectionString("Default");
-            var service = new IndexMaintenanceService(connectionString!);
-
-            var healthInfo = await service.CheckIndexHealthAsync();
+            var healthInfo = await service.CheckIndexHealthAsync(cancellationToken);
             return Results.Ok(new
             {
                 totalIndexes = healthInfo.Count,
@@ -55,12 +55,11 @@ public static class MaintenanceEndpoints
         .WithName("CheckIndexHealth")
         .WithDescription("Check health status of all database indexes");
 
-        group.MapGet("/index-stats", async (IConfiguration config) =>
+        group.MapGet("/index-stats", async (
+            IIndexMaintenanceService service,
+            CancellationToken cancellationToken) =>
         {
-            var connectionString = config.GetConnectionString("Default");
-            var service = new IndexMaintenanceService(connectionString!);
-
-            var report = await service.RebuildCorruptedIndexesAsync();
+            var report = await service.GetIndexStatisticsAsync(cancellationToken);
             return Results.Ok(new
             {
                 bloatedIndexes = report.BloatedIndexes.Select(i => new
@@ -77,6 +76,6 @@ public static class MaintenanceEndpoints
             });
         })
         .WithName("GetIndexStatistics")
-        .WithDescription("Get detailed statistics about index bloat and usage");
+        .WithDescription("Get read-only statistics about index bloat and usage");
     }
 }
