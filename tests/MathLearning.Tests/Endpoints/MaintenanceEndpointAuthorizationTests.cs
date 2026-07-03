@@ -33,6 +33,8 @@ public sealed class MaintenanceEndpointAuthorizationTests :
         foreach (var (method, path) in MaintenanceRoutes)
         {
             using var request = new HttpRequestMessage(method, path);
+            request.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+
             var response = await client.SendAsync(request);
             AssertUnauthorizedOrForbidden(path, response.StatusCode);
         }
