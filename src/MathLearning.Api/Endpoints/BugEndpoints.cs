@@ -1,6 +1,5 @@
-﻿using MathLearning.Application.DTOs.Bugs;
+using MathLearning.Application.DTOs.Bugs;
 using MathLearning.Application.Services;
-using Microsoft.AspNetCore.Authorization;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -8,19 +7,16 @@ public static class BugEndpoints
 {
     public static void MapBugEndpoints(this IEndpointRouteBuilder app)
     {
-        var publicGroup = app.MapGroup("/api/bugs")
-                            .AllowAnonymous(); // Allow anonymous bug reports
+        var userGroup = app.MapGroup("/api/bugs")
+            .RequireAuthorization()
+            .WithTags("BugReports");
 
         var adminGroup = app.MapGroup("/api/bugs")
-                           .RequireAuthorization()
-                           .WithTags("BugReports");
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+            .WithTags("BugReports");
 
-        // ==========================================
-        // PUBLIC ENDPOINTS
-        // ==========================================
-
-        // POST /api/bugs/report - Report a bug (public)
-        publicGroup.MapPost("/report", async (
+        // POST /api/bugs/report - Submit a report as the authenticated user.
+        userGroup.MapPost("/report", async (
             BugReportRequest request,
             IBugReportService bugService,
             HttpContext ctx) =>
@@ -33,10 +29,10 @@ public static class BugEndpoints
             return Results.Created($"/api/bugs/{result.Id}", result);
         })
         .WithName("ReportBug")
-        .WithDescription("Report a bug from the frontend");
+        .WithDescription("Report a bug from the authenticated frontend user");
 
-        // GET /api/bugs/mine - Get my bug reports (authenticated user)
-        publicGroup.MapGet("/mine", async (
+        // GET /api/bugs/mine - Get the authenticated user's reports.
+        userGroup.MapGet("/mine", async (
             IBugReportService bugService,
             HttpContext ctx,
             int page = 1,
@@ -52,15 +48,10 @@ public static class BugEndpoints
             var result = await bugService.GetMyBugReportsAsync(userId, page, pageSize);
             return Results.Ok(result);
         })
-        .RequireAuthorization()
         .WithName("GetMyBugReports")
         .WithDescription("Get my submitted bug reports");
 
-        // ==========================================
-        // ADMIN ENDPOINTS
-        // ==========================================
-
-        // GET /api/bugs - List bug reports (admin)
+        // GET /api/bugs - List all reports (admin only).
         adminGroup.MapGet("/", async (
             IBugReportService bugService,
             int page = 1,
@@ -77,7 +68,7 @@ public static class BugEndpoints
         .WithName("GetBugReports")
         .WithDescription("Get paginated list of bug reports");
 
-        // GET /api/bugs/{id} - Get single bug report
+        // GET /api/bugs/{id} - Get a single report (admin only).
         adminGroup.MapGet("/{id:guid}", async (
             Guid id,
             IBugReportService bugService) =>
@@ -88,7 +79,7 @@ public static class BugEndpoints
         .WithName("GetBugReport")
         .WithDescription("Get a single bug report by ID");
 
-        // PATCH /api/bugs/{id} - Update bug status
+        // PATCH /api/bugs/{id} - Update report status (admin only).
         adminGroup.MapPatch("/{id:guid}", async (
             Guid id,
             UpdateBugStatusRequest request,
@@ -101,4 +92,3 @@ public static class BugEndpoints
         .WithDescription("Update bug report status and assignee");
     }
 }
- 
