@@ -276,6 +276,61 @@ Every security test should distinguish explicit anonymous 401/challenge behavior
 
 ---
 
+### BACKEND-MISTAKE-CONTENT-001 — Regex normalization removed existing inline LaTeX
+
+Severity: P1  
+Status: Mitigated / Needs validation  
+First seen: `BACKEND-TEST-036` content-helper coverage pass
+
+Problem:
+`InlineLatexFormatter.NormalizeMixedInlineMath` used `Regex.Split` with a non-capturing pattern for existing `$...$` expressions. The matched expressions were discarded from the split result and therefore vanished when segments were concatenated.
+
+Impact:
+- correctly authored equations could disappear from question text, options, hints, explanations and generated steps;
+- backend JSON could silently differ from stored content;
+- mobile rendering failures would look like missing source data rather than a formatting bug.
+
+Root cause:
+The comment said existing inline math would be preserved, but the implementation assumed `Regex.Split` returns delimiters without using a capturing group. No direct preservation or HTTP contract test existed.
+
+Prevention:
+- formatter now scans regex matches and copies existing inline math byte-for-byte;
+- only plain segments are normalized;
+- `InlineLatexFormatterTests` cover preservation, mixed content, composition/equality wrapping and idempotence;
+- `InlineLatexEndpointContractTests` exercises persisted content through `/api/quiz/questions` JSON mapping.
+
+Next check:
+Run focused helper and endpoint tests, then confirm translated SRS/next-question responses preserve existing inline math as well.
+
+---
+
+### BACKEND-MISTAKE-CONTENT-002 — HTML sanitizer handled only quoted event attributes
+
+Severity: P1  
+Status: Mitigated / Needs validation  
+First seen: `BACKEND-TEST-036` sanitizer coverage pass
+
+Problem:
+`MathContentSanitizer` removed event-handler attributes only when values were wrapped in quotes. Inputs such as `onclick=alert(1)` or `onerror=...` survived in `ContentFormat.Html`. Dangerous `javascript:` and `data:` URL attributes were also not removed.
+
+Impact:
+- stored or previewed HTML math content could retain executable browser behavior;
+- authoring preview and any HTML renderer could expose users/admins to script execution or unsafe URL payloads;
+- existing tests covered script tags but not attribute-based execution.
+
+Root cause:
+The event-attribute regex required a quoted capture/backreference and there was no dangerous URL-attribute rule or direct sanitizer suite.
+
+Prevention:
+- event-handler sanitization now covers double-quoted, single-quoted and unquoted values;
+- dangerous `javascript:`/`data:` values are removed from `href` and `src` while safe HTTP URLs remain;
+- `MathContentSanitizerTests` cover scripts, event handlers, URLs, HTML/plain modes, malformed LaTeX, delimiters and semantics text.
+
+Next check:
+Run sanitizer and authoring pipeline tests. Treat any future expansion of accepted HTML as a security-sensitive change requiring explicit allowlist tests.
+
+---
+
 ## Add new mistake card
 
 Use `docs/ai/learning/MISTAKE_CARD_TEMPLATE.md` and IDs:
@@ -284,4 +339,4 @@ Use `docs/ai/learning/MISTAKE_CARD_TEMPLATE.md` and IDs:
 BACKEND-MISTAKE-<AREA>-<NNN>
 ```
 
-Areas: `EVIDENCE`, `AUDIT`, `VALIDATION`, `XREPO`, `IDEM`, `MIGRATION`, `AUTH`, `PERF`, `QUEUE`
+Areas: `EVIDENCE`, `AUDIT`, `VALIDATION`, `XREPO`, `IDEM`, `MIGRATION`, `AUTH`, `CONTENT`, `PERF`, `QUEUE`
