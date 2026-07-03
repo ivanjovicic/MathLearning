@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-07-02
+Last aligned: 2026-07-03
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -55,9 +55,11 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | Document | Type | Use for | Notes |
 |---|---|---|---|
 | [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Coverage strategy | Priorities, test layers, quality rules, staged CI thresholds | Coverage percentage is secondary to critical branch proof. |
-| [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Test queue | BACKEND-TEST-CORE-001 and follow-up critical test packages | Current first package is `Needs validation`. |
+| [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md) | Coverage audit | Validated vs implemented vs prompt-ready backend test matrix | Static findings are not fix proof; numeric baseline waits for CI artifact. |
+| [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Test queue | Active BACKEND-TEST implementation packages | Rows remain Needs validation until executable evidence exists. |
+| [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Follow-up test queue | P0/P1 durable ingest, outbox, PostgreSQL, operational security, cancellation and contract prompts | Created by the 2026-07-03 coverage audit. |
 | [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection and generated-file exclusions | Used by database-validation CI. |
-| [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Release build, PostgreSQL schema validation, full tests, coverage artifacts, startup smoke | Source of executable CI evidence. |
+| [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Release build, PostgreSQL schema validation, full tests, coverage summary/artifacts, startup smoke | Publishes a non-blocking ReportGenerator summary; thresholds wait for a stable baseline. |
 
 ---
 
@@ -93,6 +95,7 @@ If code/tests and docs disagree, inspect the implementation, then update docs in
 | [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | Request-path budgets | p95 latency/query budgets per mobile flow, log/trace mapping, smoke steps | BE-PERF-007 evidence. |
 | [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) | Route compatibility | Canonical vs legacy aliases, dual surfaces, duplicate-work matrix, follow-up prompts | BE-PERF-008 evidence. |
 | [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Test coverage queue | Critical test packages ordered by data-loss/security/contract risk | Test lane. |
+| [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Coverage follow-up queue | Newly identified P0/P1 test and architecture gaps | Run after focused validation of implemented packages. |
 | [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue | BE-PERF prompts (001…008 complete/backfilled) | Performance lane. |
 | [`prompt_queues/backend_critical_risk_prevention.md`](prompt_queues/backend_critical_risk_prevention.md) | Critical risk queue | BACKEND-CRIT-001…008 prompt-ready; audit-created, not Done | Security/settlement/idempotency lane. |
 | [`prompt_queues/backend_second_pass_risk_prevention.md`](prompt_queues/backend_second_pass_risk_prevention.md) | Second-pass risk queue | BACKEND2-CRIT-001…008 prompt-ready; audit-created, not Done | Auth/proxy/jobs/authoring lane. |
