@@ -8,13 +8,25 @@ namespace MathLearning.Tests.Helpers;
 
 public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    public TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+    public const string AnonymousHeader = "X-Test-Anonymous";
+
+    public TestAuthHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder)
         : base(options, logger, encoder)
     {
     }
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        if (Request.Headers.TryGetValue(AnonymousHeader, out var anonymous) &&
+            bool.TryParse(anonymous.ToString(), out var isAnonymous) &&
+            isAnonymous)
+        {
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
         var userId = Request.Headers.TryGetValue("X-Test-UserId", out var headerUserId) &&
                      !string.IsNullOrWhiteSpace(headerUserId.ToString())
             ? headerUserId.ToString().Trim()
@@ -24,7 +36,9 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
 
         if (Request.Headers.TryGetValue("X-Test-Roles", out var headerRoles))
         {
-            foreach (var role in headerRoles.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var role in headerRoles.ToString().Split(
+                         ',',
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
