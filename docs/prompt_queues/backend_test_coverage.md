@@ -24,23 +24,24 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 - Use SQLite/PostgreSQL for relational guarantees.
 - Record exact validation or why it did not run.
 - Do not mark Done without `.ai/runs` evidence.
+- Reconcile this queue before adding tests; several earlier Ready rows were already covered by validated BACKEND-CRIT packages.
 
 ## Active prompts
 
 | ID | Status | Purpose |
 |---|---|---|
 | BACKEND-TEST-CORE-001 | Needs validation | Daily Run/cosmetics trust boundary, economy state machine, refresh-token primitives, relational constraints, CI coverage artifacts. Run log: `.ai/runs/2026-07-02-BACKEND-TEST-CORE-001-evidence.md`. |
-| BACKEND-TEST-002 | Covered / Needs validation | Settlement snapshot truth is already asserted in endpoint and mobile-contract season tests; avoid adding duplicate tests unless a distinct transaction/concurrency gap is found. |
+| BACKEND-TEST-002 | Covered / Needs validation | Settlement snapshot truth is already asserted in endpoint and mobile-contract season tests; avoid duplicate tests unless a distinct transaction/concurrency gap is found. |
 | BACKEND-TEST-003 | Implemented / Needs validation | Single-key promotion, missing-key legacy behavior, and empty offline-session replay characterization. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-003-evidence.md`. |
-| BACKEND-TEST-004 | Ready | Offline timestamp UTC normalization, future/old/malformed bounds, equivalent timestamp dedupe. |
-| BACKEND-TEST-005 | Ready | Safe error responses: no raw exception details in auth/global middleware responses. |
-| BACKEND-TEST-006 | Ready | Monitoring/log authorization and redaction for anonymous and non-admin callers. |
-| BACKEND-TEST-007 | Ready | Public identity allowlists across search/profile/leaderboard/rivals/school surfaces. |
-| BACKEND-TEST-008 | Ready | Avatar upload size/type/content checks and static-file access policy. |
-| BACKEND-TEST-009 | Partial / Needs validation | SQLite unique-index tests added; transaction rollback and true concurrent settlement cases remain. |
-| BACKEND-TEST-010 | Ready | Read bounds and enum validation for search, leaderboard, history, and monitoring endpoints. |
+| BACKEND-TEST-004 | Validated | Offline timestamp UTC normalization, future/old/malformed bounds, and equivalent timestamp dedupe. Existing focused result: 25 passed, 0 failed. |
+| BACKEND-TEST-005 | Validated | Safe auth/global error responses. Existing result: 41 passed, 0 failed; focused safe-error subset 6 passed, 0 failed. |
+| BACKEND-TEST-006 | Validated | Monitoring/log authorization, redaction, and bounds. Existing result: 9 passed, 0 failed. |
+| BACKEND-TEST-007 | Validated | Public identity allowlists for search/profile/leaderboard surfaces. Existing result: 10 passed, 0 failed. |
+| BACKEND-TEST-008 | Validated | Avatar upload size/type/content checks, path safety, cross-user denial, and static-file bypass prevention. Existing result: 43 passed, 0 failed. |
+| BACKEND-TEST-009 | Implemented / Needs validation | SQLite unique constraints plus new transactional rollback and deterministic two-context duplicate-insert recovery tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`. |
+| BACKEND-TEST-010 | Validated | Read bounds and enum normalization for search, leaderboard, history, logs, and monitoring. Existing result: 70 passed, 0 failed. |
 | BACKEND-TEST-011 | Ready after coverage artifact | Measure baseline and propose progressive line/branch thresholds. |
-| BACKEND-TEST-012 | Ready / P0-P1 | Repair RefreshToken model/snapshot max length drift (64 vs existing 128 migration), add model metadata regression test, and verify schema-from-zero. |
+| BACKEND-TEST-012 | Confirmed drift / Needs safe patch | RefreshToken model/snapshot max length is 64 while generator emits 88 chars and migration history widened the column to 128. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-012-evidence.md`. |
 | BACKEND-TEST-013 | Ready / P0 decision | Decide and enforce required operation identity for retryable quiz/SRS/offline mutations while keeping any intentional legacy compatibility explicit and bounded. |
 | BACKEND-TEST-014 | Implemented / Needs validation | Direct shared/cosmetics idempotency service state machines and canonical payload semantics; 30 new test scenarios. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`. |
 
@@ -67,7 +68,7 @@ Validation still required:
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~Season"
 ```
 
-## BACKEND-TEST-003 — Required P0 operation identity
+## BACKEND-TEST-003 — Required P0 operation identity characterization
 
 Run mode: tests/investigation  
 Token budget: medium
@@ -96,26 +97,25 @@ Follow-up decision:
 
 - BACKEND-TEST-013 must decide whether missing identity is rejected, version-gated, or retained only on an explicit legacy route.
 
-## BACKEND-TEST-004 — Offline timestamp boundaries
+## BACKEND-TEST-004…008 and 010 — Existing validated coverage
 
-Run mode: tests  
-Token budget: medium
+Do not add duplicate tests unless a new branch or endpoint is identified.
 
-Cover:
+Evidence:
 
-- valid UTC timestamp;
-- offset timestamp normalized to UTC;
-- malformed timestamp;
-- future timestamp beyond tolerance;
-- excessively old timestamp;
-- equivalent timestamps do not bypass dedupe.
+- offline timestamps: `.ai/runs/2026-07-01-BACKEND-CRIT-007-evidence.md` — 25 passed;
+- safe error responses: `.ai/runs/2026-06-24-BACKEND-CRIT-001-evidence.md` — 41 passed, focused subset 6 passed;
+- monitoring/log security: `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md` — 9 passed;
+- public identity minimization: `.ai/runs/2026-07-01-BACKEND-CRIT-003-evidence.md` — 10 passed;
+- avatar safety: `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md` — 43 passed;
+- bounded reads: `.ai/runs/2026-07-01-BACKEND-CRIT-008-evidence.md` — 70 passed.
 
 ## BACKEND-TEST-009 — Relational idempotency guarantees
 
 Run mode: tests  
 Token budget: medium
 
-Implemented in this batch:
+Previously implemented:
 
 - unique user/type/idempotency-key scope;
 - unique user/type/operation-id scope;
@@ -125,28 +125,52 @@ Implemented in this batch:
 - cosmetics user/operation and user/key uniqueness;
 - different-user isolation.
 
-Still required:
+Added in this package:
 
-- rollback does not leave completed ledger state;
-- true concurrent duplicate requests settle once against a relational provider.
+- shared-ledger completion and domain mutation roll back atomically;
+- economy completion and balance mutation roll back atomically;
+- deterministic two-context shared-ledger race: both requests query before either insert, one inserts, the second hits uniqueness and reloads the same pending ledger;
+- deterministic two-context economy race with the same invariant;
+- winner completion is replayed from the single persisted row.
+
+Evidence files:
+
+- `tests/MathLearning.Tests/Idempotency/RelationalIdempotencyConstraintTests.cs`
+- `tests/MathLearning.Tests/Idempotency/RelationalIdempotencyTransactionTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`
+
+Validation required:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~RelationalIdempotency"
+```
+
+PostgreSQL follow-up:
+
+- run the same test project in `database-validation.yml` against PostgreSQL schema-from-zero;
+- do not describe SQLite as proof of PostgreSQL serialization semantics.
 
 ## BACKEND-TEST-012 — Refresh-token model length drift
 
 Run mode: bugfix + tests  
 Token budget: low
 
-Evidence:
+Confirmed evidence:
 
-- `RefreshTokenService.GenerateRefreshToken()` emits Base64 for 64 random bytes (88 characters).
-- migration `20260210114958_IncreaseRefreshTokenLength` changed the DB column to 128.
-- current EF configuration and model snapshot declare max length 64.
+- `RefreshTokenService.GenerateRefreshToken()` emits Base64 for 64 random bytes: 88 characters;
+- migration `20260210114958_IncreaseRefreshTokenLength` changed the DB column to 128;
+- current `ApiDbContext` and `ApiDbContextModelSnapshot` still declare max length 64.
 
-Required:
+Required safe patch:
 
-- align EF configuration and model snapshot to 128 without creating a redundant shrink/expand migration;
-- add a model metadata test proving generated token length fits the configured maximum;
-- run schema-from-zero validation and refresh-token tests;
-- add/update a `BACKEND-MISTAKE-AUTH-*` or `BACKEND-MISTAKE-MIGRATION-*` card.
+- change `RefreshToken.Token` fluent max length from 64 to 128;
+- change the current model snapshot max length/column type from 64 to 128;
+- do not create a redundant migration;
+- add a model metadata regression test proving generated token length fits the configured maximum;
+- add a relational persistence test for a generated token;
+- run schema-from-zero validation and refresh-token tests.
+
+Connector limitation recorded in the run log: the current GitHub contents action only supports complete-file replacement, while the two EF files are approximately 1,600 and 5,800 lines. A local targeted patch is safer than rewriting either file through the connector.
 
 ## BACKEND-TEST-013 — Enforce or explicitly bound missing operation identity
 
