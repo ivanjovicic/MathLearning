@@ -3,6 +3,8 @@
 Source: `../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`  
 Previous detailed queue: `backend_test_followups_2026_07_03.md`
 
+> Prompt IDs 036–041 were already occupied by parallel backend coverage work. New residual prompts from this pass use 042–047 to preserve one-problem/one-ID traceability.
+
 ## Status overrides for previous queue
 
 | ID | Current status | Evidence |
@@ -27,7 +29,7 @@ Previous detailed queue: `backend_test_followups_2026_07_03.md`
 
 ---
 
-## BACKEND-TEST-036 — Distributed maintenance lock, audit and safe errors
+## BACKEND-TEST-042 — Distributed maintenance lock, audit and safe errors
 
 Priority: P1  
 Run mode: runtime hardening + PostgreSQL integration tests
@@ -58,7 +60,7 @@ PostgreSQL execution is mandatory.
 
 ---
 
-## BACKEND-TEST-037 — Explanation input abuse and cost guard
+## BACKEND-TEST-043 — Explanation input abuse and cost guard
 
 Priority: P1  
 Run mode: validators + endpoint policy + tests
@@ -97,7 +99,7 @@ Cross-repo contract sync required if accepted values or limits affect mobile.
 
 ---
 
-## BACKEND-TEST-038 — Deterministic maintenance scheduler tests
+## BACKEND-TEST-044 — Deterministic maintenance scheduler tests
 
 Priority: P1/P2  
 Run mode: hosted-service refactor + clock tests
@@ -110,8 +112,8 @@ Run mode: hosted-service refactor + clock tests
 
 1. Inject `TimeProvider` and an awaitable scheduler/delay abstraction.
 2. Move one scheduled iteration into a directly testable method.
-3. Define behavior at exactly 03:00, just after 03:00, DST-independent UTC, restart and cancellation.
-4. Keep the distributed non-overlap contract from BACKEND-TEST-036.
+3. Define behavior at exactly 03:00, just after 03:00, UTC restart and cancellation.
+4. Keep the distributed non-overlap contract from BACKEND-TEST-042.
 
 ### Required tests
 
@@ -122,11 +124,11 @@ Run mode: hosted-service refactor + clock tests
 - cancellation during delay exits without rebuild;
 - cancellation during rebuild propagates safely;
 - rebuild failure does not spin or immediately retry in a tight loop;
-- next run remains 24-hour/next-calendar-day correct.
+- next run remains next-calendar-day correct.
 
 ---
 
-## BACKEND-TEST-039 — Database-level or cursor analytics pagination
+## BACKEND-TEST-045 — Database-level or cursor analytics pagination
 
 Priority: P1/P2  
 Run mode: service/query refactor + performance tests
@@ -156,14 +158,14 @@ Overflow is now bounded, but analytics endpoints still ask the service for all r
 
 ---
 
-## BACKEND-TEST-040 — Remaining page-based endpoint migration audit
+## BACKEND-TEST-046 — Remaining page-based endpoint migration audit
 
 Priority: P1/P2  
 Run mode: static inventory + focused implementation tests
 
 ### Problem
 
-`PaginationBounds` is applied to analytics and bug reports only. Other endpoint/service files may still perform direct `page * pageSize`, `(page - 1) * size`, `Skip` or unbounded offset calculations.
+`PaginationBounds` is applied to analytics and bug reports only. Other endpoint/service files may still perform direct multiplication, `Skip` or unbounded offset calculations.
 
 ### Required work
 
@@ -183,7 +185,7 @@ Run mode: static inventory + focused implementation tests
 
 ---
 
-## BACKEND-TEST-041 — Automated privileged-route authorization audit
+## BACKEND-TEST-047 — Automated privileged-route authorization audit
 
 Priority: P1  
 Run mode: endpoint metadata inventory test
@@ -196,7 +198,7 @@ Bug and maintenance routes previously relied on comments/group names rather than
 
 1. Define a canonical allowlist of public, authenticated, content-author and admin route patterns.
 2. Build an endpoint metadata test that enumerates `RouteEndpoint` instances.
-3. Fail when a privileged route has only generic auth, no auth, or the wrong policy.
+3. Fail when a privileged route has only generic auth, no auth or the wrong policy.
 4. Fail when a new route is not classified.
 5. Keep deliberate public health/auth routes explicitly allowlisted.
 
@@ -207,7 +209,7 @@ Bug and maintenance routes previously relied on comments/group names rather than
 - authoring mutation routes require content-author/admin policy;
 - public routes are explicit and minimal;
 - test-only auth scheme does not change metadata conclusions;
-- adding an unclassified route fails the inventory test with a useful message.
+- adding an unclassified route fails with a useful message.
 
 ## Validation order
 
