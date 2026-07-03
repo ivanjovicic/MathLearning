@@ -13,11 +13,11 @@ public sealed class IdempotencyObservabilityServiceTests
 
         var snapshot = service.Snapshot();
 
-        Assert.Equal(0, snapshot.FirstSuccess);
-        Assert.Equal(0, snapshot.Replay);
-        Assert.Equal(0, snapshot.Conflict);
-        Assert.Equal(0, snapshot.Failure);
-        Assert.Equal(0, snapshot.Rollback);
+        Assert.Equal(0L, snapshot.FirstSuccess);
+        Assert.Equal(0L, snapshot.Replay);
+        Assert.Equal(0L, snapshot.Conflict);
+        Assert.Equal(0L, snapshot.Failure);
+        Assert.Equal(0L, snapshot.Rollback);
         Assert.Empty(snapshot.Rows);
     }
 
@@ -35,24 +35,24 @@ public sealed class IdempotencyObservabilityServiceTests
 
         var snapshot = service.Snapshot();
 
-        Assert.Equal(2, snapshot.FirstSuccess);
-        Assert.Equal(1, snapshot.Replay);
-        Assert.Equal(1, snapshot.Conflict);
-        Assert.Equal(1, snapshot.Failure);
-        Assert.Equal(1, snapshot.Rollback);
+        Assert.Equal(2L, snapshot.FirstSuccess);
+        Assert.Equal(1L, snapshot.Replay);
+        Assert.Equal(1L, snapshot.Conflict);
+        Assert.Equal(1L, snapshot.Failure);
+        Assert.Equal(1L, snapshot.Rollback);
 
         Assert.Contains(snapshot.Rows, row =>
             row.Category == "first_success" &&
             row.Endpoint == "POST /api/quiz/answer" &&
             row.OperationType == "quiz_answer" &&
             row.Status == "completed" &&
-            row.Count == 2);
+            row.Count == 2L);
         Assert.Contains(snapshot.Rows, row =>
             row.Category == "failure" &&
             row.Endpoint == "unknown" &&
             row.OperationType == "unknown" &&
             row.Status == "unknown" &&
-            row.Count == 1);
+            row.Count == 1L);
 
         var expectedOrder = snapshot.Rows
             .OrderBy(row => row.Category, StringComparer.Ordinal)
@@ -60,7 +60,7 @@ public sealed class IdempotencyObservabilityServiceTests
             .ThenBy(row => row.OperationType, StringComparer.Ordinal)
             .ThenBy(row => row.Status, StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(expectedOrder, snapshot.Rows);
+        Assert.Equal(expectedOrder, snapshot.Rows.ToArray());
     }
 
     [Fact]
@@ -78,10 +78,10 @@ public sealed class IdempotencyObservabilityServiceTests
 
         var snapshot = service.Snapshot();
 
-        Assert.Equal(count, snapshot.FirstSuccess);
+        Assert.Equal((long)count, snapshot.FirstSuccess);
         Assert.Equal(2, snapshot.Rows.Count);
-        Assert.Equal(count / 2, snapshot.Rows.Single(row => row.Endpoint == "endpoint-a").Count);
-        Assert.Equal(count / 2, snapshot.Rows.Single(row => row.Endpoint == "endpoint-b").Count);
+        Assert.Equal((long)(count / 2), snapshot.Rows.Single(row => row.Endpoint == "endpoint-a").Count);
+        Assert.Equal((long)(count / 2), snapshot.Rows.Single(row => row.Endpoint == "endpoint-b").Count);
     }
 
     [Fact]
@@ -94,8 +94,8 @@ public sealed class IdempotencyObservabilityServiceTests
         service.Reset();
         var snapshot = service.Snapshot();
 
-        Assert.Equal(0, snapshot.FirstSuccess);
-        Assert.Equal(0, snapshot.Replay);
+        Assert.Equal(0L, snapshot.FirstSuccess);
+        Assert.Equal(0L, snapshot.Replay);
         Assert.Empty(snapshot.Rows);
     }
 
