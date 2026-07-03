@@ -1,5 +1,6 @@
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -200,9 +201,7 @@ public sealed class RelationalIdempotencyConstraintTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            var options = new DbContextOptionsBuilder<ApiDbContext>()
-                .UseSqlite(connection)
-                .Options;
+            var options = SqliteApiDbContextOptions.Create(connection);
 
             await using var setup = new ApiDbContext(options);
             await setup.Database.EnsureCreatedAsync();
