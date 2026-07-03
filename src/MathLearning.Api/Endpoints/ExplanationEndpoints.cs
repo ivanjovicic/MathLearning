@@ -7,6 +7,9 @@ namespace MathLearning.Api.Endpoints;
 
 public static class ExplanationEndpoints
 {
+    private const string StoredProblemNotFoundMessage = "Stored problem was not found.";
+    private const string ReferencedProblemNotFoundMessage = "Referenced problem was not found.";
+
     public static void MapExplanationEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/explanations")
@@ -21,12 +24,15 @@ public static class ExplanationEndpoints
         {
             try
             {
-                var response = await service.GetForProblemAsync(problemId, string.IsNullOrWhiteSpace(lang) ? "en" : lang, ct);
+                var response = await service.GetForProblemAsync(
+                    problemId,
+                    string.IsNullOrWhiteSpace(lang) ? "en" : lang,
+                    ct);
                 return Results.Ok(response);
             }
             catch (KeyNotFoundException)
             {
-                return Results.NotFound(new { error = $"Problem {problemId} not found." });
+                return Results.NotFound(new { error = StoredProblemNotFoundMessage });
             }
         })
         .WithName("GetProblemExplanation")
@@ -47,9 +53,9 @@ public static class ExplanationEndpoints
                 var response = await service.GenerateAsync(request, ct);
                 return Results.Ok(response);
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                return Results.NotFound(new { error = ex.Message });
+                return Results.NotFound(new { error = ReferencedProblemNotFoundMessage });
             }
         })
         .WithName("GenerateExplanation")
@@ -70,9 +76,9 @@ public static class ExplanationEndpoints
                 var response = await service.AnalyzeMistakeAsync(request, ct);
                 return Results.Ok(response);
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                return Results.NotFound(new { error = ex.Message });
+                return Results.NotFound(new { error = ReferencedProblemNotFoundMessage });
             }
         })
         .WithName("AnalyzeExplanationMistake")
