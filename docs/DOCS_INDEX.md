@@ -22,7 +22,7 @@ When docs disagree, use this order:
 9. [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md).
 10. [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md).
 11. [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md).
-12. Coverage audits and active test queues.
+12. Current coverage/performance audits and active queues.
 13. [`backend_contract_gap_report.md`](backend_contract_gap_report.md).
 14. [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md).
 15. Cross-repo mobile docs in `ivanjovicic/Mathlearning-Mobile-App`.
@@ -40,6 +40,7 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | Run-log gate | Mandatory `.ai/runs` evidence and score caps | Every non-trivial prompt. |
 | [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) | Quickstart | Minimal files/tests by task type | Reduces rediscovery. |
 | [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | Guardrails | Historical bug classes and validation matrix | Mandatory for implementation prompts. |
+| [`BUGFIX_PATTERN_GUARDRAILS.md`](BUGFIX_PATTERN_GUARDRAILS.md) | Bugfix guardrails | Minimum regression evidence by bug class | Read before bug fixes. |
 | [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Test strategy | Risk-first coverage layers and staged thresholds | Critical invariants before percentage. |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architecture map | Startup, projects, persistence, jobs | Update with runtime architecture. |
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current route/auth/canonical map | Updated through coverage pass 2. |
@@ -58,9 +59,29 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md) | Coverage audit pass 2 | Maintenance read-only, analytics/explanation contracts, pagination and test-auth | Adds 38 executable cases; execution still required. |
 | [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Primary test queue | Active BACKEND-TEST packages | Rows remain Needs validation without executable evidence. |
 | [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Follow-up queue pass 1 | Durable ingest, outbox, PostgreSQL and operational risks | Detailed prompts 022–035. |
-| [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Follow-up queue pass 2 | Status overrides plus maintenance/explanation/paging/policy prompts | Detailed prompts 042–047. |
+| [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Follow-up queue pass 2 | Maintenance/explanation/paging/policy prompts | Detailed prompts 042–047. |
+| [`prompt_queues/BACKEND-TEST-048-index-bloat-validation.md`](prompt_queues/BACKEND-TEST-048-index-bloat-validation.md) | PostgreSQL test prompt | Prove or replace index-bloat metric | Static formula concern requires provider evidence. |
 | [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection | Used by database-validation CI. |
 | [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Build, PostgreSQL schema, full tests, coverage summary and startup smoke | First successful baseline still required. |
+
+---
+
+## Performance / optimization and bug-risk docs
+
+| Document | Type | Use for | Notes |
+|---|---|---|---|
+| [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) | Performance review | Original hot paths and safe optimization boundaries | Covers BE-PERF-001…008. |
+| [`BACKEND_PERFORMANCE_BUG_AUDIT_2026_07_03.md`](BACKEND_PERFORMANCE_BUG_AUDIT_2026_07_03.md) | Static audit | Current adaptive, weakness, XP reset, rate-limit, read-side mutation, cache, outbox and observability risks | Not runtime-fix proof. |
+| [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue pass 1 | Quiz, SRS, replay, leaderboard, Redis, startup, budgets and route bloat | BE-PERF-001…008. |
+| [`prompt_queues/backend_performance_followups_2026_07_03.md`](prompt_queues/backend_performance_followups_2026_07_03.md) | Performance/bug queue pass 2 | Atomic mutations, bounded workers/state, pure reads, cache/outbox and observability | BE-PERF-009…017. |
+| [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Cold-start budget | Blocking vs background startup | BE-PERF-006 evidence. |
+| [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | Request budgets | p95/query budgets | BE-PERF-007 evidence. |
+| [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) | Route audit | Canonical vs legacy and duplicate-work risk | BE-PERF-008 evidence. |
+| [`prompt_queues/backend_critical_risk_prevention.md`](prompt_queues/backend_critical_risk_prevention.md) | Critical risk queue | BACKEND-CRIT prompts | Security/settlement/idempotency lane. |
+| [`prompt_queues/backend_second_pass_risk_prevention.md`](prompt_queues/backend_second_pass_risk_prevention.md) | Second-pass risk queue | BACKEND2 prompts | Auth/proxy/jobs/authoring lane. |
+| [`BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Critical app-flow findings | Not fix proof. |
+| [`BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Second-pass findings | Not fix proof. |
+| [`BACKEND_REVIEW_2026_06_27.md`](BACKEND_REVIEW_2026_06_27.md) | Safety review | Explanation safety/cache/rate-limit inputs | Focused review. |
 
 ---
 
@@ -75,26 +96,6 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md`](ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md) | Rollup prompt | Learn from recent runs | Docs-only. |
 | [`ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md`](ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md) | Backfill prompt | Repair missing evidence | No runtime edits by default. |
 | [`ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md`](ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md) | Sync prompt | Align backend/mobile/AgentsWatch rules | Docs-only. |
-
----
-
-## Performance / optimization and risk queues
-
-| Document | Type | Use for | Notes |
-|---|---|---|---|
-| [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) | Performance review | Hot paths and safe optimization boundaries | Current performance snapshot. |
-| [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Cold-start budget | Blocking vs background startup | BE-PERF-006 evidence. |
-| [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | Request budgets | p95/query budgets | BE-PERF-007 evidence. |
-| [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) | Route audit | Canonical vs legacy and duplicate-work risk | BE-PERF-008 evidence. |
-| [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Test queue | Critical test packages by risk | Test lane. |
-| [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Coverage follow-up pass 1 | P0/P1 architecture/test gaps | Detailed prompts. |
-| [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Coverage follow-up pass 2 | New residual risks and status overrides | Use after focused validation. |
-| [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue | BE-PERF prompts | Performance lane. |
-| [`prompt_queues/backend_critical_risk_prevention.md`](prompt_queues/backend_critical_risk_prevention.md) | Critical risk queue | BACKEND-CRIT prompts | Security/settlement/idempotency lane. |
-| [`prompt_queues/backend_second_pass_risk_prevention.md`](prompt_queues/backend_second_pass_risk_prevention.md) | Second-pass risk queue | BACKEND2 prompts | Auth/proxy/jobs/authoring lane. |
-| [`BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_CRITICAL_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Critical app-flow findings | Not fix proof. |
-| [`BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md`](BACKEND_SECOND_PASS_APP_FLOW_AUDIT_2026_07_01.md) | Static audit | Second-pass findings | Not fix proof. |
-| [`BACKEND_REVIEW_2026_06_27.md`](BACKEND_REVIEW_2026_06_27.md) | Safety review | Explanation safety/cache/rate-limit inputs | Focused review. |
 
 ---
 
