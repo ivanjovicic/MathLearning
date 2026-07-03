@@ -41,9 +41,10 @@ public static class BugEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
+            var requestedPageSize = pageSize is < 1 or > 100 ? 50 : pageSize;
             var paging = PaginationBounds.Normalize(
                 page,
-                pageSize,
+                requestedPageSize,
                 defaultPageSize: 50,
                 maxPageSize: 100);
             var result = await bugService.GetMyBugReportsAsync(
@@ -62,9 +63,10 @@ public static class BugEndpoints
             string? status = null,
             string? severity = null) =>
         {
+            var requestedPageSize = pageSize is < 1 or > 100 ? 20 : pageSize;
             var paging = PaginationBounds.Normalize(
                 page,
-                pageSize,
+                requestedPageSize,
                 defaultPageSize: 20,
                 maxPageSize: 100);
             var result = await bugService.GetBugReportsAsync(
