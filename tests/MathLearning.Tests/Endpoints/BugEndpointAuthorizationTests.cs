@@ -38,13 +38,25 @@ public sealed class BugEndpointAuthorizationTests :
     [Fact]
     public async Task AnonymousUser_CannotSubmitOrReadBugReports()
     {
-        var report = await client.PostAsJsonAsync("/api/bugs/report", CreateReportRequest());
-        var mine = await client.GetAsync("/api/bugs/mine");
-        var adminList = await client.GetAsync("/api/bugs/");
-        var adminDetail = await client.GetAsync($"/api/bugs/{factory.BugService.ExistingBugId}");
-        var adminUpdate = await client.PatchAsJsonAsync(
+        using var reportRequest = AnonymousRequest(
+            HttpMethod.Post,
+            "/api/bugs/report",
+            JsonContent.Create(CreateReportRequest()));
+        using var mineRequest = AnonymousRequest(HttpMethod.Get, "/api/bugs/mine");
+        using var adminListRequest = AnonymousRequest(HttpMethod.Get, "/api/bugs/");
+        using var adminDetailRequest = AnonymousRequest(
+            HttpMethod.Get,
+            $"/api/bugs/{factory.BugService.ExistingBugId}");
+        using var adminUpdateRequest = AnonymousRequest(
+            HttpMethod.Patch,
             $"/api/bugs/{factory.BugService.ExistingBugId}",
-            new UpdateBugStatusRequest("resolved", "admin"));
+            JsonContent.Create(new UpdateBugStatusRequest("resolved", "admin")));
+
+        var report = await client.SendAsync(reportRequest);
+        var mine = await client.SendAsync(mineRequest);
+        var adminList = await client.SendAsync(adminListRequest);
+        var adminDetail = await client.SendAsync(adminDetailRequest);
+        var adminUpdate = await client.SendAsync(adminUpdateRequest);
 
         AssertUnauthorizedOrForbidden(report.StatusCode);
         AssertUnauthorizedOrForbidden(mine.StatusCode);
@@ -152,6 +164,16 @@ public sealed class BugEndpointAuthorizationTests :
         Locale: "sr-RS",
         AppVersion: "1.0.0",
         ScreenshotBase64: null);
+
+    private static HttpRequestMessage AnonymousRequest(
+        HttpMethod method,
+        string path,
+        HttpContent? content = null)
+    {
+        var request = new HttpRequestMessage(method, path) { Content = content };
+        request.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+        return request;
+    }
 
     private static HttpRequestMessage AuthenticatedRequest(
         HttpMethod method,
