@@ -40,6 +40,7 @@ jobs:
         run: dotnet restore MathLearning.slnx
 
       - name: Build
+        id: build
         shell: bash
         run: |
           set -o pipefail
@@ -47,14 +48,25 @@ jobs:
           dotnet build MathLearning.slnx -c Release --no-restore 2>&1 | tee artifacts/build/build.log
 
       - name: Validate schema from zero
+        id: schema_validation
+        continue-on-error: true
         shell: pwsh
         run: |
-          ./scripts/db/validate-schema.ps1 `
-            -ConnectionString "Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_ci_template;Pooling=true;" `
-            -DatabaseName "mathlearning_ci_validation" `
-            -KeepDatabase
+          New-Item -ItemType Directory -Force -Path artifacts/schema | Out-Null
+          Start-Transcript -Path artifacts/schema/schema-validation.log -Force
+          try {
+            ./scripts/db/validate-schema.ps1 `
+              -ConnectionString "Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_ci_template;Pooling=true;" `
+              -DatabaseName "mathlearning_ci_validation" `
+              -KeepDatabase
+          }
+          finally {
+            Stop-Transcript
+          }
 
       - name: Run test suite with coverage
+        id: test_suite
+        continue-on-error: true
         run: >-
           dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj
           -c Release
@@ -64,18 +76,21 @@ jobs:
           --collect:"XPlat Code Coverage"
           --settings tests/MathLearning.Tests/coverage.runsettings
 
-      - name: Upload build, test and coverage artifacts
+      - name: Upload build, schema, test and coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mathlearning-validation-results
           path: |
             artifacts/build
+            artifacts/schema
             artifacts/test-results
           if-no-files-found: warn
           retention-days: 14
 
       - name: Generate idempotent artifact
+        id: migration_artifact
+        continue-on-error: true
         run: |
           mkdir -p artifacts/migrations
           dotnet ef migrations script --idempotent \
@@ -85,6 +100,9 @@ jobs:
             --output artifacts/migrations/api-idempotent.sql
 
       - name: Smoke startup schema guard
+        id: startup_smoke
+        if: steps.schema_validation.outcome == 'success'
+        continue-on-error: true
         env:
           ASPNETCORE_ENVIRONMENT: CI
           ConnectionStrings__Default: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_ci_validation;Pooling=true;
@@ -102,7 +120,37 @@ jobs:
           exit 1
 
       - name: Upload migration artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: api-idempotent-migration-script
           path: artifacts/migrations/api-idempotent.sql
+          if-no-files-found: warn
+
+      - name: Enforce validation gates
+        if: always()
+        shell: bash
+        run: |
+          failed=0
+
+          if [ "${{ steps.schema_validation.outcome }}" != "success" ]; then
+            echo "Schema validation failed."
+            failed=1
+          fi
+
+          if [ "${{ steps.test_suite.outcome }}" != "success" ]; then
+            echo "Test suite failed."
+            failed=1
+          fi
+
+          if [ "${{ steps.migration_artifact.outcome }}" != "success" ]; then
+            echo "Idempotent migration generation failed."
+            failed=1
+          fi
+
+          if [ "${{ steps.schema_validation.outcome }}" = "success" ] && [ "${{ steps.startup_smoke.outcome }}" != "success" ]; then
+            echo "Startup schema smoke failed."
+            failed=1
+          fi
+
+          exit "$failed"
