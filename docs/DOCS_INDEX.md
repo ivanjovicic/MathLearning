@@ -55,10 +55,10 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 |---|---|---|---|
 | [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Coverage strategy | Priorities, layers and CI thresholds | Percentage is secondary to critical branch proof. |
 | [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md) | Coverage audit pass 1 | Validated vs implemented vs prompt-ready matrix | Includes ingest, bug/maintenance auth and CI coverage visibility. |
-| [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md) | Coverage audit pass 2 | Maintenance read-only, analytics/explanation contracts, pagination and test-auth | Adds 36 test cases; execution still required. |
+| [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md) | Coverage audit pass 2 | Maintenance read-only, analytics/explanation contracts, pagination and test-auth | Adds 38 executable cases; execution still required. |
 | [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Primary test queue | Active BACKEND-TEST packages | Rows remain Needs validation without executable evidence. |
 | [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Follow-up queue pass 1 | Durable ingest, outbox, PostgreSQL and operational risks | Detailed prompts 022–035. |
-| [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Follow-up queue pass 2 | Status overrides plus maintenance/explanation/paging/policy prompts | Detailed prompts 036–041. |
+| [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Follow-up queue pass 2 | Status overrides plus maintenance/explanation/paging/policy prompts | Detailed prompts 042–047. |
 | [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection | Used by database-validation CI. |
 | [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Build, PostgreSQL schema, full tests, coverage summary and startup smoke | First successful baseline still required. |
 
