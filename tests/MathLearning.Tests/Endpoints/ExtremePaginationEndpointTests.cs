@@ -66,7 +66,7 @@ public sealed class BugExtremePaginationEndpointTests :
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Mine_IntMaxPaging_IsCappedBeforeServiceCall()
+    public async Task Mine_IntMaxPaging_UsesEstablishedDefaultSizeAndCapsPage()
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
@@ -77,11 +77,11 @@ public sealed class BugExtremePaginationEndpointTests :
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(1_000, factory.BugService.LastMinePage);
-        Assert.Equal(100, factory.BugService.LastMinePageSize);
+        Assert.Equal(50, factory.BugService.LastMinePageSize);
     }
 
     [Fact]
-    public async Task AdminList_IntMaxPaging_IsCappedBeforeServiceCall()
+    public async Task AdminList_IntMaxPaging_UsesEstablishedDefaultSizeAndCapsPage()
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
@@ -93,6 +93,6 @@ public sealed class BugExtremePaginationEndpointTests :
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(1_000, factory.BugService.LastAdminPage);
-        Assert.Equal(100, factory.BugService.LastAdminPageSize);
+        Assert.Equal(20, factory.BugService.LastAdminPageSize);
     }
 }
