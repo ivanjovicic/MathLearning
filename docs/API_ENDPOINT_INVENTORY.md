@@ -182,11 +182,11 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 
 | Method/family | Auth | Owner | Notes |
 |---|---|---|---|
-| `/api/analytics/*` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope. Paging bounded to page 100 and size 50/100 through `PaginationBounds`; endpoint contracts covered by BACKEND-TEST-029. Database-level paging remains BACKEND-TEST-039. |
-| GET `/api/recommendations/practice` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope and bounded paging; response contract tests added. |
-| GET `/api/explanations/problem/{problemId}` | Auth | `ExplanationEndpoints.cs` | Blank language defaults to `en`; stable safe not-found message. |
-| POST `/api/explanations/generate` | Auth | `ExplanationEndpoints.cs` | Validator short-circuit and safe not-found/500 tests added. Input/cost hardening remains BACKEND-TEST-037. |
-| POST `/api/explanations/mistake-analysis` | Auth | `ExplanationEndpoints.cs` | Validator and safe-error tests added. Input/cost hardening remains BACKEND-TEST-037. |
+| `/api/analytics/*` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope. Page capped at 100; page size preserves prior clamp semantics. HTTP contracts covered by BACKEND-TEST-029. Database-level paging remains BACKEND-TEST-045. |
+| GET `/api/recommendations/practice` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope and bounded paging. |
+| GET `/api/explanations/problem/{problemId}` | Auth | `ExplanationEndpoints.cs` | Blank language defaults to `en`; stable safe not-found response. |
+| POST `/api/explanations/generate` | Auth | `ExplanationEndpoints.cs` | Validator short-circuit and safe not-found/500 tests added. Input/cost hardening remains BACKEND-TEST-043. |
+| POST `/api/explanations/mistake-analysis` | Auth | `ExplanationEndpoints.cs` | Validator and safe-error tests added. Input/cost hardening remains BACKEND-TEST-043. |
 
 ---
 
@@ -211,9 +211,9 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 
 | Method | Route | Auth | Owner | Notes |
 |---|---|---|---|---|
-| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Uses injected shared service; mutation path, cancellation token and in-process non-overlap guard. Distributed lock/audit remains BACKEND-TEST-036. |
+| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Injected shared service, cancellation and in-process non-overlap. Distributed lock/audit remains BACKEND-TEST-042. |
 | GET | `/api/maintenance/index-health` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Read-only injected health query; positive admin contract tested. |
-| GET | `/api/maintenance/index-stats` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Now read-only; no longer invokes rebuild or `ANALYZE`. Positive contract verifies zero rebuild calls. |
+| GET | `/api/maintenance/index-stats` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Read-only; no longer invokes rebuild or `ANALYZE`. Contract verifies zero rebuild calls. |
 
 ---
 
@@ -221,9 +221,9 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 
 | Method | Route | Auth | Owner | Notes |
 |---|---|---|---|---|
-| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Authenticated report creation; validation/storage hardening remains BACKEND-TEST-025. |
-| GET | `/api/bugs/mine` | Auth | `BugEndpoints.cs` | Current-user reports only; page capped at 1,000 and size 100. |
-| GET | `/api/bugs/` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Global list; page capped at 1,000 and size 100. |
+| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Authenticated creation; input/storage hardening remains BACKEND-TEST-025. |
+| GET | `/api/bugs/mine` | Auth | `BugEndpoints.cs` | Current-user rows only; page capped at 1,000. Invalid page size preserves default 50. |
+| GET | `/api/bugs/` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Global list; page capped at 1,000. Invalid page size preserves default 20. |
 | GET | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Read any report. |
 | PATCH | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Update status/assignee. |
 
