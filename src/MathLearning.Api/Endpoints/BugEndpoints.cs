@@ -1,4 +1,5 @@
 using MathLearning.Application.DTOs.Bugs;
+using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 
 namespace MathLearning.Api.Endpoints;
@@ -15,7 +16,6 @@ public static class BugEndpoints
             .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
             .WithTags("BugReports");
 
-        // POST /api/bugs/report - Submit a report as the authenticated user.
         userGroup.MapPost("/report", async (
             BugReportRequest request,
             IBugReportService bugService,
@@ -31,7 +31,6 @@ public static class BugEndpoints
         .WithName("ReportBug")
         .WithDescription("Report a bug from the authenticated frontend user");
 
-        // GET /api/bugs/mine - Get the authenticated user's reports.
         userGroup.MapGet("/mine", async (
             IBugReportService bugService,
             HttpContext ctx,
@@ -42,16 +41,20 @@ public static class BugEndpoints
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 50;
-
-            var result = await bugService.GetMyBugReportsAsync(userId, page, pageSize);
+            var paging = PaginationBounds.Normalize(
+                page,
+                pageSize,
+                defaultPageSize: 50,
+                maxPageSize: 100);
+            var result = await bugService.GetMyBugReportsAsync(
+                userId,
+                paging.Page,
+                paging.PageSize);
             return Results.Ok(result);
         })
         .WithName("GetMyBugReports")
         .WithDescription("Get my submitted bug reports");
 
-        // GET /api/bugs - List all reports (admin only).
         adminGroup.MapGet("/", async (
             IBugReportService bugService,
             int page = 1,
@@ -59,16 +62,21 @@ public static class BugEndpoints
             string? status = null,
             string? severity = null) =>
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 20;
-
-            var result = await bugService.GetBugReportsAsync(page, pageSize, status, severity);
+            var paging = PaginationBounds.Normalize(
+                page,
+                pageSize,
+                defaultPageSize: 20,
+                maxPageSize: 100);
+            var result = await bugService.GetBugReportsAsync(
+                paging.Page,
+                paging.PageSize,
+                status,
+                severity);
             return Results.Ok(result);
         })
         .WithName("GetBugReports")
         .WithDescription("Get paginated list of bug reports");
 
-        // GET /api/bugs/{id} - Get a single report (admin only).
         adminGroup.MapGet("/{id:guid}", async (
             Guid id,
             IBugReportService bugService) =>
@@ -79,7 +87,6 @@ public static class BugEndpoints
         .WithName("GetBugReport")
         .WithDescription("Get a single bug report by ID");
 
-        // PATCH /api/bugs/{id} - Update report status (admin only).
         adminGroup.MapPatch("/{id:guid}", async (
             Guid id,
             UpdateBugStatusRequest request,
