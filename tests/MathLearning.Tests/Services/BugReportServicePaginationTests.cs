@@ -16,7 +16,7 @@ public sealed class BugReportServicePaginationTests
 
         Assert.Empty(result.Bugs);
         Assert.Equal(1_000, result.Page);
-        Assert.Equal(100, result.PageSize);
+        Assert.Equal(20, result.PageSize);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed class BugReportServicePaginationTests
 
         Assert.Empty(result.Bugs);
         Assert.Equal(1_000, result.Page);
-        Assert.Equal(100, result.PageSize);
+        Assert.Equal(50, result.PageSize);
     }
 
     private sealed class NoOpScreenshotStorageService : IScreenshotStorageService
