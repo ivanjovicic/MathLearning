@@ -32,7 +32,10 @@ public sealed class MonitoringLogAuthorizationTests :
     [InlineData("/api/logs/recent")]
     public async Task AnonymousUser_CannotReadLogEndpoints(string path)
     {
-        var response = await client.GetAsync(path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+
+        var response = await client.SendAsync(request);
         Assert.True(
             response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
             $"Expected 401/403 but got {(int)response.StatusCode}");
@@ -133,8 +136,13 @@ public sealed class MonitoringLogAuthorizationTests :
     [Fact]
     public async Task HealthAndMetrics_RemainAnonymous()
     {
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/metrics")).StatusCode);
+        using var healthRequest = new HttpRequestMessage(HttpMethod.Get, "/health");
+        healthRequest.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+        using var metricsRequest = new HttpRequestMessage(HttpMethod.Get, "/metrics");
+        metricsRequest.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(healthRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(metricsRequest)).StatusCode);
     }
 
     private void WriteMonitoringLogFile(params string[] lines)
