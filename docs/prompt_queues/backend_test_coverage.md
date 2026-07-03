@@ -7,14 +7,21 @@ Target repo: `ivanjovicic/MathLearning`
 
 Increase backend confidence by risk, not by chasing superficial coverage percentage.
 
-Coverage audit: [`../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md)  
-Prompt-ready architecture gaps: [`backend_test_followups_2026_07_03.md`](backend_test_followups_2026_07_03.md)
+Coverage audits:
+
+- [`../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md)
+- [`../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`](../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md)
+
+Prompt queues:
+
+- [`backend_test_followups_2026_07_03.md`](backend_test_followups_2026_07_03.md) — BACKEND-TEST-022…035
+- [`backend_test_followups_pass2_2026_07_03.md`](backend_test_followups_pass2_2026_07_03.md) — status overrides and BACKEND-TEST-042…047
 
 ## Read first
 
 - `../../AGENTS.md`
 - `../BACKEND_TEST_COVERAGE_STRATEGY.md`
-- `../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`
+- both current coverage audits
 - `../BACKEND_REGRESSION_GUARDRAILS.md`
 - `../AGENT_RUN_LOG_ENFORCEMENT.md`
 - `../ai/learning/MISTAKE_LEDGER.md`
@@ -28,10 +35,10 @@ Prompt-ready architecture gaps: [`backend_test_followups_2026_07_03.md`](backend
 - Record exact validation or why it did not run.
 - Do not mark Done without `.ai/runs` evidence.
 - A committed test remains **Implemented / Needs validation** until `dotnet test` or checked CI evidence exists.
-- Failure-injection tests should fail after SQL is issued but before commit when transaction rollback is the invariant.
+- Failure-injection tests should fail after SQL but before commit when rollback is the invariant.
 - Explicit anonymous tests must use `X-Test-Anonymous: true`.
-- Do not set arbitrary coverage thresholds before a successful baseline artifact is reviewed.
-- Content normalization/sanitization changes require preservation, idempotence and security tests.
+- Preserve existing endpoint normalization semantics while adding shared bounds.
+- Do not set coverage thresholds before a successful measured baseline.
 
 ## Active prompts
 
@@ -58,8 +65,24 @@ Prompt-ready architecture gaps: [`backend_test_followups_2026_07_03.md`](backend
 | BACKEND-TEST-019 | Implemented / Needs validation | QuizAttempt ingest aggregation, rollback, cancellation and scheduler ordering. |
 | BACKEND-TEST-020 | Runtime-fixed / Needs validation | Bug report user/admin authorization boundaries. |
 | BACKEND-TEST-021 | Runtime-fixed / Needs validation | Maintenance routes require exact admin policy. |
-| BACKEND-TEST-022…035 | Prompt-ready | Durable ingest, outbox concurrency, maintenance semantics, bug storage, public diagnostics, dead routes, pagination, analytics/explanations, scheduler, PostgreSQL, cancellation, aliases and auth-test audit. |
-| BACKEND-TEST-036 | Runtime-fixed + tests / Needs validation | Previously unprompted core gaps: identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, content sanitization, step generation, translation fallback and question invariants. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-036-evidence.md`. |
+| BACKEND-TEST-022 | P0 / Prompt-ready | Durable/idempotent analytics ingest delivery after authoritative settlement. |
+| BACKEND-TEST-023 | P0/P1 / Prompt-ready | Multi-instance outbox claim, duplicate-publish and poison-message safety. |
+| BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
+| BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation. |
+| BACKEND-TEST-026 | P1 / Prompt-ready | Minimize public health/metrics/schema/job information. |
+| BACKEND-TEST-027 | P1/P2 / Prompt-ready | Decide whether to wire, merge or remove dead `QuestionEndpoints`. |
+| BACKEND-TEST-028 | Runtime-fixed / Needs validation | Shared checked pagination bounds, analytics/bug migration and extreme-value tests. |
+| BACKEND-TEST-029 | Implemented / Needs validation | Analytics/recommendation auth, user scope, paging, shape and safe-error endpoint tests. |
+| BACKEND-TEST-030 | Runtime-fixed / Needs validation | Explanation validation contracts and stable safe not-found messages. |
+| BACKEND-TEST-031 | P1 / Prompt-ready | Weakness scheduler durability, deduplication and backpressure. |
+| BACKEND-TEST-032 | P0/P1 / Prompt-ready | PostgreSQL provider-specific concurrency/locking/constraint lane. |
+| BACKEND-TEST-033 | P1 / Prompt-ready | Cancellation/rollback matrix for canonical P0 mutations. |
+| BACKEND-TEST-034 | P1/P2 / Prompt-ready | Legacy route parity/deprecation and duplicate-settlement prevention. |
+| BACKEND-TEST-035 | Implemented / Needs validation | Direct test-auth default/anonymous/role contract tests. |
+| BACKEND-TEST-036 | Runtime-fixed + tests / Needs validation | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-036-evidence.md`. |
+| BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
+
+IDs 037–041 are reserved/occupied by parallel coverage work and are not reused by the pass-2 follow-up queue.
 
 ## Existing validated coverage — do not duplicate blindly
 
@@ -67,29 +90,19 @@ Prompt-ready architecture gaps: [`backend_test_followups_2026_07_03.md`](backend
 |---|---|
 | Offline timestamps | `.ai/runs/2026-07-01-BACKEND-CRIT-007-evidence.md` — 25 passed. |
 | Safe errors | `.ai/runs/2026-06-24-BACKEND-CRIT-001-evidence.md` — 41 passed; focused subset 6 passed. |
-| Monitoring/log security | `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md` — 9 passed before explicit-anonymous infrastructure update. |
+| Monitoring/log security | `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md` — 9 passed before explicit-anonymous update. |
 | Public identity | `.ai/runs/2026-07-01-BACKEND-CRIT-003-evidence.md` — 10 passed. |
 | Avatar safety | `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md` — 43 passed. |
 | Bounded reads | `.ai/runs/2026-07-01-BACKEND-CRIT-008-evidence.md` — 70 passed. |
 | Proxy/authoring/adaptive/jobs/admin seed/version race | `.ai/runs/2026-06-24-BACKEND2-*` evidence — 82 targeted tests. |
 
-## Key package validation
+## Focused validation commands
 
-### Settlement and operation identity
-
-```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~Season|FullyQualifiedName~OperationIdentity"
-```
-
-BACKEND-TEST-013 remains responsible for the missing-identity contract decision.
-
-### Relational idempotency, refresh, registration, offline and helper transactions
+### Settlement, identity and relational mutation packages
 
 ```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~RelationalIdempotency|FullyQualifiedName~AuthRefreshRelationalConcurrencyTests|FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests|FullyQualifiedName~OfflineBatchRelationalAtomicityTests|FullyQualifiedName~ApiDbTransactionHelpersRelationalTests"
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~Season|FullyQualifiedName~OperationIdentity|FullyQualifiedName~RelationalIdempotency|FullyQualifiedName~AuthRefreshRelationalConcurrencyTests|FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests|FullyQualifiedName~OfflineBatchRelationalAtomicityTests|FullyQualifiedName~ApiDbTransactionHelpersRelationalTests"
 ```
-
-SQLite validates relational rollback and local races; PostgreSQL remains authoritative for provider-specific serialization/locking under BACKEND-TEST-032.
 
 ### Direct idempotency state machines
 
@@ -97,53 +110,19 @@ SQLite validates relational rollback and local races; PostgreSQL remains authori
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~IdempotencyLedgerServiceTests|FullyQualifiedName~CosmeticsIdempotencyServiceTests|FullyQualifiedName~IdempotencyPayloadCanonicalizerTests"
 ```
 
-### Ingest, bug and maintenance packages
+### First and second coverage-audit packages
 
 ```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~QuizAttemptIngestServiceRelationalTests|FullyQualifiedName~BugEndpointAuthorizationTests|FullyQualifiedName~MaintenanceEndpointAuthorizationTests|FullyQualifiedName~MonitoringLogAuthorizationTests"
-```
-
-Durable post-authoritative-commit ingest delivery remains BACKEND-TEST-022. Positive/read-only maintenance behavior remains BACKEND-TEST-024.
-
-## BACKEND-TEST-036 — Previously unprompted high-value coverage
-
-Run mode: pure unit tests + endpoint contracts + focused runtime fixes  
-Evidence: `.ai/runs/2026-07-03-BACKEND-TEST-036-evidence.md`
-
-Implemented test areas:
-
-- deterministic `UserIdGuidMapper` behavior, exact SHA-256 mapping, invalid input and 1,000-value isolation;
-- `IdempotencyObservabilityService` totals, normalization, sorting, reset, canonical endpoint mapping, privacy-safe logging and 20,000 parallel increments;
-- idempotency observability endpoint anonymous/learner/admin authorization, response privacy and exact policy metadata;
-- database startup-mode configuration/environment fallbacks, schema status factories/state replacement and deployment/local mismatch guidance;
-- complete `WeaknessScoring` thresholds, rounding, clamping, recency, confidence, slow-solve boost and P95 boundaries;
-- `InlineLatexFormatter` preservation, wrapping, mixed-content and idempotence tests;
-- real `/api/quiz/questions` HTTP contract preserving stored inline math in text/options/hints/explanation;
-- `StepEngine` stored-step precedence, translations, arithmetic/equation generation, localization and fallback behavior;
-- `MathContentSanitizer` scripts, event handlers, dangerous URLs, HTML/plain modes, malformed LaTeX, delimiters and semantics text;
-- `TranslationHelper` requested language, English/original fallback, hints/options and accessibility semantics;
-- `Question` domain text/difficulty/answer/hint/publish/version/delete invariants.
-
-Runtime fixes found by tests:
-
-1. Existing `$...$` expressions were removed because `Regex.Split` discarded non-captured delimiters. Formatter now copies existing inline math byte-for-byte and normalizes only plain segments.
-2. HTML sanitizer removed only quoted event handlers and allowed dangerous `javascript:`/`data:` URL attributes. It now handles quoted/unquoted event values and unsafe `href`/`src`, while preserving safe HTTP URLs.
-
-Focused validation:
-
-```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~UserIdGuidMapperTests|FullyQualifiedName~IdempotencyObservabilityServiceTests|FullyQualifiedName~IdempotencyObservabilityAuthorizationTests|FullyQualifiedName~DatabaseSchemaVersionGuardTests|FullyQualifiedName~WeaknessScoringTests|FullyQualifiedName~InlineLatexFormatterTests|FullyQualifiedName~InlineLatexEndpointContractTests|FullyQualifiedName~StepEngineTests|FullyQualifiedName~MathContentSanitizerTests|FullyQualifiedName~TranslationHelperTests|FullyQualifiedName~QuestionEntityTests"
-
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "QuizAttemptIngestServiceRelationalTests|BugEndpointAuthorizationTests|MaintenanceEndpointAuthorizationTests|MonitoringLogAuthorizationTests|MaintenanceEndpointContractTests|AnalyticsEndpointContractTests|ExplanationEndpointContractTests|TestAuthHandlerTests|PaginationBoundsTests|ExtremePaginationEndpointTests|BugReportServicePaginationTests"
 dotnet build MathLearning.slnx -c Release
 ```
 
-Related broader regression command:
+### BACKEND-TEST-036 parallel high-value package
 
 ```text
-dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "Translation|QuestionAuthoring|Explanation|QuizEndpoint|Srs|IdempotencyObservability|DatabaseSchema|Weakness"
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~UserIdGuidMapperTests|FullyQualifiedName~IdempotencyObservabilityServiceTests|FullyQualifiedName~IdempotencyObservabilityAuthorizationTests|FullyQualifiedName~DatabaseSchemaVersionGuardTests|FullyQualifiedName~WeaknessScoringTests|FullyQualifiedName~InlineLatexFormatterTests|FullyQualifiedName~InlineLatexEndpointContractTests|FullyQualifiedName~StepEngineTests|FullyQualifiedName~MathContentSanitizerTests|FullyQualifiedName~TranslationHelperTests|FullyQualifiedName~QuestionEntityTests"
+dotnet build MathLearning.slnx -c Release
 ```
-
-Do not move BACKEND-TEST-036 to Validated until the focused command and release build pass.
 
 ## Coverage workflow
 
@@ -155,12 +134,12 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 
 ## Next execution order
 
-1. Execute BACKEND-TEST-036 and repair any compile/assertion failures.
-2. Execute all other Implemented / Needs validation packages.
-3. Apply BACKEND-TEST-012 refresh-token model/snapshot correction.
-4. Run BACKEND-TEST-022 durable ingest delivery.
-5. Run BACKEND-TEST-023 outbox multi-instance safety.
-6. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
-7. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
-8. Continue BACKEND-TEST-024…031 and 033…035 by risk order.
+1. Execute all Implemented / Needs validation packages and repair compile/assertion failures.
+2. Apply BACKEND-TEST-012 refresh-token model/snapshot correction.
+3. Run BACKEND-TEST-022 durable ingest delivery.
+4. Run BACKEND-TEST-023 outbox multi-instance safety.
+5. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
+6. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+7. Run BACKEND-TEST-025/026/031/033/034 by risk.
+8. Continue BACKEND-TEST-042…047 after the P0 packages.
 9. Review the first coverage summary and introduce progressive thresholds only from measured evidence.
