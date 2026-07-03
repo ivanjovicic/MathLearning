@@ -1,253 +1,248 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-07-03
+Last aligned: 2026-07-03  
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
 
-**Route compatibility audit (aliases, dual surfaces, duplicate-work risk):** [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md) (`BE-PERF-008`).
+**Route compatibility audit:** [`BACKEND_ROUTE_COMPATIBILITY_AUDIT.md`](BACKEND_ROUTE_COMPATIBILITY_AUDIT.md)  
+**Current coverage audits:** [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md), [`BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`](BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md)
 
-Primary source: `src/MathLearning.Api/Program.cs` endpoint map plus endpoint files under `src/MathLearning.Api/Endpoints/`.
+Primary source: `src/MathLearning.Api/Program.cs` plus endpoint files under `src/MathLearning.Api/Endpoints/`.
 
----
+## Inventory rules
 
-## 1. Inventory rules
-
-Update this file when:
-
-- a route is added, removed, renamed, or deprecated
-- a canonical route changes payload/response semantics
-- a legacy route becomes mobile-facing or is retired
-- auth policy changes
-- idempotency behavior changes
-
-Do not mark routes verified only from docs. Route behavior must be backed by code/tests.
+Update this file whenever routes, payload/response semantics, auth policy, idempotency or canonical/legacy status changes. Do not mark behavior verified only from documentation.
 
 Auth legend:
 
 | Value | Meaning |
 |---|---|
-| Public | No auth required. |
+| Public | No authentication required. |
 | Auth | Authenticated user required. |
-| Admin | Admin role/policy required. |
-| Mixed | Group has mixed auth or special rules. Inspect owner file. |
-| Legacy | Exists for compatibility; do not expand without explicit reason. |
+| Admin | Exact admin role/policy required. |
+| Content author | Admin or content-author policy required. |
+| Mixed | Inspect owning endpoint file. |
+| Legacy | Compatibility-only surface. |
 
 ---
 
-## 2. Runtime / health / observability
+## Runtime / health / observability
 
 | Method | Route | Auth | Owner | Notes |
 |---|---|---|---|---|
 | GET | `/` | Public | `Program.cs` | Basic API running response. |
 | GET | `/health` | Public | `Program.cs` | ASP.NET health checks. |
-| GET | `/health/background-jobs` | Public | `Program.cs` | Hangfire/background job startup state. |
-| GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias for background job startup state. |
-| GET | `/metrics` | Public/internal | `Program.cs` | Minimal runtime metrics; no Prometheus dependency. Public-detail minimization is tracked by BACKEND-TEST-026. |
+| GET | `/health/background-jobs` | Public | `Program.cs` | Background-job startup state. |
+| GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias. |
+| GET | `/metrics` | Public/internal | `Program.cs` | Process metrics; public-detail minimization remains BACKEND-TEST-026. |
 | GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
-| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB connectivity and schema summary; detailed public fields are under review in BACKEND-TEST-026. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness: DB, schema, data counts; public-detail minimization is pending. |
-| GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Schema/migration state; public-detail minimization is pending. |
-| GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema health alias. |
-| GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. Verify exact subroutes in file. |
-| GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock/admin UI monitoring payload; protection/removal is tracked by BACKEND-TEST-026. |
-| GET | `/api/monitoring/logs` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted Serilog file tail; anonymous/non-admin denied. |
-| GET | `/api/monitoring/logs-advanced` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted filtered log-file reader; anonymous/non-admin denied. |
+| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary; detail minimization pending. |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus data counts; detail minimization pending. |
+| GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Migration/schema detail; minimization pending. |
+| GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema-health alias. |
+| GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. |
+| GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock monitoring payload; protect/remove under BACKEND-TEST-026. |
+| GET | `/api/monitoring/logs` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted log file read. |
+| GET | `/api/monitoring/logs-advanced` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted bounded filtered log read. |
+| GET | `/api/logs/recent` | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | Redacted DB log read. |
 
 ---
 
-## 3. Authentication
+## Authentication
 
 Owner: `AuthEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, UserProfile, access/refresh tokens. |
-| POST | `/auth/login` | Public | Canonical group route | Login with refresh token issuance. |
-| POST | `/api/auth/login` | Public | Compatibility alias | Mobile/API alias for login. |
-| POST | `/auth/refresh` | Public | Canonical | Rotates refresh token single-use under concurrency and returns new access token. |
+| POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, profile and tokens. Relational rollback tests exist but need execution. |
+| POST | `/auth/login` | Public | Canonical | Login and refresh-token issuance. |
+| POST | `/api/auth/login` | Public | Compatibility alias | API/mobile alias. |
+| POST | `/auth/refresh` | Public | Canonical | Single-use token rotation. Model length drift remains BACKEND-TEST-012. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
-| POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current user's refresh tokens. |
-| POST | `/auth/register` | Public/legacy | Legacy/admin-era | Existing register path; inspect before mobile use. |
+| POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens. |
+| POST | `/auth/register` | Public/legacy | Legacy | Inspect before mobile use. |
 
 ---
 
-## 4. Users / profile / settings
+## Users / profile / settings
 
 Owner: `UserEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| GET | `/api/users/profile` | Auth | Canonical mobile | Current user's profile + appearance. |
-| PUT | `/api/users/profile` | Auth | Canonical mobile | Update current user's profile. |
-| GET | `/api/users/stats` | Auth | Canonical | Current user's stats/profile aggregate. |
-| GET | `/api/users/search` | Auth | Canonical | Search users by query. `limit` is capped server-side. |
-| GET | `/api/user/profile/{userId}` | Auth | Legacy/canonical public profile route | Profile by user id with appearance. |
-| GET | `/api/users/{userId}/profile` | Auth | Compatibility alias | Alias for profile-by-id. |
-| GET | `/api/user/coins` | Auth | Legacy read | Current coins/progress summary. |
+| GET | `/api/users/profile` | Auth | Canonical mobile | Current profile and appearance. |
+| PUT | `/api/users/profile` | Auth | Canonical mobile | Update current profile. |
+| GET | `/api/users/stats` | Auth | Canonical | Current-user statistics. |
+| GET | `/api/users/search` | Auth | Canonical | Bounded search; public identity allowlist tested. |
+| GET | `/api/user/profile/{userId}` | Auth | Public-profile read | Privacy allowlist tested. |
+| GET | `/api/users/{userId}/profile` | Auth | Compatibility alias | Profile-by-id alias. |
+| GET | `/api/user/coins` | Auth | Legacy read | Current coin/progress summary. |
 | GET | `/api/user/daily-hints` | Auth | Legacy read | Daily hints alias. |
 | GET | `/api/user/hints/daily` | Auth | Legacy read | Daily hints alias. |
-| GET | `/users/{userId}/settings` | Auth | Canonical settings | Route user must match auth user. |
-| PATCH | `/users/{userId}/settings` | Auth | Canonical settings | Route user must match auth user. |
-| POST | `/users/{id}/avatar` | Auth | Legacy/profile upload caveat | Multipart image upload; size/type/content validated; canonical equip is `PUT /api/cosmetics/avatar`. |
-| GET | `/users/{id}/avatar/{fileName}` | Auth | Legacy/profile read | Owner-only; `/uploads/avatars/*` static serving blocked. |
+| GET | `/users/{userId}/settings` | Auth | Canonical settings | Route user must equal auth user. |
+| PATCH | `/users/{userId}/settings` | Auth | Canonical settings | Route user must equal auth user. |
+| POST | `/users/{id}/avatar` | Auth | Legacy upload | Owner-only, size/type/content validation. |
+| GET | `/users/{id}/avatar/{fileName}` | Auth | Legacy read | Owner-only; static avatar bypass blocked. |
 
 ---
 
-## 5. Quiz and SRS
+## Quiz and SRS
 
 Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/quiz/start` | Auth | Canonical | Start quiz session; `QuestionCount` is normalized server-side to 1..25. |
-| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch legacy/mobile questions; `count` is normalized server-side to 1..25. |
-| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Fetch questions by posted payload; `count` is normalized server-side to 1..25. |
-| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question for subtopic. |
-| POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `quiz_answer`. |
-| POST | `/api/quiz/offline-submit` | Auth | Canonical offline sync | Stable replay path for mobile queue; user scoped by auth. Durable analytics ingest handoff remains open under BACKEND-TEST-022. |
-| POST | `/api/quiz/batch-submit` | Auth | Legacy compatibility alias | Thin adapter to offline-submit; resolves sessionId/quizId/batchId/operationId when present. |
-| POST | `/api/quiz/srs/update` | Auth | Canonical P0 mutation | Idempotent when operation keys are supplied. Operation type: `srs_update`. |
-| GET | `/api/quiz/srs/daily` | Auth | Canonical SRS read | Due SRS cards with mobile fallback padding. |
-| GET | `/api/quiz/srs/mixed` | Auth | Canonical SRS read | Due + random SRS mix. |
-| GET | `/api/quiz/srs/streak` | Auth | SRS read | Current SRS streak. Inspect file for response. |
+| POST | `/api/quiz/start` | Auth | Canonical | Question count normalized to 1..25. |
+| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Count normalized to 1..25. |
+| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded. |
+| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question. |
+| POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. Missing-key decision remains BACKEND-TEST-013. |
+| POST | `/api/quiz/offline-submit` | Auth | Canonical offline | Auth-scoped replay path. Durable analytics handoff remains BACKEND-TEST-022. |
+| POST | `/api/quiz/batch-submit` | Auth | Legacy alias | Adapter to offline-submit. |
+| POST | `/api/quiz/srs/update` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. |
+| GET | `/api/quiz/srs/daily` | Auth | Canonical SRS read | Due cards with fallback padding. |
+| GET | `/api/quiz/srs/mixed` | Auth | Canonical SRS read | Due plus random mix. |
+| GET | `/api/quiz/srs/streak` | Auth | SRS read | Current streak. |
 
 ---
 
-## 6. Practice sessions
+## Practice sessions
 
 Owner: `PracticeSessionEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned practice session. |
-| POST | `/api/practice/session/{sessionId:guid}/answer` | Auth | Canonical | Submit answer; session ownership must be enforced. |
-| POST | `/api/practice/session/{sessionId:guid}/complete` | Auth | Canonical | Complete session; ownership must be enforced. |
+| POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned session. |
+| POST | `/api/practice/session/{sessionId:guid}/answer` | Auth | Canonical | Ownership enforced. |
+| POST | `/api/practice/session/{sessionId:guid}/complete` | Auth | Canonical | Ownership enforced. |
 
 ---
 
-## 7. Progress
+## Progress
 
 Owner: `ProgressEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| GET | `/api/progress/overview` | Auth | Canonical mobile | Attempts, accuracy, streak, freezes, streak event. |
-| GET | `/api/progress/weak-areas` | Auth | Canonical | Lowest accuracy subtopics. |
+| GET | `/api/progress/overview` | Auth | Canonical mobile | Attempts, accuracy, streak and freezes. |
+| GET | `/api/progress/weak-areas` | Auth | Canonical | Lowest-accuracy subtopics. |
 | GET | `/api/progress/topics` | Auth | Canonical | Topic progress. |
-| GET | `/api/topics/progress` | Auth | Legacy alias | Alias for topic progress. |
-| POST | `/api/progress/sync` | Auth | Mobile sync | Writes daily completion; user from auth. |
+| GET | `/api/topics/progress` | Auth | Legacy alias | Topic-progress alias. |
+| POST | `/api/progress/sync` | Auth | Mobile sync | User derived from auth. |
 
 ---
 
-## 8. Economy / seasons / shop
+## Economy / seasons / shop
 
 Owner: `EconomySettlementEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/economy/coins/spend` | Auth | Canonical P0 mutation | Uses `economy_transactions`; operation id supported. |
-| POST | `/api/economy/hints/use` | Auth | Canonical P0 mutation | Uses `economy_transactions`; free hint / coin debit. |
-| GET | `/api/economy/rewards/preview` | Auth | Canonical read | Preview reward resolution. |
-| POST | `/api/economy/rewards/claim` | Auth | Canonical P0 mutation | Idempotent reward claim. |
-| POST | `/api/shop/streak-freeze/purchase` | Auth | Canonical P0 mutation | Idempotent streak-freeze purchase. |
-| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 mutation | Season Daily Run XP claim. |
-| POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 mutation | Season milestone claim. |
-| POST | `/api/admin/economy/rewards/grant` | Admin | Admin | Actor from auth, target from request. |
+| POST | `/api/economy/coins/spend` | Auth | Canonical P0 | Idempotent economy transaction. |
+| POST | `/api/economy/hints/use` | Auth | Canonical P0 | Free hint or coin debit. |
+| GET | `/api/economy/rewards/preview` | Auth | Canonical read | Must not mutate. |
+| POST | `/api/economy/rewards/claim` | Auth | Canonical P0 | Idempotent reward claim. |
+| POST | `/api/shop/streak-freeze/purchase` | Auth | Canonical P0 | Idempotent purchase. |
+| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP. |
+| POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 | Season milestone claim. |
+| POST | `/api/admin/economy/rewards/grant` | Admin | Admin | Actor from auth, target from body. |
 
 ---
 
-## 9. Cosmetics and avatar
+## Cosmetics and Daily Run
 
-Owners: `CosmeticsEndpoints.cs`, `AvatarEndpoints.cs`
-
-Canonical mobile routes:
+Owners: `CosmeticsEndpoints.cs`, `AvatarEndpoints.cs`, `DailyRunEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
 | GET | `/api/cosmetics/catalog` | Auth | Canonical mobile | Published catalog, ETag support. |
-| GET | `/api/cosmetics/inventory` | Auth | Canonical mobile | Current user's item keys and fragment progress. |
-| GET | `/api/cosmetics/avatar` | Auth | Canonical mobile | Current user's equipped avatar slots. |
-| PUT | `/api/cosmetics/avatar` | Auth | Canonical mobile | Persist equipped avatar slots with ownership validation. |
-| POST | `/api/cosmetics/items/{itemKey}/claim` | Auth | Canonical P0 mutation | Uses cosmetics idempotency ledger. |
-| POST | `/api/cosmetics/fragments/grant` | Auth | Canonical P0 mutation | Uses cosmetics idempotency ledger. |
+| GET | `/api/cosmetics/inventory` | Auth | Canonical mobile | Current-user inventory/fragments. |
+| GET | `/api/cosmetics/avatar` | Auth | Canonical mobile | Current equipped slots. |
+| PUT | `/api/cosmetics/avatar` | Auth | Canonical mobile | Ownership-validated equip. |
+| POST | `/api/cosmetics/items/{itemKey}/claim` | Auth | Canonical P0 | Cosmetics ledger. |
+| POST | `/api/cosmetics/fragments/grant` | Auth | Canonical P0 | Cosmetics ledger. |
+| POST | `/api/daily-run/chest/claim` | Auth | Canonical P0 | Server-authoritative Policy B idempotency. |
 
-Legacy/compatibility avatar routes exist in `AvatarEndpoints.cs`. Do not expand them for mobile runtime unless explicitly required. Canonical mobile avatar equip is `PUT /api/cosmetics/avatar`.
-
-**Dual surface warning:** `AvatarEndpoints.cs` and `CosmeticsEndpoints.cs` both mount under `/api/cosmetics` with different subpaths (`items`/`equip` vs `catalog`/`inventory`). See route audit §3.
-
----
-
-## 10. Daily Run
-
-Owner: `DailyRunEndpoints.cs`
-
-| Method | Route | Auth | Status | Notes |
-|---|---|---|---|---|
-| POST | `/api/daily-run/chest/claim` | Auth | Canonical P0 mutation | Server-authoritative, idempotent via domain-table Policy B. |
+Legacy avatar routes remain compatibility-only. Do not expand them for new mobile behavior.
 
 ---
 
-## 11. Hints / coins / powerups legacy surfaces
-
-Owners: `HintEndpoints.cs`, `CoinEndpoints.cs`, `PowerupEndpoints.cs`
+## Hints / coins / powerups legacy surfaces
 
 | Route family | Auth | Status | Notes |
 |---|---|---|---|
-| `/api/hints/*` | Auth | Canonical/legacy read depending route | Mobile reads hints; economy settlement for hint cost is `/api/economy/hints/use`. |
-| `/api/coins/*` | Auth | Legacy | Do not use for new mobile settlement. Prefer `/api/economy/*`. |
-| `/api/powerups/*` | Auth | Legacy/feature | Inspect before modifying. |
+| `/api/hints/*` | Auth | Mixed canonical/legacy read | Paid hint settlement belongs to `/api/economy/hints/use`. |
+| `/api/coins/*` | Auth | Legacy | Do not use for new settlement. |
+| `/api/powerups/*` | Auth | Legacy/feature | Inspect before modification. |
 
 ---
 
-## 12. Leaderboard / adaptive / analytics / explanations / authoring / sync / maintenance
+## Analytics / recommendations / explanations
 
-Owners: `LeaderboardEndpoints.cs`, `AdaptiveEndpoints.cs`, `AnalyticsEndpoints.cs`, `ExplanationEndpoints.cs`, `QuestionAuthoringEndpoints.cs`, `SyncEndpoints.cs`, `MaintenanceEndpoints.cs`, `LoggingEndpoints.cs`, `BugEndpoints.cs`.
-
-| Route family | Auth | Owner | Notes |
+| Method/family | Auth | Owner | Notes |
 |---|---|---|---|
-| `/api/leaderboard*` | Mixed/Auth | `LeaderboardEndpoints.cs` | Global/friends/schools/admin leaderboard surfaces. `limit`/`take`/`neighbors` are bounded and invalid scope/period/range values normalize to safe defaults. Inspect file before route changes. |
-| `/api/adaptive*` | Auth | `AdaptiveEndpoints.cs` | Adaptive path/recommendation/review surfaces. |
-| `/api/analytics*` | Auth | `AnalyticsEndpoints.cs` | Analytics/recommendation surfaces. Endpoint contract coverage is tracked by BACKEND-TEST-029. |
-| `/api/explanations*` | Auth | `ExplanationEndpoints.cs` | Explanation generation/read surfaces. Safe-error/cancellation coverage is tracked by BACKEND-TEST-030. |
-| POST | `/api/questions/validate` | Content author (`UiTokensAdmin` or `ContentAuthor`) | `QuestionAuthoringEndpoints.cs` | Dry-run validation only. |
-| POST | `/api/questions/preview` | Content author (`UiTokensAdmin` or `ContentAuthor`) | `QuestionAuthoringEndpoints.cs` | Safe preview only. |
-| POST | `/api/questions/save-draft` | Content author (`UiTokensAdminPolicy` / `ContentAuthorPolicy`) | `QuestionAuthoringEndpoints.cs` | Persists draft rows. |
-| POST | `/api/questions/publish` | Content author (`UiTokensAdminPolicy` / `ContentAuthorPolicy`) | `QuestionAuthoringEndpoints.cs` | Publishes draft/version. |
-| GET | `/api/questions/{id}/versions` | Content author | `QuestionAuthoringEndpoints.cs` | Version history read. |
-| GET | `/api/questions/{id}/validation` | Content author | `QuestionAuthoringEndpoints.cs` | Latest validation read. |
-| POST | `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Re-runs validation audit. |
-| `/api/sync*` | Auth | `SyncEndpoints.cs` | Offline sync transport. Reject mismatched payload user ids. |
-| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Manual index rebuild; anonymous and ordinary users denied. Positive admin/overlap tests remain under BACKEND-TEST-024. |
-| GET | `/api/maintenance/index-health` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Index health details; anonymous and ordinary users denied. |
-| GET | `/api/maintenance/index-stats` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Currently calls rebuild implementation; read-only refactor tracked by BACKEND-TEST-024. |
-| logging routes | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | DB log read/search; output redacted; non-admin denied. |
-| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Creates a report for the authenticated user; input/storage hardening tracked by BACKEND-TEST-025. |
-| GET | `/api/bugs/mine` | Auth | `BugEndpoints.cs` | Returns only authenticated user's reports; paging bounded. |
-| GET | `/api/bugs/` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | List all reports; learner denied. |
-| GET | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Read any report; learner denied. |
-| PATCH | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Update report status/assignee; learner denied. |
-
-Because these families contain more route variants and some admin/internal behavior, inspect the owning file and tests before changing them. Add precise rows here when a route becomes mobile-critical or release-critical.
-
-**Unwired:** `QuestionEndpoints.cs` defines `MapQuestionEndpoints` but it is not registered in `Program.cs` (see route audit §4 and BACKEND-TEST-027).
+| `/api/analytics/*` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope. Paging bounded to page 100 and size 50/100 through `PaginationBounds`; endpoint contracts covered by BACKEND-TEST-029. Database-level paging remains BACKEND-TEST-039. |
+| GET `/api/recommendations/practice` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope and bounded paging; response contract tests added. |
+| GET `/api/explanations/problem/{problemId}` | Auth | `ExplanationEndpoints.cs` | Blank language defaults to `en`; stable safe not-found message. |
+| POST `/api/explanations/generate` | Auth | `ExplanationEndpoints.cs` | Validator short-circuit and safe not-found/500 tests added. Input/cost hardening remains BACKEND-TEST-037. |
+| POST `/api/explanations/mistake-analysis` | Auth | `ExplanationEndpoints.cs` | Validator and safe-error tests added. Input/cost hardening remains BACKEND-TEST-037. |
 
 ---
 
-## 13. Canonical mobile P0 mutation checklist
+## Question authoring / sync
 
-Before changing any route below, inspect backend tests and mobile contract:
+| Method/family | Auth | Owner | Notes |
+|---|---|---|---|
+| POST `/api/questions/validate` | Content author | `QuestionAuthoringEndpoints.cs` | Dry-run validation. |
+| POST `/api/questions/preview` | Content author | `QuestionAuthoringEndpoints.cs` | Safe preview. |
+| POST `/api/questions/save-draft` | Content author | `QuestionAuthoringEndpoints.cs` | Persists draft. |
+| POST `/api/questions/publish` | Content author | `QuestionAuthoringEndpoints.cs` | Publishes version. |
+| GET `/api/questions/{id}/versions` | Content author | `QuestionAuthoringEndpoints.cs` | Version history. |
+| GET `/api/questions/{id}/validation` | Content author | `QuestionAuthoringEndpoints.cs` | Latest validation. |
+| POST `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Revalidation. |
+| `/api/sync/*` | Auth | `SyncEndpoints.cs` | Reject payload/auth user mismatch. |
+
+`QuestionEndpoints.MapQuestionEndpoints` remains defined but unwired; decision remains BACKEND-TEST-027.
+
+---
+
+## Maintenance
+
+| Method | Route | Auth | Owner | Notes |
+|---|---|---|---|---|
+| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Uses injected shared service; mutation path, cancellation token and in-process non-overlap guard. Distributed lock/audit remains BACKEND-TEST-036. |
+| GET | `/api/maintenance/index-health` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Read-only injected health query; positive admin contract tested. |
+| GET | `/api/maintenance/index-stats` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Now read-only; no longer invokes rebuild or `ANALYZE`. Positive contract verifies zero rebuild calls. |
+
+---
+
+## Bug reports
+
+| Method | Route | Auth | Owner | Notes |
+|---|---|---|---|---|
+| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Authenticated report creation; validation/storage hardening remains BACKEND-TEST-025. |
+| GET | `/api/bugs/mine` | Auth | `BugEndpoints.cs` | Current-user reports only; page capped at 1,000 and size 100. |
+| GET | `/api/bugs/` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Global list; page capped at 1,000 and size 100. |
+| GET | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Read any report. |
+| PATCH | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Update status/assignee. |
+
+Endpoint and service layers both normalize bug-report paging for defense-in-depth.
+
+---
+
+## Canonical mobile P0 mutation checklist
 
 | Endpoint | Operation type / policy | Evidence area |
 |---|---|---|
-| `POST /api/quiz/answer` | `quiz_answer` | `QuizAnswerIdempotencyTests.cs`, `MobileMutationContractIntegrationTests.cs` |
-| `POST /api/quiz/srs/update` | `srs_update` | `SrsUpdateIdempotencyTests.cs`, `MobileMutationContractIntegrationTests.cs` |
-| `POST /api/daily-run/chest/claim` | `daily_run_chest_claim`, Policy B | `DailyRunChestClaimIdempotencyTests.cs`, endpoint tests |
-| `POST /api/seasons/daily-run-claim` | `season_daily_run_claim` | economy contract/idempotency tests |
-| `POST /api/seasons/milestones/{milestoneId}/claim` | `season_milestone_claim` | economy contract/idempotency tests |
-| `POST /api/cosmetics/fragments/grant` | `cosmetics_fragment_grant` | cosmetics contract/idempotency tests |
-| `POST /api/cosmetics/items/{itemKey}/claim` | `cosmetics_item_claim` | cosmetics contract/idempotency tests |
-| `POST /api/economy/coins/spend` | `economy_coins_spend` | economy idempotency/contract tests |
-| `POST /api/economy/hints/use` | `economy_hint_use` | economy idempotency/contract tests |
-| `POST /api/economy/rewards/claim` | `economy_reward_claim` | economy idempotency/contract tests |
-| `POST /api/shop/streak-freeze/purchase` | `shop_streak_freeze_purchase` | economy idempotency/contract tests |
+| `POST /api/quiz/answer` | `quiz_answer` | Quiz answer idempotency and mobile-contract tests. |
+| `POST /api/quiz/srs/update` | `srs_update` | SRS idempotency and mobile-contract tests. |
+| `POST /api/daily-run/chest/claim` | `daily_run_chest_claim`, Policy B | Daily Run idempotency tests. |
+| `POST /api/seasons/daily-run-claim` | `season_daily_run_claim` | Economy contract/idempotency tests. |
+| `POST /api/seasons/milestones/{milestoneId}/claim` | `season_milestone_claim` | Economy contract/idempotency tests. |
+| `POST /api/cosmetics/fragments/grant` | `cosmetics_fragment_grant` | Cosmetics contract/idempotency tests. |
+| `POST /api/cosmetics/items/{itemKey}/claim` | `cosmetics_item_claim` | Cosmetics contract/idempotency tests. |
+| `POST /api/economy/coins/spend` | `economy_coins_spend` | Economy idempotency/contract tests. |
+| `POST /api/economy/hints/use` | `economy_hint_use` | Economy idempotency/contract tests. |
+| `POST /api/economy/rewards/claim` | `economy_reward_claim` | Economy idempotency/contract tests. |
+| `POST /api/shop/streak-freeze/purchase` | `shop_streak_freeze_purchase` | Economy idempotency/contract tests. |
