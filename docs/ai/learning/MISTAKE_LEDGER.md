@@ -194,6 +194,92 @@ Next check: automated queue/evidence lint should detect duplicate IDs across que
 
 ---
 
+### BACKEND-MISTAKE-IDEM-002 — Generic retry wrapped a non-idempotent multi-save mutation
+
+Severity: P0  
+Status: Open  
+First seen: BACKEND-PERF-AUDIT-004 / adaptive answer path
+
+Problem: `AdaptiveApiFacade` applies a generic retry policy to answer submission, while `AdaptiveLearningService` performs multiple saves and downstream effects without a settled replay record or database-enforced one-answer transition.
+
+Impact:
+
+- a transient failure after the first save can be retried as a new mutation;
+- history, review schedule, anti-cheat, mastery or legacy SRS effects can duplicate or diverge;
+- concurrent duplicate requests can both observe an unanswered item;
+- cancellation from the HTTP request is dropped by the current interface/delegate path.
+
+Root cause: retry was treated as a reliability feature independently from operation identity, atomicity and exact replay semantics.
+
+Prevention:
+
+- never wrap a mutation in generic retry until first/duplicate/conflict behavior is proven;
+- use stable operation identity and payload hash;
+- keep authoritative writes in one transaction or durable idempotent outbox;
+- add PostgreSQL concurrency and fail-after-SQL tests;
+- pass cancellation tokens through every abstraction.
+
+Next check: BE-PERF-012 and BE-PERF-015 must prove exactly-once settlement before retry optimization.
+
+---
+
+### BACKEND-MISTAKE-PERF-002 — Read endpoints performed refresh, settlement or snapshot writes
+
+Severity: P1  
+Status: Open  
+First seen: BACKEND-PERF-AUDIT-004
+
+Problem: school leaderboard and progress GET paths can refresh aggregate tables, create history snapshots, roll streak state and process cosmetic rewards.
+
+Impact:
+
+- polling and concurrent stale reads create write amplification and lock contention;
+- read latency includes full refresh/settlement work;
+- retries can repeat mutation attempts;
+- reward semantics become coupled to whether a client happened to read an endpoint;
+- schema metadata queries run on request paths.
+
+Root cause: freshness repair and domain settlement were implemented as convenience work inside read services instead of durable single-owner jobs or explicit mutations.
+
+Prevention:
+
+- GET contract tests assert zero writes and zero reward/snapshot effects;
+- serve last-known stale data with explicit metadata;
+- refresh/snapshot/reward work uses a durable background owner and idempotency;
+- schema capability comes from startup state, not per-request probes.
+
+Next check: BE-PERF-013.
+
+---
+
+### BACKEND-MISTAKE-PERF-003 — Unbounded keyed in-memory state used on exposed traffic/background work
+
+Severity: P1  
+Status: Open  
+First seen: BACKEND-PERF-AUDIT-004
+
+Problem: the rate limiter keeps dictionary keys indefinitely and queues all attempts, while weakness analysis uses an unbounded channel with no duplicate coalescing or durable capacity policy.
+
+Impact:
+
+- unique-key abuse or a large active-user set can grow memory without a hard bound;
+- rejected requests still consume rate-limit state;
+- one slow background item can grow queue age/backlog;
+- each replica has independent, inconsistent state.
+
+Root cause: convenient process-local collections were used without an eviction, capacity, restart or multi-replica contract.
+
+Prevention:
+
+- every process-local keyed store declares maximum cardinality, TTL/eviction and saturation behavior;
+- every queue declares capacity, full behavior, deduplication and restart semantics;
+- high-cardinality and sustained-rejection load tests record peak allocations;
+- distributed semantics are explicit for multi-replica deployment.
+
+Next check: BE-PERF-009 and BE-PERF-011.
+
+---
+
 ## Add new mistake card
 
 Use `docs/ai/learning/MISTAKE_CARD_TEMPLATE.md` and IDs:
