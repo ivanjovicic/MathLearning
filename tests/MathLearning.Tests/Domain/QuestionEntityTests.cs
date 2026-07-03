@@ -161,7 +161,7 @@ public sealed class QuestionEntityTests
 
         question.ReplaceSteps(new[] { third, first, second });
 
-        Assert.Equal(new[] { 1, 2, 3 }, question.Steps.Select(step => step.StepIndex));
+        Assert.Equal(new[] { 1, 2, 3 }, question.Steps.Select(step => step.StepIndex).ToArray());
     }
 
     [Fact]
