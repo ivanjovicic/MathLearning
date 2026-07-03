@@ -17,9 +17,9 @@ public sealed class StepEngineTests
             hint: "Drugi hint",
             highlight: true,
             textFormat: ContentFormat.PlainText,
-            hintFormat: ContentFormat.Markdown,
-            textRenderMode: RenderMode.PlainText,
-            hintRenderMode: RenderMode.Markdown,
+            hintFormat: ContentFormat.Html,
+            textRenderMode: RenderMode.Inline,
+            hintRenderMode: RenderMode.Display,
             semanticsAltText: "Drugi korak opis");
         var first = new QuestionStep(0, 1, "Prvi korak", "Prvi hint", false);
         question.ReplaceSteps(new[] { second, first });
@@ -31,9 +31,9 @@ public sealed class StepEngineTests
         Assert.Equal("Drugi korak", steps[1].Text);
         Assert.True(steps[1].Highlight);
         Assert.Equal(ContentFormat.PlainText, steps[1].TextFormat);
-        Assert.Equal(ContentFormat.Markdown, steps[1].HintFormat);
-        Assert.Equal(RenderMode.PlainText, steps[1].TextRenderMode);
-        Assert.Equal(RenderMode.Markdown, steps[1].HintRenderMode);
+        Assert.Equal(ContentFormat.Html, steps[1].HintFormat);
+        Assert.Equal(RenderMode.Inline, steps[1].TextRenderMode);
+        Assert.Equal(RenderMode.Display, steps[1].HintRenderMode);
         Assert.Equal("Drugi korak opis", steps[1].SemanticsAltText);
     }
 
