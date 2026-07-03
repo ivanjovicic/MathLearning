@@ -40,7 +40,11 @@ jobs:
         run: dotnet restore MathLearning.slnx
 
       - name: Build
-        run: dotnet build MathLearning.slnx -c Release --no-restore
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/build
+          dotnet build MathLearning.slnx -c Release --no-restore 2>&1 | tee artifacts/build/build.log
 
       - name: Validate schema from zero
         shell: pwsh
@@ -60,12 +64,14 @@ jobs:
           --collect:"XPlat Code Coverage"
           --settings tests/MathLearning.Tests/coverage.runsettings
 
-      - name: Upload test and coverage artifacts
+      - name: Upload build, test and coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mathlearning-test-results
-          path: artifacts/test-results
+          name: mathlearning-validation-results
+          path: |
+            artifacts/build
+            artifacts/test-results
           if-no-files-found: warn
           retention-days: 14
 
