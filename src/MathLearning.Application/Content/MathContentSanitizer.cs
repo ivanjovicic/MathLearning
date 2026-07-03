@@ -14,7 +14,12 @@ public sealed class MathContentSanitizer : IMathContentSanitizer
 {
     private static readonly Regex ScriptRegex = new(@"<\s*script\b[^>]*>.*?<\s*/\s*script\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex HtmlRegex = new(@"</?[a-z][^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex EventAttributeRegex = new(@"\son[a-z]+\s*=\s*(['""]).*?\1", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex EventAttributeRegex = new(
+        @"\son[a-z]+\s*=\s*(?:""[^""]*""|'[^']*'|[^\s>]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DangerousUrlAttributeRegex = new(
+        @"\s(?:href|src)\s*=\s*(?:""\s*(?:javascript|data)\s*:[^""]*""|'\s*(?:javascript|data)\s*:[^']*'|(?:javascript|data)\s*:[^\s>]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex MultiWhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex UnsupportedLatexRegex = new(@"\\(htmlClass|href|includegraphics|write|input|catcode|openout|read)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex MathInPlainTextRegex = new(@"\$[^$\n]+\$|\$\$[^$]+\$\$|\\frac|\\sqrt|\\int|\\sum|\\lim|\\alpha|\\beta|\\gamma|\\theta|\\pi|\\infty|\\\[|\\\(", RegexOptions.Compiled);
@@ -31,6 +36,7 @@ public sealed class MathContentSanitizer : IMathContentSanitizer
                                .Replace('\r', '\n');
         normalized = ScriptRegex.Replace(normalized, string.Empty);
         normalized = EventAttributeRegex.Replace(normalized, string.Empty);
+        normalized = DangerousUrlAttributeRegex.Replace(normalized, string.Empty);
 
         if (format != ContentFormat.Html)
         {
