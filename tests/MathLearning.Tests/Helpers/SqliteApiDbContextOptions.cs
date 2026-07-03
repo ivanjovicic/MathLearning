@@ -25,6 +25,8 @@ internal static class SqliteApiDbContextOptions
             modelBuilder.Entity<QuestionStat>()
                 .Property(x => x.NextReview)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            modelBuilder.Entity<Question>().Ignore("xmin");
         }
     }
 }
