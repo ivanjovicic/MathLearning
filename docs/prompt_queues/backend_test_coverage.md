@@ -42,6 +42,7 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 | BACKEND-TEST-011 | Ready after coverage artifact | Measure baseline and propose progressive line/branch thresholds. |
 | BACKEND-TEST-012 | Ready / P0-P1 | Repair RefreshToken model/snapshot max length drift (64 vs existing 128 migration), add model metadata regression test, and verify schema-from-zero. |
 | BACKEND-TEST-013 | Ready / P0 decision | Decide and enforce required operation identity for retryable quiz/SRS/offline mutations while keeping any intentional legacy compatibility explicit and bounded. |
+| BACKEND-TEST-014 | Implemented / Needs validation | Direct shared/cosmetics idempotency service state machines and canonical payload semantics; 30 new test scenarios. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`. |
 
 ## BACKEND-TEST-002 — Settlement snapshot truth
 
@@ -143,7 +144,7 @@ Evidence:
 Required:
 
 - align EF configuration and model snapshot to 128 without creating a redundant shrink/expand migration;
-- add a model metadata test proving generated tokens fit the configured maximum;
+- add a model metadata test proving generated token length fits the configured maximum;
 - run schema-from-zero validation and refresh-token tests;
 - add/update a `BACKEND-MISTAKE-AUTH-*` or `BACKEND-MISTAKE-MIGRATION-*` card.
 
@@ -165,3 +166,29 @@ Required decision and proof:
 - empty offline session identity must not create unbounded session rows;
 - add positive, replay, rejection, and legacy compatibility tests;
 - synchronize backend and mobile contract docs if behavior changes.
+
+## BACKEND-TEST-014 — Direct idempotency service state machines
+
+Run mode: tests  
+Token budget: medium
+
+Implemented:
+
+- shared `IdempotencyLedgerService` first-process, completed replay, failed replay, canonical payload equivalence, payload conflict, dual-key collision, user/type isolation, illegal transitions, missing-ledger and required-scope tests;
+- `CosmeticsIdempotencyService` first-process, completed replay, failed replay, canonical payload equivalence, payload conflict, dual-key collision, user isolation, illegal transitions, missing-ledger and required-scope tests;
+- canonical JSON/hash tests for recursive ordering, equivalent object order, array-order significance, web naming, `JsonElement`, null/primitives, serialization and SHA-256 stability.
+
+Evidence files:
+
+- `tests/MathLearning.Tests/Services/IdempotencyLedgerServiceTests.cs`
+- `tests/MathLearning.Tests/Services/CosmeticsIdempotencyServiceTests.cs`
+- `tests/MathLearning.Tests/Services/IdempotencyPayloadCanonicalizerTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`
+
+Validation required:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~IdempotencyLedgerServiceTests|FullyQualifiedName~CosmeticsIdempotencyServiceTests|FullyQualifiedName~IdempotencyPayloadCanonicalizerTests"
+```
+
+Do not move to Done until the focused command passes and the result is recorded in the run log. Follow with relational concurrency coverage under BACKEND-TEST-009 rather than treating EF InMemory as proof of database uniqueness.
