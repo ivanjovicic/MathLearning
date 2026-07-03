@@ -60,8 +60,8 @@ public sealed class PaginationBoundsTests
             PaginationBounds.Normalize(
                 page: 1,
                 pageSize: 1,
-                defaultPageSize,
-                maxPageSize,
-                maxPage));
+                defaultPageSize: defaultPageSize,
+                maxPageSize: maxPageSize,
+                maxPage: maxPage));
     }
 }
