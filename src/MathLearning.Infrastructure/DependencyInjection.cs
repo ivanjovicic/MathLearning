@@ -1,5 +1,6 @@
 using MathLearning.Application.Content;
 using MathLearning.Application.Services;
+using MathLearning.Infrastructure.Maintenance;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.AntiCheat;
 using MathLearning.Infrastructure.Services.Cosmetics;
@@ -20,6 +21,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
+        services.AddSingleton<IIndexMaintenanceService>(_ =>
+            new IndexMaintenanceService(config.GetConnectionString("Default") ?? string.Empty));
         services.AddSingleton<HybridCacheService>(sp =>
             new HybridCacheService(
                 sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
@@ -92,7 +95,6 @@ public static class DependencyInjection
             opt.UseNpgsql(
                 connectionString,
                 npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
-
         return services;
     }
 
@@ -102,7 +104,6 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(opt =>
             opt.UseNpgsql(connectionString));
-
         return services;
     }
 }
