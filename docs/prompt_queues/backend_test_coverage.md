@@ -25,6 +25,7 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 - Record exact validation or why it did not run.
 - Do not mark Done without `.ai/runs` evidence.
 - Reconcile this queue before adding tests; several earlier Ready rows were already covered by validated BACKEND-CRIT packages.
+- Failure-injection tests for transaction atomicity should fail after SQL is issued but before commit when that branch is material.
 
 ## Active prompts
 
@@ -38,13 +39,16 @@ Increase backend confidence by risk, not by chasing superficial coverage percent
 | BACKEND-TEST-006 | Validated | Monitoring/log authorization, redaction, and bounds. Existing result: 9 passed, 0 failed. |
 | BACKEND-TEST-007 | Validated | Public identity allowlists for search/profile/leaderboard surfaces. Existing result: 10 passed, 0 failed. |
 | BACKEND-TEST-008 | Validated | Avatar upload size/type/content checks, path safety, cross-user denial, and static-file bypass prevention. Existing result: 43 passed, 0 failed. |
-| BACKEND-TEST-009 | Implemented / Needs validation | SQLite unique constraints plus new transactional rollback and deterministic two-context duplicate-insert recovery tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`. |
+| BACKEND-TEST-009 | Implemented / Needs validation | SQLite unique constraints plus transactional rollback and deterministic two-context duplicate-insert recovery tests. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-009-evidence.md`. |
 | BACKEND-TEST-010 | Validated | Read bounds and enum normalization for search, leaderboard, history, logs, and monitoring. Existing result: 70 passed, 0 failed. |
 | BACKEND-TEST-011 | Ready after coverage artifact | Measure baseline and propose progressive line/branch thresholds. |
 | BACKEND-TEST-012 | Confirmed drift / Needs safe patch | RefreshToken model/snapshot max length is 64 while generator emits 88 chars and migration history widened the column to 128. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-012-evidence.md`. |
 | BACKEND-TEST-013 | Ready / P0 decision | Decide and enforce required operation identity for retryable quiz/SRS/offline mutations while keeping any intentional legacy compatibility explicit and bounded. |
 | BACKEND-TEST-014 | Implemented / Needs validation | Direct shared/cosmetics idempotency service state machines and canonical payload semantics; 30 new test scenarios. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-014-evidence.md`. |
 | BACKEND-TEST-015 | Implemented / Needs validation | Real `/auth/refresh` concurrent rotation through HTTP against file-backed SQLite with deterministic two-context save coordination. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-015-evidence.md`. |
+| BACKEND-TEST-016 | Implemented / Needs validation | Direct SQLite proof for transaction-helper commit, rollback-after-SQL, concurrency retry, retry exhaustion, and cancellation. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-016-evidence.md`. |
+| BACKEND-TEST-017 | Implemented / Needs validation | Real HTTP mobile-registration rollback after relational Profile/RefreshToken saves plus retry without duplicate account or welcome grant. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-017-evidence.md`. |
+| BACKEND-TEST-018 | Implemented / Needs validation | Real offline-submit rollback after SQL writes plus retry/replay proving one answer, one stat update, and one XP award. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-018-evidence.md`. |
 
 ## BACKEND-TEST-002 — Settlement snapshot truth
 
@@ -126,12 +130,12 @@ Previously implemented:
 - cosmetics user/operation and user/key uniqueness;
 - different-user isolation.
 
-Added in this package:
+Added in the relational package:
 
 - shared-ledger completion and domain mutation roll back atomically;
 - economy completion and balance mutation roll back atomically;
-- deterministic two-context shared-ledger race: both requests query before either insert, one inserts, the second hits uniqueness and reloads the same pending ledger;
-- deterministic two-context economy race with the same invariant;
+- deterministic two-context shared-ledger duplicate-insert recovery;
+- deterministic two-context economy duplicate-insert recovery;
 - winner completion is replayed from the single persisted row.
 
 Evidence files:
@@ -216,8 +220,6 @@ Validation required:
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~IdempotencyLedgerServiceTests|FullyQualifiedName~CosmeticsIdempotencyServiceTests|FullyQualifiedName~IdempotencyPayloadCanonicalizerTests"
 ```
 
-Do not move to Done until the focused command passes and the result is recorded in the run log. Follow with relational concurrency coverage under BACKEND-TEST-009 rather than treating EF InMemory as proof of database uniqueness.
-
 ## BACKEND-TEST-015 — Relational auth refresh rotation
 
 Run mode: relational HTTP integration tests  
@@ -228,10 +230,8 @@ Implemented:
 - real `/api/auth/login` and `/auth/refresh` HTTP flow;
 - two concurrent requests using independent request scopes and `ApiDbContext` instances;
 - deterministic interceptor coordination so both requests load the active token before either relational save;
-- first writer finishes before the second is released, forcing the second relational update through EF's `RevokedAt` concurrency check;
-- exactly one `200 OK` and one `401 Unauthorized`;
-- exactly two total tokens after the race, one active descendant, original token revoked, and no losing third token persisted;
-- safe public error contract for the losing request.
+- first writer finishes before the second is released, forcing EF's `RevokedAt` concurrency check;
+- exactly one `200 OK`, one `401 Unauthorized`, one active descendant, and no losing third token.
 
 Evidence files:
 
@@ -244,7 +244,81 @@ Validation required:
 dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~AuthRefreshRelationalConcurrencyTests"
 ```
 
-PostgreSQL follow-up:
+## BACKEND-TEST-016 — Transaction helper relational semantics
 
-- run the focused test and full auth suite in the PostgreSQL-backed database validation workflow;
-- keep the existing InMemory tests for fast feedback, but do not use them as the sole proof of relational concurrency.
+Run mode: direct SQLite relational tests  
+Token budget: medium
+
+Implemented:
+
+- successful action commits durable state and returns its result;
+- exception after an inner `SaveChangesAsync` rolls back SQL already issued inside the transaction;
+- first `DbUpdateConcurrencyException` retries from a cleared change tracker and persists only the second attempt;
+- three consecutive conflicts stop after exactly three attempts with no partial rows;
+- pre-cancelled operation commits nothing.
+
+Evidence files:
+
+- `tests/MathLearning.Tests/Endpoints/ApiDbTransactionHelpersRelationalTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-016-evidence.md`
+
+Validation required:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~ApiDbTransactionHelpersRelationalTests"
+```
+
+## BACKEND-TEST-017 — Relational mobile registration atomicity
+
+Run mode: real HTTP + SQLite failure injection  
+Token budget: medium
+
+Implemented:
+
+- failure after Profile SQL is issued rolls back the Identity user and profile;
+- failure after RefreshToken SQL is issued rolls back Identity, profile, and token;
+- client receives the generic registration error without the injected internal secret;
+- retry after rollback creates exactly one Identity user, one profile, one refresh token, and exactly 100 welcome coins.
+
+Evidence files:
+
+- `tests/MathLearning.Tests/Endpoints/AuthMobileRegistrationRelationalAtomicityTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-017-evidence.md`
+
+Validation required:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests"
+```
+
+## BACKEND-TEST-018 — Offline batch relational rollback and retry
+
+Run mode: real authenticated HTTP + SQLite failure injection  
+Token budget: medium
+
+Implemented:
+
+- failure is injected from `SavedChangesAsync` after answer/audit SQL is issued but before transaction commit;
+- rollback removes quiz session, user answer, answer audit, question stat, XP state, and activity-day mutation;
+- internal injected error text is not returned to the client;
+- retry imports exactly one answer and awards exactly 10 XP once;
+- exact replay imports zero and leaves one session, one answer, one audit, one stat attempt, and unchanged XP.
+
+Evidence files:
+
+- `tests/MathLearning.Tests/Endpoints/OfflineBatchRelationalAtomicityTests.cs`
+- `.ai/runs/2026-07-03-BACKEND-TEST-018-evidence.md`
+
+Validation required:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~OfflineBatchRelationalAtomicityTests"
+```
+
+Combined focused validation:
+
+```text
+dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~ApiDbTransactionHelpersRelationalTests|FullyQualifiedName~AuthMobileRegistrationRelationalAtomicityTests|FullyQualifiedName~OfflineBatchRelationalAtomicityTests"
+```
+
+Do not move BACKEND-TEST-016 through 018 to Done until this focused command passes and PostgreSQL-backed validation is recorded for provider-sensitive behavior.
