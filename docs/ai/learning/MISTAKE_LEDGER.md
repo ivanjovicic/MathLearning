@@ -4,49 +4,24 @@ Status: active agent-learning memory
 Last aligned: 2026-07-03  
 Scope: `ivanjovicic/MathLearning`
 
-## Purpose
+## Purpose and use
 
-This ledger tracks repeated agent mistakes on the **backend** repo.
+This ledger records repeated backend-agent mistakes so later work does not rediscover them from scattered commits and queues.
 
-`.ai/runs/` logs explain one run. This ledger captures patterns so future agents do not rediscover them from scattered queue rows, BE-PERF audits, and commits.
-
-A run is not learning-complete until every observed mistake is classified as:
-
-```text
-new mistake with a mistake card
-repeated mistake with a rule/prompt/test/queue update
-false alarm with explanation
-```
-
-## How agents must use this file
-
-Before starting a non-trivial prompt:
+Before a non-trivial prompt:
 
 1. Read this ledger.
-2. Pick only mistake IDs relevant to the current prompt.
-3. Write them in the run log under `Relevant prior mistakes read`.
-4. Explain how the run will avoid repeating them.
+2. Name relevant mistake IDs in the run log.
+3. Explain the prevention used.
 
 Before marking a prompt Done:
 
-1. Add a new mistake card if a new mistake was found.
-2. Update an existing card if a known mistake repeated.
-3. Add or update a rule, prompt, test, queue row, or validation prompt for repeated mistakes.
-4. If no update is needed, write the reason in the run log.
+1. Classify each discovered problem as new, repeated or false alarm.
+2. Add/update a card, rule, prompt, test or queue row.
+3. Record executable validation or why it did not run.
 
-## Severity
-
-| Severity | Meaning | Required action |
-|---|---|---|
-| P0 | Data loss, false authoritative settlement, broken idempotency, unsafe mobile contract | rule + test update required immediately |
-| P1 | Wrong Done status, missing evidence, misleading audit, wasted context | rule/prompt/queue update required |
-| P2 | Local inefficiency, stale doc reference, minor template gap | prompt/template update or documented no-op |
-
-## Status values
-
-```text
-Open | Mitigated | Watching | Retired | False alarm
-```
+Severity: P0 = data loss/idempotency/contract; P1 = security/evidence/material regression; P2 = local inefficiency or stale process.  
+Status values: `Open | Mitigated | Watching | Retired | False alarm`.
 
 ---
 
@@ -55,279 +30,167 @@ Open | Mitigated | Watching | Retired | False alarm
 ### BACKEND-MISTAKE-EVIDENCE-001 — Runtime commit without `.ai/runs` evidence
 
 Severity: P1  
-Status: Open  
-First seen: BE-PERF-001…008 performance lane (commits without per-prompt run logs)  
-Repeated in: commits `12167aa`, `0f6ccd3`, `deb3c28`, `851d961` (backfilled 2026-07-01)
+Status: Open
 
-Problem:
-Agents committed runtime changes under `src/**` or `tests/**` and marked queue rows `Done` using commit SHA and test notes only, without `.ai/runs/<prompt-id>-evidence.md`.
-
-Impact:
-Future agents cannot see validation commands, model/client, mistakes, or phase timing. Queue rows look complete while evidence is incomplete.
-
-Root cause:
-Backend repo lacked the Flutter-style run-log gate until `BACKEND-EVIDENCE-BOOTSTRAP-001`.
-
-Prevention:
-- `docs/AGENT_RUN_LOG_ENFORCEMENT.md` hard gate.
-- `.ai/RUN_LOG_TEMPLATE.md` and `.ai/runs/README.md`.
-- `docs/ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md` for repair.
-
-Next check:
-Run `RUN_LOG_EVIDENCE_LINT_PROMPT` on Done rows for BE-PERF-005…008 and BACKEND-CRIT-* before new runtime work. BE-PERF-001…004 backfilled 2026-07-01.
+Problem: runtime/tests were committed and queues advanced without per-prompt evidence.  
+Impact: later agents cannot distinguish implemented, tested and merely documented work.  
+Prevention: mandatory `.ai/runs/<prompt>-evidence.md`, evidence lint and explicit validation status.  
+Next check: no Done row without run log and executable result or explicit validation failure.
 
 ---
 
 ### BACKEND-MISTAKE-AUDIT-001 — Docs-only audit treated like runtime fix
 
 Severity: P1  
-Status: Mitigated  
-First seen: BE-PERF-006/007/008 docs-only queue prompts  
-Repeated in: performance review final responses; BE-PERF-004 queue `docs-only` label for runtime commit `851d961` (fixed 2026-07-01 backfill)
+Status: Mitigated
 
-Problem:
-Agents completed documentation audits (cold-start budget, request budgets, route compatibility, critical/second-pass app flow audits) and described outcomes as if runtime code was optimized, or left queue `Notes` ambiguous.
-
-Impact:
-Stakeholders assume latency/idempotency/route/security behavior changed when only docs or prompts were created. Mobile/backend planning diverges from reality.
-
-Root cause:
-Audit prompts and final response templates did not separate `docs/audit` from `implementation`; queue rows used `Ready` without status model.
-
-Prevention:
-- `docs/AGENT_RUN_LOG_ENFORCEMENT.md` docs-only vs runtime table.
-- `docs/prompt_queues/backend_critical_risk_prevention.md` and `backend_second_pass_risk_prevention.md` status model (audit-created / prompt-ready / runtime-fixed / validated).
-- Audit docs banner: static audit only — not fix proof (`BACKEND-AUDIT-STATUS-SYNC-2026-07-01-001`).
-- Run logs must set `Run mode: docs-only` or `docs/audit`.
-
-Next check:
-No `BACKEND-CRIT-*` or `BACKEND2-CRIT-*` row marked Done without runtime/test commit and `.ai/runs` evidence.
+Problem: audits and prompt creation were described as if runtime behavior changed.  
+Prevention: use `docs/audit`, `prompt-ready`, `runtime-fixed` and `validated` as distinct statuses.  
+Next check: static findings must never be cited as fix proof.
 
 ---
 
-### BACKEND-MISTAKE-VALIDATION-001 — Audit says no dotnet test but queue still advances
+### BACKEND-MISTAKE-VALIDATION-001 — Queue advances without executable validation
 
 Severity: P1  
-Status: Open  
-First seen: BE-PERF-006/007/008 validation blocks (`git diff --check` only)  
-Repeated in: queue marked Done without recording validation skip in run log
+Status: Open
 
-Problem:
-Docs-only prompts correctly omit `dotnet test`, but agents still wrote high-confidence Done rows without explicit `Validation not run: docs-only per prompt` or score cap ≤85%.
-
-Impact:
-Later agents assume tests ran. Runtime regressions slip in adjacent prompts.
-
-Root cause:
-Queue validation sections and Done-row shape were not tied to evidence score caps.
-
-Prevention:
-- Evidence score cap in `docs/AGENT_RUN_LOG_ENFORCEMENT.md`.
-- Run log must list `Validation run` **or** `Validation not run: <reason>`.
-- Docs-only Done rows capped at 85% unless path verification is recorded.
-
-Next check:
-Lint prompt verifies Tests/Validation fields on every Done row.
+Problem: tests/build were unavailable or omitted, but status language implied success.  
+Prevention: every run lists validation executed or `Validation not run: <reason>`; no pass claim from static review.  
+Next check: focused command and release build before moving implemented rows to Validated.
 
 ---
 
-### BACKEND-MISTAKE-XREPO-001 — Backend/mobile contract risk not synced to Flutter repo
+### BACKEND-MISTAKE-XREPO-001 — Backend/mobile contract risk not synced
 
 Severity: P0  
-Status: Open  
-First seen: `backend_contract_gap_report.md` updates without mobile matrix sync  
-Repeated in: endpoint/idempotency work closed in backend only
+Status: Open
 
-Problem:
-Backend agents updated contract evidence, routes, or idempotency behavior in `ivanjovicic/MathLearning` without noting whether `ivanjovicic/Mathlearning-Mobile-App` docs (`mobile_api_contract.md`, `mobile_backend_contract_status.md`) were updated or explicitly deferred.
-
-Impact:
-Mobile app continues against stale contract assumptions. Release coordination fails across repos.
-
-Root cause:
-Cross-repo docs live in a separate private repo; backend prompts did not require a sync decision in run logs.
-
-Prevention:
-- Run logs for contract-touching work must include:
-  ```text
-  Cross-repo sync: updated | deferred <reason> | not applicable
-  Mobile docs touched: <paths or none>
-  ```
-- Follow-up prompt when deferred.
-- `docs/backend_contract_gap_report.md` links mobile evidence sources.
-
-Next check:
-Any P0 mutation or route audit prompt must record cross-repo sync in its run log before Done.
+Problem: backend routes/idempotency changed without updating or explicitly deferring Flutter contract docs.  
+Prevention: every contract-touching log records `Cross-repo sync` and mobile paths.  
+Next check: P0 mutation changes cannot close without a mobile sync decision.
 
 ---
 
-### BACKEND-MISTAKE-AUTH-001 — Refresh token generator and EF model length drift
+### BACKEND-MISTAKE-AUTH-001 — Refresh-token generator/model/schema length drift
 
 Severity: P0/P1  
-Status: Open  
-First seen: `BACKEND-TEST-CORE-001` on 2026-07-02  
-Evidence: `RefreshTokenService.GenerateRefreshToken()` creates Base64 from 64 random bytes (88 characters); migration `20260210114958_IncreaseRefreshTokenLength` changed the column to 128; current `ApiDbContext` and model snapshot declare max length 64.
+Status: Open
 
-Problem:
-The runtime token generator, migration history, EF model, and model snapshot disagree about the maximum refresh-token length.
-
-Impact:
-- schema-from-zero or a future migration can regress the column to 64;
-- relational persistence can reject generated 88-character tokens;
-- InMemory auth tests may pass while PostgreSQL fails;
-- refresh/login flows can become unavailable.
-
-Root cause:
-An inline EF configuration retained `HasMaxLength(64)` after the migration increased the column to 128, and no model-metadata regression test locked the intended length.
-
-Prevention:
-- `BACKEND-TEST-012` in `docs/prompt_queues/backend_test_coverage.md`.
-- Align EF configuration and model snapshot to 128.
-- Add a model metadata test proving generated token length fits the configured maximum.
-- Run schema-from-zero validation and refresh-token tests.
-- Treat migration/model snapshot drift as a blocking auth regression.
-
-Next check:
-Do not mark `BACKEND-TEST-012` Done until model, snapshot, migration history, generated token length, PostgreSQL schema validation, and a regression test agree.
+Problem: generated token is 88 chars, migration widened DB column to 128, current EF model/snapshot still declare 64.  
+Impact: InMemory tests may pass while PostgreSQL rejects tokens or future migration regresses schema.  
+Prevention: BACKEND-TEST-012 aligns model/snapshot and adds metadata/relational persistence tests.  
+Next check: generator, EF metadata, snapshot, migration history and PostgreSQL schema must agree.
 
 ---
 
-### BACKEND-MISTAKE-AUTH-002 — Privileged endpoint group protected by generic authentication only
+### BACKEND-MISTAKE-AUTH-002 — Privileged routes protected by generic authentication
 
 Severity: P1  
-Status: Mitigated / Watching  
-First seen: `BugEndpoints` and `MaintenanceEndpoints` during `BACKEND-TEST-AUDIT-002`
+Status: Mitigated / Watching
 
-Problem:
-Routes that list/update all bug reports or run/read database maintenance operations used `.RequireAuthorization()` without an explicit admin policy. Any authenticated learner could pass the route-level authorization check.
-
-Impact:
-- cross-user support data exposure or mutation;
-- ordinary users triggering operational database work;
-- disclosure of database index details;
-- false confidence because route names/comments called the routes “admin”.
-
-Root cause:
-Authorization intent existed only in comments/group naming, not executable policy metadata, and focused endpoint authorization tests were absent.
-
-Prevention:
-- `BugEndpoints` and `MaintenanceEndpoints` now require `DesignTokenSecurity.AdminPolicy`.
-- `BugEndpointAuthorizationTests` and `MaintenanceEndpointAuthorizationTests` assert learner denial.
-- Maintenance tests also inspect endpoint metadata so a future refactor cannot silently downgrade to generic auth.
-- New admin/internal routes must name the exact policy in `API_ENDPOINT_INVENTORY.md`.
-
-Next check:
-Run the focused authorization suite and audit remaining `adminGroup`/maintenance/logging routes for generic `.RequireAuthorization()` without a policy.
+Problem: bug-management and maintenance routes used generic `.RequireAuthorization()` despite being described as admin.  
+Prevention: exact `UiTokensAdminPolicy`, learner-denial tests and route-metadata assertions.  
+Next check: automated privileged-route inventory under BACKEND-TEST-047.
 
 ---
 
-### BACKEND-MISTAKE-IDEM-001 — Authoritative mutation commits before non-durable downstream ingest
+### BACKEND-MISTAKE-IDEM-001 — Authoritative commit before non-durable analytics ingest
 
 Severity: P0  
-Status: Open  
-First seen: offline/quiz attempt flow during `BACKEND-TEST-AUDIT-002`
+Status: Open
 
-Problem:
-Authoritative answer/XP state commits before `IQuizAttemptIngestService` runs. If ingest fails after commit, the client can receive an error while a retry is deduplicated and produces no new ingest rows.
-
-Impact:
-- permanent analytics/weakness gaps despite correct authoritative progress;
-- retry behavior disagrees with the returned error;
-- operators cannot reliably distinguish pending, lost, and completed ingest;
-- adding retries directly can duplicate `QuizAttempt` and aggregate counters because no stable natural key is enforced.
-
-Root cause:
-The downstream analytics write is a synchronous best-effort side effect after the authoritative transaction rather than a durable, idempotent handoff.
-
-Prevention:
-- `BACKEND-TEST-019` adds direct ingest aggregation/rollback tests but does not claim delivery is fixed.
-- `BACKEND-TEST-022` requires same-transaction durable command/outbox creation and idempotent consumer tests.
-- Never return a retriable failure after an authoritative mutation unless the retry can recover every dependent effect safely.
-
-Next check:
-Do not close the ingest risk until fail-after-commit, restart recovery, duplicate delivery and two-consumer race tests pass.
+Problem: answer/XP commits before quiz-attempt analytics ingest; post-commit failure can leave permanent analytics gaps while replay is deduplicated.  
+Prevention: BACKEND-TEST-022 requires same-transaction durable handoff and idempotent consumer/recovery tests.  
+Next check: fail-after-commit, restart, duplicate delivery and two-consumer race must pass.
 
 ---
 
-### BACKEND-MISTAKE-VALIDATION-002 — Test auth silently turns no-header requests into authenticated users
+### BACKEND-MISTAKE-VALIDATION-002 — Test auth silently authenticates no-header requests
 
 Severity: P1  
-Status: Mitigated / Watching  
-First seen: authorization coverage review during `BACKEND-TEST-AUDIT-002`
+Status: Mitigated / Watching
 
-Problem:
-`TestAuthHandler` defaulted requests without test headers to an authenticated `test-user`. Tests named “Anonymous” could actually exercise the authenticated non-admin path and accept 403 instead of proving a 401 challenge.
-
-Impact:
-- false anonymous-access coverage;
-- public/authenticated route regressions can be missed;
-- tests conflate authentication and authorization failures.
-
-Root cause:
-The convenient default principal had no explicit opt-out for anonymous HTTP tests.
-
-Prevention:
-- `TestAuthHandler.AnonymousHeader` now supports `X-Test-Anonymous: true` and returns `AuthenticateResult.NoResult()`.
-- New bug/maintenance tests and existing monitoring anonymous tests use explicit anonymous mode.
-- `BACKEND-TEST-035` audits older authorization tests and adds direct handler coverage.
-
-Next check:
-Every security test should distinguish explicit anonymous 401/challenge behavior from authenticated non-admin 403 behavior unless the production contract intentionally allows either.
+Problem: tests named anonymous could actually run as authenticated `test-user`.  
+Prevention: `X-Test-Anonymous: true`, separate 401 and 403 tests, direct `TestAuthHandlerTests`.  
+Next check: old authorization suites and future metadata audit.
 
 ---
 
 ### BACKEND-MISTAKE-CONTENT-001 — Regex normalization removed existing inline LaTeX
 
 Severity: P1  
-Status: Mitigated / Needs validation  
-First seen: `BACKEND-TEST-036` content-helper coverage pass
+Status: Mitigated / Needs validation
 
-Problem:
-`InlineLatexFormatter.NormalizeMixedInlineMath` used `Regex.Split` with a non-capturing pattern for existing `$...$` expressions. The matched expressions were discarded from the split result and therefore vanished when segments were concatenated.
-
-Impact:
-- correctly authored equations could disappear from question text, options, hints, explanations and generated steps;
-- backend JSON could silently differ from stored content;
-- mobile rendering failures would look like missing source data rather than a formatting bug.
-
-Root cause:
-The comment said existing inline math would be preserved, but the implementation assumed `Regex.Split` returns delimiters without using a capturing group. No direct preservation or HTTP contract test existed.
-
-Prevention:
-- formatter now scans regex matches and copies existing inline math byte-for-byte;
-- only plain segments are normalized;
-- `InlineLatexFormatterTests` cover preservation, mixed content, composition/equality wrapping and idempotence;
-- `InlineLatexEndpointContractTests` exercises persisted content through `/api/quiz/questions` JSON mapping.
-
-Next check:
-Run focused helper and endpoint tests, then confirm translated SRS/next-question responses preserve existing inline math as well.
+Problem: `Regex.Split` discarded matched `$...$` expressions.  
+Impact: authored math could disappear from API JSON.  
+Prevention: copy existing inline math byte-for-byte; normalize only plain segments; helper and HTTP preservation tests.  
+Next check: focused formatter/quiz/SRS/next-question tests.
 
 ---
 
-### BACKEND-MISTAKE-CONTENT-002 — HTML sanitizer handled only quoted event attributes
+### BACKEND-MISTAKE-CONTENT-002 — HTML sanitizer covered only quoted event attributes
+
+Severity: P1  
+Status: Mitigated / Needs validation
+
+Problem: unquoted event attributes and dangerous `javascript:`/`data:` URLs survived sanitization.  
+Prevention: quoted/unquoted event handling, unsafe URL rules and direct sanitizer tests.  
+Next check: sanitizer plus authoring pipeline tests before accepting new HTML.
+
+---
+
+### BACKEND-MISTAKE-PERF-001 — GET maintenance route invoked mutating rebuild work
 
 Severity: P1  
 Status: Mitigated / Needs validation  
-First seen: `BACKEND-TEST-036` sanitizer coverage pass
+First seen: BACKEND-TEST-024
 
-Problem:
-`MathContentSanitizer` removed event-handler attributes only when values were wrapped in quotes. Inputs such as `onclick=alert(1)` or `onerror=...` survived in `ContentFormat.Html`. Dangerous `javascript:` and `data:` URL attributes were also not removed.
+Problem: `GET /api/maintenance/index-stats` called `RebuildCorruptedIndexesAsync`, allowing a nominal read request to execute `REINDEX` and `ANALYZE`.
 
 Impact:
-- stored or previewed HTML math content could retain executable browser behavior;
-- authoring preview and any HTML renderer could expose users/admins to script execution or unsafe URL payloads;
-- existing tests covered script tags but not attribute-based execution.
 
-Root cause:
-The event-attribute regex required a quoted capture/backreference and there was no dangerous URL-attribute rule or direct sanitizer suite.
+- GET retries, crawlers or admin refreshes could trigger expensive database mutations;
+- route semantics were misleading and hard to test safely;
+- scheduled and manual maintenance used separately constructed services.
+
+Root cause: query and mutation responsibilities were combined in one method and endpoints created concrete services directly.
 
 Prevention:
-- event-handler sanitization now covers double-quoted, single-quoted and unquoted values;
-- dangerous `javascript:`/`data:` values are removed from `href` and `src` while safe HTTP URLs remain;
-- `MathContentSanitizerTests` cover scripts, event handlers, URLs, HTML/plain modes, malformed LaTeX, delimiters and semantics text.
 
-Next check:
-Run sanitizer and authoring pipeline tests. Treat any future expansion of accepted HTML as a security-sensitive change requiring explicit allowlist tests.
+- `IIndexMaintenanceService` separates read-only statistics from rebuild;
+- GET contract test asserts zero rebuild calls;
+- shared DI service and cancellation tokens;
+- endpoint inventory explicitly marks mutating vs read-only paths.
+
+Next check: PostgreSQL distributed lock/operator audit under BACKEND-TEST-042 and focused maintenance tests.
+
+---
+
+### BACKEND-MISTAKE-QUEUE-001 — Parallel agents assigned the same prompt ID to different work
+
+Severity: P1  
+Status: Mitigated / Watching  
+First seen: BACKEND-TEST-AUDIT-003
+
+Problem: second-pass follow-ups initially used BACKEND-TEST-036 while parallel work had already committed a different BACKEND-TEST-036 package.
+
+Impact:
+
+- evidence, commits and queue statuses become ambiguous;
+- a future agent may run or close the wrong prompt;
+- audit links can point to unrelated implementation.
+
+Root cause: prompt IDs were allocated from a stale queue snapshot during parallel work.
+
+Prevention:
+
+- re-read the central queue immediately before publishing new prompt IDs;
+- never reuse an existing ID even if the package is unrelated;
+- second-pass residual prompts were moved to BACKEND-TEST-042…047;
+- central queue preserves the parallel BACKEND-TEST-036 package.
+
+Next check: automated queue/evidence lint should detect duplicate IDs across queue and `.ai/runs` files.
 
 ---
 
@@ -339,4 +202,4 @@ Use `docs/ai/learning/MISTAKE_CARD_TEMPLATE.md` and IDs:
 BACKEND-MISTAKE-<AREA>-<NNN>
 ```
 
-Areas: `EVIDENCE`, `AUDIT`, `VALIDATION`, `XREPO`, `IDEM`, `MIGRATION`, `AUTH`, `CONTENT`, `PERF`, `QUEUE`
+Areas: `EVIDENCE`, `AUDIT`, `VALIDATION`, `XREPO`, `IDEM`, `MIGRATION`, `AUTH`, `CONTENT`, `PERF`, `QUEUE`.
