@@ -1,68 +1,49 @@
-﻿using MathLearning.Infrastructure.Maintenance;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
+using MathLearning.Infrastructure.Maintenance;
 
 namespace MathLearning.Api.Services;
 
-public class IndexMaintenanceBackgroundService : BackgroundService
+public sealed class IndexMaintenanceBackgroundService : BackgroundService
 {
-    private readonly ILogger<IndexMaintenanceBackgroundService> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly ILogger<IndexMaintenanceBackgroundService> logger;
+    private readonly IIndexMaintenanceService maintenanceService;
 
     public IndexMaintenanceBackgroundService(
         ILogger<IndexMaintenanceBackgroundService> logger,
-        IConfiguration configuration)
+        IIndexMaintenanceService maintenanceService)
     {
-        _logger = logger;
-        _configuration = configuration;
+        this.logger = logger;
+        this.maintenanceService = maintenanceService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🔧 Index Maintenance Service started");
+        logger.LogInformation("Index Maintenance Service started");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                // Wait until 3 AM or configured time
                 await WaitUntilScheduledTime(stoppingToken);
 
                 if (stoppingToken.IsCancellationRequested)
                     break;
 
-                _logger.LogInformation("🔍 Running index maintenance...");
-
-                var connectionString = _configuration.GetConnectionString("Default");
-                if (string.IsNullOrWhiteSpace(connectionString))
-                {
-                    _logger.LogWarning("⚠️ Index maintenance skipped: ConnectionStrings:Default is not configured.");
-                    continue;
-                }
-
-                var service = new IndexMaintenanceService(connectionString);
-
-                // Run maintenance
-                var report = await service.RebuildCorruptedIndexesAsync();
-
-                // Log report
+                logger.LogInformation("Running index maintenance");
+                var report = await maintenanceService.RebuildCorruptedIndexesAsync(stoppingToken);
                 LogMaintenanceReport(report);
-
-                _logger.LogInformation("✅ Index maintenance completed");
+                logger.LogInformation("Index maintenance completed");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                // Normal shutdown
                 break;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Index maintenance failed");
+                logger.LogError(ex, "Index maintenance failed");
             }
         }
 
-        _logger.LogInformation("🛑 Index Maintenance Service stopped");
+        logger.LogInformation("Index Maintenance Service stopped");
     }
 
     private async Task WaitUntilScheduledTime(CancellationToken cancellationToken)
@@ -70,51 +51,34 @@ public class IndexMaintenanceBackgroundService : BackgroundService
         var now = DateTime.UtcNow;
         var scheduledTime = new DateTime(now.Year, now.Month, now.Day, 3, 0, 0, DateTimeKind.Utc);
 
-        // If already past 3 AM today, schedule for tomorrow
         if (now > scheduledTime)
-        {
             scheduledTime = scheduledTime.AddDays(1);
-        }
 
         var delay = scheduledTime - now;
-        
-        _logger.LogInformation($"⏰ Next maintenance scheduled at {scheduledTime:yyyy-MM-dd HH:mm:ss} UTC (in {delay.TotalHours:F1} hours)");
+        logger.LogInformation(
+            "Next maintenance scheduled at {ScheduledTimeUtc} in {DelayHours:F1} hours",
+            scheduledTime,
+            delay.TotalHours);
 
         await Task.Delay(delay, cancellationToken);
     }
 
     private void LogMaintenanceReport(IndexMaintenanceReport report)
     {
-        _logger.LogInformation("📊 Maintenance Report:");
-        _logger.LogInformation($"  - Bloated indexes: {report.BloatedIndexes.Count}");
-        _logger.LogInformation($"  - Unused indexes: {report.UnusedIndexes.Count}");
-        _logger.LogInformation($"  - Rebuilt indexes: {report.RebuiltIndexes.Count}");
+        logger.LogInformation(
+            "Index maintenance report. Bloated={BloatedCount} Unused={UnusedCount} Rebuilt={RebuiltCount} Errors={ErrorCount}",
+            report.BloatedIndexes.Count,
+            report.UnusedIndexes.Count,
+            report.RebuiltIndexes.Count,
+            report.Errors.Count);
 
-        if (report.RebuiltIndexes.Any())
-        {
-            _logger.LogInformation("  ✅ Rebuilt indexes:");
-            foreach (var index in report.RebuiltIndexes)
-            {
-                _logger.LogInformation($"    - {index}");
-            }
-        }
+        foreach (var index in report.RebuiltIndexes)
+            logger.LogInformation("Rebuilt index {IndexName}", index);
 
-        if (report.UnusedIndexes.Any())
-        {
-            _logger.LogWarning("  ⚠️ Unused indexes (consider removing):");
-            foreach (var index in report.UnusedIndexes.Take(5))
-            {
-                _logger.LogWarning($"    - {index}");
-            }
-        }
+        foreach (var index in report.UnusedIndexes.Take(5))
+            logger.LogWarning("Unused index {IndexName}", index);
 
-        if (report.Errors.Any())
-        {
-            _logger.LogError("  ❌ Errors:");
-            foreach (var error in report.Errors)
-            {
-                _logger.LogError($"    - {error}");
-            }
-        }
+        foreach (var error in report.Errors)
+            logger.LogError("Index maintenance item failed: {Error}", error);
     }
 }
