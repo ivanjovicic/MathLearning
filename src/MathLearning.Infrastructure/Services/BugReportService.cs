@@ -61,9 +61,10 @@ public class BugReportService : IBugReportService
         string? status = null,
         string? severity = null)
     {
+        var requestedPageSize = pageSize is < 1 or > 100 ? 20 : pageSize;
         var paging = PaginationBounds.Normalize(
             page,
-            pageSize,
+            requestedPageSize,
             defaultPageSize: 20,
             maxPageSize: 100);
         var query = db.BugReports.AsQueryable();
@@ -109,9 +110,10 @@ public class BugReportService : IBugReportService
         int page = 1,
         int pageSize = 50)
     {
+        var requestedPageSize = pageSize is < 1 or > 100 ? 50 : pageSize;
         var paging = PaginationBounds.Normalize(
             page,
-            pageSize,
+            requestedPageSize,
             defaultPageSize: 50,
             maxPageSize: 100);
         var query = db.BugReports.Where(b => b.UserId == userId);
