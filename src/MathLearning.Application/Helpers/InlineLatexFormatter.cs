@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace MathLearning.Application.Helpers;
@@ -23,20 +24,38 @@ public static partial class InlineLatexFormatter
         if (string.IsNullOrWhiteSpace(input))
             return input;
 
-        // Keep already-wrapped inline math intact and process only plain segments.
-        var parts = ExistingInlineMathRegex().Split(input);
-        for (int i = 0; i < parts.Length; i++)
-        {
-            var part = parts[i];
-            if (part.Length >= 2 && part.StartsWith('$') && part.EndsWith('$'))
-                continue;
+        var existingInlineMath = ExistingInlineMathRegex();
+        var matches = existingInlineMath.Matches(input);
+        if (matches.Count == 0)
+            return NormalizePlainSegment(input);
 
-            part = CompositionCallRegex().Replace(part, m => WrapInline(m.Value));
-            part = FunctionEqualityRegex().Replace(part, m => WrapInline(m.Value));
-            parts[i] = part;
+        var result = new StringBuilder(input.Length + 16);
+        var currentIndex = 0;
+
+        foreach (Match match in matches)
+        {
+            if (match.Index > currentIndex)
+            {
+                result.Append(NormalizePlainSegment(input[currentIndex..match.Index]));
+            }
+
+            // Existing inline math is already authoritative formatting. Keep it byte-for-byte.
+            result.Append(match.Value);
+            currentIndex = match.Index + match.Length;
         }
 
-        return string.Concat(parts);
+        if (currentIndex < input.Length)
+        {
+            result.Append(NormalizePlainSegment(input[currentIndex..]));
+        }
+
+        return result.ToString();
+    }
+
+    private static string NormalizePlainSegment(string value)
+    {
+        var normalized = CompositionCallRegex().Replace(value, match => WrapInline(match.Value));
+        return FunctionEqualityRegex().Replace(normalized, match => WrapInline(match.Value));
     }
 
     private static string WrapInline(string value)
