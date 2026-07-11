@@ -12,6 +12,7 @@ Coverage audits:
 - [`../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md`](../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03.md)
 - [`../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md`](../BACKEND_TEST_COVERAGE_AUDIT_2026_07_03_PASS2.md)
 - [`../BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11.md`](../BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11.md)
+- [`../BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11_PASS2.md`](../BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11_PASS2.md)
 
 Prompt queues:
 
@@ -19,13 +20,14 @@ Prompt queues:
 - [`backend_test_followups_pass2_2026_07_03.md`](backend_test_followups_pass2_2026_07_03.md) — status overrides and BACKEND-TEST-042…047
 - [`backend_latest_commit_followups_2026_07_11.md`](backend_latest_commit_followups_2026_07_11.md) — latest implementation validation, workflow evidence, run-log lint and canonical queue ownership
 - [`backend_api_db_residuals_2026_07_11.md`](backend_api_db_residuals_2026_07_11.md) — BACKEND-API-DB-001…008 for answer disclosure, quiz/progress/sync authority, offline bundles, token storage and remaining user-read queries
+- [`backend_api_db_residuals_pass2_2026_07_11.md`](backend_api_db_residuals_pass2_2026_07_11.md) — BACKEND-API-DB-009…015 for cosmetics/economy entitlement, leaderboard identity/parity, account provisioning, photo avatars and pending-operation recovery
 - [`backend_failing_test_followups_2026_07_11.md`](backend_failing_test_followups_2026_07_11.md) — BACKEND-MIGRATION-001 for the remaining clean/upgraded PostgreSQL cosmetics migration blocker
 
 ## Read first
 
 - `../../AGENTS.md`
 - `../BACKEND_TEST_COVERAGE_STRATEGY.md`
-- both current coverage audits
+- current coverage/API/DB audits
 - `../BACKEND_REGRESSION_GUARDRAILS.md`
 - `../AGENT_RUN_LOG_ENFORCEMENT.md`
 - `../ai/learning/MISTAKE_LEDGER.md`
@@ -44,6 +46,7 @@ Prompt queues:
 - Preserve existing endpoint normalization semantics while adding shared bounds.
 - Do not set coverage thresholds before a successful measured baseline.
 - Search all active test/performance/risk queues before allocating a new ID; overlapping risks require one canonical runtime owner.
+- Idempotency is not entitlement: a stable key cannot authorize a client-declared reward, quantity, price or source.
 
 ## Active prompts
 
@@ -99,6 +102,13 @@ Prompt queues:
 | BACKEND-API-DB-006 | P1 / Prompt-ready | Bound sync envelopes, persisted failure data and retention. |
 | BACKEND-API-DB-007 | P1 / Prompt-ready; depends on/safely supersedes BACKEND-TEST-012 schema work | Store no reusable refresh-token secret and bound expired/revoked retention. |
 | BACKEND-API-DB-008 | P1/P2 / Prompt-ready; linked to BE-PERF-013 | SQL user aggregates, indexed search and remaining zero-write GET contracts. |
+| BACKEND-API-DB-009 | P0 / Prompt-ready | Require server-created cosmetic entitlements; reject arbitrary item/fragment/copy/source grants. |
+| BACKEND-API-DB-010 | P0 / Prompt-ready | Remove authoritative mutations and paid-content bypasses from legacy coin/hint/power-up routes. |
+| BACKEND-API-DB-011 | P0 / Prompt-ready | Replace numeric leaderboard user-ID assumptions with string-safe versioned keyset cursors/ranking. |
+| BACKEND-API-DB-012 | P1 / Prompt-ready; depends on BACKEND-API-DB-011 | Make Redis and DB leaderboard scope/rank/cursor/failover behavior contract-equivalent. |
+| BACKEND-API-DB-013 | P1 / Prompt-ready | Use one complete account-provisioning owner and reconcile Identity/profile/token orphan states. |
+| BACKEND-API-DB-014 | P1 / Prompt-ready | Retire or rebuild legacy photo avatars with string/self routes, durable storage and compensation. |
+| BACKEND-API-DB-015 | P0/P1 / Prompt-ready; extends BACKEND-TEST-014/032/033 | Recover stale pending economy/cosmetics operations without allowing dual settlement. |
 
 IDs 037–041 are reserved/occupied by parallel coverage work and are not reused by the pass-2 follow-up queue.
 
@@ -106,12 +116,14 @@ IDs 037–041 are reserved/occupied by parallel coverage work and are not reused
 
 | Area | Evidence |
 |---|---|
+| Full backend test project after failing-test repairs | `.ai/runs/2026-07-11-BACKEND-FAILING-TESTS-001-evidence.md` — 996 passed, 0 failed; independent migration gate remains queued. |
 | Offline timestamps | `.ai/runs/2026-07-01-BACKEND-CRIT-007-evidence.md` — 25 passed. |
 | Safe errors | `.ai/runs/2026-06-24-BACKEND-CRIT-001-evidence.md` — 41 passed; focused subset 6 passed. |
 | Monitoring/log security | `.ai/runs/2026-06-24-BACKEND-CRIT-002-evidence.md` — 9 passed before explicit-anonymous update. |
 | Public identity | `.ai/runs/2026-07-01-BACKEND-CRIT-003-evidence.md` — 10 passed. |
-| Avatar safety | `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md` — 43 passed. |
+| Avatar file safety | `.ai/runs/2026-06-24-BACKEND-CRIT-004-evidence.md` — 43 passed; does not prove durable storage/route compatibility. |
 | Bounded reads | `.ai/runs/2026-07-01-BACKEND-CRIT-008-evidence.md` — 70 passed. |
+| Daily Run fragment trust boundary | `.ai/runs/2026-07-02-BACKEND-TEST-CORE-001-evidence.md` — server chest/season values covered; generic non-Daily-Run grants remain queued. |
 | Proxy/authoring/adaptive/jobs/admin seed/version race | `.ai/runs/2026-06-24-BACKEND2-*` evidence — 82 targeted tests. |
 
 ## Focused validation commands
@@ -152,22 +164,28 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 
 ## Next execution order
 
-1. Run BACKEND-LATEST-VALIDATION-002 and repair only proven compile/test failures.
-2. Run BACKEND-LATEST-WORKFLOW-002 against the exact resulting `main` SHA and review artifacts.
-3. Run BACKEND-LATEST-EVIDENCE-002 and BACKEND-LATEST-QUEUE-002 to close evidence and duplicate-ownership drift.
-4. Run BACKEND-MIGRATION-001 to restore clean and upgraded PostgreSQL migration validation without weakening the schema gate.
-5. Run BACKEND-API-DB-001 to remove answer/solution disclosure from pre-answer online contracts.
-6. Run BACKEND-API-DB-002 to establish quiz-session/question authority.
-7. Run BACKEND-API-DB-003 to replace client-authoritative progress completion.
-8. Apply BACKEND-TEST-012 refresh-token model/snapshot correction unless BACKEND-API-DB-007 safely supersedes and fully satisfies it.
-9. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
-10. Run BACKEND-API-DB-004 for same-device sync serialization and scoped operation identity.
-11. Run BACKEND-TEST-023 as canonical outbox owner, satisfying linked BE-PERF-016.
-12. Run BACKEND-TEST-022 durable ingest delivery.
-13. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
-14. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
-15. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection.
-16. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.
-17. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
-18. Continue BACKEND-TEST-042…047 after the P0 packages.
-19. Review the first coverage summary and introduce progressive thresholds only from measured evidence.
+1. Run BACKEND-LATEST-WORKFLOW-002 against the current exact `main` SHA and review the standard workflow/artifacts.
+2. Run BACKEND-LATEST-EVIDENCE-002 and BACKEND-LATEST-QUEUE-002 to close historical evidence and duplicate-ownership drift.
+3. Run BACKEND-MIGRATION-001 to restore clean and upgraded PostgreSQL migration validation without weakening the schema gate.
+4. Run BACKEND-API-DB-009 to stop arbitrary cosmetic item/fragment grants.
+5. Run BACKEND-API-DB-010 to close legacy coin/hint/power-up mutation and paid-content bypasses.
+6. Run BACKEND-API-DB-011 to restore student leaderboard behavior for string/GUID Identity users.
+7. Run BACKEND-API-DB-015 to make canonical economy/cosmetics operations recoverable after pending-state failures.
+8. Run BACKEND-API-DB-001 to remove answer/solution disclosure from pre-answer online contracts.
+9. Run BACKEND-API-DB-002 to establish quiz-session/question authority.
+10. Run BACKEND-API-DB-003 to replace client-authoritative progress completion.
+11. Apply BACKEND-TEST-012 refresh-token model/snapshot correction unless BACKEND-API-DB-007 safely supersedes and fully satisfies it.
+12. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
+13. Run BACKEND-API-DB-004 for same-device sync serialization and scoped operation identity.
+14. Run BACKEND-API-DB-012 for Redis/DB leaderboard parity after the string cursor contract is stable.
+15. Run BACKEND-API-DB-013 for one complete account-provisioning owner and orphan reconciliation.
+16. Run BACKEND-API-DB-014 to retire or repair the photo-avatar contract/storage.
+17. Run BACKEND-TEST-023 as canonical outbox owner, satisfying linked BE-PERF-016.
+18. Run BACKEND-TEST-022 durable ingest delivery.
+19. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+20. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
+21. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection.
+22. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.
+23. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
+24. Continue BACKEND-TEST-042…047 after the P0 packages.
+25. Review the measured coverage summary and introduce progressive thresholds only from retained evidence.
