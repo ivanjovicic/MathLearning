@@ -33,7 +33,7 @@ public sealed class LogOutputRedactorTests
         Assert.DoesNotContain("Bearer abc.def.ghi", redacted);
         Assert.DoesNotContain("password=secret123", redacted);
         Assert.Contains("[redacted-email]", redacted);
-        Assert.Contains("[redacted-token]", redacted);
+        Assert.Contains("token=[redacted]", redacted);
         Assert.Contains("password=[redacted]", redacted);
     }
 
