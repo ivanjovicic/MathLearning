@@ -24,7 +24,17 @@ jobs:
           python-version: "3.12"
 
       - name: Validate referenced evidence
-        run: python scripts/validate_agent_evidence.py --referenced-run-logs-only
+        id: evidence
+        shell: bash
+        run: |
+          mkdir -p artifacts/evidence-lint
+          set +e
+          python scripts/validate_agent_evidence.py --referenced-run-logs-only \
+            > artifacts/evidence-lint/output.log 2>&1
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          cat artifacts/evidence-lint/output.log
+          exit 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -49,6 +59,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: failing-test-repair-final-validation
-          path: artifacts/test-results
-          if-no-files-found: warn
+          path: artifacts
+          if-no-files-found: error
           retention-days: 3
+
+      - name: Fail when evidence lint failed
+        if: steps.evidence.outputs.exit_code != '0'
+        run: exit 1
