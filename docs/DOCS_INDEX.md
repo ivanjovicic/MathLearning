@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-07-11
+Last aligned: 2026-07-11  
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -41,7 +41,7 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`AGENT_QUICKSTART.md`](AGENT_QUICKSTART.md) | Quickstart | Minimal files/tests by task type | Reduces rediscovery. |
 | [`BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | Guardrails | Historical bug classes and validation matrix | Mandatory for implementation prompts. |
 | [`BUGFIX_PATTERN_GUARDRAILS.md`](BUGFIX_PATTERN_GUARDRAILS.md) | Bugfix guardrails | Minimum regression evidence by bug class | Read before bug fixes. |
-| [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Test strategy | Risk-first coverage layers and staged thresholds | Critical invariants before percentage. |
+| [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Coverage strategy | Risk-first coverage layers and staged thresholds | Critical invariants before percentage. |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Architecture map | Startup, projects, persistence, jobs | Update with runtime architecture. |
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Endpoint inventory | Current route/auth/canonical map | Updated through coverage pass 2. |
 | [`BACKEND_CHANGE_CHECKLIST.md`](BACKEND_CHANGE_CHECKLIST.md) | Checklist | Pre-commit safety gate | Code and docs changes. |
@@ -61,6 +61,7 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Follow-up queue pass 1 | Durable ingest, outbox, PostgreSQL and operational risks | Detailed prompts 022–035. |
 | [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Follow-up queue pass 2 | Maintenance/explanation/paging/policy prompts | Detailed prompts 042–047. |
 | [`prompt_queues/backend_latest_commit_followups_2026_07_11.md`](prompt_queues/backend_latest_commit_followups_2026_07_11.md) | Latest-commit closure queue | Validate recent implementation, bind CI artifacts, lint evidence and reconcile prompt ownership | Run before another broad backend audit. |
+| [`prompt_queues/backend_api_db_residuals_2026_07_11.md`](prompt_queues/backend_api_db_residuals_2026_07_11.md) | API/DB residual queue | Answer disclosure, quiz authority, progress/sync trust, offline bundles, token storage and remaining read queries | Detailed prompts BACKEND-API-DB-001…008. |
 | [`prompt_queues/BACKEND-TEST-048-index-bloat-validation.md`](prompt_queues/BACKEND-TEST-048-index-bloat-validation.md) | PostgreSQL test prompt | Prove or replace index-bloat metric | Static formula concern requires provider evidence. |
 | [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection | Used by database-validation CI. |
 | [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Build, PostgreSQL schema, full tests, coverage summary and startup smoke | Exact successful head/artifact evidence still required. |
@@ -73,6 +74,7 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 |---|---|---|---|
 | [`BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md`](BACKEND_PERFORMANCE_OPTIMIZATION_REVIEW_2026_06_27.md) | Performance review | Original hot paths and safe optimization boundaries | Covers BE-PERF-001…008. |
 | [`BACKEND_PERFORMANCE_BUG_AUDIT_2026_07_03.md`](BACKEND_PERFORMANCE_BUG_AUDIT_2026_07_03.md) | Static audit | Current adaptive, weakness, XP reset, rate-limit, read-side mutation, cache, outbox and observability risks | Not runtime-fix proof. |
+| [`BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11.md`](BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11.md) | Static API/DB audit | Mobile response leakage, session/progress/sync authority, offline content versioning, token storage and user query gaps | Admin excluded; not runtime-fix proof. |
 | [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue pass 1 | Quiz, SRS, replay, leaderboard, Redis, startup, budgets and route bloat | BE-PERF-001…008. |
 | [`prompt_queues/backend_performance_followups_2026_07_03.md`](prompt_queues/backend_performance_followups_2026_07_03.md) | Performance/bug queue pass 2 | Atomic mutations, bounded workers/state, pure reads, cache/outbox and observability | BE-PERF-009…017. |
 | [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Cold-start budget | Blocking vs background startup | BE-PERF-006 evidence. |
