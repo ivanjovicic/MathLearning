@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-07-03
+Last aligned: 2026-07-11
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -60,9 +60,10 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`prompt_queues/backend_test_coverage.md`](prompt_queues/backend_test_coverage.md) | Primary test queue | Active BACKEND-TEST packages | Rows remain Needs validation without executable evidence. |
 | [`prompt_queues/backend_test_followups_2026_07_03.md`](prompt_queues/backend_test_followups_2026_07_03.md) | Follow-up queue pass 1 | Durable ingest, outbox, PostgreSQL and operational risks | Detailed prompts 022–035. |
 | [`prompt_queues/backend_test_followups_pass2_2026_07_03.md`](prompt_queues/backend_test_followups_pass2_2026_07_03.md) | Follow-up queue pass 2 | Maintenance/explanation/paging/policy prompts | Detailed prompts 042–047. |
+| [`prompt_queues/backend_latest_commit_followups_2026_07_11.md`](prompt_queues/backend_latest_commit_followups_2026_07_11.md) | Latest-commit closure queue | Validate recent implementation, bind CI artifacts, lint evidence and reconcile prompt ownership | Run before another broad backend audit. |
 | [`prompt_queues/BACKEND-TEST-048-index-bloat-validation.md`](prompt_queues/BACKEND-TEST-048-index-bloat-validation.md) | PostgreSQL test prompt | Prove or replace index-bloat metric | Static formula concern requires provider evidence. |
 | [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection | Used by database-validation CI. |
-| [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Build, PostgreSQL schema, full tests, coverage summary and startup smoke | First successful baseline still required. |
+| [`../.github/workflows/database-validation.yml`](../.github/workflows/database-validation.yml) | CI workflow | Build, PostgreSQL schema, full tests, coverage summary and startup smoke | Exact successful head/artifact evidence still required. |
 
 ---
 
