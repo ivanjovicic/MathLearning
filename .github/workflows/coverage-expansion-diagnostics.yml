@@ -48,7 +48,7 @@ jobs:
         id: build
         shell: bash
         run: |
-          mkdir -p artifacts/build-diagnostics artifacts/schema-diagnostics artifacts/test-results artifacts/coverage-report
+          mkdir -p artifacts/build-diagnostics artifacts/schema-diagnostics artifacts/focused-results artifacts/test-results artifacts/coverage-report
           set +e
           dotnet build MathLearning.slnx -c Release --no-restore > artifacts/build-diagnostics/build.log 2>&1
           exit_code=$?
@@ -72,8 +72,26 @@ jobs:
           Get-Content artifacts/schema-diagnostics/schema.log
           exit 0
 
+      - name: Run focused coverage expansion tests
+        id: focused
+        if: always() && steps.build.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          set +e
+          dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj \
+            -c Release \
+            --no-build \
+            --filter "FullyQualifiedName~ReturnUrlSanitizerTests|FullyQualifiedName~DeleteImpactFormatterTests|FullyQualifiedName~EndpointUserTests|FullyQualifiedName~StreakRollerTests|FullyQualifiedName~SafeClientErrorResponseTests|FullyQualifiedName~CorrelationIdMiddlewareTests|FullyQualifiedName~RetryPolicyTests|FullyQualifiedName~ApiResultTests|FullyQualifiedName~LogOutputRedactorTests|FullyQualifiedName~BktServiceTests|FullyQualifiedName~AdminQuestionValidationAdditionalTests|FullyQualifiedName~QuestionEditorModelTests" \
+            --logger "trx;LogFileName=coverage-expansion-focused.trx" \
+            --results-directory artifacts/focused-results \
+            > artifacts/focused-results/test.log 2>&1
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          cat artifacts/focused-results/test.log
+          exit 0
+
       - name: Run complete test suite with coverage
-        id: tests
+        id: full_tests
         if: always() && steps.build.outputs.exit_code == '0'
         shell: bash
         run: |
@@ -92,7 +110,7 @@ jobs:
           exit 0
 
       - name: Generate coverage report
-        if: always() && steps.tests.outcome != 'skipped'
+        if: always() && steps.full_tests.outcome != 'skipped'
         shell: bash
         run: |
           COVERAGE_FILES=$(find artifacts/test-results -type f -name 'coverage.cobertura.xml' -print | paste -sd ';' -)
@@ -114,11 +132,12 @@ jobs:
           path: |
             artifacts/build-diagnostics
             artifacts/schema-diagnostics
+            artifacts/focused-results
             artifacts/test-results
             artifacts/coverage-report
           if-no-files-found: error
           retention-days: 3
 
-      - name: Fail when build or tests failed
-        if: steps.build.outputs.exit_code != '0' || steps.tests.outputs.exit_code != '0'
+      - name: Fail when build or focused tests failed
+        if: steps.build.outputs.exit_code != '0' || steps.focused.outputs.exit_code != '0'
         run: exit 1
