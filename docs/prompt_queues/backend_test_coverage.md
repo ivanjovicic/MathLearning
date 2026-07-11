@@ -1,6 +1,6 @@
 # Backend Test Coverage Queue
 
-Last aligned: 2026-07-03  
+Last aligned: 2026-07-11  
 Target repo: `ivanjovicic/MathLearning`
 
 ## Purpose
@@ -16,6 +16,7 @@ Prompt queues:
 
 - [`backend_test_followups_2026_07_03.md`](backend_test_followups_2026_07_03.md) — BACKEND-TEST-022…035
 - [`backend_test_followups_pass2_2026_07_03.md`](backend_test_followups_pass2_2026_07_03.md) — status overrides and BACKEND-TEST-042…047
+- [`backend_latest_commit_followups_2026_07_11.md`](backend_latest_commit_followups_2026_07_11.md) — latest implementation validation, workflow evidence, run-log lint and canonical queue ownership
 
 ## Read first
 
@@ -39,6 +40,7 @@ Prompt queues:
 - Explicit anonymous tests must use `X-Test-Anonymous: true`.
 - Preserve existing endpoint normalization semantics while adding shared bounds.
 - Do not set coverage thresholds before a successful measured baseline.
+- Search all active test/performance/risk queues before allocating a new ID; overlapping risks require one canonical runtime owner.
 
 ## Active prompts
 
@@ -66,7 +68,7 @@ Prompt queues:
 | BACKEND-TEST-020 | Runtime-fixed / Needs validation | Bug report user/admin authorization boundaries. |
 | BACKEND-TEST-021 | Runtime-fixed / Needs validation | Maintenance routes require exact admin policy. |
 | BACKEND-TEST-022 | P0 / Prompt-ready | Durable/idempotent analytics ingest delivery after authoritative settlement. |
-| BACKEND-TEST-023 | P0/P1 / Prompt-ready | Multi-instance outbox claim, duplicate-publish and poison-message safety. |
+| BACKEND-TEST-023 | P0/P1 / Prompt-ready | Canonical runtime owner for multi-instance outbox claim, duplicate-publish and poison-message safety; satisfies linked BE-PERF-016 when fully implemented and measured. |
 | BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
 | BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation. |
 | BACKEND-TEST-026 | P1 / Prompt-ready | Minimize public health/metrics/schema/job information. |
@@ -74,13 +76,17 @@ Prompt queues:
 | BACKEND-TEST-028 | Runtime-fixed / Needs validation | Shared checked pagination bounds, analytics/bug migration and extreme-value tests. |
 | BACKEND-TEST-029 | Implemented / Needs validation | Analytics/recommendation auth, user scope, paging, shape and safe-error endpoint tests. |
 | BACKEND-TEST-030 | Runtime-fixed / Needs validation | Explanation validation contracts and stable safe not-found messages. |
-| BACKEND-TEST-031 | P1 / Prompt-ready | Weakness scheduler durability, deduplication and backpressure. |
-| BACKEND-TEST-032 | P0/P1 / Prompt-ready | PostgreSQL provider-specific concurrency/locking/constraint lane. |
-| BACKEND-TEST-033 | P1 / Prompt-ready | Cancellation/rollback matrix for canonical P0 mutations. |
+| BACKEND-TEST-031 | P1 / Prompt-ready | Canonical runtime owner for weakness scheduler durability, deduplication and backpressure; satisfies linked BE-PERF-009 when fully implemented and measured. |
+| BACKEND-TEST-032 | P0/P1 / Prompt-ready | PostgreSQL provider-specific concurrency/locking/constraint lane; prerequisite proof for BE-PERF-012, 015 and 016. |
+| BACKEND-TEST-033 | P1 / Prompt-ready | Cancellation/rollback matrix for canonical P0 mutations; supporting proof for BE-PERF-012 and 015. |
 | BACKEND-TEST-034 | P1/P2 / Prompt-ready | Legacy route parity/deprecation and duplicate-settlement prevention. |
 | BACKEND-TEST-035 | Implemented / Needs validation | Direct test-auth default/anonymous/role contract tests. |
 | BACKEND-TEST-036 | Runtime-fixed + tests / Needs validation | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-036-evidence.md`. |
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
+| BACKEND-LATEST-VALIDATION-002 | P0 / Prompt-ready | Execute and minimally repair the latest July 3 implementation/test batch before more runtime work. |
+| BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Prompt-ready | Link exact `main` SHA to Database Validation jobs, logs and artifacts. |
+| BACKEND-LATEST-EVIDENCE-002 | P1 / Prompt-ready | Lint latest referenced run logs and reconcile evidence/status/score claims. |
+| BACKEND-LATEST-QUEUE-002 | P1 / Prompt-ready | Canonical ownership and dependency map across overlapping test/performance queues. |
 
 IDs 037–041 are reserved/occupied by parallel coverage work and are not reused by the pass-2 follow-up queue.
 
@@ -134,12 +140,14 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 
 ## Next execution order
 
-1. Execute all Implemented / Needs validation packages and repair compile/assertion failures.
-2. Apply BACKEND-TEST-012 refresh-token model/snapshot correction.
-3. Run BACKEND-TEST-022 durable ingest delivery.
-4. Run BACKEND-TEST-023 outbox multi-instance safety.
+1. Run BACKEND-LATEST-VALIDATION-002 and repair only proven compile/test failures.
+2. Run BACKEND-LATEST-WORKFLOW-002 against the exact resulting `main` SHA and review artifacts.
+3. Run BACKEND-LATEST-EVIDENCE-002 and BACKEND-LATEST-QUEUE-002 to close evidence and duplicate-ownership drift.
+4. Apply BACKEND-TEST-012 refresh-token model/snapshot correction.
 5. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
-6. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
-7. Run BACKEND-TEST-025/026/031/033/034 by risk.
-8. Continue BACKEND-TEST-042…047 after the P0 packages.
-9. Review the first coverage summary and introduce progressive thresholds only from measured evidence.
+6. Run BACKEND-TEST-023 as canonical outbox owner, satisfying linked BE-PERF-016.
+7. Run BACKEND-TEST-022 durable ingest delivery.
+8. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+9. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
+10. Continue BACKEND-TEST-042…047 after the P0 packages.
+11. Review the first coverage summary and introduce progressive thresholds only from measured evidence.
