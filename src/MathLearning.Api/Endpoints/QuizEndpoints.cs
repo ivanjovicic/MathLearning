@@ -1071,7 +1071,9 @@ public static class QuizEndpoints
         CancellationToken cancellationToken)
     {
         UserQuestionStat? existing;
-        if (db.Database.IsRelational())
+        var supportsForUpdate = (db.Database.ProviderName ?? string.Empty)
+            .Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
+        if (supportsForUpdate)
         {
             existing = await db.UserQuestionStats
                 .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
@@ -1105,7 +1107,7 @@ public static class QuizEndpoints
         catch (DbUpdateException)
         {
             db.Entry(created).State = EntityState.Detached;
-            if (db.Database.IsRelational())
+            if (supportsForUpdate)
             {
                 return await db.UserQuestionStats
                     .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
