@@ -9,10 +9,11 @@ Model mode/settings: reasoning, repository editing
 Client/IDE: ChatGPT connector session
 Run mode: validation-first, minimal repair
 Token budget: high
+Commit SHA: `f4f8fd175f5beb9d7e1eb5b6f74376401f5831c6` for validated runtime/test repairs; final squash merge pending
 Started from queue status: ad-hoc user request following BACKEND-COVERAGE-EXPANSION-001
 Local collision check: active central/latest/API-DB queues were inspected before allocating this run ID and `BACKEND-MIGRATION-001`
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-VALIDATION-002, BACKEND-MISTAKE-QUEUE-001
-How this run avoids prior mistakes: evidence created before edits; every failure classified from retained TRX/log evidence; repairs kept minimal and provider-aware; canonical public error text reused from source constants; unsafe migration work routed to a dedicated queue prompt; no full-suite-green claim was made until a checked 995/995 run existed
+How this run avoids prior mistakes: evidence created before edits; every failure classified from retained TRX/log evidence; repairs kept minimal and provider-aware; canonical public error text reused from source constants; unsafe migration work routed to a dedicated queue prompt; no full-suite-green claim was made until checked 995/995 and 996/996 runs existed
 Elapsed time: unknown-not-recorded
 Phase time breakdown: unknown-not-recorded
 
@@ -81,7 +82,8 @@ The former `ApiDbContext_MapsXminAsConcurrencyToken` test created an InMemory co
 - `src/MathLearning.Api/Middleware/SafeClientErrorResponse.cs`;
 - all failing test files and their relational factories/interceptors;
 - cosmetics migration chain and standard Database Validation workflow for residual classification;
-- active backend queues before publishing a new prompt.
+- active backend queues before publishing a new prompt;
+- `scripts/validate_agent_evidence.py` and repository-wide referenced evidence output.
 
 ## Files changed
 
@@ -105,7 +107,7 @@ The former `ApiDbContext_MapsXminAsConcurrencyToken` test created an InMemory co
 - `docs/prompt_queues/backend_test_coverage.md`
 - `.ai/runs/2026-07-11-BACKEND-FAILING-TESTS-001-evidence.md`
 
-A temporary branch-only workflow, `.github/workflows/apply-failing-test-repairs.yml`, was used to apply and validate the patch in GitHub Actions and was deleted before merge.
+Temporary branch-only workflows were used for patch application and final validation and were deleted before merge.
 
 ## Validation progression
 
@@ -114,14 +116,18 @@ The iterative runs were retained because each run exposed the next provider laye
 - run `29149157453`, artifact `8247652200`: **65/72 passed**, seven `Questions.xmin` SQLite failures;
 - run `29149276258`, artifact `8247686067`: **70/72 passed**, two SQLite `FOR UPDATE` offline-batch failures;
 - run `29149413427`, artifact `8247733504`: focused **72/72 passed**, full suite **994/995 passed**, one stale InMemory/Npgsql `xmin` assertion;
-- final run `29149563136`, artifact `8247778512`, validated head `63f97bbf11b142e58d0e33742dffed69b9df3ddc`:
+- repair run `29149563136`, artifact `8247778512`, validated head `63f97bbf11b142e58d0e33742dffed69b9df3ddc`:
   - restore: passed;
   - Release build: passed;
   - focused previously failing groups: **72 passed, 0 failed**;
   - complete test project: **995 passed, 0 failed, 0 skipped**;
   - validated runtime/test changes committed by workflow as `f4f8fd175f5beb9d7e1eb5b6f74376401f5831c6`.
+- final PR-head validation run `29149806077`, artifact `8247841295`, head `1c2d8b2b2d427146d622951d6c39b3279135bc57`:
+  - Release build: passed;
+  - complete test project after splitting the provider contract test: **996 passed, 0 failed, 0 skipped**;
+  - TRX artifact retained as `mathlearning-tests.trx`.
 
-### Commands represented by the final run
+### Commands represented by the final runs
 
 ```text
 dotnet restore MathLearning.slnx
@@ -145,6 +151,21 @@ dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj \
   --results-directory artifacts/test-results
 ```
 
+## Evidence validation
+
+Repository-wide referenced evidence lint was executed in run `29149806077` and retained in artifact `8247841295`:
+
+```text
+python scripts/validate_agent_evidence.py --referenced-run-logs-only
+```
+
+Result:
+
+- failures: **140**;
+- warnings: **4**.
+
+The findings are pre-existing repository evidence debt in older Done rows and older run logs, including missing model/waste/missed/follow-up/residual fields and legacy run-log metadata. No finding points to this new run log. The canonical owner already exists as `BACKEND-LATEST-EVIDENCE-002`; no duplicate prompt was created. This run uses a targeted strict validation of its own log before merge while preserving the global lint output as an explicit residual rather than weakening the validator.
+
 ## What was done
 
 - Reproduced and grouped every original failure by executable signature.
@@ -156,11 +177,12 @@ dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj \
 - Split the `xmin` model test into explicit Npgsql and non-Npgsql contracts.
 - Re-ran the exact affected groups and then the entire backend test project.
 - Added and indexed `BACKEND-MIGRATION-001` for the independent schema-from-zero blocker.
-- Removed the temporary patch workflow before merge.
+- Preserved the repository-wide evidence-lint debt under its existing canonical owner.
+- Removed temporary validation workflows before merge.
 
 ## What was missed / intentionally deferred
 
-The standard `Database Validation` workflow is not green because it still stops in the clean PostgreSQL migration chain before its normal test step. This is independent of the now-green 995-test project.
+The standard `Database Validation` workflow is not green because it still stops in the clean PostgreSQL migration chain before its normal test step. This is independent of the now-green 996-test project.
 
 Confirmed residual:
 
@@ -170,30 +192,34 @@ Confirmed residual:
 
 This historical migration repair was not mixed into the test-repair patch because it requires proof for both clean and already-upgraded databases. It is fully specified as `BACKEND-MIGRATION-001` in `docs/prompt_queues/backend_failing_test_followups_2026_07_11.md` and linked from the central queue.
 
+Repository-wide evidence lint remains red for 140 pre-existing failures and four warnings. Its canonical remediation prompt is already `BACKEND-LATEST-EVIDENCE-002` in `docs/prompt_queues/backend_latest_commit_followups_2026_07_11.md`; this run does not duplicate or expand that docs-only package.
+
 ## Mistakes observed
 
 - BACKEND-MISTAKE-VALIDATION-001 — the committed relational tests had not been executed against the current provider-aware model before the previous coverage claim.
 - BACKEND-MISTAKE-VALIDATION-002 — `Database.IsRelational()` was incorrectly treated as proof that PostgreSQL-only SQL (`AT TIME ZONE`, `xmin`, `FOR UPDATE`) was valid for SQLite.
 - BACKEND-MISTAKE-EVIDENCE-001 — each repair layer required retained TRX/log artifacts; static inspection alone would have stopped after the first symptom.
-- BACKEND-MISTAKE-QUEUE-001 — the migration residual was checked against active queues before reserving a new canonical ID.
+- BACKEND-MISTAKE-QUEUE-001 — the migration residual and evidence-lint debt were checked against active queues before reserving or declining new IDs.
 
 ## Waste categories
 
 - connector-only repository access with no local `gh`/checkout execution;
 - standard workflow serially blocks tests behind schema-from-zero;
 - the original provider leak produced cascading symptoms, requiring multiple runs to expose the next layer;
-- temporary workflow was required to apply a multi-file patch and retain full untruncated test logs.
+- temporary workflows were required to apply a multi-file patch and retain full untruncated test/lint logs.
 
 ## Where time/context was wasted
 
 - Initial standard logs truncated before the actionable stack traces.
 - Fixing only `AT TIME ZONE` revealed `xmin`; fixing `xmin` revealed `FOR UPDATE`.
 - The last stale `xmin` assertion mixed InMemory and PostgreSQL expectations, requiring one final full-suite run.
+- Repository-wide evidence lint includes 140 historical failures unrelated to this run, so a targeted current-log check is required in addition to preserving the global diagnostic.
 
 ## Why waste happened
 
 - Provider-specific behavior was keyed from broad `IsRelational()` checks or unconditionally modeled SQL rather than explicit provider capabilities.
 - The standard CI workflow does not continue to tests when schema validation fails.
+- The evidence checker intentionally audits all referenced historical Done rows, not only the current run.
 
 ## What the next agent should avoid
 
@@ -202,6 +228,7 @@ This historical migration repair was not mixed into the test-repair patch becaus
 - Do not duplicate `BACKEND-TEST-032`; it remains the canonical broader PostgreSQL provider lane.
 - Do not weaken the schema gate to hide the cosmetics migration defect.
 - Do not add a later migration that clean databases cannot reach.
+- Do not treat the 140 historical lint failures as defects introduced by this test-repair commit.
 
 ## Queue updated
 
@@ -209,29 +236,33 @@ This historical migration repair was not mixed into the test-repair patch becaus
 - Added and reserved `BACKEND-MIGRATION-001` as the canonical P0 migration repair.
 - Indexed the queue and prompt in `docs/prompt_queues/backend_test_coverage.md`.
 - Linked `BACKEND-MIGRATION-001` to existing `BACKEND-TEST-032` rather than duplicating the general PostgreSQL provider lane.
+- Reused existing `BACKEND-LATEST-EVIDENCE-002` for the repository-wide evidence-lint debt.
 
 ## Follow-up prompt
 
 - `BACKEND-MIGRATION-001` — repair the cosmetics FK-name drift with clean PostgreSQL, upgraded-path, idempotent-script and startup-smoke evidence.
+- Existing owner `BACKEND-LATEST-EVIDENCE-002` — reconcile the 140 historical evidence-lint failures and four warnings; no duplicate prompt added.
 
 ## Completion %
 
 - **96%**
 
-The requested failing-test repair is complete and the backend test project is fully green. Completion is capped because the independent standard migration/schema workflow remains red and is queued rather than repaired in this run.
+The requested failing-test repair is complete and the backend test project is fully green. Completion is capped because the independent standard migration/schema workflow and historical repository evidence lint remain red under queued owners.
 
 ## Residual risk
 
 - Provider-aware branches are validated against the existing SQLite/InMemory/Npgsql model tests, but `BACKEND-TEST-032` remains necessary for a broader authoritative PostgreSQL concurrency/locking lane.
 - Historical migration edits carry deployed-database risk and must follow `BACKEND-MIGRATION-001` dual-path validation.
+- Historical evidence debt remains governed by `BACKEND-LATEST-EVIDENCE-002`.
 
 ## Commit SHAs
 
 - evidence start: `acbb7ea40c7fbfa03725662301f76879a8737373`;
 - provider/runtime/test repair commit: `f4f8fd175f5beb9d7e1eb5b6f74376401f5831c6`;
 - queue prompt creation: `615706a5e602da75a513d63549ff4eaf557dd489`;
-- temporary workflow removal: `b63ff6288facd527680fa70c7cfc12569c8d95e2`;
+- patch workflow removal: `b63ff6288facd527680fa70c7cfc12569c8d95e2`;
 - central queue index update: `d9d3348467381b9bcd4e460c536fdedafd8eac87`;
+- final validation workflow head: `1c2d8b2b2d427146d622951d6c39b3279135bc57`;
 - final merge SHA: pending.
 
 ## Cross-repo sync
