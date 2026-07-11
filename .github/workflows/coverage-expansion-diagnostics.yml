@@ -59,6 +59,7 @@ jobs:
       - name: Capture schema-from-zero output
         id: schema
         if: steps.build.outputs.exit_code == '0'
+        continue-on-error: true
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -73,7 +74,7 @@ jobs:
 
       - name: Run complete test suite with coverage
         id: tests
-        if: steps.build.outputs.exit_code == '0'
+        if: always() && steps.build.outputs.exit_code == '0'
         shell: bash
         run: |
           set +e
