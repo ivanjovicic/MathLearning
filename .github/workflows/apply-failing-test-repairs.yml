@@ -45,6 +45,7 @@ jobs:
       - name: Apply minimal repairs
         shell: python
         run: |
+          import re
           from pathlib import Path
 
           def replace(path: str, old: str, new: str) -> None:
@@ -53,6 +54,14 @@ jobs:
               if old not in text:
                   raise RuntimeError(f"Expected block not found in {path}")
               file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          def replace_regex(path: str, pattern: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8-sig")
+              updated, count = re.subn(pattern, new, text, count=1, flags=re.MULTILINE)
+              if count != 1:
+                  raise RuntimeError(f"Expected exactly one regex match in {path}, got {count}")
+              file.write_text(updated, encoding="utf-8")
 
           replace(
               "src/MathLearning.Admin/Services/AdminApiClient.cs",
@@ -144,12 +153,9 @@ jobs:
                   nextReview.HasDefaultValueSql(nextReviewDefaultSql);
           ''')
 
-          replace(
+          replace_regex(
               "src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs",
-              '''            entity.Property<uint>("xmin")
-                        .HasColumnName("xmin")
-                        .IsRowVersion();
-          ''',
+              r'''            entity\.Property<uint>\("xmin"\)\n\s+\.HasColumnName\("xmin"\)\n\s+\.IsRowVersion\(\);''',
               '''            if (string.Equals(
                       Database.ProviderName,
                       "Npgsql.EntityFrameworkCore.PostgreSQL",
@@ -158,8 +164,7 @@ jobs:
                       entity.Property<uint>("xmin")
                           .HasColumnName("xmin")
                           .IsRowVersion();
-                  }
-          ''')
+                  }''')
 
           replace(
               "tests/MathLearning.Tests/Endpoints/AnalyticsEndpointContractTests.cs",
