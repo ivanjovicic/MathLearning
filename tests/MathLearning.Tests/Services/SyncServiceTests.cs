@@ -140,7 +140,7 @@ public class SyncServiceTests
         Assert.Equal(0, await db.UserAnswers.CountAsync());
 
         var log = await db.SyncEventLogs.SingleAsync(x => x.OperationId == operation.OperationId);
-        Assert.Equal(Domain.Entities.SyncEventStatuses.Rejected, log.Status);
+        Assert.Equal(global::MathLearning.Domain.Entities.SyncEventStatuses.Rejected, log.Status);
         Assert.Equal("user_mismatch", log.ErrorCode);
     }
 
@@ -163,7 +163,7 @@ public class SyncServiceTests
             7,
             DateTime.UtcNow));
 
-        db.SyncEventLogs.Add(new Domain.Entities.SyncEventLog
+        db.SyncEventLogs.Add(new global::MathLearning.Domain.Entities.SyncEventLog
         {
             OperationId = operationId,
             DeviceId = "device-3",
@@ -171,7 +171,7 @@ public class SyncServiceTests
             ClientSequence = 1,
             OperationType = "submit_answer",
             PayloadJson = payloadJson,
-            Status = Domain.Entities.SyncEventStatuses.DeadLettered,
+            Status = global::MathLearning.Domain.Entities.SyncEventStatuses.DeadLettered,
             OccurredAtUtc = DateTime.UtcNow,
             ReceivedAtUtc = DateTime.UtcNow,
             RetryCount = 5,
@@ -179,7 +179,7 @@ public class SyncServiceTests
             ErrorMessage = "Synthetic failure"
         });
 
-        db.SyncDeadLetters.Add(new Domain.Entities.SyncDeadLetter
+        db.SyncDeadLetters.Add(new global::MathLearning.Domain.Entities.SyncDeadLetter
         {
             OperationId = operationId,
             DeviceId = "device-3",
@@ -187,7 +187,7 @@ public class SyncServiceTests
             OperationType = "submit_answer",
             PayloadJson = payloadJson,
             RetryCount = 5,
-            Status = Domain.Entities.SyncDeadLetterStatuses.Pending,
+            Status = global::MathLearning.Domain.Entities.SyncDeadLetterStatuses.Pending,
             FailureReason = "Synthetic failure",
             CreatedAtUtc = DateTime.UtcNow,
             LastFailedAtUtc = DateTime.UtcNow
@@ -200,10 +200,10 @@ public class SyncServiceTests
         var deadLetter = await db.SyncDeadLetters.SingleAsync(x => x.OperationId == operationId);
         var log = await db.SyncEventLogs.SingleAsync(x => x.OperationId == operationId);
 
-        Assert.Equal(Domain.Entities.SyncDeadLetterStatuses.Resolved, result.Status);
-        Assert.Equal(Domain.Entities.SyncDeadLetterStatuses.Resolved, deadLetter.Status);
+        Assert.Equal(global::MathLearning.Domain.Entities.SyncDeadLetterStatuses.Resolved, result.Status);
+        Assert.Equal(global::MathLearning.Domain.Entities.SyncDeadLetterStatuses.Resolved, deadLetter.Status);
         Assert.NotNull(deadLetter.ResolvedAtUtc);
-        Assert.Equal(Domain.Entities.SyncEventStatuses.Processed, log.Status);
+        Assert.Equal(global::MathLearning.Domain.Entities.SyncEventStatuses.Processed, log.Status);
         Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.SyncOperationId == operationId));
     }
 
