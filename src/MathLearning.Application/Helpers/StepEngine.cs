@@ -1,4 +1,4 @@
-﻿using MathLearning.Application.DTOs.Quiz;
+using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Domain.Entities;
 using System.Text.RegularExpressions;
 
@@ -135,6 +135,19 @@ public static class StepEngine
                 return isSr ? ForDivisionSr(a, b) : ForDivisionEn(a, b);
         }
 
+        // Try "Ax - B = C" or "Ax + B = C" before the simpler x + B form.
+        // Otherwise "2x + 4 = 18" is partially matched as "x + 4 = 18".
+        var eqMatch3 = Regex.Match(text, @"(\d+)x\s*([\+\-−])\s*(\d+)\s*=\s*(\d+)");
+        if (eqMatch3.Success)
+        {
+            int a = int.Parse(eqMatch3.Groups[1].Value);
+            string op = eqMatch3.Groups[2].Value;
+            int b = int.Parse(eqMatch3.Groups[3].Value);
+            int c = int.Parse(eqMatch3.Groups[4].Value);
+            bool isSubtract = op == "-" || op == "−";
+            return isSr ? ForLinearComplexSr(a, b, c, isSubtract) : ForLinearComplexEn(a, b, c, isSubtract);
+        }
+
         // Try simple linear equation: "x + B = C" or "Ax = C"
         var eqMatch1 = Regex.Match(text, @"x\s*\+\s*(\d+)\s*=\s*(\d+)");
         if (eqMatch1.Success)
@@ -150,18 +163,6 @@ public static class StepEngine
             int a = int.Parse(eqMatch2.Groups[1].Value);
             int c = int.Parse(eqMatch2.Groups[2].Value);
             return isSr ? ForLinearMulSr(a, c) : ForLinearMulEn(a, c);
-        }
-
-        // Try "Ax - B = C" or "Ax + B = C"
-        var eqMatch3 = Regex.Match(text, @"(\d+)x\s*([\+\-−])\s*(\d+)\s*=\s*(\d+)");
-        if (eqMatch3.Success)
-        {
-            int a = int.Parse(eqMatch3.Groups[1].Value);
-            string op = eqMatch3.Groups[2].Value;
-            int b = int.Parse(eqMatch3.Groups[3].Value);
-            int c = int.Parse(eqMatch3.Groups[4].Value);
-            bool isSubtract = op == "-" || op == "−";
-            return isSr ? ForLinearComplexSr(a, b, c, isSubtract) : ForLinearComplexEn(a, b, c, isSubtract);
         }
 
         return [];

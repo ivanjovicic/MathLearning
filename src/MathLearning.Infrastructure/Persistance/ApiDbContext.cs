@@ -1,4 +1,4 @@
-﻿using MathLearning.Domain.Entities;
+using MathLearning.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -162,9 +162,15 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_Questions_Difficulty");
             entity.HasIndex(e => new { e.SubtopicId, e.Difficulty })
                   .HasDatabaseName("IX_Questions_Subtopic_Difficulty");
+            if (string.Equals(
+            Database.ProviderName,
+            "Npgsql.EntityFrameworkCore.PostgreSQL",
+            StringComparison.Ordinal))
+        {
             entity.Property<uint>("xmin")
-                  .HasColumnName("xmin")
-                  .IsRowVersion();
+                .HasColumnName("xmin")
+                .IsRowVersion();
+        }
         });
 
         builder.Entity<QuestionOption>(entity =>
@@ -453,7 +459,14 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Ease).HasDefaultValue(1.3);
             entity.Property(e => e.SuccessStreak).HasDefaultValue(0);
-            entity.Property(e => e.NextReview).HasDefaultValueSql("NOW() AT TIME ZONE 'UTC'");
+            var nextReview = entity.Property(e => e.NextReview);
+        var nextReviewDefaultSql = string.Equals(
+            Database.ProviderName,
+            "Microsoft.EntityFrameworkCore.Sqlite",
+            StringComparison.Ordinal)
+            ? "CURRENT_TIMESTAMP"
+            : "NOW() AT TIME ZONE 'UTC'";
+        nextReview.HasDefaultValueSql(nextReviewDefaultSql);
 
             entity.HasIndex(e => new { e.UserId, e.QuestionId })
                   .IsUnique()

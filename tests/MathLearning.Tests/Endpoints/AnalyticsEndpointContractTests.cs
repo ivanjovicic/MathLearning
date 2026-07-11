@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using MathLearning.Api;
+using MathLearning.Api.Middleware;
 using MathLearning.Application.DTOs.Analytics;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
@@ -145,7 +146,9 @@ public sealed class AnalyticsEndpointContractTests :
         Assert.DoesNotContain(SecretFailure, body);
 
         using var json = JsonDocument.Parse(body);
-        Assert.Equal("An unexpected error occurred.", json.RootElement.GetProperty("error").GetString());
+        Assert.Equal(
+            SafeClientErrorResponse.GenericInternalError,
+            json.RootElement.GetProperty("error").GetString());
         Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
     }
 

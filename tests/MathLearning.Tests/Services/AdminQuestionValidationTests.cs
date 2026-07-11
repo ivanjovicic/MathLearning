@@ -1,6 +1,7 @@
 using MathLearning.Admin.Data;
 using MathLearning.Admin.Models;
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -232,10 +233,23 @@ public class AdminQuestionValidationTests
     }
 
     [Fact]
-    public void ApiDbContext_MapsXminAsConcurrencyToken()
+    public void ApiDbContext_NonNpgsqlModel_DoesNotMapXmin()
     {
         using var db = TestDbContextFactory.Create();
 
+        var xminProperty = db.Model.FindEntityType(typeof(Question))!.FindProperty("xmin");
+
+        Assert.Null(xminProperty);
+    }
+
+    [Fact]
+    public void ApiDbContext_NpgsqlModel_MapsXminAsConcurrencyToken()
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseNpgsql("Host=localhost;Database=metadata_only;Username=test;Password=test")
+            .Options;
+
+        using var db = new ApiDbContext(options);
         var xminProperty = db.Model.FindEntityType(typeof(Question))!.FindProperty("xmin");
 
         Assert.NotNull(xminProperty);

@@ -50,7 +50,8 @@ public sealed class AdminApiClient
 
     private void EnsureUsableRequestUri(string requestUri)
     {
-        if (Uri.TryCreate(requestUri, UriKind.Absolute, out _))
+        if (Uri.TryCreate(requestUri, UriKind.Absolute, out var absoluteUri) &&
+            (absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps))
         {
             return;
         }

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MathLearning.Api;
+using MathLearning.Api.Middleware;
 using MathLearning.Application.DTOs.Explanations;
 using MathLearning.Application.Services;
 using MathLearning.Tests.Helpers;
@@ -201,7 +202,9 @@ public sealed class ExplanationEndpointContractTests :
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain(SecretFailure, body);
         using var json = JsonDocument.Parse(body);
-        Assert.Equal("An unexpected error occurred.", json.RootElement.GetProperty("error").GetString());
+        Assert.Equal(
+            SafeClientErrorResponse.GenericInternalError,
+            json.RootElement.GetProperty("error").GetString());
         Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
     }
 

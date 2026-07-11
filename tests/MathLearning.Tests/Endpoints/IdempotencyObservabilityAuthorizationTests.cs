@@ -84,7 +84,7 @@ public sealed class IdempotencyObservabilityAuthorizationTests :
         var endpoint = Assert.Single(dataSource.Endpoints
             .OfType<RouteEndpoint>()
             .Where(candidate => string.Equals(
-                candidate.RoutePattern.RawText,
+                candidate.RoutePattern.RawText?.TrimEnd('/'),
                 Path,
                 StringComparison.OrdinalIgnoreCase)));
 
