@@ -145,6 +145,23 @@ jobs:
           ''')
 
           replace(
+              "src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs",
+              '''            entity.Property<uint>("xmin")
+                        .HasColumnName("xmin")
+                        .IsRowVersion();
+          ''',
+              '''            if (string.Equals(
+                      Database.ProviderName,
+                      "Npgsql.EntityFrameworkCore.PostgreSQL",
+                      StringComparison.Ordinal))
+                  {
+                      entity.Property<uint>("xmin")
+                          .HasColumnName("xmin")
+                          .IsRowVersion();
+                  }
+          ''')
+
+          replace(
               "tests/MathLearning.Tests/Endpoints/AnalyticsEndpointContractTests.cs",
               '''using MathLearning.Api;
           ''',
