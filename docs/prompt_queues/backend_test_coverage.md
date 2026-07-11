@@ -19,6 +19,7 @@ Prompt queues:
 - [`backend_test_followups_pass2_2026_07_03.md`](backend_test_followups_pass2_2026_07_03.md) — status overrides and BACKEND-TEST-042…047
 - [`backend_latest_commit_followups_2026_07_11.md`](backend_latest_commit_followups_2026_07_11.md) — latest implementation validation, workflow evidence, run-log lint and canonical queue ownership
 - [`backend_api_db_residuals_2026_07_11.md`](backend_api_db_residuals_2026_07_11.md) — BACKEND-API-DB-001…008 for answer disclosure, quiz/progress/sync authority, offline bundles, token storage and remaining user-read queries
+- [`backend_failing_test_followups_2026_07_11.md`](backend_failing_test_followups_2026_07_11.md) — BACKEND-MIGRATION-001 for the remaining clean/upgraded PostgreSQL cosmetics migration blocker
 
 ## Read first
 
@@ -89,6 +90,7 @@ Prompt queues:
 | BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Prompt-ready | Link exact `main` SHA to Database Validation jobs, logs and artifacts. |
 | BACKEND-LATEST-EVIDENCE-002 | P1 / Prompt-ready | Lint latest referenced run logs and reconcile evidence/status/score claims. |
 | BACKEND-LATEST-QUEUE-002 | P1 / Prompt-ready | Canonical ownership and dependency map across overlapping test/performance queues. |
+| BACKEND-MIGRATION-001 | P0 / Prompt-ready | Repair historical cosmetics FK-name drift and prove clean plus upgraded PostgreSQL migration paths without weakening the schema gate. |
 | BACKEND-API-DB-001 | P0 / Prompt-ready | Remove answer keys and complete solution material from online pre-answer quiz/SRS responses. |
 | BACKEND-API-DB-002 | P0 / Prompt-ready | Require a valid user-owned issued quiz session/question before answer settlement. |
 | BACKEND-API-DB-003 | P0/P1 / Prompt-ready | Replace client-authoritative progress completion/day with verifiable idempotent settlement. |
@@ -153,18 +155,19 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 1. Run BACKEND-LATEST-VALIDATION-002 and repair only proven compile/test failures.
 2. Run BACKEND-LATEST-WORKFLOW-002 against the exact resulting `main` SHA and review artifacts.
 3. Run BACKEND-LATEST-EVIDENCE-002 and BACKEND-LATEST-QUEUE-002 to close evidence and duplicate-ownership drift.
-4. Run BACKEND-API-DB-001 to remove answer/solution disclosure from pre-answer online contracts.
-5. Run BACKEND-API-DB-002 to establish quiz-session/question authority.
-6. Run BACKEND-API-DB-003 to replace client-authoritative progress completion.
-7. Apply BACKEND-TEST-012 refresh-token model/snapshot correction unless BACKEND-API-DB-007 safely supersedes and fully satisfies it.
-8. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
-9. Run BACKEND-API-DB-004 for same-device sync serialization and scoped operation identity.
-10. Run BACKEND-TEST-023 as canonical outbox owner, satisfying linked BE-PERF-016.
-11. Run BACKEND-TEST-022 durable ingest delivery.
-12. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
-13. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
-14. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection.
-15. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.
-16. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
-17. Continue BACKEND-TEST-042…047 after the P0 packages.
-18. Review the first coverage summary and introduce progressive thresholds only from measured evidence.
+4. Run BACKEND-MIGRATION-001 to restore clean and upgraded PostgreSQL migration validation without weakening the schema gate.
+5. Run BACKEND-API-DB-001 to remove answer/solution disclosure from pre-answer online contracts.
+6. Run BACKEND-API-DB-002 to establish quiz-session/question authority.
+7. Run BACKEND-API-DB-003 to replace client-authoritative progress completion.
+8. Apply BACKEND-TEST-012 refresh-token model/snapshot correction unless BACKEND-API-DB-007 safely supersedes and fully satisfies it.
+9. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
+10. Run BACKEND-API-DB-004 for same-device sync serialization and scoped operation identity.
+11. Run BACKEND-TEST-023 as canonical outbox owner, satisfying linked BE-PERF-016.
+12. Run BACKEND-TEST-022 durable ingest delivery.
+13. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+14. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
+15. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection.
+16. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.
+17. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
+18. Continue BACKEND-TEST-042…047 after the P0 packages.
+19. Review the first coverage summary and introduce progressive thresholds only from measured evidence.
