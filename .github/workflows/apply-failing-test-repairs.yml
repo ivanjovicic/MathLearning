@@ -167,6 +167,48 @@ jobs:
                   }''')
 
           replace(
+              "src/MathLearning.Api/Endpoints/QuizEndpoints.cs",
+              '''        UserQuestionStat? existing;
+                  if (db.Database.IsRelational())
+                  {
+                      existing = await db.UserQuestionStats
+                          .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                          .FirstOrDefaultAsync(cancellationToken);
+                  }
+                  else
+          ''',
+              '''        UserQuestionStat? existing;
+                  var supportsForUpdate = (db.Database.ProviderName ?? string.Empty)
+                      .Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
+                  if (supportsForUpdate)
+                  {
+                      existing = await db.UserQuestionStats
+                          .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                          .FirstOrDefaultAsync(cancellationToken);
+                  }
+                  else
+          ''')
+
+          replace(
+              "src/MathLearning.Api/Endpoints/QuizEndpoints.cs",
+              '''            db.Entry(created).State = EntityState.Detached;
+                      if (db.Database.IsRelational())
+                      {
+                          return await db.UserQuestionStats
+                              .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                              .SingleAsync(cancellationToken);
+                      }
+          ''',
+              '''            db.Entry(created).State = EntityState.Detached;
+                      if (supportsForUpdate)
+                      {
+                          return await db.UserQuestionStats
+                              .FromSqlInterpolated($@"SELECT * FROM ""UserQuestionStats"" WHERE ""UserId"" = {userId} AND ""QuestionId"" = {questionId} FOR UPDATE")
+                              .SingleAsync(cancellationToken);
+                      }
+          ''')
+
+          replace(
               "tests/MathLearning.Tests/Endpoints/AnalyticsEndpointContractTests.cs",
               '''using MathLearning.Api;
           ''',
@@ -274,6 +316,7 @@ jobs:
             src/MathLearning.Admin/Services/AdminApiClient.cs \
             src/MathLearning.Application/Helpers/StepEngine.cs \
             src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs \
+            src/MathLearning.Api/Endpoints/QuizEndpoints.cs \
             tests/MathLearning.Tests/Endpoints/AnalyticsEndpointContractTests.cs \
             tests/MathLearning.Tests/Endpoints/ExplanationEndpointContractTests.cs \
             tests/MathLearning.Tests/Endpoints/IdempotencyObservabilityAuthorizationTests.cs
