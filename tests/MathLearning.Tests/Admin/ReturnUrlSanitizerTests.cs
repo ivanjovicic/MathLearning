@@ -11,6 +11,7 @@ public sealed class ReturnUrlSanitizerTests
     [InlineData("dashboard")]
     [InlineData("https://evil.example/path")]
     [InlineData("//evil.example/path")]
+    [InlineData("/questions/42?mode=edit#answer")]
     public void NormalizeLocalReturnUrl_InvalidOrExternalValue_ReturnsRoot(string? returnUrl)
     {
         var result = ReturnUrlSanitizer.NormalizeLocalReturnUrl(returnUrl);
@@ -31,7 +32,7 @@ public sealed class ReturnUrlSanitizerTests
     [Theory]
     [InlineData("/")]
     [InlineData("/dashboard")]
-    [InlineData("/questions/42?mode=edit#answer")]
+    [InlineData("/questions/42?mode=edit")]
     public void NormalizeLocalReturnUrl_ValidLocalPath_IsPreserved(string returnUrl)
     {
         var result = ReturnUrlSanitizer.NormalizeLocalReturnUrl(returnUrl);
