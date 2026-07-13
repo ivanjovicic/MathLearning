@@ -27,7 +27,7 @@ Before implementing any prompt:
 | `BACKEND-API-DB-001` | P0 | Prompt-ready | Remove answer keys and full solution material from pre-answer online quiz/SRS responses. | Cross-repo mobile contract; preserve post-answer feedback |
 | `BACKEND-API-DB-002` | P0 | Prompt-ready | Bind answer settlement to a valid user-owned issued quiz session and question set. | `BACKEND-TEST-013`, `BACKEND-TEST-032`, `BACKEND-TEST-033` |
 | `BACKEND-API-DB-003` | P0/P1 | Prompt-ready | Replace client-authoritative progress completion with server-verifiable idempotent settlement. | Mobile offline/sync contract; `BACKEND-TEST-032/033` where needed |
-| `BACKEND-API-DB-004` | P0/P1 | Prompt-ready | Scope sync operation identity and serialize same-device cursor mutation on PostgreSQL. | `BACKEND-TEST-032`; reuse transaction/failure barriers from `BACKEND-TEST-033` |
+| `BACKEND-API-DB-004` | P0/P1 | Done | Scope sync operation identity and serialize same-device cursor mutation on PostgreSQL. | Run log: `.ai/runs/2026-07-13-BACKEND-API-DB-004-evidence.md` |
 | `BACKEND-API-DB-005` | P1 | Prompt-ready | Correct offline bundle hint mapping and make bundle version reflect all response-affecting content. | Cross-repo offline contract |
 | `BACKEND-API-DB-006` | P1 | Prompt-ready | Bound sync request/payload/storage/error data and add explicit retention ownership. | Follow `BACKEND-API-DB-004` schema decisions |
 | `BACKEND-API-DB-007` | P1 | Prompt-ready | Protect refresh tokens at rest and bound expired/revoked-token retention. | Depends on or safely supersedes schema part of `BACKEND-TEST-012` |

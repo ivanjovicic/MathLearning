@@ -7,6 +7,7 @@
 @using MathLearning.Admin.Services
 @using MathLearning.Application.Content
 @using MathLearning.Application.DTOs.Questions
+@using MathLearning.Application.Services
 @using MathLearning.Infrastructure.Services.QuestionAuthoring
 @using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
@@ -20,6 +21,8 @@
 @inject ILogger<Edit> Logger
 @inject IJSRuntime Js
 @inject IQuestionAuthoringService QuestionAuthoringService
+@inject IMathQuestionAuthoringService MathQuestionAuthoringService
+@inject IQuestionVersioningService QuestionVersioningService
 @inject AdminQuestionValidationOrchestrator ValidationOrchestrator
 @inject IDialogService DialogService
 
@@ -93,6 +96,18 @@ else
             }
             Validiraj
         </MudButton>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Secondary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="RevalidatePersistedDraftAsync"
+                   Disabled="@(_isRevalidating || IsSaving || _question.CurrentDraftId is null)"
+                   Size="Size.Small">
+            @if (_isRevalidating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+            }
+            Revalidiraj draft
+        </MudButton>
         @if (_question.PublishState is not QuestionPublishStates.Published)
         {
             <MudButton Variant="Variant.Filled"
@@ -107,6 +122,119 @@ else
     </div>
 
     <ValidationDetailPanel Result="@_validationResult" />
+
+    @if (_latestValidation is not null)
+    {
+        <MudPaper Class="pa-4 mb-4" Outlined="true">
+            <div class="d-flex align-center justify-space-between gap-2 mb-3 flex-wrap">
+                <div>
+                    <MudText Typo="Typo.h6">Poslednja validacija</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @FormatUtcDate(_latestValidation.ValidatedAtUtc) | @GetValidationStatusLabel(_latestValidation.Status)
+                    </MudText>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <MudChip T="string" Variant="Variant.Outlined" Color="@GetValidationChipColor(_latestValidation.Status)" Size="Size.Small">
+                        @GetValidationStatusLabel(_latestValidation.Status)
+                    </MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Color="@(_latestValidation.HasErrors ? Color.Error : Color.Success)" Size="Size.Small">
+                        Greške: @_latestValidation.Issues.Count(x => string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.OrdinalIgnoreCase))
+                    </MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Color="@(_latestValidation.HasWarnings ? Color.Warning : Color.Success)" Size="Size.Small">
+                        Upozorenja: @_latestValidation.Issues.Count(x => string.Equals(x.Severity, ValidationIssueSeverities.Warning, StringComparison.OrdinalIgnoreCase))
+                    </MudChip>
+                </div>
+            </div>
+
+            @if (_latestValidation.Issues.Count == 0)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Variant="Variant.Outlined">
+                    Nema otvorenih validacionih problema na poslednjem snimljenom draftu.
+                </MudAlert>
+            }
+            else
+            {
+                <MudList T="string" Dense="true">
+                    @foreach (var issue in _latestValidation.Issues.Take(6))
+                    {
+                        <MudListItem T="string" Icon="@GetValidationIssueIcon(issue.Severity)">
+                            <div>
+                                <strong>@GetValidationIssueSeverityLabel(issue.Severity):</strong> @issue.Message
+                                @if (!string.IsNullOrWhiteSpace(issue.FieldPath))
+                                {
+                                    <div class="text-muted">@issue.FieldPath</div>
+                                }
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+
+                @if (_latestValidation.Issues.Count > 6)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Prikazano prvih 6 od @_latestValidation.Issues.Count problema.
+                    </MudText>
+                }
+            }
+        </MudPaper>
+    }
+
+    @if (_versionHistory.Count > 0)
+    {
+        <MudPaper Class="pa-4 mb-4" Outlined="true">
+            <div class="d-flex align-center justify-space-between gap-2 mb-3 flex-wrap">
+                <div>
+                    <MudText Typo="Typo.h6">Istorija verzija</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Poslednje objave i razlozi promena za ovo pitanje.
+                    </MudText>
+                </div>
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">
+                    @_versionHistory.Count verzija
+                </MudChip>
+            </div>
+
+            <MudTable Items="@_versionHistory" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Verzija</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Audit</MudTh>
+                    <MudTh>Autor/Editor</MudTh>
+                    <MudTh>Kreirano</MudTh>
+                    <MudTh>Objavljeno</MudTh>
+                    <MudTh>Napomena</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Verzija">v@context.VersionNumber</MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string"
+                                 Variant="Variant.Outlined"
+                                 Color="@GetPublishStateColor(context.PublishState)"
+                                 Size="Size.Small">
+                            @GetPublishStateLabel(context.PublishState)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Audit">
+                        <div class="d-flex flex-column gap-1">
+                            <MudChip T="string"
+                                     Variant="Variant.Outlined"
+                                     Color="@GetVersionAuditColor(context)"
+                                     Size="Size.Small">
+                                @GetVersionAuditLabel(context)
+                            </MudChip>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @GetVersionAuditHint(context)
+                            </MudText>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="Autor/Editor">@GetVersionActorLabel(context)</MudTd>
+                    <MudTd DataLabel="Kreirano">@FormatUtcDate(context.CreatedAtUtc)</MudTd>
+                    <MudTd DataLabel="Objavljeno">@FormatUtcDate(context.PublishedAtUtc)</MudTd>
+                    <MudTd DataLabel="Napomena">@GetChangeReasonLabel(context.ChangeReason)</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
 
     <QuestionEditor Model="@Model"
                     Categories="@Categories"
@@ -150,6 +278,9 @@ else
     private string? _autosaveStatus;
     private ValidateQuestionResponse? _validationResult;
     private bool _isValidating;
+    private bool _isRevalidating;
+    private IReadOnlyList<QuestionVersionHistoryItemDto> _versionHistory = [];
+    private QuestionValidationHistoryDto? _latestValidation;
     private bool CanPublish =>
         _validationResult?.Summary.CanPublish == true ||
         _currentDraftValidationStatus is QuestionValidationStatuses.Passed or QuestionValidationStatuses.PassedWithWarnings;
@@ -196,6 +327,9 @@ else
                         .FirstOrDefaultAsync();
                 }
             }
+
+            await LoadVersionHistoryAsync();
+            await LoadLatestValidationAsync();
 
             MarkSnapshot();
         }
@@ -334,9 +468,19 @@ else
                 }
 
                 var request = _editorHelper.ToAuthoringRequest(Model, _question.Id);
+                var wasPublished = string.Equals(question.PublishState, QuestionPublishStates.Published, StringComparison.Ordinal);
                 await QuestionAuthoringService.UpdateQuestionAsync(db, question, request, "admin_ui", CancellationToken.None);
+                if (wasPublished)
+                {
+                    question.SetPublishState(QuestionPublishStates.Draft, "admin_ui", null);
+                }
+                var draftSaveResult = await MathQuestionAuthoringService.SaveDraftAsync(
+                    new SaveQuestionDraftRequest(request, "admin_ui_save"),
+                    "admin_ui",
+                    CancellationToken.None);
                 await tx.CommitAsync();
                 _question = question;
+                _currentDraftValidationStatus = draftSaveResult.Validation.Summary.Status;
             }
             catch
             {
@@ -345,13 +489,6 @@ else
             }
 
             Snackbar.Add("Pitanje je uspešno izmenjeno.", Severity.Success);
-            _currentDraftValidationStatus = _question.CurrentDraftId.HasValue
-                ? await db.QuestionDrafts
-                    .AsNoTracking()
-                    .Where(x => x.Id == _question.CurrentDraftId.Value)
-                    .Select(x => x.ValidationStatus)
-                    .FirstOrDefaultAsync()
-                : _currentDraftValidationStatus;
             MarkSnapshot();
 
             var draftKey = $"question-editor-draft-{Id}";
@@ -416,6 +553,20 @@ else
         }
     }
 
+    private async Task LoadVersionHistoryAsync()
+    {
+        _versionHistory = await QuestionVersioningService.GetVersionsAsync(Id, CancellationToken.None);
+    }
+
+    private async Task LoadLatestValidationAsync()
+    {
+        _latestValidation = await MathQuestionAuthoringService.GetValidationAsync(Id, CancellationToken.None);
+        if (_latestValidation is not null)
+        {
+            _currentDraftValidationStatus = _latestValidation.Status;
+        }
+    }
+
     private async Task RunValidationAsync()
     {
         if (_editorHelper is null) return;
@@ -440,9 +591,43 @@ else
         }
     }
 
+    private async Task RevalidatePersistedDraftAsync()
+    {
+        if (_question?.CurrentDraftId is null)
+        {
+            Snackbar.Add("Nema drafta za revalidaciju.", Severity.Info);
+            return;
+        }
+
+        _isRevalidating = true;
+        StateHasChanged();
+        try
+        {
+            _latestValidation = await MathQuestionAuthoringService.RevalidateAsync(Id, "admin_ui", CancellationToken.None);
+            _currentDraftValidationStatus = _latestValidation.Status;
+            Snackbar.Add("Draft je ponovo validiran.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to revalidate question draft {QuestionId}", Id);
+            Snackbar.Add("Greška pri revalidaciji drafta.", Severity.Error);
+        }
+        finally
+        {
+            _isRevalidating = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task PublishAsync()
     {
-        if (_question is null) return;
+        if (_question is null || _editorHelper is null) return;
+
+        ValidationErrors = _editorHelper.ValidateModel(Model);
+        if (ValidationErrors.Count > 0)
+        {
+            return;
+        }
 
         var confirm = await DialogService.ShowMessageBox(
             "Objavljivanje pitanja",
@@ -455,33 +640,36 @@ else
         StateHasChanged();
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var question = await db.Questions.FirstOrDefaultAsync(x => x.Id == Id);
-            if (question is null)
+            var request = _editorHelper.ToAuthoringRequest(Model, Id);
+            var draftResult = await MathQuestionAuthoringService.SaveDraftAsync(
+                new SaveQuestionDraftRequest(request, "admin_ui_publish"),
+                "admin_ui",
+                CancellationToken.None);
+            var publishResult = await MathQuestionAuthoringService.PublishAsync(
+                new PublishQuestionRequest(draftResult.DraftId, "admin_ui_publish"),
+                "admin_ui",
+                CancellationToken.None);
+
+            if (!publishResult.Published)
             {
-                Snackbar.Add("Pitanje nije pronađeno.", Severity.Warning);
+                ValidationErrors = publishResult.ValidationSummary.Issues
+                    .Select(x => x.Message)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToList();
+                Snackbar.Add("Pitanje nije spremno za objavljivanje.", Severity.Warning);
                 return;
             }
 
-            question.SetPublishState(QuestionPublishStates.Published, "admin_ui", DateTime.UtcNow);
-            if (question.CurrentDraftId.HasValue)
-            {
-                var draft = await db.QuestionDrafts
-                    .FirstOrDefaultAsync(x => x.Id == question.CurrentDraftId.Value);
-                if (draft is not null)
-                {
-                    draft.PublishState = QuestionPublishStates.Published;
-                    draft.UpdatedAtUtc = DateTime.UtcNow;
-                }
-            }
-            await db.SaveChangesAsync();
-            _question = question;
-            _currentDraftValidationStatus = question.CurrentDraftId.HasValue
-                ? await db.QuestionDrafts.AsNoTracking()
-                    .Where(x => x.Id == question.CurrentDraftId.Value)
-                    .Select(x => x.ValidationStatus)
-                    .FirstOrDefaultAsync()
-                : _currentDraftValidationStatus;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _question = await db.Questions
+                .AsNoTracking()
+                .Include(x => x.Options)
+                .Include(x => x.Steps)
+                .FirstOrDefaultAsync(x => x.Id == Id);
+            _currentDraftValidationStatus = publishResult.ValidationSummary.Status;
+            await LoadLatestValidationAsync();
+            await LoadVersionHistoryAsync();
             Snackbar.Add("Pitanje je uspešno objavljeno.", Severity.Success);
             StateHasChanged();
         }
@@ -514,11 +702,78 @@ else
         _ => "Draft"
     };
 
+    private static Color GetPublishStateColor(string publishState) => publishState switch
+    {
+        QuestionPublishStates.Published => Color.Success,
+        QuestionPublishStates.Validated => Color.Info,
+        QuestionPublishStates.Archived => Color.Secondary,
+        _ => Color.Warning
+    };
+
     private static string GetValidationStatusLabel(string validationStatus) => validationStatus switch
     {
         QuestionValidationStatuses.Passed => "Bez grešaka",
         QuestionValidationStatuses.PassedWithWarnings => "Upozorenja",
         QuestionValidationStatuses.Failed => "Problematično",
         _ => "Na čekanju"
+    };
+
+    private static Color GetValidationChipColor(string validationStatus) => validationStatus switch
+    {
+        QuestionValidationStatuses.Passed => Color.Success,
+        QuestionValidationStatuses.PassedWithWarnings => Color.Warning,
+        QuestionValidationStatuses.Failed => Color.Error,
+        _ => Color.Info
+    };
+
+    private static string FormatUtcDate(DateTime? value)
+        => value?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "Nije objavljeno";
+
+    private static string GetChangeReasonLabel(string? changeReason)
+        => string.IsNullOrWhiteSpace(changeReason) ? "Bez napomene" : changeReason;
+
+    private static string GetVersionActorLabel(QuestionVersionHistoryItemDto version)
+    {
+        if (!string.IsNullOrWhiteSpace(version.EditorUserId))
+        {
+            return version.EditorUserId!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(version.AuthorUserId))
+        {
+            return version.AuthorUserId!;
+        }
+
+        return "Sistem";
+    }
+
+    private static Color GetVersionAuditColor(QuestionVersionHistoryItemDto version)
+        => version.PreviousVersionId.HasValue ? Color.Info : Color.Success;
+
+    private static string GetVersionAuditLabel(QuestionVersionHistoryItemDto version)
+        => version.PreviousVersionId.HasValue ? "Iteracija" : "Prva objava";
+
+    private static string GetVersionAuditHint(QuestionVersionHistoryItemDto version)
+    {
+        if (version.PreviousVersionId.HasValue)
+        {
+            return $"Nastavlja verzionisanje nakon v{Math.Max(1, version.VersionNumber - 1)}.";
+        }
+
+        return "Prvi objavljeni snapshot ovog pitanja.";
+    }
+
+    private static string GetValidationIssueIcon(string severity) => severity switch
+    {
+        ValidationIssueSeverities.Error => Icons.Material.Filled.ErrorOutline,
+        ValidationIssueSeverities.Warning => Icons.Material.Filled.WarningAmber,
+        _ => Icons.Material.Filled.Info
+    };
+
+    private static string GetValidationIssueSeverityLabel(string severity) => severity switch
+    {
+        ValidationIssueSeverities.Error => "Greška",
+        ValidationIssueSeverities.Warning => "Upozorenje",
+        _ => "Info"
     };
 }

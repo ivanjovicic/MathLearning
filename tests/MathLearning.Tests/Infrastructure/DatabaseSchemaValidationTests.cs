@@ -2,6 +2,8 @@ using System.Data;
 using MathLearning.Api.Services;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MathLearning.Tests.Database;
@@ -26,6 +28,9 @@ public sealed class DatabaseSchemaValidationTests
         await AssertColumnExistsAsync(db, "SyncDeadLetter", "ResolvedAtUtc");
         await AssertColumnExistsAsync(db, "SyncDeadLetter", "ResolutionNote");
         await AssertColumnExistsAsync(db, "SyncDeadLetter", "SyncEventLogId");
+        await AssertColumnExistsAsync(db, "SyncDeadLetter", "PayloadHash");
+
+        await AssertColumnExistsAsync(db, "SyncEventLog", "PayloadHash");
 
         await AssertColumnExistsAsync(db, "Questions", "CurrentDraftId");
         await AssertColumnExistsAsync(db, "Questions", "CurrentVersionNumber");
@@ -73,6 +78,10 @@ public sealed class DatabaseSchemaValidationTests
         await using var db = CreateDbContext();
 
         await AssertIndexExistsAsync(db, "SyncDeadLetter", "IX_SyncDeadLetter_Status_LastFailedAtUtc");
+        await AssertIndexExistsAsync(db, "SyncDeadLetter", "UX_SyncDeadLetter_User_Device_OperationId");
+        await AssertIndexExistsAsync(db, "SyncEventLog", "UX_SyncEventLog_User_Device_OperationId");
+        await AssertIndexExistsAsync(db, "SyncEventLog", "UX_SyncEventLog_User_Device_Sequence");
+        await AssertIndexExistsAsync(db, "UserAnswers", "UX_UserAnswers_User_Device_SyncOperationId");
         await AssertIndexExistsAsync(db, "Questions", "IX_Questions_CurrentDraftId");
         await AssertIndexExistsAsync(db, "Questions", "IX_Questions_PublishState");
         await AssertIndexExistsAsync(db, "Questions", "IX_Questions_CorrectOptionId");
@@ -97,6 +106,30 @@ public sealed class DatabaseSchemaValidationTests
         await AssertConstraintExistsAsync(db, "QuestionSteps", "FK_QuestionSteps_Questions_QuestionId");
         await AssertConstraintExistsAsync(db, "Options", "FK_Options_Questions_QuestionId");
         await AssertConstraintExistsAsync(db, "UserProfiles", "FK_UserProfiles_AspNetUsers_UserId");
+    }
+
+    [Fact]
+    [Trait("Category", "DatabaseSchema")]
+    public void CosmeticsMigrationUsesConstraintIntrospectionForHistoricalDrift()
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseNpgsql("Host=localhost;Database=metadata_only;Username=test;Password=test")
+            .Options;
+
+        using var db = new ApiDbContext(options);
+        var migrator = db.GetService<IMigrator>();
+
+        var script = migrator.GenerateScript(
+            fromMigration: "20260309091241_AddCosmeticSystem",
+            toMigration: "20260624133144_AlignCosmeticsMobileDataModel",
+            options: MigrationsSqlGenerationOptions.Idempotent);
+
+        Assert.Contains("pg_constraint", script, StringComparison.Ordinal);
+        Assert.Contains("cardinality(c.conkey) = 1", script, StringComparison.Ordinal);
+        Assert.Contains("ALTER TABLE %I DROP CONSTRAINT %I", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("FK_user_avatar_configs_UserProfiles_UserId", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PK_user_avatar_configs", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PK_user_cosmetic_inventory", script, StringComparison.Ordinal);
     }
 
     [Fact]

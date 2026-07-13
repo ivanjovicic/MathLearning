@@ -88,6 +88,46 @@
             </MudExpansionPanel>
         </MudCardContent>
     }
+    @if (Result.EquivalenceChecks.Count > 0)
+    {
+        <MudCardContent Class="pt-0">
+            <MudExpansionPanel Text="Semanticka provera odgovora" Dense="true">
+                <MudStack Spacing="2">
+                    @foreach (var check in Result.EquivalenceChecks)
+                    {
+                        <MudPaper Outlined="true" Class="pa-3">
+                            <div class="d-flex align-center gap-2 flex-wrap mb-2">
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Variant="Variant.Filled"
+                                         Color="@(check.IsEquivalent ? Color.Success : Color.Warning)">
+                                    @(check.IsEquivalent ? "Ekvivalentno" : "Razlika")
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                    Nacin: @check.ComparisonMode
+                                </MudChip>
+                            </div>
+
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Ocekivano</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-2">@check.Expected</MudText>
+
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Poredjeno sa</MudText>
+                            <MudText Typo="Typo.body2">@check.Actual</MudText>
+
+                            @if (!string.IsNullOrWhiteSpace(check.Reason))
+                            {
+                                <MudAlert Severity="@(check.IsEquivalent ? Severity.Info : Severity.Warning)"
+                                          Dense="true"
+                                          Class="mt-3">
+                                    @check.Reason
+                                </MudAlert>
+                            }
+                        </MudPaper>
+                    }
+                </MudStack>
+            </MudExpansionPanel>
+        </MudCardContent>
+    }
 </MudCard>
 
 @* Inline row component *@

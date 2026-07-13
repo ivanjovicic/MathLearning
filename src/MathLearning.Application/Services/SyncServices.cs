@@ -38,7 +38,7 @@ public interface ISyncAdminService
         CancellationToken cancellationToken);
 
     Task<SyncDeadLetterRedriveResponseDto> RedriveDeadLetterAsync(
-        Guid operationId,
+        Guid deadLetterId,
         string? actorUserId,
         CancellationToken cancellationToken);
 

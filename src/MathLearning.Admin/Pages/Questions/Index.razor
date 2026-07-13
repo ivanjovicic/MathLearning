@@ -51,6 +51,17 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
+            <MudSelect @bind-Value="_selectedSubtopicId"
+                       Label="Podtema"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var subtopic in _subtopics)
+                {
+                    <MudSelectItem Value="@subtopic.Id">@subtopic.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
             <MudSelect T="string" @bind-Value="_selectedType" 
                        Label="Tip pitanja" 
                        Variant="Variant.Outlined"
@@ -82,10 +93,46 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
+            <MudSelect T="string" @bind-Value="_selectedAttentionFilter"
+                       Label="Pažnja"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                <MudSelectItem T="string" Value="@AttentionFilterProblematic">Problematična</MudSelectItem>
+                <MudSelectItem T="string" Value="@AttentionFilterWarnings">Sa upozorenjima</MudSelectItem>
+                <MudSelectItem T="string" Value="@AttentionFilterReady">Spremna za objavu</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudSelect T="string" @bind-Value="_selectedValidationStatus"
+                       Label="Validacija"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                <MudSelectItem T="string" Value="@QuestionValidationStatuses.Passed">Bez grešaka</MudSelectItem>
+                <MudSelectItem T="string" Value="@QuestionValidationStatuses.PassedWithWarnings">Upozorenja</MudSelectItem>
+                <MudSelectItem T="string" Value="@QuestionValidationStatuses.Failed">Problematično</MudSelectItem>
+                <MudSelectItem T="string" Value="@ValidationStatusPending">Na čekanju</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_selectedAuthor"
+                          Label="Autor / izmenio"
+                          Placeholder="npr. admin_ui"
+                          Variant="Variant.Outlined"
+                          Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" md="3">
             <MudDatePicker Label="Izmenjeno nakon"
                            Variant="Variant.Outlined"
                            Date="@_updatedAfterDate"
                            DateChanged="OnUpdatedAfterDateChangedAsync"
+                           Clearable="true"
+                           Editable="true" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker Label="Izmenjeno pre"
+                           Variant="Variant.Outlined"
+                           Date="@_updatedBeforeDate"
+                           DateChanged="OnUpdatedBeforeDateChangedAsync"
                            Clearable="true"
                            Editable="true" />
         </MudItem>
@@ -96,6 +143,15 @@
                        FullWidth="true">
                 <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
                 Pretraži
+            </MudButton>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudButton OnClick="ResetSearchAndReloadAsync"
+                       Color="Color.Default"
+                       Variant="Variant.Outlined"
+                       FullWidth="true">
+                <MudIcon Icon="@Icons.Material.Filled.FilterAltOff" Class="mr-2" />
+                Očisti filtere (@ActiveFilterCount)
             </MudButton>
         </MudItem>
     </MudGrid>
@@ -112,6 +168,26 @@
         </MudButton>
     </div>
 
+    @if (ActiveFilterCount > 0)
+    {
+        <MudChipSet T="string" Class="mb-4 gap-2">
+            @foreach (var filter in ActiveFilterLabels)
+            {
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Variant="Variant.Outlined"
+                         Color="Color.Info"
+                         Class="cursor-pointer"
+                         @onclick="async () => await RemoveFilterAsync(filter.Key)">
+                    <span class="d-inline-flex align-center gap-1">
+                        <span>@filter.Label</span>
+                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                    </span>
+                </MudChip>
+            }
+        </MudChipSet>
+    }
+
     @if (_loading)
     {
         <MudProgressCircular Indeterminate="true" />
@@ -119,7 +195,24 @@
     else if (_questions.Count == 0)
     {
         <MudAlert Severity="Severity.Info">
-            Nema pitanja sa izabranim kriterijumima. Kliknite "Dodaj Pitanje" da kreirate prvo.
+            @if (ActiveFilterCount > 0)
+            {
+                <div class="d-flex flex-column gap-2">
+                    <span>Nema pitanja za izabrane filtere. Pokušajte sa širim kriterijumima.</span>
+                    <div>
+                        <MudButton OnClick="ResetSearchAndReloadAsync"
+                                   Variant="Variant.Text"
+                                   Color="Color.Info"
+                                   StartIcon="@Icons.Material.Filled.FilterAltOff">
+                            Očisti filtere
+                        </MudButton>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <span>Nema pitanja sa izabranim kriterijumima. Kliknite "Dodaj Pitanje" da kreirate prvo.</span>
+            }
         </MudAlert>
     }
     else
@@ -133,6 +226,7 @@
                 <MudTh>Tekst</MudTh>
                 <MudTh>Tip</MudTh>
                 <MudTh>Kategorija</MudTh>
+                <MudTh>Podtema</MudTh>
                 <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.PublishState)">Stanje</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.Difficulty)">Tezina</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel SortBy="new Func<QuestionListItem, object>(x => x.UpdatedAt)" InitialDirection="SortDirection.Descending">Poslednja izmena</MudTableSortLabel></MudTh>
@@ -164,15 +258,30 @@
                         @context.Category?.Name
                     </MudChip>
                 </MudTd>
+                <MudTd DataLabel="Podtema">
+                    @if (!string.IsNullOrWhiteSpace(context.SubtopicName))
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">
+                            @context.SubtopicName
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">-</MudText>
+                    }
+                </MudTd>
                 <MudTd DataLabel="Stanje">
                     <div class="d-flex flex-column gap-1">
                         <MudChip T="string" Size="Size.Small" Color="@GetPublishStateColor(context.PublishState)" Variant="Variant.Filled">
                             @GetPublishStateLabel(context.PublishState)
                         </MudChip>
-                        @if (!string.IsNullOrWhiteSpace(context.ValidationStatus))
+                        <MudChip T="string" Size="Size.Small" Color="@GetValidationStatusColor(context.ValidationStatus)" Variant="Variant.Outlined">
+                            @GetValidationStatusLabel(context.ValidationStatus ?? ValidationStatusPending)
+                        </MudChip>
+                        @if (NeedsAttention(context))
                         {
-                            <MudChip T="string" Size="Size.Small" Color="@GetValidationStatusColor(context.ValidationStatus)" Variant="Variant.Outlined">
-                                @GetValidationStatusLabel(context.ValidationStatus)
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
+                                Potrebna pažnja
                             </MudChip>
                         }
                     </div>
@@ -235,13 +344,19 @@
 @code {
     private List<QuestionListItem> _questions = new();
     private List<Category> _categories = new();
+    private List<Subtopic> _subtopics = new();
     private bool _loading = true;
     private string _searchText = string.Empty;
     private int _selectedCategoryId = 0;
+    private int _selectedSubtopicId = 0;
     private string _selectedType = string.Empty;
     private int? _selectedDifficulty;
     private string _selectedPublishState = string.Empty;
+    private string _selectedAttentionFilter = string.Empty;
+    private string _selectedValidationStatus = string.Empty;
+    private string _selectedAuthor = string.Empty;
     private DateTime? _updatedAfterDate;
+    private DateTime? _updatedBeforeDate;
     private int _currentPage = 1;
     private int _pageSize = 10;
     private int _totalCount = 0;
@@ -253,7 +368,100 @@
         QuestionPublishStates.Published,
         QuestionPublishStates.Archived
     ];
+    private const string AttentionFilterProblematic = "problematic";
+    private const string AttentionFilterWarnings = "warnings";
+    private const string AttentionFilterReady = "ready";
+    private const string ValidationStatusPending = "__pending";
+    private const string FilterKeySearch = "search";
+    private const string FilterKeyCategory = "category";
+    private const string FilterKeySubtopic = "subtopic";
+    private const string FilterKeyType = "type";
+    private const string FilterKeyDifficulty = "difficulty";
+    private const string FilterKeyPublishState = "publishState";
+    private const string FilterKeyAttention = "attention";
+    private const string FilterKeyValidation = "validation";
+    private const string FilterKeyAuthor = "author";
+    private const string FilterKeyUpdatedAfter = "updatedAfter";
+    private const string FilterKeyUpdatedBefore = "updatedBefore";
     private int _pageCount => (_totalCount + _pageSize - 1) / _pageSize;
+    private int ActiveFilterCount =>
+        (!string.IsNullOrWhiteSpace(_searchText) ? 1 : 0) +
+        (_selectedCategoryId > 0 ? 1 : 0) +
+        (_selectedSubtopicId > 0 ? 1 : 0) +
+        (!string.IsNullOrWhiteSpace(_selectedType) ? 1 : 0) +
+        (_selectedDifficulty.HasValue ? 1 : 0) +
+        (!string.IsNullOrWhiteSpace(_selectedPublishState) ? 1 : 0) +
+        (!string.IsNullOrWhiteSpace(_selectedAttentionFilter) ? 1 : 0) +
+        (!string.IsNullOrWhiteSpace(_selectedValidationStatus) ? 1 : 0) +
+        (!string.IsNullOrWhiteSpace(_selectedAuthor) ? 1 : 0) +
+        (_updatedAfterDate.HasValue ? 1 : 0) +
+        (_updatedBeforeDate.HasValue ? 1 : 0);
+    private IReadOnlyList<ActiveFilterChip> ActiveFilterLabels
+    {
+        get
+        {
+            var filters = new List<ActiveFilterChip>();
+
+            if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                filters.Add(new ActiveFilterChip(FilterKeySearch, $"Pretraga: {_searchText}"));
+            }
+
+            if (_selectedCategoryId > 0)
+            {
+                var categoryName = _categories.FirstOrDefault(x => x.Id == _selectedCategoryId)?.Name;
+                filters.Add(new ActiveFilterChip(FilterKeyCategory, $"Kategorija: {categoryName ?? _selectedCategoryId.ToString()}"));
+            }
+
+            if (_selectedSubtopicId > 0)
+            {
+                var subtopicName = _subtopics.FirstOrDefault(x => x.Id == _selectedSubtopicId)?.Name;
+                filters.Add(new ActiveFilterChip(FilterKeySubtopic, $"Podtema: {subtopicName ?? _selectedSubtopicId.ToString()}"));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedType))
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyType, $"Tip: {(_selectedType == "multiple_choice" ? "Višestruki izbor" : "Otvoren odgovor")}"));
+            }
+
+            if (_selectedDifficulty.HasValue)
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyDifficulty, $"Težina: {_selectedDifficulty.Value}"));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedPublishState))
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyPublishState, $"Status: {GetPublishStateLabel(_selectedPublishState)}"));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedAttentionFilter))
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyAttention, $"Pažnja: {GetAttentionFilterLabel(_selectedAttentionFilter)}"));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedValidationStatus))
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyValidation, $"Validacija: {GetValidationStatusFilterLabel(_selectedValidationStatus)}"));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedAuthor))
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyAuthor, $"Autor: {_selectedAuthor}"));
+            }
+
+            if (_updatedAfterDate.HasValue)
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyUpdatedAfter, $"Izmenjeno nakon: {_updatedAfterDate.Value:dd.MM.yyyy}"));
+            }
+
+            if (_updatedBeforeDate.HasValue)
+            {
+                filters.Add(new ActiveFilterChip(FilterKeyUpdatedBefore, $"Izmenjeno pre: {_updatedBeforeDate.Value:dd.MM.yyyy}"));
+            }
+
+            return filters;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -264,6 +472,11 @@
             _categories = await db.Categories
                 .AsNoTracking()
                 .OrderBy(c => c.Name)
+                .ToListAsync();
+
+            _subtopics = await db.Subtopics
+                .AsNoTracking()
+                .OrderBy(s => s.Name)
                 .ToListAsync();
 
             await LoadQuestionsAsync();
@@ -289,8 +502,7 @@
             var query = BuildFilteredQuery(db);
 
             _totalCount = await query.CountAsync();
-            _questions = await query
-                .OrderBy(q => q.Id)
+            _questions = await ApplyDefaultOrdering(query)
                 .Skip((_currentPage - 1) * _pageSize)
                 .Take(_pageSize)
                 .ToListAsync();
@@ -318,8 +530,7 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            _questions = await BuildFilteredQuery(db)
-                .OrderBy(q => q.Id)
+            _questions = await ApplyDefaultOrdering(BuildFilteredQuery(db))
                 .Skip((_currentPage - 1) * _pageSize)
                 .Take(_pageSize)
                 .ToListAsync();
@@ -343,6 +554,8 @@
             where !question.IsDeleted
             join category in db.Categories.AsNoTracking() on question.CategoryId equals category.Id into categoryJoin
             from category in categoryJoin.DefaultIfEmpty()
+            join subtopic in db.Subtopics.AsNoTracking() on question.SubtopicId equals subtopic.Id into subtopicJoin
+            from subtopic in subtopicJoin.DefaultIfEmpty()
             join draft in db.QuestionDrafts.AsNoTracking() on question.CurrentDraftId equals draft.Id into draftJoin
             from currentDraft in draftJoin.DefaultIfEmpty()
             select new QuestionListItem
@@ -356,6 +569,8 @@
                 UpdatedBy = question.UpdatedBy,
                 Category = category,
                 CategoryId = question.CategoryId,
+                SubtopicId = question.SubtopicId,
+                SubtopicName = subtopic != null ? subtopic.Name : null,
                 Type = question.Type,
                 PublishState = question.PublishState,
                 ValidationStatus = currentDraft != null ? currentDraft.ValidationStatus : null,
@@ -373,6 +588,11 @@
             query = query.Where(q => q.CategoryId == _selectedCategoryId);
         }
 
+        if (_selectedSubtopicId > 0)
+        {
+            query = query.Where(q => q.SubtopicId == _selectedSubtopicId);
+        }
+
         if (!string.IsNullOrWhiteSpace(_selectedType))
         {
             query = query.Where(q => q.Type == _selectedType);
@@ -388,28 +608,113 @@
             query = query.Where(q => q.PublishState == _selectedPublishState);
         }
 
+        if (!string.IsNullOrWhiteSpace(_selectedAuthor))
+        {
+            query = query.Where(q => q.UpdatedBy != null && EF.Functions.ILike(q.UpdatedBy, $"%{_selectedAuthor}%"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedValidationStatus))
+        {
+            query = _selectedValidationStatus == ValidationStatusPending
+                ? query.Where(q => q.ValidationStatus == null)
+                : query.Where(q => q.ValidationStatus == _selectedValidationStatus);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedAttentionFilter))
+        {
+            query = _selectedAttentionFilter switch
+            {
+                AttentionFilterProblematic => query.Where(q => q.ValidationStatus == QuestionValidationStatuses.Failed),
+                AttentionFilterWarnings => query.Where(q => q.ValidationStatus == QuestionValidationStatuses.PassedWithWarnings),
+                AttentionFilterReady => query.Where(q =>
+                    q.PublishState != QuestionPublishStates.Published &&
+                    q.ValidationStatus == QuestionValidationStatuses.Passed),
+                _ => query
+            };
+        }
+
         if (_updatedAfterDate.HasValue)
         {
             var updatedAfterUtc = DateTime.SpecifyKind(_updatedAfterDate.Value.Date, DateTimeKind.Utc);
             query = query.Where(q => q.UpdatedAt >= updatedAfterUtc);
         }
 
+        if (_updatedBeforeDate.HasValue)
+        {
+            var updatedBeforeUtcExclusive = DateTime.SpecifyKind(_updatedBeforeDate.Value.Date.AddDays(1), DateTimeKind.Utc);
+            query = query.Where(q => q.UpdatedAt < updatedBeforeUtcExclusive);
+        }
+
         return query;
     }
+
+    private static IOrderedQueryable<QuestionListItem> ApplyDefaultOrdering(IQueryable<QuestionListItem> query)
+        => query
+            .OrderByDescending(q => q.UpdatedAt)
+            .ThenByDescending(q => q.Id);
 
     private void ResetSearch()
     {
         _searchText = string.Empty;
         _selectedCategoryId = 0;
+        _selectedSubtopicId = 0;
         _selectedType = string.Empty;
         _selectedDifficulty = null;
         _selectedPublishState = string.Empty;
+        _selectedAttentionFilter = string.Empty;
+        _selectedValidationStatus = string.Empty;
+        _selectedAuthor = string.Empty;
         _updatedAfterDate = null;
+        _updatedBeforeDate = null;
     }
 
     private async Task ResetSearchAndReloadAsync()
     {
         ResetSearch();
+        await LoadQuestionsAsync();
+    }
+
+    private async Task RemoveFilterAsync(string filterKey)
+    {
+        switch (filterKey)
+        {
+            case FilterKeySearch:
+                _searchText = string.Empty;
+                break;
+            case FilterKeyCategory:
+                _selectedCategoryId = 0;
+                break;
+            case FilterKeySubtopic:
+                _selectedSubtopicId = 0;
+                break;
+            case FilterKeyType:
+                _selectedType = string.Empty;
+                break;
+            case FilterKeyDifficulty:
+                _selectedDifficulty = null;
+                break;
+            case FilterKeyPublishState:
+                _selectedPublishState = string.Empty;
+                break;
+            case FilterKeyAttention:
+                _selectedAttentionFilter = string.Empty;
+                break;
+            case FilterKeyValidation:
+                _selectedValidationStatus = string.Empty;
+                break;
+            case FilterKeyAuthor:
+                _selectedAuthor = string.Empty;
+                break;
+            case FilterKeyUpdatedAfter:
+                _updatedAfterDate = null;
+                break;
+            case FilterKeyUpdatedBefore:
+                _updatedBeforeDate = null;
+                break;
+            default:
+                return;
+        }
+
         await LoadQuestionsAsync();
     }
 
@@ -429,6 +734,12 @@
     private async Task OnUpdatedAfterDateChangedAsync(DateTime? date)
     {
         _updatedAfterDate = date;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnUpdatedBeforeDateChangedAsync(DateTime? date)
+    {
+        _updatedBeforeDate = date;
         await LoadQuestionsAsync();
     }
 
@@ -556,7 +867,7 @@
         _ => "Draft"
     };
 
-    private static Color GetValidationStatusColor(string validationStatus) => validationStatus switch
+    private static Color GetValidationStatusColor(string? validationStatus) => validationStatus switch
     {
         QuestionValidationStatuses.Passed => Color.Success,
         QuestionValidationStatuses.PassedWithWarnings => Color.Warning,
@@ -572,6 +883,22 @@
         _ => "Na čekanju"
     };
 
+    private static string GetValidationStatusFilterLabel(string validationStatus)
+        => validationStatus == ValidationStatusPending
+            ? "Na čekanju"
+            : GetValidationStatusLabel(validationStatus);
+
+    private static string GetAttentionFilterLabel(string attentionFilter) => attentionFilter switch
+    {
+        AttentionFilterProblematic => "Problematična",
+        AttentionFilterWarnings => "Sa upozorenjima",
+        AttentionFilterReady => "Spremna za objavu",
+        _ => attentionFilter
+    };
+
+    private static bool NeedsAttention(QuestionListItem question)
+        => question.ValidationStatus is QuestionValidationStatuses.Failed or QuestionValidationStatuses.PassedWithWarnings;
+
     private sealed class QuestionListItem
     {
         public int Id { get; init; }
@@ -583,10 +910,14 @@
         public string? UpdatedBy { get; init; }
         public Category? Category { get; init; }
         public int CategoryId { get; init; }
+        public int SubtopicId { get; init; }
+        public string? SubtopicName { get; init; }
         public string Type { get; init; } = string.Empty;
         public string PublishState { get; init; } = QuestionPublishStates.Draft;
         public string? ValidationStatus { get; init; }
         public int OptionCount { get; init; }
         public int StepCount { get; init; }
     }
+
+    private sealed record ActiveFilterChip(string Key, string Label);
 }

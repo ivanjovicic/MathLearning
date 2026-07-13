@@ -105,6 +105,8 @@ A modified client can declare completion for an arbitrary parseable day. Even wh
 
 Define the authoritative source for daily completion. Prefer derivation from settled server operations or a registered-device signed offline operation with stable identity. Bound accepted dates, reject future/implausible history, and make duplicate/conflict behavior explicit.
 
+Implementation note: `BACKEND-API-DB-003` replaces the raw `completed/day` acceptance path with a server-verifiable, idempotent evidence flow; keep this finding as the historical rationale for the change.
+
 ---
 
 ## Finding 4 — Sync operation scope and same-device serialization are incomplete
@@ -128,6 +130,8 @@ Two concurrent requests from the same device can observe the same cursor before 
 ### Required action
 
 Align operation identity with the documented authenticated scope, serialize cursor advancement inside the transaction with PostgreSQL locking/CAS semantics, store a canonical payload hash and settled acknowledgement, and prove concurrency on PostgreSQL.
+
+Implementation note: `BACKEND-API-DB-004` now scopes sync event/dead-letter uniqueness by user and device, records a payload hash for replay/conflict handling, and moves dead-letter redrive to the dead-letter ID surface.
 
 ---
 

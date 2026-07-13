@@ -138,6 +138,25 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("wizard-step-locked", content, StringComparison.Ordinal);
         Assert.Contains("editor-save-bar", content, StringComparison.Ordinal);
         Assert.Contains("Preview", content, StringComparison.Ordinal);
+        Assert.Contains("Split preview", content, StringComparison.Ordinal);
+        Assert.Contains("preview-split-grid", content, StringComparison.Ordinal);
+        Assert.Contains("Source levo, render desno", content, StringComparison.Ordinal);
+        Assert.Contains("Brze komande", content, StringComparison.Ordinal);
+        Assert.Contains("HandleEditorShortcutKeyDown", content, StringComparison.Ordinal);
+        Assert.Contains("Ctrl+Shift+S", content, StringComparison.Ordinal);
+        Assert.Contains("Alt+4", content, StringComparison.Ordinal);
+        Assert.Contains("Quality snapshot", content, StringComparison.Ordinal);
+        Assert.Contains("BlockingIssueCount", content, StringComparison.Ordinal);
+        Assert.Contains("RecommendationIssueCount", content, StringComparison.Ordinal);
+        Assert.Contains("CompletedStageCount", content, StringComparison.Ordinal);
+        Assert.Contains("Hintovi prisutni", content, StringComparison.Ordinal);
+        Assert.Contains("editor-quality-grid", content, StringComparison.Ordinal);
+        Assert.Contains("Student view", content, StringComparison.Ordinal);
+        Assert.Contains("PreviewModeDescription", content, StringComparison.Ordinal);
+        Assert.Contains("ShowCorrectOptionHighlight", content, StringComparison.Ordinal);
+        Assert.Contains("Hintovi se otkrivaju postepeno", content, StringComparison.Ordinal);
+        Assert.Contains("Koraci resavanja ostaju skriveni", content, StringComparison.Ordinal);
+        Assert.Contains("Objasnjenje se prikazuje tek nakon odgovora", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@Model.Text\"", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@opt.Text\"", content, StringComparison.Ordinal);
         Assert.Contains("<MathPreview Content=\"@Model.Explanation\"", content, StringComparison.Ordinal);
@@ -170,6 +189,16 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("clearDraft", content, StringComparison.Ordinal);
         Assert.Contains("ConfirmNavigationAsync", content, StringComparison.Ordinal);
         Assert.Contains("Validacija:", content, StringComparison.Ordinal);
+        Assert.Contains("Istorija verzija", content, StringComparison.Ordinal);
+        Assert.Contains("LoadVersionHistoryAsync", content, StringComparison.Ordinal);
+        Assert.Contains("QuestionVersioningService.GetVersionsAsync", content, StringComparison.Ordinal);
+        Assert.Contains("GetVersionAuditLabel", content, StringComparison.Ordinal);
+        Assert.Contains("Prva objava", content, StringComparison.Ordinal);
+        Assert.Contains("Nastavlja verzionisanje nakon", content, StringComparison.Ordinal);
+        Assert.Contains("Poslednja validacija", content, StringComparison.Ordinal);
+        Assert.Contains("Revalidiraj draft", content, StringComparison.Ordinal);
+        Assert.Contains("RevalidatePersistedDraftAsync", content, StringComparison.Ordinal);
+        Assert.Contains("MathQuestionAuthoringService.RevalidateAsync", content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -181,8 +210,62 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("ValidationStatus", content, StringComparison.Ordinal);
         Assert.Contains("GetValidationStatusLabel", content, StringComparison.Ordinal);
         Assert.Contains("GetPublishStateLabel", content, StringComparison.Ordinal);
+        Assert.Contains("_selectedAttentionFilter", content, StringComparison.Ordinal);
+        Assert.Contains("_selectedValidationStatus", content, StringComparison.Ordinal);
+        Assert.Contains("_selectedSubtopicId", content, StringComparison.Ordinal);
+        Assert.Contains("_subtopics", content, StringComparison.Ordinal);
+        Assert.Contains("SubtopicName", content, StringComparison.Ordinal);
+        Assert.Contains("ActiveFilterCount", content, StringComparison.Ordinal);
+        Assert.Contains("ActiveFilterLabels", content, StringComparison.Ordinal);
+        Assert.Contains("RemoveFilterAsync", content, StringComparison.Ordinal);
+        Assert.Contains("ActiveFilterChip", content, StringComparison.Ordinal);
+        Assert.Contains("ValidationStatusPending", content, StringComparison.Ordinal);
+        Assert.Contains("GetValidationStatusFilterLabel", content, StringComparison.Ordinal);
+        Assert.Contains("GetValidationStatusLabel(context.ValidationStatus ?? ValidationStatusPending)", content, StringComparison.Ordinal);
+        Assert.Contains("_selectedAuthor", content, StringComparison.Ordinal);
+        Assert.Contains("_updatedBeforeDate", content, StringComparison.Ordinal);
+        Assert.Contains("Očisti filtere", content, StringComparison.Ordinal);
+        Assert.Contains("Nema pitanja za izabrane filtere", content, StringComparison.Ordinal);
+        Assert.Contains("GetAttentionFilterLabel", content, StringComparison.Ordinal);
+        Assert.Contains("ApplyDefaultOrdering", content, StringComparison.Ordinal);
+        Assert.Contains("OrderByDescending(q => q.UpdatedAt)", content, StringComparison.Ordinal);
+        Assert.Contains("Podtema", content, StringComparison.Ordinal);
+        Assert.Contains("Autor / izmenio", content, StringComparison.Ordinal);
+        Assert.Contains("Validacija", content, StringComparison.Ordinal);
+        Assert.Contains("Izmenjeno pre", content, StringComparison.Ordinal);
+        Assert.Contains("OnUpdatedBeforeDateChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("EF.Functions.ILike(q.UpdatedBy", content, StringComparison.Ordinal);
+        Assert.Contains("Problematična", content, StringComparison.Ordinal);
+        Assert.Contains("NeedsAttention(context)", content, StringComparison.Ordinal);
         Assert.DoesNotContain(".Include(q => q.Options)", content, StringComparison.Ordinal);
         Assert.DoesNotContain(".Include(q => q.Steps)", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PreviewDialog_SourceSupportsStudentView()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Components", "Dialogs", "QuestionPreviewDialog.razor");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("QA preview", content, StringComparison.Ordinal);
+        Assert.Contains("Student view", content, StringComparison.Ordinal);
+        Assert.Contains("PreviewModeDescription", content, StringComparison.Ordinal);
+        Assert.Contains("ShowCorrectOptionHighlight", content, StringComparison.Ordinal);
+        Assert.Contains("student-answer-placeholder", content, StringComparison.Ordinal);
+        Assert.Contains("Objasnjenje se prikazuje tek nakon odgovora", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ValidationPanel_SourceShowsSemanticEquivalenceChecks()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Admin", "Components", "ValidationDetailPanel.razor");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("Result.EquivalenceChecks.Count > 0", content, StringComparison.Ordinal);
+        Assert.Contains("Semanticka provera odgovora", content, StringComparison.Ordinal);
+        Assert.Contains("Ekvivalentno", content, StringComparison.Ordinal);
+        Assert.Contains("Razlika", content, StringComparison.Ordinal);
+        Assert.Contains("ComparisonMode", content, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -8,6 +8,7 @@ public sealed class SyncDeadLetter
     public string DeviceId { get; set; } = null!;
     public string UserId { get; set; } = null!;
     public string OperationType { get; set; } = null!;
+    public string PayloadHash { get; set; } = null!;
     public string PayloadJson { get; set; } = null!;
     public int RetryCount { get; set; }
     public string Status { get; set; } = SyncDeadLetterStatuses.Pending;

@@ -234,6 +234,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         builder.Entity<QuizSession>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.IssuedQuestionIdsJson)
+                  .HasColumnType("TEXT")
+                  .IsRequired()
+                  .HasDefaultValue("[]");
             
             // 🚀 Performance index za user sessions
             entity.HasIndex(e => e.UserId)
@@ -270,9 +274,9 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_UserAnswers_User_Answered");
             entity.HasIndex(e => new { e.UserId, e.IsCorrect })
                   .HasDatabaseName("IX_UserAnswers_User_Correct");
-            entity.HasIndex(e => e.SyncOperationId)
+            entity.HasIndex(e => new { e.UserId, e.DeviceId, e.SyncOperationId })
                   .IsUnique()
-                  .HasDatabaseName("UX_UserAnswers_SyncOperationId");
+                  .HasDatabaseName("UX_UserAnswers_User_Device_SyncOperationId");
             entity.HasIndex(e => new { e.UserId, e.DeviceId, e.ClientSequence })
                   .IsUnique()
                   .HasDatabaseName("UX_UserAnswers_User_Device_Sequence");

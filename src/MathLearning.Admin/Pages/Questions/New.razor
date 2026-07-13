@@ -6,6 +6,8 @@
 @using MathLearning.Admin.Models
 @using MathLearning.Admin.Services
 @using MathLearning.Application.Content
+@using MathLearning.Application.DTOs.Questions
+@using MathLearning.Application.Services
 @using MathLearning.Infrastructure.Services.QuestionAuthoring
 @using MathLearning.Domain.Entities
 @using Microsoft.EntityFrameworkCore
@@ -19,6 +21,7 @@
 @inject ILogger<New> Logger
 @inject IJSRuntime Js
 @inject IQuestionAuthoringService QuestionAuthoringService
+@inject IMathQuestionAuthoringService MathQuestionAuthoringService
 @inject IDialogService DialogService
 
 <PageTitle>Novo Pitanje - MathLearning Admin</PageTitle>
@@ -226,7 +229,11 @@ else
             try
             {
                 var request = _editorHelper.ToAuthoringRequest(Model);
-                await QuestionAuthoringService.CreateQuestionAsync(db, request, "admin_ui", CancellationToken.None);
+                var created = await QuestionAuthoringService.CreateQuestionAsync(db, request, "admin_ui", CancellationToken.None);
+                await MathQuestionAuthoringService.SaveDraftAsync(
+                    new SaveQuestionDraftRequest(request with { QuestionId = created.Question.Id }, "admin_ui_save"),
+                    "admin_ui",
+                    CancellationToken.None);
 
                 await tx.CommitAsync();
             }

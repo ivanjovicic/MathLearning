@@ -147,6 +147,38 @@ public class QuestionAuthoringRequestValidatorTests
     }
 
     [Fact]
+    public void OpenAnswer_RejectsLeftoverMultipleChoiceOptions()
+    {
+        var request = CreateValidMultipleChoiceRequest() with
+        {
+            Type = "open_answer",
+            CorrectAnswer = "4"
+        };
+
+        var result = validator.Validate(request);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(QuestionAuthoringRequest.Options));
+    }
+
+    [Fact]
+    public void OpenAnswer_RejectsCorrectOptionId()
+    {
+        var request = CreateValidMultipleChoiceRequest() with
+        {
+            Type = "open_answer",
+            CorrectAnswer = "4",
+            Options = [],
+            CorrectOptionId = 1
+        };
+
+        var result = validator.Validate(request);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(QuestionAuthoringRequest.CorrectOptionId));
+    }
+
+    [Fact]
     public void Question_RejectsTooShortText()
     {
         var request = CreateValidMultipleChoiceRequest() with

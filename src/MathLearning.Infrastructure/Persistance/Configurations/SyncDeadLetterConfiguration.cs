@@ -14,6 +14,7 @@ public sealed class SyncDeadLetterConfiguration : IEntityTypeConfiguration<SyncD
         builder.Property(x => x.DeviceId).IsRequired().HasMaxLength(128);
         builder.Property(x => x.UserId).IsRequired().HasMaxLength(450);
         builder.Property(x => x.OperationType).IsRequired().HasMaxLength(64);
+        builder.Property(x => x.PayloadHash).IsRequired().HasMaxLength(64);
         builder.Property(x => x.PayloadJson).IsRequired().HasColumnType("jsonb");
         builder.Property(x => x.Status).IsRequired().HasMaxLength(32);
         builder.Property(x => x.FailureReason).IsRequired().HasMaxLength(2048);
@@ -23,9 +24,9 @@ public sealed class SyncDeadLetterConfiguration : IEntityTypeConfiguration<SyncD
         builder.Property(x => x.ResolvedAtUtc).HasColumnType("timestamp with time zone");
         builder.Property(x => x.ResolutionNote).HasMaxLength(2048);
 
-        builder.HasIndex(x => x.OperationId)
+        builder.HasIndex(x => new { x.UserId, x.DeviceId, x.OperationId })
             .IsUnique()
-            .HasDatabaseName("UX_SyncDeadLetter_OperationId");
+            .HasDatabaseName("UX_SyncDeadLetter_User_Device_OperationId");
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc })
             .HasDatabaseName("IX_SyncDeadLetter_User_CreatedAtUtc");

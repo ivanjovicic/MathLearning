@@ -7,12 +7,14 @@ using MathLearning.Application.DTOs.Questions;
 using MathLearning.Application.Services;
 using MathLearning.Application.Validators;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Performance;
 using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -109,9 +111,21 @@ builder.Services.AddHttpClient<AdminApiClient>((serviceProvider, httpClient) =>
     }
 })
     .AddHttpMessageHandler<ForwardAuthCookiesHandler>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<AdminDbContext>());
+builder.Services.AddSingleton<HybridCacheService>(sp =>
+    new HybridCacheService(
+        sp.GetRequiredService<IMemoryCache>(),
+        sp.GetRequiredService<ILogger<HybridCacheService>>(),
+        null));
 builder.Services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
 builder.Services.AddScoped<IValidator<QuestionAuthoringRequest>, QuestionAuthoringRequestValidator>();
 builder.Services.AddScoped<IQuestionAuthoringService, QuestionAuthoringService>();
+builder.Services.AddScoped<IQuestionAutoHintGenerator, NoOpQuestionAutoHintGenerator>();
+builder.Services.AddScoped<MathQuestionAuthoringService>();
+builder.Services.AddScoped<IMathQuestionAuthoringService>(sp => sp.GetRequiredService<MathQuestionAuthoringService>());
+builder.Services.AddScoped<IMathQuestionValidationService>(sp => sp.GetRequiredService<MathQuestionAuthoringService>());
+builder.Services.AddScoped<IQuestionVersioningService>(sp => sp.GetRequiredService<MathQuestionAuthoringService>());
 
 // Stateless validation stage services (no ApiDbContext required)
 builder.Services.AddScoped<IMathContentLinter, MathContentLinter>();

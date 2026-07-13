@@ -148,6 +148,16 @@ public sealed class QuestionAuthoringRequestValidator : AbstractValidator<Questi
         {
             context.AddFailure(nameof(QuestionAuthoringRequest.CorrectAnswer), $"CorrectAnswer cannot exceed {CorrectAnswerMaxLength} characters.");
         }
+
+        if (request.Options.Count > 0)
+        {
+            context.AddFailure(nameof(QuestionAuthoringRequest.Options), "Open answer question cannot include multiple choice options.");
+        }
+
+        if (request.CorrectOptionId.HasValue)
+        {
+            context.AddFailure(nameof(QuestionAuthoringRequest.CorrectOptionId), "Open answer question cannot include CorrectOptionId.");
+        }
     }
 
     private static string NormalizeOptionText(string value)

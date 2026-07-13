@@ -33,11 +33,11 @@ public sealed class AdminSyncController : ControllerBase
         CancellationToken cancellationToken = default)
         => Ok(await syncAdminService.GetDeadLettersAsync(take, status, cancellationToken));
 
-    [HttpPost("dead-letters/{operationId:guid}/redrive")]
+    [HttpPost("dead-letters/{deadLetterId:guid}/redrive")]
     public async Task<IActionResult> Redrive(
-        Guid operationId,
+        Guid deadLetterId,
         CancellationToken cancellationToken)
-        => Ok(await syncAdminService.RedriveDeadLetterAsync(operationId, GetActorUserId(), cancellationToken));
+        => Ok(await syncAdminService.RedriveDeadLetterAsync(deadLetterId, GetActorUserId(), cancellationToken));
 
     [HttpPost("dead-letters/redrive")]
     public async Task<IActionResult> RedriveBatch(

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance.Configurations;
 
 namespace MathLearning.Admin.Data;
 
@@ -24,6 +25,11 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>, IDataProtectionKe
     public DbSet<QuestionTranslation> QuestionTranslations => Set<QuestionTranslation>();
     public DbSet<BugReport> BugReports => Set<BugReport>();
     public DbSet<QuestionDraft> QuestionDrafts => Set<QuestionDraft>();
+    public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
+    public DbSet<QuestionValidationResult> QuestionValidationResults => Set<QuestionValidationResult>();
+    public DbSet<QuestionValidationIssue> QuestionValidationIssues => Set<QuestionValidationIssue>();
+    public DbSet<QuestionPreviewCache> QuestionPreviewCaches => Set<QuestionPreviewCache>();
+    public DbSet<QuestionAuthoringAuditLog> QuestionAuthoringAuditLogs => Set<QuestionAuthoringAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -36,8 +42,13 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>, IDataProtectionKe
         builder.Entity<QuestionStepTranslation>().ToTable("QuestionStepTranslations");
         builder.Entity<OptionTranslation>().ToTable("OptionTranslations");
         builder.Entity<BugReport>().ToTable("bug_reports");
-        builder.Entity<QuestionDraft>().ToTable("question_drafts");
-        builder.Entity<QuestionDraft>().Ignore(e => e.LatestValidationResult);
+        builder.ApplyConfiguration(new QuestionAuthoringQuestionConfiguration());
+        builder.ApplyConfiguration(new QuestionDraftConfiguration());
+        builder.ApplyConfiguration(new QuestionVersionConfiguration());
+        builder.ApplyConfiguration(new QuestionValidationResultConfiguration());
+        builder.ApplyConfiguration(new QuestionValidationIssueConfiguration());
+        builder.ApplyConfiguration(new QuestionPreviewCacheConfiguration());
+        builder.ApplyConfiguration(new QuestionAuthoringAuditLogConfiguration());
 
         builder.Entity<Question>(entity =>
         {
@@ -49,11 +60,16 @@ public class AdminDbContext : IdentityDbContext<IdentityUser>, IDataProtectionKe
             entity.Property(e => e.HintRenderMode).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.SemanticsAltText).HasMaxLength(1000);
             entity.Property(e => e.HintFull).HasColumnType("TEXT").IsRequired(false);
+            entity.Property(e => e.PublishState).HasMaxLength(32).HasDefaultValue(QuestionPublishStates.Draft);
+            entity.Property(e => e.PublishedByUserId).HasMaxLength(450).IsRequired(false);
+            entity.Property(e => e.PublishedAtUtc).HasColumnType("timestamp with time zone").IsRequired(false);
             entity.Property(e => e.UpdatedBy).HasMaxLength(256).IsRequired(false);
             entity.Property(e => e.PreviousSnapshotJson).HasColumnType("jsonb").IsRequired(false);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.DeletedAt).IsRequired(false);
             entity.HasIndex(e => e.IsDeleted);
+            entity.HasIndex(e => e.PublishState);
+            entity.HasIndex(e => e.CurrentDraftId);
 
             entity.HasOne(e => e.Category)
                 .WithMany()

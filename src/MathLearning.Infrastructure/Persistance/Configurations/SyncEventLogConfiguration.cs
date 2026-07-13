@@ -16,6 +16,7 @@ public sealed class SyncEventLogConfiguration : IEntityTypeConfiguration<SyncEve
         builder.Property(x => x.DeviceId).IsRequired().HasMaxLength(128);
         builder.Property(x => x.UserId).IsRequired().HasMaxLength(450);
         builder.Property(x => x.OperationType).IsRequired().HasMaxLength(64);
+        builder.Property(x => x.PayloadHash).IsRequired().HasMaxLength(64);
         builder.Property(x => x.PayloadJson).IsRequired().HasColumnType("jsonb");
         builder.Property(x => x.Status).IsRequired().HasMaxLength(32);
         builder.Property(x => x.ErrorCode).HasMaxLength(64);
@@ -24,13 +25,13 @@ public sealed class SyncEventLogConfiguration : IEntityTypeConfiguration<SyncEve
         builder.Property(x => x.ReceivedAtUtc).HasColumnType("timestamp with time zone");
         builder.Property(x => x.ProcessedAtUtc).HasColumnType("timestamp with time zone");
 
-        builder.HasIndex(x => x.OperationId)
+        builder.HasIndex(x => new { x.UserId, x.DeviceId, x.OperationId })
             .IsUnique()
-            .HasDatabaseName("UX_SyncEventLog_OperationId");
+            .HasDatabaseName("UX_SyncEventLog_User_Device_OperationId");
 
-        builder.HasIndex(x => new { x.DeviceId, x.ClientSequence })
+        builder.HasIndex(x => new { x.UserId, x.DeviceId, x.ClientSequence })
             .IsUnique()
-            .HasDatabaseName("UX_SyncEventLog_Device_Sequence");
+            .HasDatabaseName("UX_SyncEventLog_User_Device_Sequence");
 
         builder.HasIndex(x => new { x.UserId, x.Id })
             .HasDatabaseName("IX_SyncEventLog_User_Id");

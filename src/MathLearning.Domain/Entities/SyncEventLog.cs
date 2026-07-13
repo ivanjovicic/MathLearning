@@ -8,6 +8,7 @@ public sealed class SyncEventLog
     public string UserId { get; set; } = null!;
     public long ClientSequence { get; set; }
     public string OperationType { get; set; } = null!;
+    public string PayloadHash { get; set; } = null!;
     public string PayloadJson { get; set; } = null!;
     public string Status { get; set; } = SyncEventStatuses.Received;
     public DateTime OccurredAtUtc { get; set; }

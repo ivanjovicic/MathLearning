@@ -7,7 +7,7 @@
 @using MathRenderMode = MathLearning.Domain.Enums.RenderMode
 @inject IMathContentSanitizer Sanitizer
 
-<div class="question-editor">
+<div class="question-editor" tabindex="0" @onkeydown="HandleEditorShortcutKeyDown">
     <MathInputHelper Inserted="ApplyLatexInsert" />
 
     <MudPaper Class="latex-help-panel mb-3 pa-3" Outlined="true">
@@ -51,6 +51,60 @@
             </button>
         }
     </div>
+
+    <MudPaper Class="editor-shortcuts-panel mb-3 pa-3" Outlined="true">
+        <div class="editor-shortcuts-header">
+            <MudText Typo="Typo.subtitle2">Brze komande</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Radi i dok si u polju za unos.</MudText>
+        </div>
+        <div class="editor-shortcuts-grid">
+            <span><code>Alt+1</code> pitanje</span>
+            <span><code>Alt+2</code> odgovori</span>
+            <span><code>Alt+3</code> koraci</span>
+            <span><code>Alt+4</code> meta</span>
+            <span><code>Ctrl+Shift+A</code> dodaj odgovor</span>
+            <span><code>Ctrl+Shift+K</code> dodaj korak</span>
+            <span><code>Ctrl+Shift+S</code> sačuvaj</span>
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="editor-quality-panel mb-3 pa-3" Outlined="true">
+        <div class="editor-quality-header">
+            <div>
+                <MudText Typo="Typo.subtitle2">Quality snapshot</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Brzi signal šta blokira objavu, a šta je samo preporuka.</MudText>
+            </div>
+            <MudChip T="string" Variant="Variant.Filled" Color="@FormStatusColor" Size="Size.Small">@FormStatusText</MudChip>
+        </div>
+
+        <div class="editor-quality-grid">
+            <div class="quality-metric quality-metric-danger">
+                <span class="quality-metric-label">Blokeri</span>
+                <strong>@BlockingIssueCount</strong>
+            </div>
+            <div class="quality-metric quality-metric-warning">
+                <span class="quality-metric-label">Preporuke</span>
+                <strong>@RecommendationIssueCount</strong>
+            </div>
+            <div class="quality-metric quality-metric-info">
+                <span class="quality-metric-label">Aktivni korak</span>
+                <strong>@CurrentStageLabel</strong>
+            </div>
+            <div class="quality-metric quality-metric-success">
+                <span class="quality-metric-label">Spremna područja</span>
+                <strong>@CompletedStageCount / 4</strong>
+            </div>
+        </div>
+
+        <div class="editor-quality-chips">
+            <MudChip T="string" Variant="Variant.Outlined" Color="@QuestionStateColor" Size="Size.Small">@QuestionStateText</MudChip>
+            <MudChip T="string" Variant="Variant.Outlined" Color="@AnswerStateColor" Size="Size.Small">@AnswerStateText</MudChip>
+            <MudChip T="string" Variant="Variant.Outlined" Color="@StepStateColor" Size="Size.Small">@StepStateText</MudChip>
+            <MudChip T="string" Variant="Variant.Outlined" Color="@(HasAnyHint ? Color.Success : Color.Default)" Size="Size.Small">
+                @(HasAnyHint ? "Hintovi prisutni" : "Hintovi opcionalni")
+            </MudChip>
+        </div>
+    </MudPaper>
 
     <MudGrid Spacing="3" Class="question-editor-grid">
         <MudItem xs="12" lg="8">
@@ -782,24 +836,47 @@
                 <div class="preview-header">
                     <div>
                         <MudText Typo="Typo.h6">Quiz preview</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Admin prikaz: tacan odgovor je namerno istaknut.</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@PreviewModeDescription</MudText>
                     </div>
-                    <MudChip T="string" Color="@FormStatusColor" Variant="Variant.Filled" Size="Size.Small">@FormStatusText</MudChip>
+                    <div class="d-flex align-center gap-2 flex-wrap">
+                        <MudChip T="string" Color="@FormStatusColor" Variant="Variant.Filled" Size="Size.Small">@FormStatusText</MudChip>
+                        <MudSwitch T="bool"
+                                   Value="_previewAsStudent"
+                                   ValueChanged="OnPreviewModeChanged"
+                                   Color="Color.Primary"
+                                   Label="Student view" />
+                    </div>
                 </div>
 
                 <MudDivider Class="my-3" />
 
-                @if (!string.IsNullOrWhiteSpace(_selectedPreviewTitle))
-                {
-                    <div class="selected-preview mb-3">
-                        <MudText Typo="Typo.overline" Color="Color.Primary">@_selectedPreviewTitle</MudText>
-                        <MathPreview Content="@_selectedPreviewContent"
-                                     Format="@_selectedPreviewFormat"
-                                     RenderMode="@_selectedPreviewRenderMode"
-                                     EmptyText="Nema sadrzaja za preview." />
+                <div class="selected-preview mb-3">
+                    <div class="preview-split-header">
+                        <div>
+                            <MudText Typo="Typo.overline" Color="Color.Primary">@ActivePreviewTitle</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Source levo, render desno za brze ispravke.</MudText>
+                        </div>
+                        <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small" Color="Color.Info">
+                            Split preview
+                        </MudChip>
                     </div>
-                    <MudDivider Class="mb-3" />
-                }
+
+                    <div class="preview-split-grid">
+                        <div class="preview-source-card">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Source</MudText>
+                            <pre class="preview-source-block">@ActivePreviewContentDisplay</pre>
+                        </div>
+                        <div class="preview-render-card">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Render</MudText>
+                            <MathPreview Content="@ActivePreviewContent"
+                                         Format="@ActivePreviewFormat"
+                                         RenderMode="@ActivePreviewRenderMode"
+                                         EmptyText="Nema sadrzaja za preview." />
+                        </div>
+                    </div>
+                </div>
+
+                <MudDivider Class="mb-3" />
 
                 <div class="quiz-preview-question">
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Pitanje</MudText>
@@ -817,13 +894,13 @@
                         @for (var i = 0; i < Model.Options.Count; i++)
                         {
                             var opt = Model.Options[i];
-                            <div class="preview-option quiz-answer-row @(opt.IsCorrect ? "preview-option-correct" : string.Empty)">
+                            <div class="preview-option quiz-answer-row @(ShowCorrectOptionHighlight(opt) ? "preview-option-correct" : string.Empty)">
                                 <span class="quiz-answer-letter">@GetOptionLetter(i)</span>
                                 <MathPreview Content="@opt.Text"
                                              Format="@opt.TextFormat"
                                              RenderMode="@opt.RenderMode"
                                              EmptyText="@($"Odgovor {i + 1} je prazan.")" />
-                                @if (opt.IsCorrect)
+                                @if (ShowCorrectOptionHighlight(opt))
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" Class="preview-option-icon" />
                                 }
@@ -834,63 +911,107 @@
                 else
                 {
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Tacan odgovor</MudText>
-                    <MathPreview Content="@Model.CorrectAnswer"
-                                 Format="@Model.TextFormat"
-                                 RenderMode="@Model.TextRenderMode"
-                                 EmptyText="Tacan odgovor jos nije unet."
-                                 Class="mb-3" />
+                    @if (_previewAsStudent)
+                    {
+                        <MudPaper Class="pa-3 mb-3 student-answer-placeholder" Outlined="true">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Student vidi polje za unos odgovora, bez otkrivenog rešenja.
+                            </MudText>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MathPreview Content="@Model.CorrectAnswer"
+                                     Format="@Model.TextFormat"
+                                     RenderMode="@Model.TextRenderMode"
+                                     EmptyText="Tacan odgovor jos nije unet."
+                                     Class="mb-3" />
+                    }
                 }
 
                 @if (Model.Steps.Count > 0)
                 {
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Koraci resavanja</MudText>
-                    <div class="mb-3">
-                        @for (var i = 0; i < Model.Steps.Count; i++)
-                        {
-                            var step = Model.Steps[i];
-                            <div class="preview-step">
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">Korak @(i + 1)</MudText>
-                                <MathPreview Content="@step.Text" Format="@step.TextFormat" RenderMode="@step.TextRenderMode" EmptyText="Prazan korak." />
-                                @if (!string.IsNullOrWhiteSpace(step.Hint))
-                                {
-                                    <div class="preview-step-hint">
-                                        <MathPreview Content="@step.Hint" Format="@step.HintFormat" RenderMode="@step.HintRenderMode" />
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
+                    @if (_previewAsStudent)
+                    {
+                        <MudPaper Class="pa-3 mb-3 student-answer-placeholder" Outlined="true">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Koraci resavanja ostaju skriveni dok student ne zavrsi pokusaj.
+                            </MudText>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            @for (var i = 0; i < Model.Steps.Count; i++)
+                            {
+                                var step = Model.Steps[i];
+                                <div class="preview-step">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Korak @(i + 1)</MudText>
+                                    <MathPreview Content="@step.Text" Format="@step.TextFormat" RenderMode="@step.TextRenderMode" EmptyText="Prazan korak." />
+                                    @if (!string.IsNullOrWhiteSpace(step.Hint))
+                                    {
+                                        <div class="preview-step-hint">
+                                            <MathPreview Content="@step.Hint" Format="@step.HintFormat" RenderMode="@step.HintRenderMode" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
                 }
 
                 @if (!string.IsNullOrWhiteSpace(Model.Explanation))
                 {
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Objasnjenje</MudText>
-                    <MathPreview Content="@Model.Explanation" Format="@Model.ExplanationFormat" RenderMode="@Model.ExplanationRenderMode" Class="mb-3" />
+                    @if (_previewAsStudent)
+                    {
+                        <MudPaper Class="pa-3 mb-3 student-answer-placeholder" Outlined="true">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Objasnjenje se prikazuje tek nakon odgovora ili u review koraku.
+                            </MudText>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MathPreview Content="@Model.Explanation" Format="@Model.ExplanationFormat" RenderMode="@Model.ExplanationRenderMode" Class="mb-3" />
+                    }
                 }
 
                 @if (HasAnyHint)
                 {
                     <MudText Typo="Typo.overline" Color="Color.Secondary">Hintovi</MudText>
-                    @if (!string.IsNullOrWhiteSpace(Model.HintFormula))
+                    @if (_previewAsStudent)
                     {
-                        <div class="preview-hint preview-hint-light">
-                            <MudText Typo="Typo.caption" Color="Color.Info">Lagani hint</MudText>
-                            <MathPreview Content="@Model.HintFormula" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
-                        </div>
+                        <MudPaper Class="pa-3 mb-3 student-answer-placeholder" Outlined="true">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Hintovi se otkrivaju postepeno i nisu vidljivi na pocetnom studentskom prikazu.
+                            </MudText>
+                        </MudPaper>
                     }
-                    @if (!string.IsNullOrWhiteSpace(Model.HintClue))
+                    else
                     {
-                        <div class="preview-hint preview-hint-medium">
-                            <MudText Typo="Typo.caption" Color="Color.Warning">Naputak</MudText>
-                            <MathPreview Content="@Model.HintClue" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(Model.HintFull))
-                    {
-                        <div class="preview-hint preview-hint-full">
-                            <MudText Typo="Typo.caption" Color="Color.Success">Potpuno resenje</MudText>
-                            <MathPreview Content="@Model.HintFull" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
-                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Model.HintFormula))
+                        {
+                            <div class="preview-hint preview-hint-light">
+                                <MudText Typo="Typo.caption" Color="Color.Info">Lagani hint</MudText>
+                                <MathPreview Content="@Model.HintFormula" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.HintClue))
+                        {
+                            <div class="preview-hint preview-hint-medium">
+                                <MudText Typo="Typo.caption" Color="Color.Warning">Naputak</MudText>
+                                <MathPreview Content="@Model.HintClue" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.HintFull))
+                        {
+                            <div class="preview-hint preview-hint-full">
+                                <MudText Typo="Typo.caption" Color="Color.Success">Potpuno resenje</MudText>
+                                <MathPreview Content="@Model.HintFull" Format="@Model.HintFormat" RenderMode="@Model.HintRenderMode" />
+                            </div>
+                        }
                     }
                 }
             </MudPaper>
@@ -992,6 +1113,7 @@
     private EditorStage _currentStage = EditorStage.Question;
     private bool _latexHelpExpanded;
     private int _dragFromIndex = -1;
+    private bool _previewAsStudent;
     private string? _selectedPreviewTitle;
     private string? _selectedPreviewContent;
     private ContentFormat _selectedPreviewFormat = ContentFormat.MarkdownWithMath;
@@ -1031,6 +1153,11 @@
                                !string.IsNullOrWhiteSpace(Model.HintClue) ||
                                !string.IsNullOrWhiteSpace(Model.HintFull);
     private bool HasBlankSteps => Model.Steps.Any(step => string.IsNullOrWhiteSpace(step.Text));
+    private string ActivePreviewTitle => string.IsNullOrWhiteSpace(_selectedPreviewTitle) ? "Tekst pitanja" : _selectedPreviewTitle!;
+    private string? ActivePreviewContent => string.IsNullOrWhiteSpace(_selectedPreviewTitle) ? Model.Text : _selectedPreviewContent;
+    private string ActivePreviewContentDisplay => string.IsNullOrWhiteSpace(ActivePreviewContent) ? "Nema izvornog sadrzaja." : ActivePreviewContent!;
+    private ContentFormat ActivePreviewFormat => string.IsNullOrWhiteSpace(_selectedPreviewTitle) ? Model.TextFormat : _selectedPreviewFormat;
+    private MathRenderMode ActivePreviewRenderMode => string.IsNullOrWhiteSpace(_selectedPreviewTitle) ? Model.TextRenderMode : _selectedPreviewRenderMode;
 
     private bool IsQuestionStageReady => GetQuestionIssues().Count == 0;
     private bool IsAnswerStageReady => IsQuestionStageReady && GetAnswerIssues().Count == 0;
@@ -1038,6 +1165,19 @@
     private bool IsMetaStageReady => GetBlockingMetaIssues().Count == 0;
     private bool IsFormReady => IsQuestionStageReady && IsAnswerStageReady && IsSolutionStageReady && IsMetaStageReady;
     private bool CanSave => !IsSaving && IsFormReady;
+    private int BlockingIssueCount => GetQuestionIssues().Count + GetAnswerIssues().Count + GetBlockingSolutionIssues().Count + GetBlockingMetaIssues().Count;
+    private int RecommendationIssueCount => GetSolutionIssues().Count - GetBlockingSolutionIssues().Count + GetMetaIssues().Count - GetBlockingMetaIssues().Count;
+    private int CompletedStageCount => GetReadinessItems().Count(x => x.Done);
+    private string CurrentStageLabel => _currentStage switch
+    {
+        EditorStage.Question => "Pitanje",
+        EditorStage.Answers => "Odgovori",
+        EditorStage.Solution => "Resenje",
+        _ => "Meta"
+    };
+    private string PreviewModeDescription => _previewAsStudent
+        ? "Student view: tacan odgovor i resenje nisu unapred otkriveni."
+        : "Admin prikaz: tacan odgovor je namerno istaknut.";
 
     private Color QuestionStateColor => IsQuestionStageReady ? Color.Success : Color.Warning;
     private string QuestionStateText => IsQuestionStageReady ? "Pitanje spremno" : "Nepotpuno pitanje";
@@ -1655,6 +1795,55 @@
         }
     }
 
+    private async Task HandleEditorShortcutKeyDown(KeyboardEventArgs e)
+    {
+        if (e.AltKey)
+        {
+            switch (e.Key)
+            {
+                case "1":
+                    GoToStage(EditorStage.Question);
+                    return;
+                case "2":
+                    if (CanOpenStage(EditorStage.Answers))
+                    {
+                        GoToStage(EditorStage.Answers);
+                    }
+                    return;
+                case "3":
+                    if (CanOpenStage(EditorStage.Solution))
+                    {
+                        GoToStage(EditorStage.Solution);
+                    }
+                    return;
+                case "4":
+                    if (CanOpenStage(EditorStage.Meta))
+                    {
+                        GoToStage(EditorStage.Meta);
+                    }
+                    return;
+            }
+        }
+
+        if (!e.CtrlKey || !e.ShiftKey)
+        {
+            return;
+        }
+
+        switch (e.Key?.ToUpperInvariant())
+        {
+            case "A" when IsMultipleChoice && _currentStage == EditorStage.Answers && Model.Options.Count < 8:
+                AddOption();
+                break;
+            case "K" when _currentStage == EditorStage.Solution:
+                AddStep();
+                break;
+            case "S" when CanSave:
+                await OnSave.InvokeAsync();
+                break;
+        }
+    }
+
     private void PreviewField(string title, string? content, ContentFormat format, MathRenderMode renderMode)
     {
         _selectedPreviewTitle = title;
@@ -1662,6 +1851,15 @@
         _selectedPreviewFormat = format;
         _selectedPreviewRenderMode = renderMode;
     }
+
+    private Task OnPreviewModeChanged(bool value)
+    {
+        _previewAsStudent = value;
+        return Task.CompletedTask;
+    }
+
+    private bool ShowCorrectOptionHighlight(QuestionOptionEditorModel option)
+        => !_previewAsStudent && option.IsCorrect;
 
     private void PreviewStrongestHint()
     {

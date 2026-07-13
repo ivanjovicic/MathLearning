@@ -121,6 +121,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             throw new InvalidOperationException($"Batch too large. MaxBatchSize={options.Value.MaxBatchSize}.");
         }
 
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+
         var device = await db.SyncDevices
             .FirstOrDefaultAsync(
                 x => x.DeviceId == request.DeviceId &&
@@ -128,6 +132,13 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                      x.Status == SyncDeviceStatuses.Active,
                 cancellationToken)
             ?? throw new InvalidOperationException("Active sync device not found. Register device first.");
+
+        if (db.Database.IsNpgsql())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $@"SELECT 1 FROM ""DeviceSyncState"" WHERE ""DeviceId"" = {request.DeviceId} AND ""UserId"" = {authenticatedUserId} FOR UPDATE",
+                cancellationToken);
+        }
 
         var deviceState = await db.DeviceSyncStates
             .FirstOrDefaultAsync(x => x.DeviceId == request.DeviceId && x.UserId == authenticatedUserId, cancellationToken);
@@ -154,17 +165,14 @@ public sealed class SyncService : ISyncService, ISyncAdminService
 
         var operationIds = orderedOperations.Select(x => x.OperationId).Distinct().ToList();
         var existingLogs = await db.SyncEventLogs
-            .Where(x => operationIds.Contains(x.OperationId))
+            .Where(x => x.UserId == authenticatedUserId &&
+                        x.DeviceId == request.DeviceId &&
+                        operationIds.Contains(x.OperationId))
             .ToDictionaryAsync(x => x.OperationId, cancellationToken);
 
         var acknowledgements = new List<SyncOperationAckDto>(orderedOperations.Count);
         var expectedSequence = deviceState.LastProcessedClientSequence + 1;
         var stopFurtherProcessing = false;
-        var useTransaction = db.Database.IsRelational();
-
-        await using var tx = useTransaction
-            ? await db.Database.BeginTransactionAsync(cancellationToken)
-            : null;
 
         foreach (var operation in orderedOperations)
         {
@@ -179,8 +187,22 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 continue;
             }
 
+            var canonicalPayloadHash = BuildCanonicalPayloadHash(operation);
+
             if (existingLogs.TryGetValue(operation.OperationId, out var existing))
             {
+                if (!string.Equals(GetEffectivePayloadHash(existing), canonicalPayloadHash, StringComparison.Ordinal))
+                {
+                    metrics.IncrementRejected("payload_conflict");
+                    acknowledgements.Add(new SyncOperationAckDto(
+                        operation.OperationId,
+                        existing.ClientSequence,
+                        "Conflict",
+                        "payload_conflict",
+                        "Operation payload does not match the stored payload for this operation."));
+                    continue;
+                }
+
                 if (existing.Status == SyncEventStatuses.Failed &&
                     existing.ClientSequence == expectedSequence)
                 {
@@ -199,12 +221,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 }
 
                 metrics.IncrementDuplicate();
-                acknowledgements.Add(new SyncOperationAckDto(
-                    operation.OperationId,
-                    existing.ClientSequence,
-                    existing.Status == SyncEventStatuses.Processed ? "Duplicate" : existing.Status,
-                    existing.ErrorCode,
-                    existing.ErrorMessage));
+                acknowledgements.Add(CreateStoredAcknowledgement(existing));
                 continue;
             }
 
@@ -233,23 +250,26 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 continue;
             }
 
-            var log = new SyncEventLog
-            {
-                OperationId = operation.OperationId,
-                DeviceId = operation.DeviceId,
-                UserId = operation.UserId,
-                ClientSequence = operation.ClientSequence,
-                OperationType = operation.OperationType.Trim(),
-                PayloadJson = operation.Payload.GetRawText(),
-                Status = SyncEventStatuses.Received,
-                OccurredAtUtc = operation.OccurredAtUtc,
-                ReceivedAtUtc = DateTime.UtcNow
-            };
-            db.SyncEventLogs.Add(log);
-
+            SyncEventLog? log = null;
             try
             {
                 await ValidateOperationEnvelopeAsync(authenticatedUserId, request.DeviceId, device, operation, cancellationToken);
+
+                log = new SyncEventLog
+                {
+                    OperationId = operation.OperationId,
+                    DeviceId = operation.DeviceId,
+                    UserId = operation.UserId,
+                    ClientSequence = operation.ClientSequence,
+                    OperationType = operation.OperationType.Trim(),
+                    PayloadHash = canonicalPayloadHash,
+                    PayloadJson = operation.Payload.GetRawText(),
+                    Status = SyncEventStatuses.Received,
+                    OccurredAtUtc = operation.OccurredAtUtc,
+                    ReceivedAtUtc = DateTime.UtcNow
+                };
+                db.SyncEventLogs.Add(log);
+
                 await ProcessOperationAsync(log, cancellationToken);
                 log.Status = SyncEventStatuses.Processed;
                 log.ProcessedAtUtc = DateTime.UtcNow;
@@ -266,12 +286,16 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             }
             catch (SyncOperationRejectedException ex)
             {
-                log.Status = SyncEventStatuses.Rejected;
-                log.ProcessedAtUtc = DateTime.UtcNow;
-                log.ErrorCode = ex.Code;
-                log.ErrorMessage = ex.Message;
-                deviceState.LastProcessedClientSequence = operation.ClientSequence;
-                expectedSequence = deviceState.LastProcessedClientSequence + 1;
+                if (log is not null)
+                {
+                    log.Status = SyncEventStatuses.Rejected;
+                    log.ProcessedAtUtc = DateTime.UtcNow;
+                    log.ErrorCode = ex.Code;
+                    log.ErrorMessage = ex.Message;
+                    deviceState.LastProcessedClientSequence = operation.ClientSequence;
+                    expectedSequence = deviceState.LastProcessedClientSequence + 1;
+                }
+
                 metrics.IncrementRejected(ex.Code);
 
                 acknowledgements.Add(new SyncOperationAckDto(
@@ -283,6 +307,11 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             }
             catch (Exception ex)
             {
+                if (log is null)
+                {
+                    throw;
+                }
+
                 log.RetryCount++;
                 log.ErrorCode = "processing_failed";
                 log.ErrorMessage = ex.Message;
@@ -291,6 +320,8 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 {
                     log.Status = SyncEventStatuses.DeadLettered;
                     log.ProcessedAtUtc = DateTime.UtcNow;
+                    var payloadHash = GetEffectivePayloadHash(log);
+                    log.PayloadHash = payloadHash;
                     db.SyncDeadLetters.Add(new SyncDeadLetter
                     {
                         SyncEventLogId = log.Id == 0 ? null : log.Id,
@@ -298,6 +329,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                         DeviceId = log.DeviceId,
                         UserId = log.UserId,
                         OperationType = log.OperationType,
+                        PayloadHash = payloadHash,
                         PayloadJson = log.PayloadJson,
                         RetryCount = log.RetryCount,
                         Status = SyncDeadLetterStatuses.Pending,
@@ -332,7 +364,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 logger.LogError(ex, "Sync operation failed. OperationId={OperationId} DeviceId={DeviceId}", operation.OperationId, operation.DeviceId);
             }
 
-            existingLogs[operation.OperationId] = log;
+            if (log is not null)
+            {
+                existingLogs[operation.OperationId] = log;
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -433,6 +468,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             .ThenByDescending(x => x.LastFailedAtUtc)
             .Take(take)
             .Select(x => new SyncDeadLetterItemDto(
+                x.Id,
                 x.OperationId,
                 x.SyncEventLogId,
                 x.DeviceId,
@@ -478,13 +514,13 @@ public sealed class SyncService : ISyncService, ISyncAdminService
     }
 
     public async Task<SyncDeadLetterRedriveResponseDto> RedriveDeadLetterAsync(
-        Guid operationId,
+        Guid deadLetterId,
         string? actorUserId,
         CancellationToken cancellationToken)
     {
         var deadLetter = await db.SyncDeadLetters
-            .FirstOrDefaultAsync(x => x.OperationId == operationId, cancellationToken)
-            ?? throw new InvalidOperationException($"Dead-letter operation '{operationId}' was not found.");
+            .FirstOrDefaultAsync(x => x.Id == deadLetterId, cancellationToken)
+            ?? throw new InvalidOperationException($"Dead-letter '{deadLetterId}' was not found.");
 
         return await RedriveDeadLetterInternalAsync(deadLetter, actorUserId, cancellationToken);
     }
@@ -528,6 +564,40 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
         return Convert.ToBase64String(hash);
     }
+
+    private static string BuildCanonicalPayloadHash(SyncOperationDto operation)
+        => BuildCanonicalPayloadHash(operation.OperationType, operation.Payload.GetRawText());
+
+    private static string BuildCanonicalPayloadHash(string operationType, string payloadJson)
+    {
+        var canonical = $"{operationType.Trim().ToLowerInvariant()}|{payloadJson}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
+    private static string GetEffectivePayloadHash(SyncEventLog log) =>
+        string.IsNullOrWhiteSpace(log.PayloadHash)
+            ? BuildCanonicalPayloadHash(log.OperationType, log.PayloadJson)
+            : log.PayloadHash;
+
+    private static SyncOperationAckDto CreateStoredAcknowledgement(SyncEventLog log)
+        => log.Status switch
+        {
+            SyncEventStatuses.Processed => new SyncOperationAckDto(log.OperationId, log.ClientSequence, "Accepted"),
+            SyncEventStatuses.Rejected => new SyncOperationAckDto(log.OperationId, log.ClientSequence, "Rejected", log.ErrorCode, log.ErrorMessage),
+            SyncEventStatuses.DeadLettered => new SyncOperationAckDto(
+                log.OperationId,
+                log.ClientSequence,
+                "DeadLettered",
+                log.ErrorCode,
+                log.ErrorMessage ?? "Operation moved to dead-letter queue."),
+            SyncEventStatuses.Failed => new SyncOperationAckDto(
+                log.OperationId,
+                log.ClientSequence,
+                "Failed",
+                log.ErrorCode,
+                log.ErrorMessage ?? "Transient processing failure. Retry later."),
+            _ => new SyncOperationAckDto(log.OperationId, log.ClientSequence, "Accepted")
+        };
 
     private async Task<SyncOperationAckDto> RetryFailedOperationAsync(
         SyncEventLog log,
@@ -583,6 +653,8 @@ public sealed class SyncService : ISyncService, ISyncAdminService
 
             if (log.Status == SyncEventStatuses.DeadLettered)
             {
+                var payloadHash = GetEffectivePayloadHash(log);
+                log.PayloadHash = payloadHash;
                 db.SyncDeadLetters.Add(new SyncDeadLetter
                 {
                     SyncEventLogId = log.Id,
@@ -590,6 +662,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                     DeviceId = log.DeviceId,
                     UserId = log.UserId,
                     OperationType = log.OperationType,
+                    PayloadHash = payloadHash,
                     PayloadJson = log.PayloadJson,
                     RetryCount = log.RetryCount,
                     Status = SyncDeadLetterStatuses.Pending,
@@ -691,19 +764,17 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         }
 
         var existingAnswer = await db.UserAnswers
-            .FirstOrDefaultAsync(x => x.SyncOperationId == log.OperationId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.UserId == log.UserId &&
+                     x.DeviceId == log.DeviceId &&
+                     x.SyncOperationId == log.OperationId,
+                cancellationToken);
         if (existingAnswer is not null)
         {
             return;
         }
 
-        var isCorrect = question.Type == "multiple_choice"
-            ? question.Options.Any(o =>
-                o.IsCorrect &&
-                (o.Text == payload.Answer ||
-                 (int.TryParse(payload.Answer, out var selectedOptionId) && o.Id == selectedOptionId)))
-            : question.CorrectAnswer != null &&
-              question.CorrectAnswer.Trim().Equals(payload.Answer.Trim(), StringComparison.OrdinalIgnoreCase);
+        var isCorrect = question.MatchesSubmittedAnswer(payload.Answer);
 
         db.UserAnswers.Add(new UserAnswer
         {
@@ -1026,7 +1097,11 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         deadLetter.LastRedriveAttemptAtUtc = now;
 
         var log = await db.SyncEventLogs
-            .FirstOrDefaultAsync(x => x.OperationId == deadLetter.OperationId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.UserId == deadLetter.UserId &&
+                     x.DeviceId == deadLetter.DeviceId &&
+                     x.OperationId == deadLetter.OperationId,
+                cancellationToken);
         if (log is null)
         {
             deadLetter.Status = SyncDeadLetterStatuses.Exhausted;

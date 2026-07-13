@@ -93,16 +93,16 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/quiz/start` | Auth | Canonical | Question count normalized to 1..25. |
-| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Count normalized to 1..25. |
-| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded. |
-| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question. |
+| POST | `/api/quiz/start` | Auth | Canonical | Question count normalized to 1..25; pre-answer question shape omits answer key and full solution material. |
+| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Count normalized to 1..25; pre-answer question shape omits answer key and full solution material. |
+| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; pre-answer question shape omits answer key and full solution material. |
+| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question; pre-answer question shape omits answer key and full solution material. |
 | POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. Missing-key decision remains BACKEND-TEST-013. |
 | POST | `/api/quiz/offline-submit` | Auth | Canonical offline | Auth-scoped replay path. Durable analytics handoff remains BACKEND-TEST-022. |
 | POST | `/api/quiz/batch-submit` | Auth | Legacy alias | Adapter to offline-submit. |
 | POST | `/api/quiz/srs/update` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. |
-| GET | `/api/quiz/srs/daily` | Auth | Canonical SRS read | Due cards with fallback padding. |
-| GET | `/api/quiz/srs/mixed` | Auth | Canonical SRS read | Due plus random mix. |
+| GET | `/api/quiz/srs/daily` | Auth | Canonical SRS read | Due cards with fallback padding; pre-answer question shape omits answer key and full solution material. |
+| GET | `/api/quiz/srs/mixed` | Auth | Canonical SRS read | Due plus random mix; pre-answer question shape omits answer key and full solution material. |
 | GET | `/api/quiz/srs/streak` | Auth | SRS read | Current streak. |
 
 ---
@@ -129,7 +129,7 @@ Owner: `ProgressEndpoints.cs`
 | GET | `/api/progress/weak-areas` | Auth | Canonical | Lowest-accuracy subtopics. |
 | GET | `/api/progress/topics` | Auth | Canonical | Topic progress. |
 | GET | `/api/topics/progress` | Auth | Legacy alias | Topic-progress alias. |
-| POST | `/api/progress/sync` | Auth | Mobile sync | User derived from auth. |
+| POST | `/api/progress/sync` | Auth | Mobile sync | Server-verifiable settlement; legacy completed/day payloads are rejected. |
 
 ---
 
@@ -201,6 +201,8 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 | GET `/api/questions/{id}/versions` | Content author | `QuestionAuthoringEndpoints.cs` | Version history. |
 | GET `/api/questions/{id}/validation` | Content author | `QuestionAuthoringEndpoints.cs` | Latest validation. |
 | POST `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Revalidation. |
+| GET `/api/admin/sync/dead-letters` | Admin | `AdminSyncController.cs` | Sync dead-letter list now includes the dead-letter ID. |
+| POST `/api/admin/sync/dead-letters/{deadLetterId}/redrive` | Admin | `AdminSyncController.cs` | Redrive by dead-letter ID; sync identity is scoped per user/device. |
 | `/api/sync/*` | Auth | `SyncEndpoints.cs` | Reject payload/auth user mismatch. |
 
 `QuestionEndpoints.MapQuestionEndpoints` remains defined but unwired; decision remains BACKEND-TEST-027.

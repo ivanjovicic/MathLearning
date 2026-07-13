@@ -70,6 +70,7 @@ public sealed record SyncAdminOverviewDto(
     SyncMetricsSnapshotDto Metrics);
 
 public sealed record SyncDeadLetterItemDto(
+    Guid Id,
     Guid OperationId,
     long? SyncEventLogId,
     string DeviceId,
