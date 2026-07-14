@@ -29,9 +29,10 @@ public sealed class OperationIdentityContractIntegrationTests : IClassFixture<Cu
     {
         var userId = NewUserId($"quiz-{identityField}");
         await EnsureUserAsync(userId);
-        var correctAnswer = await GetCorrectAnswerTokenAsync();
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+        var correctAnswer = await GetCorrectAnswerTokenAsync(issuedQuiz.QuestionId);
         var identity = $"quiz-single-{identityField}-{Guid.NewGuid():N}";
-        var payload = BuildQuizAnswerPayload(identityField, identity, correctAnswer);
+        var payload = BuildQuizAnswerPayload(identityField, identity, issuedQuiz.QuizId, issuedQuiz.QuestionId, correctAnswer);
 
         var first = await PostAsUserAsync(userId, "/api/quiz/answer", payload);
         await AssertOkAsync(first);
@@ -49,9 +50,9 @@ public sealed class OperationIdentityContractIntegrationTests : IClassFixture<Cu
         Assert.Equal(identity, ledger.OperationId);
         Assert.Equal(identity, ledger.IdempotencyKey);
         Assert.Equal(IdempotencyLedgerStatuses.Completed, ledger.Status);
-        Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.UserId == userId && x.QuestionId == 1));
+        Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId));
 
-        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == 1);
+        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId);
         Assert.Equal(1, stat.Attempts);
     }
 
@@ -60,8 +61,9 @@ public sealed class OperationIdentityContractIntegrationTests : IClassFixture<Cu
     {
         var userId = NewUserId("quiz-missing");
         await EnsureUserAsync(userId);
-        var correctAnswer = await GetCorrectAnswerTokenAsync();
-        var payload = BuildQuizAnswerPayload(null, null, correctAnswer);
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+        var correctAnswer = await GetCorrectAnswerTokenAsync(issuedQuiz.QuestionId);
+        var payload = BuildQuizAnswerPayload(null, null, issuedQuiz.QuizId, issuedQuiz.QuestionId, correctAnswer);
 
         var response = await PostAsUserAsync(userId, "/api/quiz/answer", payload);
         await AssertOkAsync(response);
@@ -70,7 +72,7 @@ public sealed class OperationIdentityContractIntegrationTests : IClassFixture<Cu
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
         Assert.False(await db.IdempotencyLedgers.AnyAsync(x =>
             x.UserId == userId && x.OperationType == QuizOperationTypes.QuizAnswer));
-        Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.UserId == userId && x.QuestionId == 1));
+        Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId));
     }
 
     [Theory]
@@ -169,12 +171,14 @@ public sealed class OperationIdentityContractIntegrationTests : IClassFixture<Cu
     private static Dictionary<string, object?> BuildQuizAnswerPayload(
         string? identityField,
         string? identity,
+        Guid quizId,
+        int questionId,
         string answer)
     {
         var payload = new Dictionary<string, object?>
         {
-            ["quizId"] = Guid.NewGuid().ToString(),
-            ["questionId"] = 1,
+            ["quizId"] = quizId.ToString(),
+            ["questionId"] = questionId,
             ["answer"] = answer,
             ["timeSpentSeconds"] = 5
         };
@@ -212,6 +216,25 @@ public sealed class OperationIdentityContractIntegrationTests : IClassFixture<Cu
         return correctOption.Id > 0
             ? correctOption.Id.ToString()
             : question.CorrectAnswer ?? throw new InvalidOperationException($"Question {questionId} has no correct answer");
+    }
+
+    private async Task<(Guid QuizId, int QuestionId)> StartIssuedQuizAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var subtopicId = await db.Questions.Select(q => q.SubtopicId).FirstAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/quiz/start", new
+        {
+            subtopicId,
+            questionCount = 1
+        });
+
+        await AssertOkAsync(response);
+        var payload = await ReadJsonAsync(response);
+        var quizId = Guid.Parse(payload.GetProperty("quizId").GetString()!);
+        var questionId = payload.GetProperty("questions").EnumerateArray().Single().GetProperty("id").GetInt32();
+        return (quizId, questionId);
     }
 
     private async Task<HttpResponseMessage> PostAsUserAsync(string userId, string url, object payload)

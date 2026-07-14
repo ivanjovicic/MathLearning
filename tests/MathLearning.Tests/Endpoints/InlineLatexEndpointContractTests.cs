@@ -47,9 +47,10 @@ public sealed class InlineLatexEndpointContractTests :
                 .GetProperty("text")
                 .GetString());
         Assert.Equal("Koristi $x=1$.", question.GetProperty("hintLight").GetString());
-        Assert.Equal(
-            "Pošto je $f(x)=2x+3$, važi $f(1)=5$.",
-            question.GetProperty("explanation").GetString());
+        Assert.False(question.TryGetProperty("correctAnswerId", out _));
+        Assert.False(question.TryGetProperty("hintFull", out _));
+        Assert.False(question.TryGetProperty("explanation", out _));
+        Assert.False(question.TryGetProperty("steps", out _));
 
         Assert.DoesNotContain("Za  i", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Pošto je ,", body, StringComparison.Ordinal);

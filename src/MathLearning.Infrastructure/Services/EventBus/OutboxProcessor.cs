@@ -9,17 +9,18 @@ namespace MathLearning.Infrastructure.Services.EventBus;
 
 public sealed class OutboxProcessor : BackgroundService
 {
-    private const int BatchSize = 50;
-    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan ErrorDelay = TimeSpan.FromSeconds(5);
-
     private readonly IServiceProvider _sp;
     private readonly ILogger<OutboxProcessor> _logger;
+    private readonly OutboxProcessingOptions _options;
 
-    public OutboxProcessor(IServiceProvider sp, ILogger<OutboxProcessor> logger)
+    public OutboxProcessor(
+        IServiceProvider sp,
+        ILogger<OutboxProcessor> logger,
+        OutboxProcessingOptions? options = null)
     {
         _sp = sp;
         _logger = logger;
+        _options = options ?? new OutboxProcessingOptions();
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -33,50 +34,15 @@ public sealed class OutboxProcessor : BackgroundService
                 try
                 {
                     using var scope = _sp.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    var bus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+                    var processor = scope.ServiceProvider.GetRequiredService<OutboxBatchProcessor>();
+                    var processedCount = await processor.ProcessBatchAsync(ct);
 
-                    var batch = await db.Outbox
-                        .Where(x => x.ProcessedUtc == null)
-                        .OrderBy(x => x.OccurredUtc)
-                        .Take(BatchSize)
-                        .ToListAsync(ct);
-
-                    if (batch.Count > 0)
+                    if (processedCount > 0)
                     {
-                        _logger.LogInformation("Processing {Count} outbox messages", batch.Count);
+                        _logger.LogInformation("Processed {Count} outbox messages", processedCount);
                     }
 
-                    foreach (var msg in batch)
-                    {
-                        if (ct.IsCancellationRequested)
-                            break;
-
-                        try
-                        {
-                            await bus.PublishAsync(msg.Type, msg.PayloadJson, ct);
-                            msg.ProcessedUtc = DateTime.UtcNow;
-                            msg.LastError = null;
-                            _logger.LogDebug("Processed outbox message {Id} of type {Type}", msg.Id, msg.Type);
-                        }
-                        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                        {
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            msg.Attempts += 1;
-                            msg.LastError = ex.Message;
-                            _logger.LogError(ex, "Failed to process outbox message {Id} (Attempt {Attempts})", msg.Id, msg.Attempts);
-                        }
-                    }
-
-                    if (batch.Count > 0)
-                    {
-                        await db.SaveChangesAsync(ct);
-                    }
-
-                    await DelaySafely(IdleDelay, ct);
+                    await DelaySafely(_options.IdleDelay, ct);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -92,7 +58,7 @@ public sealed class OutboxProcessor : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error in OutboxProcessor main loop");
-                    await DelaySafely(ErrorDelay, ct);
+                    await DelaySafely(_options.ErrorDelay, ct);
                 }
             }
         }

@@ -1,14 +1,16 @@
 using System;
+using MathLearning.Infrastructure.Persistance;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace MathLearning.Infrastructure.Migrations.Api
 {
-    /// <inheritdoc />
+    [DbContext(typeof(ApiDbContext))]
+    [Migration("20260515103000_AddDailyRunChestClaims")]
     public partial class AddDailyRunChestClaims : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -42,7 +44,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                 unique: true);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

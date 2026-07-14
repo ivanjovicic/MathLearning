@@ -255,12 +255,9 @@ public sealed class QuestionAuthoringService : IQuestionAuthoringService
         }
 
         resolved ??= orderedOptions.FirstOrDefault(x => x.IsCorrect);
-        resolved ??= !string.IsNullOrWhiteSpace(request.CorrectAnswer)
-            ? orderedOptions.FirstOrDefault(x => string.Equals(x.Text, request.CorrectAnswer, StringComparison.Ordinal))
-            : null;
 
         question.SetCorrectOptionId(resolved?.Id);
-        question.SetCorrectAnswer(resolved?.Text ?? request.CorrectAnswer);
+        question.SetCorrectAnswer(resolved?.Text);
         question.EnsureAnswerInvariant();
     }
 
@@ -308,3 +305,4 @@ public sealed class QuestionAuthoringService : IQuestionAuthoringService
         return JsonSerializer.Serialize(snapshot);
     }
 }
+

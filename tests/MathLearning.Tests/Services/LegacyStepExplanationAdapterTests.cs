@@ -9,7 +9,11 @@ public class LegacyStepExplanationAdapterTests
     public void GetSteps_ForRecognizedProblem_UsesReasoningGraphOutput()
     {
         var question = new Question("3/4 + 1/4", 1, 1);
-        question.SetCorrectAnswer("1");
+        question.ReplaceOptions([
+            new QuestionOption("1", true, order: 1),
+            new QuestionOption("2", false, order: 2)
+        ]);
+        question.SetCorrectAnswer("999");
 
         var adapter = new LegacyStepExplanationAdapter(
             new MathReasoningGraphEngine(),

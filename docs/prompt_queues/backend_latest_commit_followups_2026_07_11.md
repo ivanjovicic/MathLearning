@@ -45,10 +45,10 @@ This queue therefore prioritizes closure and canonical ownership before another 
 
 | ID | Priority | Status | Purpose |
 |---|---:|---|---|
-| BACKEND-LATEST-VALIDATION-002 | P0 | Prompt-ready | Build and execute the latest July 3 implementation/test batch, repair only proven failures, and update statuses from evidence. |
-| BACKEND-LATEST-WORKFLOW-002 | P0/P1 | Prompt-ready after validation or in parallel if Actions access exists | Bind the reviewed `main` head to a concrete Database Validation workflow result and artifacts. |
-| BACKEND-LATEST-EVIDENCE-002 | P1 | Prompt-ready | Run evidence lint against the latest referenced logs and reconcile misleading completion/status/commit fields. |
-| BACKEND-LATEST-QUEUE-002 | P1 | Prompt-ready | Create canonical ownership/dependency mapping across overlapping BACKEND-TEST and BE-PERF prompts. |
+| BACKEND-LATEST-VALIDATION-002 | P0 | Validated | Build and execute the latest July 3 implementation/test batch; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"` passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
+| BACKEND-LATEST-WORKFLOW-002 | P0/P1 | Validation failed | `Database Validation` run `29150275641` failed on schema-from-zero migration `20260624133144_AlignCosmeticsMobileDataModel` with missing constraint `FK_user_avatar_configs_UserProfiles_UserId`; tests/coverage/startup smoke were skipped and no artifacts were produced. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-WORKFLOW-002-evidence.md`. |
+| BACKEND-LATEST-EVIDENCE-002 | P1 | Done 75% | Linted the latest referenced July 3 evidence logs, added missing `Commit SHA:` fields, and reconciled completion caps; the referenced-only validator still reports older legacy queue/log debt outside the July 3 set. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-EVIDENCE-002-evidence.md`. |
+| BACKEND-LATEST-QUEUE-002 | P1 | Done | Canonical ownership/dependency mapping added across overlapping BACKEND-TEST and BE-PERF prompts, including duplicate-risk search rules and linked-owner evidence guidance. Run log: `.ai/runs/2026-07-14-BACKEND-LATEST-QUEUE-002-evidence.md`. |
 
 ---
 
@@ -273,6 +273,12 @@ At minimum reconcile these overlaps:
 6. Add a rule: an agent must search all active queues for the entity/service/risk before allocating a new ID.
 7. Add a machine-checkable duplicate-risk inventory if feasible, but do not build a complex new tool unless simple validation is insufficient.
 
+### Ownership rule added by this prompt
+
+- Before claiming a new backend prompt ID, search active queues for the prompt ID, endpoint, service, entity and risk phrase.
+- Search existing `Canonical owner`, `Linked to`, `Depends on`, `Satisfies` and `Superseded by` markers before allocating a new implementation lane.
+- If the same runtime risk already exists, extend the canonical owner and add only a linked/supporting row instead of spawning a second implementation package.
+
 ### Completion rule
 
 The map must make it impossible to interpret BACKEND-TEST-023 and BE-PERF-016, or BACKEND-TEST-031 and BE-PERF-009, as two independent runtime implementations.
@@ -281,14 +287,13 @@ The map must make it impossible to interpret BACKEND-TEST-023 and BE-PERF-016, o
 
 After the four closure prompts above:
 
-1. **BACKEND-TEST-012** — apply the safe 64/88/128 refresh-token model/snapshot correction and regression tests. Do not create a redundant migration.
-2. **BACKEND-TEST-032** — establish the PostgreSQL provider fixture/lane.
-3. **BACKEND-TEST-023 as canonical owner, satisfying BE-PERF-016** — implement outbox claim/lease/backoff/dead-letter.
-4. **BACKEND-TEST-022** — durable quiz/offline analytics ingest handoff, reusing the outbox contract.
-5. **BE-PERF-012 with BACKEND-TEST-033 and mobile contract sync** — adaptive exactly-once settlement.
-6. **BE-PERF-015 with BACKEND-TEST-032/033** — practice answer/completion concurrency.
-7. **BACKEND-TEST-031 as canonical owner, satisfying BE-PERF-009** — bounded/durable weakness scheduling.
-8. Continue maintenance, explanation, pagination and privileged-route prompts by risk.
+1. **BACKEND-TEST-032** — establish the PostgreSQL provider fixture/lane.
+2. **BACKEND-TEST-023 as canonical owner, satisfying BE-PERF-016** — implement outbox claim/lease/backoff/dead-letter.
+3. **BACKEND-TEST-022** — durable quiz/offline analytics ingest handoff, reusing the outbox contract.
+4. **BE-PERF-012 with BACKEND-TEST-033 and mobile contract sync** — adaptive exactly-once settlement.
+5. **BE-PERF-015 with BACKEND-TEST-032/033** — practice answer/completion concurrency.
+6. **BACKEND-TEST-031 as canonical owner, satisfying BE-PERF-009** — bounded/durable weakness scheduling.
+7. Continue maintenance, explanation, pagination and privileged-route prompts by risk.
 
 ## Stop rules
 

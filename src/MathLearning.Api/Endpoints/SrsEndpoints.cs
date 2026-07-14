@@ -137,7 +137,6 @@ public static class SrsEndpoints
         group.MapGet("/srs/daily", async (
             ApiDbContext db,
             HttpContext ctx,
-            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             int limit = 20) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -167,14 +166,13 @@ public static class SrsEndpoints
                 questions.AddRange(randomFill);
             }
 
-            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList());
+            return Results.Ok(questions.Select(q => MapQuestionDto(q, lang)).ToList());
         });
 
         // ?? SRS MIXED (due + random)
         group.MapGet("/srs/mixed", async (
             ApiDbContext db,
             HttpContext ctx,
-            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             int count = 15) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -204,8 +202,8 @@ public static class SrsEndpoints
 
             return Results.Ok(new
             {
-                srs = srsQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter)),
-                random = randomQuestions.Select(q => MapQuestionDto(q, lang, stepAdapter))
+                srs = srsQuestions.Select(q => MapQuestionDto(q, lang)),
+                random = randomQuestions.Select(q => MapQuestionDto(q, lang))
             });
         });
 
@@ -248,8 +246,8 @@ public static class SrsEndpoints
         });
     }
 
-    // ??? Shared helper to map Question entity ? QuestionDto with translation + steps
-    private static QuestionDto MapQuestionDto(Question q, string lang, MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter)
+    // Shared helper to map Question entity to pre-answer quiz-safe DTO.
+    private static QuizQuestionDto MapQuestionDto(Question q, string lang)
     {
         var options = q.Options
             .Select(o => new OptionDto(
@@ -260,41 +258,20 @@ public static class SrsEndpoints
                 TranslationHelper.GetOptionSemanticsAltText(o, lang)))
             .ToList();
 
-        return new QuestionDto(
+        return new QuizQuestionDto(
             q.Id,
             q.Type,
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)) ?? string.Empty,
             options,
-            q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
             q.Difficulty,
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
-            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
-            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
-            NormalizeStepsForResponse(stepAdapter.GetSteps(q, lang)),
             q.TextFormat,
-            q.ExplanationFormat,
             q.HintFormat,
             q.TextRenderMode,
-            q.ExplanationRenderMode,
             q.HintRenderMode,
             TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         );
-    }
-
-    private static List<StepExplanationDto> NormalizeStepsForResponse(List<StepExplanationDto> steps)
-    {
-        return steps
-            .Select(step => new StepExplanationDto(
-                InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
-                InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
-                step.Highlight,
-                step.TextFormat,
-                step.HintFormat,
-                step.TextRenderMode,
-                step.HintRenderMode,
-                TranslationHelper.ResolveSemanticsAltText(step.SemanticsAltText, step.Text, step.TextFormat)))
-            .ToList();
     }
 
     // Load full question graph in a deterministic order by pre-selected IDs.

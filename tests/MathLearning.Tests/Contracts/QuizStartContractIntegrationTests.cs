@@ -43,7 +43,7 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
         var payload = await ReadJsonAsync(response);
         Assert.True(Guid.TryParse(payload.GetProperty("quizId").GetString(), out _));
 
-        AssertQuizQuestionsShape(payload.GetProperty("questions"), expectedCount, "Quiz hot path");
+        AssertPreAnswerQuestionArrayShape(payload.GetProperty("questions"), expectedCount, "Quiz hot path");
     }
 
     [Fact]
@@ -78,7 +78,24 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
         var payload = await ReadJsonAsync(response);
         Assert.True(Guid.TryParse(payload.GetProperty("quizId").GetString(), out _));
 
-        AssertQuizQuestionsShape(payload.GetProperty("questions"), 25, "Quiz hot path");
+        AssertPreAnswerQuestionArrayShape(payload.GetProperty("questions"), 25, "Quiz hot path");
+    }
+
+    [Fact]
+    public async Task NextQuestion_ReturnsPreAnswerSafeShape()
+    {
+        var quizData = await SeedQuizPoolAsync("next-question", 4, createEmptySubtopic: true);
+
+        var response = await PostAsUserAsync("/api/quiz/next-question", new
+        {
+            quizId = Guid.NewGuid(),
+            subtopicId = quizData.HotSubtopicId
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await ReadJsonAsync(response);
+        AssertPreAnswerQuestionShape(payload);
     }
 
     private async Task<(int HotSubtopicId, int EmptySubtopicId)> SeedQuizPoolAsync(
@@ -167,28 +184,38 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
             : payload;
     }
 
-    private static void AssertQuizQuestionsShape(JsonElement questionsElement, int expectedCount, string expectedTextFragment)
+    private static void AssertPreAnswerQuestionArrayShape(JsonElement questionsElement, int expectedCount, string expectedTextFragment)
     {
         Assert.Equal(JsonValueKind.Array, questionsElement.ValueKind);
 
         var questions = questionsElement.EnumerateArray().ToList();
         Assert.Equal(expectedCount, questions.Count);
 
+        Assert.All(questions, AssertPreAnswerQuestionShape);
         Assert.All(questions, question =>
         {
-            Assert.True(question.TryGetProperty("id", out var idElement));
-            Assert.True(idElement.GetInt32() > 0);
-
             Assert.True(question.TryGetProperty("text", out var textElement));
-            Assert.False(string.IsNullOrWhiteSpace(textElement.GetString()));
             Assert.Contains(expectedTextFragment, textElement.GetString() ?? string.Empty, StringComparison.OrdinalIgnoreCase);
-
-            Assert.True(question.TryGetProperty("options", out var optionsElement));
-            Assert.Equal(JsonValueKind.Array, optionsElement.ValueKind);
-            Assert.Equal(4, optionsElement.GetArrayLength());
-
-            Assert.True(question.TryGetProperty("correctAnswerId", out var correctAnswerIdElement));
-            Assert.True(correctAnswerIdElement.GetInt32() > 0);
         });
+    }
+
+    private static void AssertPreAnswerQuestionShape(JsonElement question)
+    {
+        Assert.True(question.TryGetProperty("id", out var idElement));
+        Assert.True(idElement.GetInt32() > 0);
+
+        Assert.True(question.TryGetProperty("text", out var textElement));
+        Assert.False(string.IsNullOrWhiteSpace(textElement.GetString()));
+
+        Assert.True(question.TryGetProperty("options", out var optionsElement));
+        Assert.Equal(JsonValueKind.Array, optionsElement.ValueKind);
+        Assert.Equal(4, optionsElement.GetArrayLength());
+
+        Assert.True(question.TryGetProperty("hintLight", out _));
+        Assert.True(question.TryGetProperty("hintMedium", out _));
+        Assert.False(question.TryGetProperty("correctAnswerId", out _));
+        Assert.False(question.TryGetProperty("hintFull", out _));
+        Assert.False(question.TryGetProperty("explanation", out _));
+        Assert.False(question.TryGetProperty("steps", out _));
     }
 }

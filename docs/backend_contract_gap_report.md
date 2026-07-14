@@ -9,6 +9,7 @@ Mobile contract source: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_con
 |---|---|---|---|
 | `POST /api/quiz/answer` | `quiz_answer` | **Implemented / tested** | `IdempotencyLedger` + `QuizAnswerIdempotencyTests.cs` + `MobileMutationContractIntegrationTests.cs` |
 | `POST /api/quiz/srs/update` | `srs_update` | **Implemented / tested** | `SrsUpdateIdempotencyTests.cs` + `MobileMutationContractIntegrationTests.cs` |
+| `GET /api/quiz/srs/daily`, `GET /api/quiz/srs/mixed`, `POST /api/quiz/start`, `POST /api/quiz/next-question`, legacy `/api/quiz/questions` | pre-answer quiz/SRS question shape | **Verified** | `QuizStartContractIntegrationTests.cs` + `SrsEndpointsIntegrationTests.cs` + `openapi.yaml` + `docs/API_ENDPOINT_INVENTORY.md` |
 | `POST /api/daily-run/chest/claim` | `daily_run_chest_claim` | **Verified (domain-table Policy B)** | `DailyRunChestClaimIdempotencyTests.cs` + endpoint integration tests + `MobileMutationContractIntegrationTests.cs` |
 | Economy mutations | various | **Verified** | `EconomyOperationIdIdempotencyTests.cs` + `MobileEconomyContractIntegrationTests.cs` + `MobileMutationContractIntegrationTests.cs` |
 | Cosmetics mutations | various | **Verified** | `CosmeticsMutationResponseTests.cs` + cosmetics contract tests + `MobileApiRouteContractTests.cs` |
@@ -77,6 +78,13 @@ Why this is the lowest-risk direction:
   begin/replay/conflict/write logic, but they differ in schema shape and stored result semantics.
 - `EconomyTransactionService` follows the same flow, but keeps enum status, nullable `OperationId`, and
   economy-specific naming (`TransactionType`, `TransactionId`) that many settled endpoints already rely on.
+
+## Outbox delivery semantics
+
+- `Outbox` now claims rows with PostgreSQL `FOR UPDATE SKIP LOCKED`, plus `NextAttemptUtc` and `DeadLetteredUtc` to avoid multi-instance duplicate claims and bound poison retries.
+- Delivery remains at-least-once. Consumers must stay idempotent because a worker can still fail after publish and before commit.
+- Operators can replay a dead-lettered row by clearing `DeadLetteredUtc`, `NextAttemptUtc`, and resetting attempt state after triage.
+- Evidence: `tests/MathLearning.Tests/Infrastructure/OutboxBatchProcessorTests.cs`, migration `20260714124712_AddOutboxRetryAndDeadLetter`
 - `DailyRunChestClaimIdempotency` is intentionally not a generic ledger. Its authority is the domain claim row plus
   `(userId, day)` uniqueness, and its replay semantics are "replay by business identity" rather than "same key or
   conflict".
@@ -259,6 +267,46 @@ This pack intentionally checks:
 - duplicate idempotent requests replay settled responses
 - same keys with different payloads return `409` + `idempotency_conflict` where endpoint semantics use generic key/payload conflict
 
+## Question authoring collection replace strategy (U4)
+
+### Decision
+
+Keep the current hybrid update model for authoring options and steps. Do not switch to a full content-diff or move-aware
+collection sync yet.
+
+### Current backend behavior
+
+- `QuestionAuthoringService.SyncQuestionOptions` is keyed by persisted option `Id` when present.
+- Missing option ids are deleted.
+- Existing option ids are updated in place and keep identity/audit continuity.
+- New options without ids are inserted as new rows.
+- `QuestionAuthoringService.SyncQuestionSteps` is keyed by `StepIndex` / authoring `Order`, not by a dedicated stable
+  step identity field.
+- Missing step orders are deleted.
+- Existing step orders are updated in place.
+- A content reorder between two existing steps keeps the row identities attached to the order slots, not to the moved
+  text payload.
+
+### Why this remains the current choice
+
+- It matches the current mobile/admin authoring contract, which already submits stable option ids but does not expose a
+  separate stable identity for steps.
+- It preserves option identity for the most important backend-authoritative path: `CorrectOptionId`, published version
+  snapshots, and legacy answer compatibility.
+- It avoids a schema and contract expansion before there is a concrete audit, analytics, or translation requirement
+  that depends on move-aware step identity.
+
+### Explicitly deferred
+
+The backend does **not** currently support a "same step content moved to a new order keeps the same row id" guarantee.
+If audit diff quality, translation reuse, or per-step analytics becomes release-critical, introduce a dedicated stable
+step identity in the authoring contract and persist against that field instead of `StepIndex`.
+
+### Evidence
+
+- Runtime implementation: `src/MathLearning.Infrastructure/Services/QuestionAuthoring/QuestionAuthoringService.cs`
+- Regression tests: `tests/MathLearning.Tests/Services/QuestionAuthoringPipelineTests.cs`
+
 Daily Run chest remains the deliberate exception to generic conflict semantics:
 
 - same `transactionId` replay returns settled success
@@ -297,6 +345,89 @@ Covered categories:
 - `rollback`: counted and logged when quiz/SRS work throws before ledger completion inside the serializable transaction
 
 Smoke verification path:
+
+## Question authoring bulk import/export backlog proposal (U6)
+
+### Recommendation
+
+Do not implement bulk import/export yet. Keep it as a backend backlog item that is explicitly blocked on stable
+authoring contract semantics.
+
+### Why it stays deferred
+
+Bulk authoring is not just a transport feature. It would lock in several backend decisions that are still intentionally
+evolving or only recently stabilized:
+
+- validation/preview DTO semantics and issue ordering
+- open-answer equivalence outcomes (`validation_error` vs `mismatch`)
+- authoring collection identity rules for options and steps
+- preview-safe sanitization boundary for math/markdown/html payloads
+- versioning and revalidate consistency expectations
+
+If bulk import is added before those rules are treated as stable, the backend would either:
+
+- freeze an immature file contract that becomes expensive to support, or
+- silently drift from the single-question authoring pipeline and create a second validation truth.
+
+### Proposed backend shape when it becomes eligible
+
+Prefer a two-phase backend design instead of immediate write-through import:
+
+1. `POST /api/questions/import/validate`
+   - accepts a batch document
+   - returns per-item normalized validation/preview results
+   - performs no persistence
+
+2. `POST /api/questions/import/commit`
+   - accepts the validated batch payload plus stable item identities
+   - persists draft or published rows through the same authoring pipeline used by single-question flows
+   - returns per-item success/failure/version metadata
+
+3. `GET /api/questions/export`
+   - exports canonical backend-owned authoring JSON
+   - should emit normalized current contract fields, not legacy UI-only shapes
+
+### File-contract requirements before implementation
+
+Any future import/export contract should require:
+
+- canonical question type values (`multiple_choice`, `open_answer`)
+- explicit option arrays with stable option ids when updating existing questions
+- explicit step order values
+- math/render metadata (`TextFormat`, `RenderMode`, semantics alt text) in the same shape as backend authoring DTOs
+- enough identity data to distinguish create vs update vs publish intent
+- batch-level and item-level diagnostics, not fail-fast whole-file behavior
+
+Avoid introducing a CSV-first contract for full authoring fidelity. CSV can be a later convenience adapter, but the
+backend source of truth should be JSON because the authoring model already contains nested collections, math metadata,
+render hints, semantics alt text, and validation detail.
+
+### Non-goals for the first pass
+
+When bulk import/export is eventually started, the first backend pass should still exclude:
+
+- admin UI spreadsheet workflow design
+- translation import/export
+- asset/file attachment orchestration
+- move-aware step identity migration
+- partial success replay semantics across retries without a dedicated batch identity model
+
+### Preconditions before moving from backlog to implementation
+
+Do not promote this item out of backlog until all of the following are true:
+
+- question authoring validation/preview contract is treated as stable
+- replace-strategy decision for options/steps is documented and accepted
+- open-answer equivalence outcomes are covered by regression tests
+- sanitization boundary is considered release-ready for import-sized payloads
+- draft/publish/revalidate consistency tests are already in place
+
+### Suggested follow-up when priority rises
+
+- add a backend-only design note under `docs/` with example import/export JSON
+- add contract tests for per-item validation reporting
+- add import idempotency strategy for batch commit operations before exposing write endpoints
+- decide whether commit writes drafts only, or allows direct publish under admin/content-author policy
 
 1. send a first idempotent mutation
 2. resend the same request and optionally a conflict variant

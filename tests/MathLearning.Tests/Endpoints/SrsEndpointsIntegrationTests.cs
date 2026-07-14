@@ -85,6 +85,21 @@ public sealed class SrsEndpointsIntegrationTests : IClassFixture<CustomWebApplic
     }
 
     [Fact]
+    public async Task Daily_ResponseShape_OmitsAnswerKeyAndSolutionMaterial()
+    {
+        var userId = NewUserId("daily-shape");
+        await SeedQuestionStatsAsync(userId,
+            (1, DateTime.UtcNow.AddDays(-1), 1.2));
+
+        var response = await SendGetAsync("/api/quiz/srs/daily?limit=1", userId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await ReadJsonAsync(response);
+        AssertPreAnswerQuestionArrayShape(payload, 1);
+    }
+
+    [Fact]
     public async Task Mixed_DueAndRandom_AreDisjointAndRespectCount()
     {
         var userId = NewUserId("mixed-padding");
@@ -104,6 +119,22 @@ public sealed class SrsEndpointsIntegrationTests : IClassFixture<CustomWebApplic
         Assert.Equal(3, randomIds.Length);
         Assert.Equal(3, randomIds.Distinct().Count());
         Assert.Empty(srsIds.Intersect(randomIds));
+    }
+
+    [Fact]
+    public async Task Mixed_ResponseShape_OmitsAnswerKeyAndSolutionMaterial()
+    {
+        var userId = NewUserId("mixed-shape");
+        await SeedQuestionStatsAsync(userId,
+            (1, DateTime.UtcNow.AddDays(-1), 1.2));
+
+        var response = await SendGetAsync("/api/quiz/srs/mixed?count=2", userId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await ReadJsonAsync(response);
+        AssertPreAnswerQuestionArrayShape(payload.GetProperty("srs"), 1);
+        AssertPreAnswerQuestionArrayShape(payload.GetProperty("random"), 1);
     }
 
     private async Task<HttpResponseMessage> SendGetAsync(string path, string userId)
@@ -131,6 +162,34 @@ public sealed class SrsEndpointsIntegrationTests : IClassFixture<CustomWebApplic
         return element.EnumerateArray()
             .Select(item => item.GetProperty("id").GetInt32())
             .ToArray();
+    }
+
+    private static void AssertPreAnswerQuestionArrayShape(JsonElement element, int expectedCount)
+    {
+        Assert.Equal(JsonValueKind.Array, element.ValueKind);
+
+        var questions = element.EnumerateArray().ToList();
+        Assert.Equal(expectedCount, questions.Count);
+
+        Assert.All(questions, question =>
+        {
+            Assert.True(question.TryGetProperty("id", out var idElement));
+            Assert.True(idElement.GetInt32() > 0);
+
+            Assert.True(question.TryGetProperty("text", out var textElement));
+            Assert.False(string.IsNullOrWhiteSpace(textElement.GetString()));
+
+            Assert.True(question.TryGetProperty("options", out var optionsElement));
+            Assert.Equal(JsonValueKind.Array, optionsElement.ValueKind);
+            Assert.Equal(4, optionsElement.GetArrayLength());
+
+            Assert.True(question.TryGetProperty("hintLight", out _));
+            Assert.True(question.TryGetProperty("hintMedium", out _));
+            Assert.False(question.TryGetProperty("correctAnswerId", out _));
+            Assert.False(question.TryGetProperty("hintFull", out _));
+            Assert.False(question.TryGetProperty("explanation", out _));
+            Assert.False(question.TryGetProperty("steps", out _));
+        });
     }
 
     private async Task SeedQuestionStatsAsync(

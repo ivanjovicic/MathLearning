@@ -983,20 +983,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
 
     private static bool EvaluateAnswer(Question question, string answer)
     {
-        var normalized = (answer ?? string.Empty).Trim();
-        if (normalized.Length == 0)
-            return false;
-
-        if (question.Type == "multiple_choice")
-        {
-            var parsedId = int.TryParse(normalized, out var optionId) ? optionId : -1;
-            return question.Options.Any(o =>
-                o.IsCorrect &&
-                (o.Id == parsedId || string.Equals(o.Text.Trim(), normalized, StringComparison.OrdinalIgnoreCase)));
-        }
-
-        return question.CorrectAnswer is not null &&
-               string.Equals(question.CorrectAnswer.Trim(), normalized, StringComparison.OrdinalIgnoreCase);
+        return question.MatchesSubmittedAnswer(answer);
     }
 
     // Example EF query pattern used by multiple methods:

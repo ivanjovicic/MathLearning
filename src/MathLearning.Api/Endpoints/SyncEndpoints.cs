@@ -54,6 +54,10 @@ public static class SyncEndpoints
                 var response = await syncService.SyncAsync(userId, request, cancellationToken);
                 return Results.Ok(response);
             }
+            catch (SyncConcurrencyException ex)
+            {
+                return Results.Conflict(new { error = "sync_conflict", message = ex.Message });
+            }
             catch (InvalidOperationException ex)
             {
                 return Results.BadRequest(new { error = ex.Message });

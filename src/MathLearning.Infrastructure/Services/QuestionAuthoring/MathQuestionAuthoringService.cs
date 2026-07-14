@@ -32,6 +32,7 @@ public sealed partial class MathQuestionAuthoringService :
     private readonly IQuestionAutoHintGenerator autoHintGenerator;
     private readonly IQuestionAuthoringService questionAuthoringService;
     private readonly IMathContentSanitizer sanitizer;
+    private const int LoggedIssueRuleLimit = 5;
 
     public MathQuestionAuthoringService(
         ApiDbContext db,
@@ -105,9 +106,10 @@ public sealed partial class MathQuestionAuthoringService :
                 db.ChangeTracker.Clear();
                 logger.LogWarning(
                     ex,
-                    "Draft version allocation conflict for question {QuestionId}. Retrying attempt {Attempt}.",
+                    "Draft version allocation conflict for question {QuestionId}. Retrying attempt {Attempt} of {MaxAttempts}.",
                     request.Content.QuestionId,
-                    attempt + 1);
+                    attempt + 1,
+                    QuestionAuthoringConcurrencySupport.MaxVersionAllocationAttempts);
             }
         }
 
@@ -223,9 +225,10 @@ public sealed partial class MathQuestionAuthoringService :
                 db.ChangeTracker.Clear();
                 logger.LogWarning(
                     ex,
-                    "Publish version allocation conflict for draft {DraftId}. Retrying attempt {Attempt}.",
+                    "Publish version allocation conflict for draft {DraftId}. Retrying attempt {Attempt} of {MaxAttempts}.",
                     request.DraftId,
-                    attempt + 1);
+                    attempt + 1,
+                    QuestionAuthoringConcurrencySupport.MaxVersionAllocationAttempts);
             }
         }
 
@@ -278,10 +281,12 @@ public sealed partial class MathQuestionAuthoringService :
         if (!pipeline.Validation.Summary.CanPublish)
         {
             logger.LogWarning(
-                "Publish blocked for draft {DraftId}. Errors={ErrorCount} Warnings={WarningCount}",
+                "Publish blocked for draft {DraftId}. Status={Status} Errors={ErrorCount} Warnings={WarningCount} TopRuleIds={TopRuleIds}",
                 draft.Id,
+                pipeline.Validation.Summary.Status,
                 pipeline.Validation.Summary.ErrorCount,
-                pipeline.Validation.Summary.WarningCount);
+                pipeline.Validation.Summary.WarningCount,
+                BuildTopRuleIds(pipeline.Validation.Summary.Issues));
 
             return new PublishQuestionResponse(
                 false,
@@ -463,7 +468,13 @@ public sealed partial class MathQuestionAuthoringService :
         await ReplaceValidationForDraftAsync(draft, pipeline, actorUserId, cancellationToken);
         draft.ValidationStatus = pipeline.Validation.Summary.Status;
         draft.PublishState = pipeline.Validation.Summary.CanPublish ? QuestionPublishStates.Validated : QuestionPublishStates.Draft;
+        draft.EditorUserId = actorUserId;
         draft.UpdatedAtUtc = DateTime.UtcNow;
+        question.SetCurrentDraft(draft.Id);
+        if (!string.Equals(question.PublishState, QuestionPublishStates.Published, StringComparison.Ordinal))
+        {
+            question.SetPublishState(draft.PublishState, actorUserId, null);
+        }
 
         db.QuestionAuthoringAuditLogs.Add(new QuestionAuthoringAuditLog
         {
@@ -516,6 +527,27 @@ public sealed partial class MathQuestionAuthoringService :
             equivalenceChecks,
             stepResults,
             difficultyResult);
+
+        if (summary.ErrorCount > 0)
+        {
+            logger.LogWarning(
+                "Question authoring validation failed. QuestionId={QuestionId} Status={Status} Errors={ErrorCount} Warnings={WarningCount} TopRuleIds={TopRuleIds}",
+                effectiveRequest.QuestionId,
+                summary.Status,
+                summary.ErrorCount,
+                summary.WarningCount,
+                BuildTopRuleIds(summary.Issues));
+        }
+        else if (summary.WarningCount > 0)
+        {
+            logger.LogInformation(
+                "Question authoring validation completed with warnings. QuestionId={QuestionId} Status={Status} Errors={ErrorCount} Warnings={WarningCount} TopRuleIds={TopRuleIds}",
+                effectiveRequest.QuestionId,
+                summary.Status,
+                summary.ErrorCount,
+                summary.WarningCount,
+                BuildTopRuleIds(summary.Issues));
+        }
 
         logger.LogDebug(
             "Question authoring validation completed. QuestionId={QuestionId} Status={Status} Errors={ErrorCount} Warnings={WarningCount}",
@@ -666,7 +698,7 @@ public sealed partial class MathQuestionAuthoringService :
             question.Id,
             question.Text,
             question.Type,
-            question.CorrectAnswer,
+            question.GetExpectedAnswerText(),
             question.Explanation,
             question.Difficulty,
             question.CategoryId,
@@ -792,9 +824,19 @@ public sealed partial class MathQuestionAuthoringService :
                     x.Suggestion))
                 .ToArray());
 
+    private static string BuildTopRuleIds(IReadOnlyList<ValidationIssueDto> issues)
+        => string.Join(
+            ",",
+            issues
+                .Select(x => x.RuleId)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .Take(LoggedIssueRuleLimit));
+
     private sealed record PipelineExecution(
         QuestionAuthoringRequest EffectiveRequest,
         string ContentHash,
         ValidateQuestionResponse Validation,
         PreviewQuestionResponse Preview);
 }
+

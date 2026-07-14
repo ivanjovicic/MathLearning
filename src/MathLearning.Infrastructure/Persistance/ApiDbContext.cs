@@ -309,7 +309,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         builder.Entity<RefreshToken>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Token).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Token).IsRequired().HasMaxLength(128);
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ExpiresAt).IsRequired();
             entity.Property(e => e.RevokedAt)
@@ -1155,7 +1155,11 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Type).IsRequired();
             entity.Property(e => e.PayloadJson).IsRequired();
+            entity.Property(e => e.NextAttemptUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ProcessedUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.DeadLetteredUtc).HasColumnType("timestamp with time zone");
             entity.HasIndex(e => new { e.ProcessedUtc, e.OccurredUtc });
+            entity.HasIndex(e => new { e.ProcessedUtc, e.DeadLetteredUtc, e.NextAttemptUtc, e.OccurredUtc });
         });
 
         builder.Entity<UserXpEvent>(entity =>

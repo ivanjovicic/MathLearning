@@ -31,7 +31,6 @@ public static class QuizEndpoints
         group.MapPost("/start", async (
             StartQuizRequest request,
             ApiDbContext db,
-            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -51,9 +50,10 @@ public static class QuizEndpoints
                 db.Questions.AsNoTracking().Where(q => q.SubtopicId == request.SubtopicId),
                 questionCount,
                 ctx.RequestAborted);
+            quiz.SetIssuedQuestionIds(questionIds);
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
 
-            var questionDtos = questions.Select(q => MapQuestionDto(q, lang, stepAdapter)).ToList();
+            var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
 
             await db.SaveChangesAsync();
 
@@ -104,7 +104,6 @@ public static class QuizEndpoints
         group.MapPost("/next-question", async (
             NextQuestionRequest request,
             ApiDbContext db,
-            MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -131,7 +130,6 @@ public static class QuizEndpoints
             if (question == null)
                 return Results.NotFound("No questions available");
 
-            var steps = NormalizeStepsForResponse(stepAdapter.GetSteps(question, lang));
             var questionText = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, lang)) ?? string.Empty;
             var options = question.Options
                 .Select(o => new OptionDto(
@@ -142,7 +140,7 @@ public static class QuizEndpoints
                     TranslationHelper.GetOptionSemanticsAltText(o, lang)))
                 .ToList();
 
-            return Results.Ok(new NextQuestionResponse(
+            return Results.Ok(new QuizQuestionDto(
                 question.Id,
                 question.Type,
                 questionText,
@@ -150,14 +148,9 @@ public static class QuizEndpoints
                 question.Difficulty,
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(question, lang)),
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, lang)),
-                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(question, lang)),
-                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(question, lang)),
-                steps,
                 question.TextFormat,
-                question.ExplanationFormat,
                 question.HintFormat,
                 question.TextRenderMode,
-                question.ExplanationRenderMode,
                 question.HintRenderMode,
                 TranslationHelper.GetQuestionSemanticsAltText(question, lang)
             ));
@@ -249,9 +242,19 @@ public static class QuizEndpoints
                                     Results.NotFound("Question not found"));
                             }
 
-                            var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
+                            var issuedSession = await LoadIssuedQuizSessionAsync(
+                                db,
+                                userId,
+                                quizSessionId,
+                                questionId,
+                                ctx.RequestAborted);
+                            if (issuedSession is null)
+                            {
+                                throw new IdempotentQuizAnswerEarlyReturnException(
+                                    Results.NotFound("Quiz session not found"));
+                            }
 
-                            await EnsureQuizSessionAsync(db, userId, quizSessionId, DateTime.UtcNow, ctx.RequestAborted);
+                            var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
                             var attemptResult = await ProcessAnswerAttemptWithinTransactionAsync(
                                 db,
@@ -329,6 +332,15 @@ public static class QuizEndpoints
             if (question == null)
                 return Results.NotFound("Question not found");
 
+            var issuedSession = await LoadIssuedQuizSessionAsync(
+                db,
+                userId,
+                quizSessionId,
+                questionId,
+                ctx.RequestAborted);
+            if (issuedSession is null)
+                return Results.NotFound("Quiz session not found");
+
             var answeredAtUtc = DateTime.UtcNow;
             var attemptInput = new AnswerAttemptInput(
                 Question: question,
@@ -347,8 +359,6 @@ public static class QuizEndpoints
                 logger,
                 async () =>
                 {
-                    await EnsureQuizSessionAsync(db, userId, quizSessionId, answeredAtUtc, ctx.RequestAborted);
-
                     var result = await ProcessAnswerAttemptWithinTransactionAsync(
                         db,
                         xpTrackingService,
@@ -510,7 +520,7 @@ public static class QuizEndpoints
             attemptResult.TotalXpAfterAward);
     }
 
-    private static QuestionDto MapQuestionDto(Question q, string lang, MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter)
+    private static QuizQuestionDto MapQuestionDto(Question q, string lang)
     {
         var options = q.Options
             .Select(o => new OptionDto(
@@ -521,26 +531,35 @@ public static class QuizEndpoints
                 TranslationHelper.GetOptionSemanticsAltText(o, lang)))
             .ToList();
 
-        return new QuestionDto(
+        return new QuizQuestionDto(
             q.Id,
             q.Type,
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)) ?? string.Empty,
             options,
-            q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
             q.Difficulty,
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
-            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
-            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
-            NormalizeStepsForResponse(stepAdapter.GetSteps(q, lang)),
             q.TextFormat,
-            q.ExplanationFormat,
             q.HintFormat,
             q.TextRenderMode,
-            q.ExplanationRenderMode,
             q.HintRenderMode,
             TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         );
+    }
+
+    private static List<StepExplanationDto> NormalizeStepsForResponse(List<StepExplanationDto> steps)
+    {
+        return steps
+            .Select(step => new StepExplanationDto(
+                InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
+                InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
+                step.Highlight,
+                step.TextFormat,
+                step.HintFormat,
+                step.TextRenderMode,
+                step.HintRenderMode,
+                TranslationHelper.ResolveSemanticsAltText(step.SemanticsAltText, step.Text, step.TextFormat)))
+            .ToList();
     }
 
     private static async Task<List<int>> SelectRandomQuestionIdsAsync(
@@ -619,59 +638,13 @@ public static class QuizEndpoints
             UserId = userId,
             StartedAt = DateTime.UtcNow
         };
+        quizSession.SetIssuedQuestionIds(questionIds);
         db.QuizSessions.Add(quizSession);
         await db.SaveChangesAsync();
 
-        var mapped = questions.Select(q => new
-        {
-            id = q.Id,
-            text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)),
-            textFormat = q.TextFormat,
-            renderMode = q.TextRenderMode,
-            type = q.Type,
-            options = q.Options
-                .Select(o => new
-                {
-                    id = o.Id,
-                    text = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)),
-                    textFormat = o.TextFormat,
-                    renderMode = o.RenderMode,
-                    semanticsAltText = TranslationHelper.GetOptionSemanticsAltText(o, lang)
-                })
-                .ToList(),
-            correctAnswerId = q.Options.FirstOrDefault(o => o.IsCorrect)?.Id ?? 0,
-            subtopicId = q.SubtopicId,
-            hintLight = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
-            hintMedium = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
-            hintFull = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintFull(q, lang)),
-            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetExplanation(q, lang)),
-            explanationFormat = q.ExplanationFormat,
-            hintFormat = q.HintFormat,
-            explanationRenderMode = q.ExplanationRenderMode,
-            hintRenderMode = q.HintRenderMode,
-            semanticsAltText = TranslationHelper.GetQuestionSemanticsAltText(q, lang)
-        });
-
-        return Results.Ok(new
-        {
-            quizId = quizSession.Id,
-            questions = mapped
-        });
-    }
-
-    private static List<StepExplanationDto> NormalizeStepsForResponse(List<StepExplanationDto> steps)
-    {
-        return steps
-            .Select(step => new StepExplanationDto(
-                InlineLatexFormatter.NormalizeMixedInlineMath(step.Text) ?? step.Text,
-                InlineLatexFormatter.NormalizeMixedInlineMath(step.Hint),
-                step.Highlight,
-                step.TextFormat,
-                step.HintFormat,
-                step.TextRenderMode,
-                step.HintRenderMode,
-                TranslationHelper.ResolveSemanticsAltText(step.SemanticsAltText, step.Text, step.TextFormat)))
-            .ToList();
+        return Results.Ok(new QuizResponse(
+            quizSession.Id,
+            questions.Select(q => MapQuestionDto(q, lang)).ToList()));
     }
 
     private static async Task<Question?> LoadQuestionForAnswerAsync(
@@ -902,26 +875,23 @@ public static class QuizEndpoints
         return null;
     }
 
-    private static async Task EnsureQuizSessionAsync(
+    private static async Task<QuizSession?> LoadIssuedQuizSessionAsync(
         ApiDbContext db,
         string userId,
         Guid quizSessionId,
-        DateTime startedAtUtc,
+        int questionId,
         CancellationToken cancellationToken)
     {
-        var existingSession = await db.QuizSessions
+        var session = await db.QuizSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == quizSessionId && s.UserId == userId, cancellationToken);
 
-        if (existingSession != null)
-            return;
-
-        db.QuizSessions.Add(new QuizSession
+        if (session is null || !session.HasIssuedQuestion(questionId))
         {
-            Id = quizSessionId,
-            UserId = userId,
-            StartedAt = startedAtUtc
-        });
+            return null;
+        }
+
+        return session;
     }
 
     private static async Task<AnswerAttemptResult> ProcessAnswerAttemptWithinTransactionAsync(

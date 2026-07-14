@@ -46,6 +46,7 @@ Prompt queues:
 - Preserve existing endpoint normalization semantics while adding shared bounds.
 - Do not set coverage thresholds before a successful measured baseline.
 - Search all active test/performance/risk queues before allocating a new ID; overlapping risks require one canonical runtime owner.
+- When a queue row is test-side only, append runtime/provider/evidence work to its canonical owner instead of opening a second implementation lane.
 - Idempotency is not entitlement: a stable key cannot authorize a client-declared reward, quantity, price or source.
 
 ## Active prompts
@@ -63,7 +64,7 @@ Prompt queues:
 | BACKEND-TEST-009 | Implemented / Needs validation | Relational idempotency constraints, rollback and duplicate-insert recovery. |
 | BACKEND-TEST-010 | Validated | Bounded reads and enum normalization: 70 passed. |
 | BACKEND-TEST-011 | Implemented / Workflow validation needed | GitHub summary plus HTML/merged Cobertura coverage artifact. |
-| BACKEND-TEST-012 | Confirmed drift / Needs safe patch | Refresh-token generator 88 chars vs EF model/snapshot 64 and migration target 128. |
+| BACKEND-TEST-012 | Validated | Refresh-token generator/model/snapshot drift resolved by aligning EF metadata and snapshot to the existing 128-char migration target, without creating a redundant migration. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~RefreshTokenServiceSecurityTests"`: 8 passed, 0 failed, 0 skipped; `dotnet ef migrations has-pending-model-changes --project src/MathLearning.Infrastructure/MathLearning.Infrastructure.csproj --startup-project src/MathLearning.Api/MathLearning.Api.csproj --context ApiDbContext --no-build`: no pending model changes. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-012-evidence.md`. |
 | BACKEND-TEST-013 | Ready / P0 contract decision | Require, gate or isolate missing operation identity. |
 | BACKEND-TEST-014 | Implemented / Needs validation | Shared/cosmetics idempotency state machines and canonical payload semantics. |
 | BACKEND-TEST-015 | Implemented / Needs validation | Real HTTP refresh-token rotation race against relational SQLite. |
@@ -74,7 +75,7 @@ Prompt queues:
 | BACKEND-TEST-020 | Runtime-fixed / Needs validation | Bug report user/admin authorization boundaries. |
 | BACKEND-TEST-021 | Runtime-fixed / Needs validation | Maintenance routes require exact admin policy. |
 | BACKEND-TEST-022 | P0 / Prompt-ready | Durable/idempotent analytics ingest delivery after authoritative settlement. |
-| BACKEND-TEST-023 | P0/P1 / Prompt-ready | Canonical runtime owner for multi-instance outbox claim, duplicate-publish and poison-message safety; satisfies linked BE-PERF-016 when fully implemented and measured. |
+| BACKEND-TEST-023 | Runtime-fixed / Workflow validation needed | Canonical runtime owner now uses `FOR UPDATE SKIP LOCKED`, bounded retry/dead-letter state, redacted persisted errors and hosted-service wiring; PostgreSQL proof still needs CI evidence or valid local credentials before linked BE-PERF-016 can be marked validated. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-023-evidence.md` |
 | BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
 | BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation. |
 | BACKEND-TEST-026 | P1 / Prompt-ready | Minimize public health/metrics/schema/job information. |
@@ -83,16 +84,16 @@ Prompt queues:
 | BACKEND-TEST-029 | Implemented / Needs validation | Analytics/recommendation auth, user scope, paging, shape and safe-error endpoint tests. |
 | BACKEND-TEST-030 | Runtime-fixed / Needs validation | Explanation validation contracts and stable safe not-found messages. |
 | BACKEND-TEST-031 | P1 / Prompt-ready | Canonical runtime owner for weakness scheduler durability, deduplication and backpressure; satisfies linked BE-PERF-009 when fully implemented and measured. |
-| BACKEND-TEST-032 | P0/P1 / Prompt-ready | PostgreSQL provider-specific concurrency/locking/constraint lane; prerequisite proof for BE-PERF-012, 015 and 016. |
+| BACKEND-TEST-032 | Implemented / Workflow validation needed | Shared PostgreSQL provider harness and initial authority tests are now wired for refresh-token persistence, refresh rotation race and fresh-migration schema guard; the CI workflow now exports `POSTGRES_PROVIDER_TESTS_REQUIRED=1` with the workflow PostgreSQL service. Exact provider execution still needs successful workflow or local maintenance credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-032-evidence.md`. |
 | BACKEND-TEST-033 | P1 / Prompt-ready | Cancellation/rollback matrix for canonical P0 mutations; supporting proof for BE-PERF-012 and 015. |
 | BACKEND-TEST-034 | P1/P2 / Prompt-ready | Legacy route parity/deprecation and duplicate-settlement prevention. |
 | BACKEND-TEST-035 | Implemented / Needs validation | Direct test-auth default/anonymous/role contract tests. |
-| BACKEND-TEST-036 | Runtime-fixed + tests / Needs validation | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Run log: `.ai/runs/2026-07-03-BACKEND-TEST-036-evidence.md`. |
+| BACKEND-TEST-036 | Validated | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"`: 272 passed, 0 failed, 0 skipped. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
-| BACKEND-LATEST-VALIDATION-002 | P0 / Prompt-ready | Execute and minimally repair the latest July 3 implementation/test batch before more runtime work. |
+| BACKEND-LATEST-VALIDATION-002 | Validated | Latest July 3 implementation/test batch verified; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and the focused `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"` passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Prompt-ready | Link exact `main` SHA to Database Validation jobs, logs and artifacts. |
-| BACKEND-LATEST-EVIDENCE-002 | P1 / Prompt-ready | Lint latest referenced run logs and reconcile evidence/status/score claims. |
-| BACKEND-LATEST-QUEUE-002 | P1 / Prompt-ready | Canonical ownership and dependency map across overlapping test/performance queues. |
+| BACKEND-LATEST-EVIDENCE-002 | P1 / Done 75% | Linted the latest referenced July 3 evidence logs, added missing `Commit SHA:` fields, and reconciled completion caps; the referenced-only validator still reports older legacy queue/log debt outside the July 3 set. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-EVIDENCE-002-evidence.md`. |
+| BACKEND-LATEST-QUEUE-002 | P1 / Done | Canonical ownership and dependency map across overlapping test/performance queues, including duplicate-risk search guidance. Run log: `.ai/runs/2026-07-14-BACKEND-LATEST-QUEUE-002-evidence.md`. |
 | BACKEND-MIGRATION-001 | P0 / Prompt-ready | Repair historical cosmetics FK-name drift and prove clean plus upgraded PostgreSQL migration paths without weakening the schema gate. |
 | BACKEND-API-DB-001 | P0 / Prompt-ready | Remove answer keys and complete solution material from online pre-answer quiz/SRS responses. |
 | BACKEND-API-DB-002 | P0 / Prompt-ready | Require a valid user-owned issued quiz session/question before answer settlement. |
@@ -111,6 +112,24 @@ Prompt queues:
 | BACKEND-API-DB-015 | P0/P1 / Prompt-ready; extends BACKEND-TEST-014/032/033 | Recover stale pending economy/cosmetics operations without allowing dual settlement. |
 
 IDs 037–041 are reserved/occupied by parallel coverage work and are not reused by the pass-2 follow-up queue.
+
+## Canonical ownership map
+
+| Test prompt | Canonical performance owner | Scope note |
+|---|---|---|
+| BACKEND-TEST-023 | BE-PERF-016 | Outbox claim, duplicate-publish defense and poison-message lifecycle are owned on the performance side; this test row keeps the contract and regression coverage. |
+| BACKEND-TEST-031 | BE-PERF-009 | Weakness scheduling owns the bounded queue and deduplication behavior; keep the test row aligned to the scheduler contract. |
+| BACKEND-TEST-032 | BE-PERF-012, BE-PERF-015, BE-PERF-016 | PostgreSQL provider proof sits behind the adaptive/practice/outbox lanes and should not be re-implemented separately. |
+| BACKEND-TEST-033 | BE-PERF-012 and BE-PERF-015 | Cancellation/rollback proof belongs to the canonical P0 mutation lanes. |
+| BACKEND-TEST-042 | maintenance operational workstream | Distributed maintenance lock/audit coverage is the shared ops/maintenance responsibility, not a new standalone implementation lane. |
+| BACKEND-TEST-043 | BE-PERF-014 | Force-refresh and cost-bound checks mirror the explanation-cache guard work. |
+| BACKEND-TEST-045 | analytics pagination fixup workstream | This is the analytics side of the pagination fix and must preserve BACKEND-TEST-028 bounds. |
+
+## Duplicate-risk search rule
+
+- Search active queues by endpoint, service, entity, risk phrase and existing linked-owner markers before allocating a new backend ID.
+- Reuse `Canonical owner`, `Linked to`, `Depends on`, `Satisfies` and `Superseded by` markers to decide whether the work is runtime ownership, provider proof or contract validation.
+- If a matching runtime risk already exists, extend that canonical row and share the evidence log unless the new prompt is docs-only.
 
 ## Existing validated coverage — do not duplicate blindly
 
@@ -174,18 +193,17 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 8. Run BACKEND-API-DB-001 to remove answer/solution disclosure from pre-answer online contracts.
 9. Run BACKEND-API-DB-002 to establish quiz-session/question authority.
 10. Run BACKEND-API-DB-003 to replace client-authoritative progress completion.
-11. Apply BACKEND-TEST-012 refresh-token model/snapshot correction unless BACKEND-API-DB-007 safely supersedes and fully satisfies it.
-12. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
-13. Run BACKEND-API-DB-004 for same-device sync serialization and scoped operation identity.
-14. Run BACKEND-API-DB-012 for Redis/DB leaderboard parity after the string cursor contract is stable.
-15. Run BACKEND-API-DB-013 for one complete account-provisioning owner and orphan reconciliation.
-16. Run BACKEND-API-DB-014 to retire or repair the photo-avatar contract/storage.
-17. Run BACKEND-TEST-023 as canonical outbox owner, satisfying linked BE-PERF-016.
-18. Run BACKEND-TEST-022 durable ingest delivery.
-19. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
-20. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
-21. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection.
-22. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.
-23. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
-24. Continue BACKEND-TEST-042…047 after the P0 packages.
-25. Review the measured coverage summary and introduce progressive thresholds only from retained evidence.
+11. Run BACKEND-TEST-032 PostgreSQL provider-specific lane.
+12. Run BACKEND-API-DB-004 for same-device sync serialization and scoped operation identity.
+13. Run BACKEND-API-DB-012 for Redis/DB leaderboard parity after the string cursor contract is stable.
+14. Run BACKEND-API-DB-013 for one complete account-provisioning owner and orphan reconciliation.
+15. Run BACKEND-API-DB-014 to retire or repair the photo-avatar contract/storage.
+16. Re-run BACKEND-TEST-023 with working PostgreSQL credentials or CI evidence, then close linked BE-PERF-016.
+17. Run BACKEND-TEST-022 durable ingest delivery.
+18. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+19. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
+20. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection.
+21. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.
+22. Run BACKEND-TEST-025/026/031/033/034 by risk, using canonical linked ownership.
+23. Continue BACKEND-TEST-042…047 after the P0 packages.
+24. Review the measured coverage summary and introduce progressive thresholds only from retained evidence.

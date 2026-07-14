@@ -15,6 +15,16 @@ Previous detailed queue: `backend_test_followups_2026_07_03.md`
 | BACKEND-TEST-030 | Runtime-fixed / Needs validation | Stable safe explanation not-found responses and 9 endpoint cases. `.ai/runs/2026-07-03-BACKEND-TEST-030-evidence.md`. |
 | BACKEND-TEST-035 | Implemented / Needs validation | 3 direct `TestAuthHandler` contract tests. `.ai/runs/2026-07-03-BACKEND-TEST-035-evidence.md`. |
 
+## Canonical ownership notes
+
+| Test row | Canonical owner | Note |
+|---|---|---|
+| BACKEND-TEST-042 | maintenance operational workstream | Shared maintenance lock/audit work lives on the ops side; this row keeps the test-side regression gate. |
+| BACKEND-TEST-043 | BE-PERF-014 | Force-refresh and cost-bound checks mirror the explanation-cache guard work. |
+| BACKEND-TEST-045 | analytics pagination fixup workstream | This row covers the analytics side of the pagination fix and must preserve BACKEND-TEST-028 bounds. |
+| BACKEND-TEST-046 | test coverage inventory only | No direct BE-PERF counterpart; keep this row as the page-based endpoint migration audit. |
+| BACKEND-TEST-047 | test coverage inventory only | No direct BE-PERF counterpart; keep this row as the privileged-route authorization audit. |
+
 ## Still-open highest priority from previous queue
 
 - BACKEND-TEST-022 — durable quiz/offline analytics ingest delivery;
@@ -32,6 +42,9 @@ Previous detailed queue: `backend_test_followups_2026_07_03.md`
 ## BACKEND-TEST-042 — Distributed maintenance lock, audit and safe errors
 
 Priority: P1  
+Canonical owner: maintenance operational workstream; this row is the test-side gate for the shared maintenance lock/audit contract.
+Linked to: BACKEND-LATEST-QUEUE-002
+Primary evidence rule: one shared maintenance implementation across HTTP/background/CLI paths; this row contributes only the regression gate.
 Run mode: runtime hardening + PostgreSQL integration tests
 
 ### Problem
@@ -63,6 +76,9 @@ PostgreSQL execution is mandatory.
 ## BACKEND-TEST-043 — Explanation input abuse and cost guard
 
 Priority: P1  
+Canonical owner: BE-PERF-014; this row validates the force-refresh and cost-bound contract.
+Linked to: BACKEND-LATEST-QUEUE-002
+Primary runtime evidence: canonical BE-PERF-014 implementation log; this row adds contract-bound validation only.
 Run mode: validators + endpoint policy + tests
 
 ### Problem
@@ -121,6 +137,9 @@ The worker reads `DateTime.UtcNow` directly and owns a 03:00 loop that cannot be
 ## BACKEND-TEST-045 — Database-level or cursor analytics pagination
 
 Priority: P1/P2  
+Canonical owner: analytics pagination fixup workstream; preserve BACKEND-TEST-028 bounds while moving the paging implementation.
+Linked to: BACKEND-TEST-028, BACKEND-LATEST-QUEUE-002
+Supersedes: endpoint-only bounded prefix slicing for analytics pagination once the canonical implementation lands.
 Run mode: service/query refactor + performance tests
 
 ### Problem
@@ -151,6 +170,7 @@ Overflow is bounded, but endpoints still request a bounded prefix and slice in m
 ## BACKEND-TEST-046 — Remaining page-based endpoint migration audit
 
 Priority: P1/P2  
+Canonical owner: test coverage inventory only; this row stays on the test side and has no BE-PERF counterpart.
 Run mode: static inventory + focused implementation tests
 
 ### Problem
@@ -178,6 +198,7 @@ Run mode: static inventory + focused implementation tests
 ## BACKEND-TEST-047 — Automated privileged-route authorization audit
 
 Priority: P1  
+Canonical owner: test coverage inventory only; this row stays on the test side and has no BE-PERF counterpart.
 Run mode: endpoint metadata inventory test
 
 ### Problem

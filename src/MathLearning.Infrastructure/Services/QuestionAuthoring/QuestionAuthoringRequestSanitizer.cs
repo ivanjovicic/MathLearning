@@ -1,5 +1,6 @@
 using MathLearning.Application.Content;
 using MathLearning.Application.DTOs.Questions;
+using MathLearning.Domain.Enums;
 
 namespace MathLearning.Infrastructure.Services.QuestionAuthoring;
 
@@ -15,7 +16,7 @@ internal static class QuestionAuthoringRequestSanitizer
                 Text = sanitizer.NormalizeMathContent(hint.Text, request.HintFormat),
                 SemanticsAltText = string.IsNullOrWhiteSpace(hint.SemanticsAltText)
                     ? sanitizer.GenerateSemanticsAltText(hint.Text, request.HintFormat)
-                    : hint.SemanticsAltText
+                    : sanitizer.NormalizeMathContent(hint.SemanticsAltText, ContentFormat.PlainText)
             })
             .ToArray();
 
@@ -25,7 +26,7 @@ internal static class QuestionAuthoringRequestSanitizer
                 Text = sanitizer.NormalizeMathContent(option.Text, option.TextFormat),
                 SemanticsAltText = string.IsNullOrWhiteSpace(option.SemanticsAltText)
                     ? sanitizer.GenerateSemanticsAltText(option.Text, option.TextFormat)
-                    : option.SemanticsAltText
+                    : sanitizer.NormalizeMathContent(option.SemanticsAltText, ContentFormat.PlainText)
             })
             .ToArray();
 
@@ -36,7 +37,7 @@ internal static class QuestionAuthoringRequestSanitizer
                 Hint = sanitizer.NormalizeMathContent(step.Hint, step.HintFormat),
                 SemanticsAltText = string.IsNullOrWhiteSpace(step.SemanticsAltText)
                     ? sanitizer.GenerateSemanticsAltText(step.Text, step.TextFormat)
-                    : step.SemanticsAltText
+                    : sanitizer.NormalizeMathContent(step.SemanticsAltText, ContentFormat.PlainText)
             })
             .ToArray();
 
@@ -50,7 +51,7 @@ internal static class QuestionAuthoringRequestSanitizer
             Steps = sanitizedSteps,
             SemanticsAltText = string.IsNullOrWhiteSpace(request.SemanticsAltText)
                 ? sanitizer.GenerateSemanticsAltText(request.Text, request.TextFormat)
-                : request.SemanticsAltText
+                : sanitizer.NormalizeMathContent(request.SemanticsAltText, ContentFormat.PlainText)
         };
     }
 }

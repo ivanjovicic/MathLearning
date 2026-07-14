@@ -167,6 +167,25 @@ components:
         hintFull: { type: string, nullable: true }
         explanation: { type: string, nullable: true }
 
+    QuizQuestionDto:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        text: { type: string }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/OptionDto'
+        difficulty: { type: integer }
+        hintLight: { type: string, nullable: true }
+        hintMedium: { type: string, nullable: true }
+        textFormat: { type: string }
+        hintFormat: { type: string }
+        textRenderMode: { type: string }
+        hintRenderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
+
     StartQuizRequest:
       type: object
       properties:
@@ -181,7 +200,7 @@ components:
         questions:
           type: array
           items:
-            $ref: '#/components/schemas/QuestionDto'
+            $ref: '#/components/schemas/QuizQuestionDto'
 
     SubmitAnswerRequest:
       type: object
@@ -1406,13 +1425,8 @@ components:
       type: object
       properties:
         quizId: { type: string, format: uuid }
-        lastQuestionId: { type: integer }
-
-    NextQuestionResponse:
-      type: object
-      properties:
-        question:
-          $ref: '#/components/schemas/QuestionDto'
+        subtopicId: { type: integer }
+      required: [quizId, subtopicId]
 
     OfflineBatchSubmitRequest:
       type: object
@@ -2576,7 +2590,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NextQuestionResponse'
+                $ref: '#/components/schemas/QuizQuestionDto'
 
   /api/quiz/offline-submit:
     post:

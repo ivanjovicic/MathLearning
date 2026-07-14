@@ -151,6 +151,8 @@ PostgreSQL 16 evidence is mandatory for BE-PERF-012, 013, 014, 015 and 016 where
 
 Score is capped because this was a docs/static audit without executable validation.
 
+Commit SHA: 2ee5ad8260334ca1984bc1c29c2f5bdf7bba486c
+
 ## Key commits
 
 - `9f7965be858ec752c9432a892f9abf69be5087ae` — evidence started

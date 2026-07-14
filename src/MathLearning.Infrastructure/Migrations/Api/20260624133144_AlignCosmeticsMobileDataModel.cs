@@ -109,57 +109,26 @@ public partial class AlignCosmeticsMobileDataModel : Migration
             oldType: "integer",
             oldNullable: true);
 
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_UserProfiles_UserId",
-            table: "user_avatar_configs");
+        foreach (var (table, column, principalTable, principalColumn) in new[]
+        {
+            ("user_avatar_configs", "UserId", "UserProfiles", "UserId"),
+            ("user_avatar_configs", "AccessoryId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "BackgroundId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "ClothingId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "EffectId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "EmojiId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "FrameId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "HairId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "LeaderboardDecorationId", "cosmetic_items", "Id"),
+            ("user_avatar_configs", "SkinId", "cosmetic_items", "Id"),
+            ("user_cosmetic_inventory", "CosmeticItemId", "cosmetic_items", "Id"),
+        })
+        {
+            DropForeignKeyByColumns(migrationBuilder, table, column, principalTable, principalColumn);
+        }
 
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_AccessoryId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_BackgroundId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_ClothingId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_EffectId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_EmojiId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_FrameId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_HairId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_LeaderboardDecorationId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_avatar_configs_cosmetic_items_SkinId",
-            table: "user_avatar_configs");
-
-        migrationBuilder.DropForeignKey(
-            name: "FK_user_cosmetic_inventory_cosmetic_items_CosmeticItemId",
-            table: "user_cosmetic_inventory");
-
-        migrationBuilder.DropPrimaryKey(
-            name: "PK_user_cosmetic_inventory",
-            table: "user_cosmetic_inventory");
-
-        migrationBuilder.DropPrimaryKey(
-            name: "PK_user_avatar_configs",
-            table: "user_avatar_configs");
+        DropPrimaryKeyByTable(migrationBuilder, "user_cosmetic_inventory");
+        DropPrimaryKeyByTable(migrationBuilder, "user_avatar_configs");
 
         migrationBuilder.RenameTable(
             name: "user_cosmetic_inventory",
@@ -390,6 +359,67 @@ public partial class AlignCosmeticsMobileDataModel : Migration
             principalTable: "cosmetic_items",
             principalColumn: "Id",
             onDelete: ReferentialAction.Cascade);
+    }
+
+    private static void DropForeignKeyByColumns(
+        MigrationBuilder migrationBuilder,
+        string tableName,
+        string columnName,
+        string principalTableName,
+        string principalColumnName)
+    {
+        migrationBuilder.Sql($$"""
+            DO $$
+            DECLARE constraint_name text;
+            BEGIN
+                SELECT c.conname
+                INTO constraint_name
+                FROM pg_constraint c
+                JOIN pg_class rel ON rel.oid = c.conrelid
+                JOIN pg_namespace relns ON relns.oid = rel.relnamespace
+                JOIN pg_class refrel ON refrel.oid = c.confrelid
+                JOIN pg_namespace refns ON refns.oid = refrel.relnamespace
+                JOIN pg_attribute relattr ON relattr.attrelid = rel.oid AND relattr.attnum = ANY(c.conkey)
+                JOIN pg_attribute refattr ON refattr.attrelid = refrel.oid AND refattr.attnum = ANY(c.confkey)
+                WHERE c.contype = 'f'
+                  AND relns.nspname = 'public'
+                  AND refns.nspname = 'public'
+                  AND rel.relname = '{{tableName}}'
+                  AND refrel.relname = '{{principalTableName}}'
+                  AND relattr.attname = '{{columnName}}'
+                  AND refattr.attname = '{{principalColumnName}}'
+                  AND cardinality(c.conkey) = 1
+                  AND cardinality(c.confkey) = 1
+                LIMIT 1;
+
+                IF constraint_name IS NOT NULL THEN
+                    EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', '{{tableName}}', constraint_name);
+                END IF;
+            END $$;
+            """);
+    }
+
+    private static void DropPrimaryKeyByTable(MigrationBuilder migrationBuilder, string tableName)
+    {
+        migrationBuilder.Sql($$"""
+            DO $$
+            DECLARE constraint_name text;
+            BEGIN
+                SELECT c.conname
+                INTO constraint_name
+                FROM pg_constraint c
+                JOIN pg_class rel ON rel.oid = c.conrelid
+                JOIN pg_namespace relns ON relns.oid = rel.relnamespace
+                WHERE c.contype = 'p'
+                  AND relns.nspname = 'public'
+                  AND rel.relname = '{{tableName}}'
+                LIMIT 1;
+
+                IF constraint_name IS NOT NULL THEN
+                    EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', '{{tableName}}', constraint_name);
+                END IF;
+            END $$;
+            """);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

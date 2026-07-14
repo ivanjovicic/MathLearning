@@ -166,7 +166,11 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Type).IsRequired();
             entity.Property(e => e.PayloadJson).IsRequired();
+            entity.Property(e => e.NextAttemptUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ProcessedUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.DeadLetteredUtc).HasColumnType("timestamp with time zone");
             entity.HasIndex(e => new { e.ProcessedUtc, e.OccurredUtc });
+            entity.HasIndex(e => new { e.ProcessedUtc, e.DeadLetteredUtc, e.NextAttemptUtc, e.OccurredUtc });
         });
     }
 }

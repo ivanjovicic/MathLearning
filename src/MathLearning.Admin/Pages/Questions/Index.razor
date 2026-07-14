@@ -1,4 +1,4 @@
-﻿@page "/questions"
+@page "/questions"
 @rendermode @(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode())
 @attribute [Authorize]
 @using MathLearning.Admin.Data
@@ -32,16 +32,19 @@
     <MudGrid Spacing="2">
         <MudItem xs="12" md="6">
             <MudTextField @bind-Value="_searchText" 
-                          Placeholder="Pretraži pitanja..." 
+                          Placeholder="PretraÃ…Â¾i pitanja..." 
                           Variant="Variant.Outlined"
                           DebounceInterval="400"
                           TextChanged="OnSearchTextChangedAsync"
                           Clearable="true"
-                          OnClearButtonClick="ResetSearchAndReloadAsync" />
+                          OnClearButtonClick="ClearSearchAsync" />
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect @bind-Value="_selectedCategoryId" 
+            <MudSelect T="int"
+                       Value="_selectedCategoryId"
+                       ValueChanged="OnCategoryChangedAsync" 
                        Label="Kategorija" 
+                       HelperText="@CategoryFilterHelpText"
                        Variant="Variant.Outlined"
                        Clearable="true">
                 @foreach (var category in _categories)
@@ -51,28 +54,35 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect @bind-Value="_selectedSubtopicId"
+            <MudSelect T="int"
+                       Value="_selectedSubtopicId"
+                       ValueChanged="OnSubtopicChangedAsync"
                        Label="Podtema"
+                       Placeholder="Izaberite kategoriju"
+                       HelperText="@SubtopicFilterHelpText"
                        Variant="Variant.Outlined"
+                       Disabled="@(_selectedCategoryId <= 0)"
                        Clearable="true">
-                @foreach (var subtopic in _subtopics)
+                @foreach (var subtopic in FilteredSubtopics)
                 {
                     <MudSelectItem Value="@subtopic.Id">@subtopic.Name</MudSelectItem>
                 }
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect T="string" @bind-Value="_selectedType" 
+            <MudSelect T="string" Value="_selectedType"
+                       ValueChanged="OnTypeChangedAsync" 
                        Label="Tip pitanja" 
                        Variant="Variant.Outlined"
                        Clearable="true">
-                <MudSelectItem T="string" Value="@("multiple_choice")">Višestruki izbor</MudSelectItem>
+                <MudSelectItem T="string" Value="@("multiple_choice")">ViÃ…Â¡estruki izbor</MudSelectItem>
                 <MudSelectItem T="string" Value="@("open_answer")">Otvoren odgovor</MudSelectItem>
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect T="int?" @bind-Value="_selectedDifficulty"
-                       Label="Težina"
+            <MudSelect T="int?" Value="_selectedDifficulty"
+                       ValueChanged="OnDifficultyChangedAsync"
+                       Label="TeÃ…Â¾ina"
                        Variant="Variant.Outlined"
                        Clearable="true">
                 @for (var difficulty = 1; difficulty <= 5; difficulty++)
@@ -82,41 +92,46 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect T="string" @bind-Value="_selectedPublishState"
+            <MudSelect T="string" Value="_selectedPublishState"
+                       ValueChanged="OnPublishStateChangedAsync"
                        Label="Status"
                        Variant="Variant.Outlined"
                        Clearable="true">
                 @foreach (var status in _publishStates)
                 {
-                    <MudSelectItem T="string" Value="@status">@status</MudSelectItem>
+                    <MudSelectItem T="string" Value="@status">@GetPublishStateLabel(status)</MudSelectItem>
                 }
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect T="string" @bind-Value="_selectedAttentionFilter"
-                       Label="Pažnja"
+            <MudSelect T="string" Value="_selectedAttentionFilter"
+                       ValueChanged="OnAttentionFilterChangedAsync"
+                       Label="PaÃ…Â¾nja"
                        Variant="Variant.Outlined"
                        Clearable="true">
-                <MudSelectItem T="string" Value="@AttentionFilterProblematic">Problematična</MudSelectItem>
+                <MudSelectItem T="string" Value="@AttentionFilterProblematic">Problematicna</MudSelectItem>
                 <MudSelectItem T="string" Value="@AttentionFilterWarnings">Sa upozorenjima</MudSelectItem>
                 <MudSelectItem T="string" Value="@AttentionFilterReady">Spremna za objavu</MudSelectItem>
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudSelect T="string" @bind-Value="_selectedValidationStatus"
+            <MudSelect T="string" Value="_selectedValidationStatus"
+                       ValueChanged="OnValidationStatusChangedAsync"
                        Label="Validacija"
                        Variant="Variant.Outlined"
                        Clearable="true">
-                <MudSelectItem T="string" Value="@QuestionValidationStatuses.Passed">Bez grešaka</MudSelectItem>
+                <MudSelectItem T="string" Value="@QuestionValidationStatuses.Passed">Bez greÃ…Â¡aka</MudSelectItem>
                 <MudSelectItem T="string" Value="@QuestionValidationStatuses.PassedWithWarnings">Upozorenja</MudSelectItem>
-                <MudSelectItem T="string" Value="@QuestionValidationStatuses.Failed">Problematično</MudSelectItem>
-                <MudSelectItem T="string" Value="@ValidationStatusPending">Na čekanju</MudSelectItem>
+                <MudSelectItem T="string" Value="@QuestionValidationStatuses.Failed">Problematicno</MudSelectItem>
+                <MudSelectItem T="string" Value="@ValidationStatusPending">Na cekanju</MudSelectItem>
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
             <MudTextField @bind-Value="_selectedAuthor"
                           Label="Autor / izmenio"
                           Placeholder="npr. admin_ui"
+                          DebounceInterval="400"
+                          TextChanged="OnAuthorChangedAsync"
                           Variant="Variant.Outlined"
                           Clearable="true" />
         </MudItem>
@@ -142,16 +157,17 @@
                        Variant="Variant.Filled"
                        FullWidth="true">
                 <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
-                Pretraži
+                PretraÃ…Â¾i
             </MudButton>
         </MudItem>
         <MudItem xs="12" md="3">
             <MudButton OnClick="ResetSearchAndReloadAsync"
                        Color="Color.Default"
                        Variant="Variant.Outlined"
+                       Disabled="@(ActiveFilterCount == 0)"
                        FullWidth="true">
                 <MudIcon Icon="@Icons.Material.Filled.FilterAltOff" Class="mr-2" />
-                Očisti filtere (@ActiveFilterCount)
+                Ocisti filtere (@ActiveFilterCount)
             </MudButton>
         </MudItem>
     </MudGrid>
@@ -198,13 +214,13 @@
             @if (ActiveFilterCount > 0)
             {
                 <div class="d-flex flex-column gap-2">
-                    <span>Nema pitanja za izabrane filtere. Pokušajte sa širim kriterijumima.</span>
+                    <span>Nema pitanja za izabrane filtere. PokuÃ…Â¡ajte sa Ã…Â¡irim kriterijumima.</span>
                     <div>
                         <MudButton OnClick="ResetSearchAndReloadAsync"
                                    Variant="Variant.Text"
                                    Color="Color.Info"
                                    StartIcon="@Icons.Material.Filled.FilterAltOff">
-                            Očisti filtere
+                            Ocisti filtere
                         </MudButton>
                     </div>
                 </div>
@@ -245,7 +261,7 @@
                     </div>
                 </MudTd>
                 <MudTd DataLabel="Tip">
-                    <MudTooltip Text="@(context.Type == "multiple_choice" ? "Višestruki izbor" : "Otvoren odgovor")">
+                    <MudTooltip Text="@(context.Type == "multiple_choice" ? "ViÃ…Â¡estruki izbor" : "Otvoren odgovor")">
                         <MudIcon Icon="@(context.Type == "multiple_choice"
                                         ? Icons.Material.Filled.FormatListBulleted
                                         : Icons.Material.Filled.TextFields)"
@@ -281,7 +297,7 @@
                         @if (NeedsAttention(context))
                         {
                             <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
-                                Potrebna pažnja
+                                Potrebna paÃ…Â¾nja
                             </MudChip>
                         }
                     </div>
@@ -384,6 +400,15 @@
     private const string FilterKeyUpdatedAfter = "updatedAfter";
     private const string FilterKeyUpdatedBefore = "updatedBefore";
     private int _pageCount => (_totalCount + _pageSize - 1) / _pageSize;
+    private IReadOnlyList<Subtopic> FilteredSubtopics => _selectedCategoryId > 0
+        ? _subtopics.Where(x => x.TopicId == _selectedCategoryId).ToList()
+        : _subtopics;
+    private string CategoryFilterHelpText => _selectedCategoryId > 0
+        ? "Podtema filter je suzen na izabranu kategoriju."
+        : "Izbor kategorije suzava dostupne podteme.";
+    private string SubtopicFilterHelpText => _selectedCategoryId > 0
+        ? $"Dostupno podtema: {FilteredSubtopics.Count}. Prikazane su samo podteme izabrane kategorije."
+        : "Prvo izaberite kategoriju da biste suzili podteme.";
     private int ActiveFilterCount =>
         (!string.IsNullOrWhiteSpace(_searchText) ? 1 : 0) +
         (_selectedCategoryId > 0 ? 1 : 0) +
@@ -421,12 +446,12 @@
 
             if (!string.IsNullOrWhiteSpace(_selectedType))
             {
-                filters.Add(new ActiveFilterChip(FilterKeyType, $"Tip: {(_selectedType == "multiple_choice" ? "Višestruki izbor" : "Otvoren odgovor")}"));
+                filters.Add(new ActiveFilterChip(FilterKeyType, $"Tip: {(_selectedType == "multiple_choice" ? "ViÃ…Â¡estruki izbor" : "Otvoren odgovor")}"));
             }
 
             if (_selectedDifficulty.HasValue)
             {
-                filters.Add(new ActiveFilterChip(FilterKeyDifficulty, $"Težina: {_selectedDifficulty.Value}"));
+                filters.Add(new ActiveFilterChip(FilterKeyDifficulty, $"TeÃ…Â¾ina: {_selectedDifficulty.Value}"));
             }
 
             if (!string.IsNullOrWhiteSpace(_selectedPublishState))
@@ -436,7 +461,7 @@
 
             if (!string.IsNullOrWhiteSpace(_selectedAttentionFilter))
             {
-                filters.Add(new ActiveFilterChip(FilterKeyAttention, $"Pažnja: {GetAttentionFilterLabel(_selectedAttentionFilter)}"));
+                filters.Add(new ActiveFilterChip(FilterKeyAttention, $"PaÃ…Â¾nja: {GetAttentionFilterLabel(_selectedAttentionFilter)}"));
             }
 
             if (!string.IsNullOrWhiteSpace(_selectedValidationStatus))
@@ -484,7 +509,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error initializing questions index");
-            _loadError = "Greška pri učitavanju pitanja. Pokušajte ponovo za nekoliko trenutaka.";
+            _loadError = "GreÃ…Â¡ka pri ucitavanju pitanja. PokuÃ…Â¡ajte ponovo za nekoliko trenutaka.";
             _loading = false;
         }
     }
@@ -510,9 +535,9 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error loading questions");
-            _loadError = "Greška pri učitavanju pitanja. Proverite bazu i pokušajte ponovo.";
+            _loadError = "GreÃ…Â¡ka pri ucitavanju pitanja. Proverite bazu i pokuÃ…Â¡ajte ponovo.";
             _questions.Clear();
-            Snackbar.Add("Greška pri učitavanju pitanja", Severity.Error);
+            Snackbar.Add("GreÃ…Â¡ka pri ucitavanju pitanja", Severity.Error);
         }
         finally
         {
@@ -538,8 +563,8 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error changing questions page to {Page}", page);
-            _loadError = "Greška pri učitavanju sledeće stranice pitanja.";
-            Snackbar.Add("Greška pri učitavanju sledeće stranice pitanja", Severity.Error);
+            _loadError = "GreÃ…Â¡ka pri ucitavanju sledece stranice pitanja.";
+            Snackbar.Add("GreÃ…Â¡ka pri ucitavanju sledece stranice pitanja", Severity.Error);
         }
         finally
         {
@@ -674,6 +699,12 @@
         await LoadQuestionsAsync();
     }
 
+    private async Task ClearSearchAsync(MouseEventArgs _)
+    {
+        _searchText = string.Empty;
+        await LoadQuestionsAsync();
+    }
+
     private async Task RemoveFilterAsync(string filterKey)
     {
         switch (filterKey)
@@ -683,6 +714,7 @@
                 break;
             case FilterKeyCategory:
                 _selectedCategoryId = 0;
+                _selectedSubtopicId = 0;
                 break;
             case FilterKeySubtopic:
                 _selectedSubtopicId = 0;
@@ -724,6 +756,59 @@
         await LoadQuestionsAsync();
     }
 
+    private async Task OnAuthorChangedAsync(string value)
+    {
+        _selectedAuthor = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnCategoryChangedAsync(int value)
+    {
+        _selectedCategoryId = value;
+
+        if (_selectedSubtopicId > 0 && !FilteredSubtopics.Any(x => x.Id == _selectedSubtopicId))
+        {
+            _selectedSubtopicId = 0;
+        }
+
+        await LoadQuestionsAsync();
+    }
+    private async Task OnSubtopicChangedAsync(int value)
+    {
+        _selectedSubtopicId = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnTypeChangedAsync(string value)
+    {
+        _selectedType = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnDifficultyChangedAsync(int? value)
+    {
+        _selectedDifficulty = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnPublishStateChangedAsync(string value)
+    {
+        _selectedPublishState = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnAttentionFilterChangedAsync(string value)
+    {
+        _selectedAttentionFilter = value;
+        await LoadQuestionsAsync();
+    }
+
+    private async Task OnValidationStatusChangedAsync(string value)
+    {
+        _selectedValidationStatus = value;
+        await LoadQuestionsAsync();
+    }
+
     private async Task OnPageSizeChangedAsync(int newSize)
     {
         _pageSize = newSize;
@@ -745,7 +830,7 @@
 
     private async Task DeleteQuestionAsync(QuestionListItem question)
     {
-        // Fetch actual counts lazily — only needed for the confirm dialog message
+        // Fetch actual counts lazily Ã¢â‚¬â€ only needed for the confirm dialog message
         int optionCount = 0;
         int stepCount = 0;
         try
@@ -787,7 +872,7 @@
             var entity = await db.Questions.FirstOrDefaultAsync(x => x.Id == question.Id);
             if (entity is null)
             {
-                Snackbar.Add("Pitanje više ne postoji.", Severity.Warning);
+                Snackbar.Add("Pitanje viÃ…Â¡e ne postoji.", Severity.Warning);
                 _questions.Remove(question);
                 _totalCount = Math.Max(0, _totalCount - 1);
                 return;
@@ -801,7 +886,7 @@
             var deletedId = question.Id;
             Snackbar.Add("Pitanje je obrisano", Severity.Success, config =>
             {
-                config.Action = "Poništi";
+                config.Action = "PoniÃ…Â¡ti";
                 config.ActionColor = Color.Warning;
                 config.OnClick = async _ => await UndoDeleteAsync(deletedId);
                 config.VisibleStateDuration = 6000;
@@ -811,7 +896,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error deleting question");
-            Snackbar.Add($"Greška pri brisanju: {ex.Message}", Severity.Error);
+            Snackbar.Add($"GreÃ…Â¡ka pri brisanju: {ex.Message}", Severity.Error);
         }
     }
 
@@ -823,19 +908,19 @@
             var entity = await db.Questions.FirstOrDefaultAsync(x => x.Id == questionId);
             if (entity is null)
             {
-                Snackbar.Add("Nije moguće poništiti — pitanje nije pronađeno.", Severity.Warning);
+                Snackbar.Add("Nije moguce poniÃ…Â¡titi Ã¢â‚¬â€ pitanje nije pronadeno.", Severity.Warning);
                 return;
             }
 
             entity.Restore();
             await db.SaveChangesAsync();
-            Snackbar.Add("Brisanje poništeno", Severity.Success);
+            Snackbar.Add("Brisanje poniÃ…Â¡teno", Severity.Success);
             await LoadQuestionsAsync();
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error restoring question {QuestionId}", questionId);
-            Snackbar.Add($"Greška pri poništavanju: {ex.Message}", Severity.Error);
+            Snackbar.Add($"GreÃ…Â¡ka pri poniÃ…Â¡tavanju: {ex.Message}", Severity.Error);
         }
     }
 
@@ -877,20 +962,20 @@
 
     private static string GetValidationStatusLabel(string validationStatus) => validationStatus switch
     {
-        QuestionValidationStatuses.Passed => "Bez grešaka",
+        QuestionValidationStatuses.Passed => "Bez greÃ…Â¡aka",
         QuestionValidationStatuses.PassedWithWarnings => "Upozorenja",
-        QuestionValidationStatuses.Failed => "Problematično",
-        _ => "Na čekanju"
+        QuestionValidationStatuses.Failed => "Problematicno",
+        _ => "Na cekanju"
     };
 
     private static string GetValidationStatusFilterLabel(string validationStatus)
         => validationStatus == ValidationStatusPending
-            ? "Na čekanju"
+            ? "Na cekanju"
             : GetValidationStatusLabel(validationStatus);
 
     private static string GetAttentionFilterLabel(string attentionFilter) => attentionFilter switch
     {
-        AttentionFilterProblematic => "Problematična",
+        AttentionFilterProblematic => "Problematicna",
         AttentionFilterWarnings => "Sa upozorenjima",
         AttentionFilterReady => "Spremna za objavu",
         _ => attentionFilter
@@ -921,3 +1006,13 @@
 
     private sealed record ActiveFilterChip(string Key, string Label);
 }
+
+
+
+
+
+
+
+
+
+

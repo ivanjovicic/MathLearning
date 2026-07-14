@@ -6,7 +6,7 @@ namespace MathLearning.Infrastructure.Services;
 public class RefreshTokenService
 {
     /// <summary>
-    /// Generiše kriptografski siguran random token (64 bytes = 128 hex chars)
+    /// Generiše kriptografski siguran Base64 token od 64 slučajna bajta (~88 chars).
     /// </summary>
     public static string GenerateRefreshToken()
     {

@@ -187,6 +187,42 @@ public class PracticeSessionServiceIntegrationTests
                 CancellationToken.None));
     }
 
+    [Fact]
+    public async Task SubmitAnswer_MultipleChoiceIgnoresLegacyCorrectAnswerFallbackWhenCanonicalOptionExists()
+    {
+        var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var scheduler = new FakeWeaknessScheduler();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var sut = BuildService(db, scheduler, cache);
+
+        var seededQuestion = await db.Questions
+            .Include(x => x.Options)
+            .FirstAsync(x => x.Id == 1);
+        seededQuestion.SetCorrectAnswer("legacy-stale-answer");
+        await db.SaveChangesAsync();
+
+        var start = await sut.StartSessionAsync(
+            "1",
+            new StartPracticeSessionRequest(
+                UserId: null,
+                SkillNodeId: "fractions_basics",
+                TopicId: 1,
+                SubtopicId: 1,
+                TargetQuestions: 1,
+                PreferredDifficulty: "medium"),
+            CancellationToken.None);
+
+        Assert.NotNull(start.Question);
+
+        var stale = await sut.SubmitAnswerAsync(
+            "1",
+            start.SessionId,
+            new SubmitPracticeAnswerRequest(start.Question!.Id, "legacy-stale-answer", 12000),
+            CancellationToken.None);
+
+        Assert.False(stale.IsCorrect);
+    }
+
     private static PracticeSessionService BuildService(
         ApiDbContext db,
         IWeaknessAnalysisScheduler scheduler,

@@ -11,6 +11,7 @@ using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace MathLearning.Infrastructure.Services.Sync;
 
@@ -121,6 +122,36 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             throw new InvalidOperationException($"Batch too large. MaxBatchSize={options.Value.MaxBatchSize}.");
         }
 
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            db.ChangeTracker.Clear();
+
+            try
+            {
+                return await ExecuteSyncAttemptAsync(authenticatedUserId, request, cancellationToken);
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsRetryableSyncPersistenceException(ex))
+            {
+                logger.LogWarning(
+                    ex,
+                    "Retrying sync after transient persistence conflict. Attempt={Attempt}/{MaxAttempts} UserId={UserId} DeviceId={DeviceId}",
+                    attempt,
+                    maxAttempts,
+                    authenticatedUserId,
+                    request.DeviceId);
+            }
+        }
+
+        throw new SyncConcurrencyException("Sync could not be completed after repeated concurrency conflicts. Please retry.");
+    }
+
+    private async Task<SyncResponseDto> ExecuteSyncAttemptAsync(
+        string authenticatedUserId,
+        SyncRequestDto request,
+        CancellationToken cancellationToken)
+    {
         await using var tx = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(cancellationToken)
             : null;
@@ -578,6 +609,45 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         string.IsNullOrWhiteSpace(log.PayloadHash)
             ? BuildCanonicalPayloadHash(log.OperationType, log.PayloadJson)
             : log.PayloadHash;
+
+    private static bool IsRetryableSyncPersistenceException(Exception exception)
+    {
+        if (exception is DbUpdateConcurrencyException)
+        {
+            return true;
+        }
+
+        if (exception is DbUpdateException dbUpdateException &&
+            dbUpdateException.InnerException is PostgresException innerPostgresException)
+        {
+            return IsRetryableSyncPostgresException(innerPostgresException);
+        }
+
+        return exception is PostgresException postgresException &&
+               IsRetryableSyncPostgresException(postgresException);
+    }
+
+    private static bool IsRetryableSyncPostgresException(PostgresException exception)
+    {
+        if (exception.SqlState == PostgresErrorCodes.SerializationFailure)
+        {
+            return true;
+        }
+
+        if (exception.SqlState != PostgresErrorCodes.UniqueViolation)
+        {
+            return false;
+        }
+
+        return exception.ConstraintName is
+            "UX_UserAnswers_NoDuplicate" or
+            "UX_UserAnswers_User_Device_SyncOperationId" or
+            "UX_UserAnswers_User_Device_Sequence" or
+            "UX_QuestionStats_User_Question" or
+            "UX_SyncEventLog_User_Device_OperationId" or
+            "UX_SyncEventLog_User_Device_Sequence" or
+            "UX_SyncDeadLetter_User_Device_OperationId";
+    }
 
     private static SyncOperationAckDto CreateStoredAcknowledgement(SyncEventLog log)
         => log.Status switch
@@ -1301,5 +1371,13 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         }
 
         public string Code { get; }
+    }
+}
+
+public sealed class SyncConcurrencyException : Exception
+{
+    public SyncConcurrencyException(string message)
+        : base(message)
+    {
     }
 }

@@ -14,6 +14,7 @@ Previous queue: `backend_performance_optimization.md`
 - Every bug fix must include the smallest regression test that fails before the fix.
 - Do not move work from a request into an unbounded fire-and-forget task.
 - Record cross-repo sync when request/response or retry semantics change.
+- Before allocating a new performance ID, search active test/risk queues and reuse the canonical runtime owner if the implementation risk already exists there.
 
 ## Priority table
 
@@ -26,8 +27,18 @@ Previous queue: `backend_performance_optimization.md`
 | BE-PERF-013 | P1 | Prompt-ready | Remove refresh, snapshot, streak and reward mutations from GET/read paths. |
 | BE-PERF-014 | P1 | Prompt-ready | Prevent explanation-cache stampedes, write-on-read amplification and expired-row growth. |
 | BE-PERF-015 | P0/P1 | Prompt-ready | Make practice answer/completion concurrency settle exactly once and replay deterministically. |
-| BE-PERF-016 | P0/P1 | Prompt-ready | Add outbox claim/lease/backoff/dead-letter and bounded idle polling. |
+| BE-PERF-016 | Runtime-fixed / Workflow validation needed | Outbox runtime now claims rows with `FOR UPDATE SKIP LOCKED`, persists bounded retry/dead-letter state, redacts stored errors and is wired as a hosted service; PostgreSQL proof still needs CI evidence or valid local credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-023-evidence.md` |
 | BE-PERF-017 | P2/P1 | Prompt-ready | Measure and control tracing/logging overhead, cardinality and synchronous DB logging risk. |
+
+## Canonical ownership notes
+
+| Perf row | Canonical test partner | Note |
+|---|---|---|
+| BE-PERF-009 | BACKEND-TEST-031 | The test row keeps the validation wrapper for bounded weakness scheduling and deduplication. |
+| BE-PERF-012 | BACKEND-TEST-032 and BACKEND-TEST-033 | PostgreSQL provider and cancellation/rollback proof stays paired with the canonical P0 mutation lanes. |
+| BE-PERF-014 | BACKEND-TEST-043 | Explanation-cache force-refresh and cost-bound checks are validated through the test queue. |
+| BE-PERF-015 | BACKEND-TEST-032 and BACKEND-TEST-033 | Practice answer/completion exactly-once behavior is proven alongside the mutation test lanes. |
+| BE-PERF-016 | BACKEND-TEST-023, BACKEND-TEST-032 and BACKEND-TEST-033 | The outbox claim/lease/backoff lane is owned here; the test queue provides the contract and regression gate. |
 
 ---
 
@@ -35,6 +46,9 @@ Previous queue: `backend_performance_optimization.md`
 
 Priority: P1  
 Related: BACKEND-TEST-031
+Canonical test partner: BACKEND-TEST-031; keep the scheduler contract aligned with the test row.
+Linked to: BACKEND-LATEST-QUEUE-002
+Primary evidence rule: one implementation log owns runtime scheduler changes; BACKEND-TEST-031 contributes validating evidence only.
 
 ### Inspect
 
@@ -100,6 +114,7 @@ Do not mark complete from replacing `Channel.CreateUnbounded` alone. Completion 
 ## BE-PERF-010 — Set-based and single-owner XP reset
 
 Priority: P1
+Canonical test partner: BACKEND-TEST-043; this lane owns the implementation and the test row validates the force-refresh and cost bounds.
 
 ### Inspect
 
@@ -219,6 +234,9 @@ A timer that only trims queues is insufficient. Idle keys must be evicted, rejec
 ## BE-PERF-012 — Atomic/idempotent adaptive answer mutation
 
 Priority: P0 correctness before performance
+Canonical test partners: BACKEND-TEST-032 and BACKEND-TEST-033; this lane owns the implementation and the test rows own provider and rollback proof.
+Linked to: BACKEND-LATEST-QUEUE-002
+Status propagation: do not mark this row fully validated until the linked provider-proof and rollback rows also have executable evidence.
 
 ### Inspect
 
@@ -341,6 +359,8 @@ No completion if GET merely dispatches unbounded `Task.Run`. Mutation work must 
 ## BE-PERF-014 — Explanation-cache single-flight and retention
 
 Priority: P1
+Linked to: BACKEND-TEST-043, BACKEND-LATEST-QUEUE-002
+Primary evidence rule: force-refresh, abuse-bound and cache-cost contract evidence may append to this row instead of spawning a second implementation lane.
 
 ### Inspect
 
@@ -397,6 +417,9 @@ A memory lock alone is not enough for multiple replicas. Completion needs atomic
 ## BE-PERF-015 — Exactly-once practice answer and completion
 
 Priority: P0/P1 correctness
+Canonical test partners: BACKEND-TEST-032 and BACKEND-TEST-033; this lane owns the settled replay contract and the test rows prove the matrix.
+Linked to: BACKEND-LATEST-QUEUE-002
+Status propagation: provider-proof and cancellation rows are prerequisites for Validated, not separate runtime owners.
 
 ### Inspect
 
@@ -453,6 +476,9 @@ No completion from an application-level `if (AnsweredAt != null)` alone. The exa
 
 Priority: P0/P1  
 Related: BACKEND-TEST-023
+Canonical test partners: BACKEND-TEST-023, BACKEND-TEST-032 and BACKEND-TEST-033; keep the shared outbox contract here and let the test rows prove the regression matrix.
+Linked to: BACKEND-LATEST-QUEUE-002
+Status propagation: BACKEND-TEST-023 satisfies the contract/regression gate, while BACKEND-TEST-032/033 satisfy provider and rollback proof for this same implementation owner.
 
 ### Inspect
 

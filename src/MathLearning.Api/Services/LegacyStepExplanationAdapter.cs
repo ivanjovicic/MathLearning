@@ -33,7 +33,9 @@ public sealed class LegacyStepExplanationAdapter
         var descriptor = new MathProblemDescriptor(
             question.Id,
             TranslationHelper.GetText(question, language),
-            question.CorrectAnswer ?? question.Options.FirstOrDefault(x => x.IsCorrect)?.Text,
+            string.Equals(question.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase)
+                ? question.GetCanonicalCorrectOption()?.Text ?? question.GetExpectedAnswerText()
+                : question.GetExpectedAnswerText(),
             null,
             new MathContext(
                 question.Subtopic?.Topic?.Name ?? "General Math",

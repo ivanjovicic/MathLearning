@@ -51,6 +51,9 @@ jobs:
             -KeepDatabase
 
       - name: Run test suite with coverage
+        env:
+          POSTGRES_PROVIDER_TESTS_REQUIRED: 1
+          TEST_POSTGRES_MAINTENANCE_CONNECTION_STRING: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=postgres;Pooling=true;
         run: >-
           dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj
           -c Release

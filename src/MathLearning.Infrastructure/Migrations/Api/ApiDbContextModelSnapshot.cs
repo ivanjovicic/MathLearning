@@ -2815,8 +2815,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.Property<string>("Token")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("UserId")
                         .IsRequired()
@@ -4914,8 +4914,14 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("Attempts")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("DeadLetteredUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("LastError")
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("NextAttemptUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("OccurredUtc")
                         .HasColumnType("timestamp with time zone");
@@ -4934,6 +4940,8 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasKey("Id");
 
                     b.HasIndex("ProcessedUtc", "OccurredUtc");
+
+                    b.HasIndex("ProcessedUtc", "DeadLetteredUtc", "NextAttemptUtc", "OccurredUtc");
 
                     b.ToTable("Outbox", (string)null);
                 });

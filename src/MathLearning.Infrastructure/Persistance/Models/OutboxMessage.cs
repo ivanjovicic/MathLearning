@@ -6,7 +6,9 @@ public class OutboxMessage
     public DateTime OccurredUtc { get; set; }
     public string Type { get; set; } = default!;
     public string PayloadJson { get; set; } = default!;
+    public DateTime? NextAttemptUtc { get; set; }
     public DateTime? ProcessedUtc { get; set; }
+    public DateTime? DeadLetteredUtc { get; set; }
     public int Attempts { get; set; }
     public string? LastError { get; set; }
 }

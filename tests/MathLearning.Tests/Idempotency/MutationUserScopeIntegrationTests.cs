@@ -77,7 +77,7 @@ public sealed class MutationUserScopeIntegrationTests : IClassFixture<CustomWebA
     }
 
     [Fact]
-    public async Task ProgressSync_PersistsAuthenticatedUserDailyStats()
+    public async Task ProgressSync_LegacyPayload_IsRejectedAndIgnoresClientUserId()
     {
         var userId = NewUserId("progress-sync");
         await EnsureUserAsync(userId);
@@ -98,12 +98,11 @@ public sealed class MutationUserScopeIntegrationTests : IClassFixture<CustomWebA
 
         var response = await _client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UpgradeRequired, response.StatusCode);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        var stat = await db.UserDailyStats.SingleAsync(x => x.UserId == userId);
-        Assert.True(stat.Completed);
+        Assert.False(await db.UserDailyStats.AnyAsync(x => x.UserId == userId));
         Assert.Equal(0, await db.UserDailyStats.CountAsync(x => x.UserId == "must-not-be-used"));
     }
 

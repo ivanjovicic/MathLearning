@@ -161,8 +161,10 @@ public static class ServiceRegistrationExtensions
     {
         builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
         builder.Services.AddHostedService<XpResetBackgroundService>();
+        builder.Services.AddHostedService<OutboxProcessor>();
 
         builder.Services.AddScoped<IEventBus, InProcEventBus>();
+        builder.Services.AddScoped<OutboxBatchProcessor>();
         builder.Services.AddScoped<IEventHandler<QuizCompleted>, QuizCompletedCoinsHandler>();
         builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
         builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();

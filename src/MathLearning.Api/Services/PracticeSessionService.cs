@@ -527,20 +527,7 @@ public sealed class PracticeSessionService : IPracticeSessionService
 
     private static bool EvaluateAnswer(Question question, string selectedOption)
     {
-        var answer = selectedOption?.Trim() ?? string.Empty;
-        if (answer.Length == 0)
-            return false;
-
-        if (string.Equals(question.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
-        {
-            var asInt = int.TryParse(answer, out var optionId) ? optionId : -1;
-            return question.Options.Any(o =>
-                o.IsCorrect &&
-                (o.Id == asInt || string.Equals(o.Text.Trim(), answer, StringComparison.OrdinalIgnoreCase)));
-        }
-
-        return question.CorrectAnswer is not null &&
-               string.Equals(question.CorrectAnswer.Trim(), answer, StringComparison.OrdinalIgnoreCase);
+        return question.MatchesSubmittedAnswer(selectedOption);
     }
 
     private static string SelectDifficulty(decimal mastery) =>

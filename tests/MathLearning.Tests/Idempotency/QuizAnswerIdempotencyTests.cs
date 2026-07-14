@@ -27,16 +27,17 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
     {
         var userId = NewUserId("first-success");
         await EnsureUserAsync(userId);
-        var quizId = Guid.NewGuid().ToString();
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+        var correctAnswer = await GetCorrectAnswerTokenAsync(issuedQuiz.QuestionId);
         const string operationId = "quiz-answer-first";
         const string idempotencyKey = "quiz-answer-first-key";
 
         var response = await PostQuizAnswerAsync(
             userId,
             BuildPayload(
-                quizId: quizId,
-                questionId: 1,
-                answer: "2",
+                quizId: issuedQuiz.QuizId.ToString(),
+                questionId: issuedQuiz.QuestionId,
+                answer: correctAnswer,
                 timeSpentSeconds: 5,
                 operationId: operationId,
                 idempotencyKey: idempotencyKey));
@@ -47,7 +48,7 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == 1);
+        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId);
         Assert.Equal(1, stat.Attempts);
         Assert.Equal(1, stat.CorrectAttempts);
 
@@ -62,13 +63,14 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
     {
         var userId = NewUserId("duplicate");
         await EnsureUserAsync(userId);
-        var quizId = Guid.NewGuid().ToString();
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+        var correctAnswer = await GetCorrectAnswerTokenAsync(issuedQuiz.QuestionId);
         const string operationId = "quiz-answer-dup";
         const string idempotencyKey = "quiz-answer-dup-key";
         var body = BuildPayload(
-            quizId: quizId,
-            questionId: 1,
-            answer: "2",
+            quizId: issuedQuiz.QuizId.ToString(),
+            questionId: issuedQuiz.QuestionId,
+            answer: correctAnswer,
             timeSpentSeconds: 5,
             operationId: operationId,
             idempotencyKey: idempotencyKey);
@@ -83,9 +85,9 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == 1);
+        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId);
         Assert.Equal(1, stat.Attempts);
-        Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.UserId == userId && x.QuestionId == 1));
+        Assert.Equal(1, await db.UserAnswers.CountAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId));
     }
 
     [Fact]
@@ -93,16 +95,17 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
     {
         var userId = NewUserId("conflict");
         await EnsureUserAsync(userId);
-        var quizId = Guid.NewGuid().ToString();
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+        var correctAnswer = await GetCorrectAnswerTokenAsync(issuedQuiz.QuestionId);
         const string operationId = "quiz-answer-conflict";
         const string idempotencyKey = "quiz-answer-conflict-key";
 
         var first = await PostQuizAnswerAsync(
             userId,
             BuildPayload(
-                quizId: quizId,
-                questionId: 1,
-                answer: "2",
+                quizId: issuedQuiz.QuizId.ToString(),
+                questionId: issuedQuiz.QuestionId,
+                answer: correctAnswer,
                 timeSpentSeconds: 5,
                 operationId: operationId,
                 idempotencyKey: idempotencyKey));
@@ -111,9 +114,9 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
         var conflict = await PostQuizAnswerAsync(
             userId,
             BuildPayload(
-                quizId: quizId,
-                questionId: 1,
-                answer: "3",
+                quizId: issuedQuiz.QuizId.ToString(),
+                questionId: issuedQuiz.QuestionId,
+                answer: "wrong-answer",
                 timeSpentSeconds: 5,
                 operationId: operationId,
                 idempotencyKey: idempotencyKey));
@@ -124,7 +127,7 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == 1);
+        var stat = await db.UserQuestionStats.SingleAsync(x => x.UserId == userId && x.QuestionId == issuedQuiz.QuestionId);
         Assert.Equal(1, stat.Attempts);
     }
 
@@ -133,16 +136,17 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
     {
         var userId = NewUserId("rollback");
         await EnsureUserWithoutProfileAsync(userId);
-        var quizId = Guid.NewGuid().ToString();
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+        var correctAnswer = await GetCorrectAnswerTokenAsync(issuedQuiz.QuestionId);
         const string operationId = "quiz-answer-rollback";
         const string idempotencyKey = "quiz-answer-rollback-key";
 
         var response = await PostQuizAnswerAsync(
             userId,
             BuildPayload(
-                quizId: quizId,
-                questionId: 1,
-                answer: "2",
+                quizId: issuedQuiz.QuizId.ToString(),
+                questionId: issuedQuiz.QuestionId,
+                answer: correctAnswer,
                 timeSpentSeconds: 5,
                 operationId: operationId,
                 idempotencyKey: idempotencyKey));
@@ -165,22 +169,24 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
         var userB = NewUserId("user-b");
         await EnsureUserAsync(userA);
         await EnsureUserAsync(userB);
-        var quizIdA = Guid.NewGuid().ToString();
-        var quizIdB = Guid.NewGuid().ToString();
+        var quizA = await StartIssuedQuizAsync(userA);
+        var quizB = await StartIssuedQuizAsync(userB);
+        var answerA = await GetCorrectAnswerTokenAsync(quizA.QuestionId);
+        var answerB = await GetCorrectAnswerTokenAsync(quizB.QuestionId);
         const string operationId = "shared-operation-id";
         const string idempotencyKey = "shared-idempotency-key";
 
         var payloadA = BuildPayload(
-            quizId: quizIdA,
-            questionId: 1,
-            answer: "2",
+            quizId: quizA.QuizId.ToString(),
+            questionId: quizA.QuestionId,
+            answer: answerA,
             timeSpentSeconds: 4,
             operationId: operationId,
             idempotencyKey: idempotencyKey);
         var payloadB = BuildPayload(
-            quizId: quizIdB,
-            questionId: 1,
-            answer: "2",
+            quizId: quizB.QuizId.ToString(),
+            questionId: quizB.QuestionId,
+            answer: answerB,
             timeSpentSeconds: 4,
             operationId: operationId,
             idempotencyKey: idempotencyKey);
@@ -195,7 +201,7 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
         Assert.Equal(2, await db.IdempotencyLedgers.CountAsync(
             x => x.OperationId == operationId && x.OperationType == QuizOperationTypes.QuizAnswer));
         Assert.Equal(2, await db.UserQuestionStats.CountAsync(
-            x => (x.UserId == userA || x.UserId == userB) && x.QuestionId == 1 && x.Attempts == 1));
+            x => (x.UserId == userA || x.UserId == userB) && (x.QuestionId == quizA.QuestionId || x.QuestionId == quizB.QuestionId) && x.Attempts == 1));
     }
 
     private static object BuildPayload(
@@ -218,8 +224,11 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
     }
 
     private async Task<HttpResponseMessage> PostQuizAnswerAsync(string userId, object payload)
+        => await PostAsUserAsync(userId, "/api/quiz/answer", payload);
+
+    private async Task<HttpResponseMessage> PostAsUserAsync(string userId, string url, object payload)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/quiz/answer")
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
         };
@@ -277,5 +286,41 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
         {
             await userManager.CreateAsync(new IdentityUser { Id = userId, UserName = userId });
         }
+    }
+
+    private async Task<string> GetCorrectAnswerTokenAsync(int questionId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var question = await db.Questions
+            .Include(q => q.Options)
+            .SingleAsync(q => q.Id == questionId);
+        var correctOption = question.Options.First(o => o.IsCorrect);
+
+        return correctOption.Id > 0
+            ? correctOption.Id.ToString()
+            : question.CorrectAnswer ?? throw new InvalidOperationException($"Question {questionId} has no correct answer");
+    }
+
+    private async Task<(Guid QuizId, int QuestionId)> StartIssuedQuizAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var subtopicId = await db.Questions.Select(q => q.SubtopicId).FirstAsync();
+
+        var response = await PostAsUserAsync(
+            userId,
+            "/api/quiz/start",
+            new
+            {
+                subtopicId,
+                questionCount = 1
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await ReadJsonAsync(response);
+        var quizId = Guid.Parse(payload.GetProperty("quizId").GetString()!);
+        var questionId = payload.GetProperty("questions").EnumerateArray().Single().GetProperty("id").GetInt32();
+        return (quizId, questionId);
     }
 }

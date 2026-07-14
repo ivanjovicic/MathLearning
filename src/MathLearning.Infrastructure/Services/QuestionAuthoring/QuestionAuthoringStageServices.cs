@@ -131,6 +131,14 @@ public sealed class MathContentLinter : IMathContentLinter
                 continue;
             }
 
+            if (QuestionAuthoringContentSupport.ContainsUnsafeMarkup(field.Value) && !IsUnsafeMarkupHandledExplicitly(field.Path))
+            {
+                issues.Add(Error(
+                    GetUnsafeMarkupRuleId(field.Path),
+                    GetUnsafeMarkupMessage(field.Path),
+                    field.Path,
+                    "Use plain text and math delimiters only."));
+            }
             if (!QuestionAuthoringContentSupport.TrySegment(field.Value, out _, out var errorCode, out var errorMessage))
             {
                 issues.Add(Error(errorCode ?? "content.invalid_math_delimiter", errorMessage ?? "Content has invalid math delimiters.", field.Path));
@@ -158,8 +166,16 @@ public sealed class MathContentLinter : IMathContentLinter
             }
         }
 
-        var isValid = issues.All(x => !string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.Ordinal));
-        return new ContentLintResultDto(isValid, issues);
+        var orderedIssues = issues
+            .OrderByDescending(x => string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.Ordinal))
+            .ThenBy(x => x.Stage, StringComparer.Ordinal)
+            .ThenBy(x => x.FieldPath ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(x => x.RuleId, StringComparer.Ordinal)
+            .ThenBy(x => x.Message, StringComparer.Ordinal)
+            .ToArray();
+
+        var isValid = orderedIssues.All(x => !string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.Ordinal));
+        return new ContentLintResultDto(isValid, orderedIssues);
     }
 
     private static IEnumerable<(string Path, string? Value)> EnumerateFields(QuestionAuthoringRequest request)
@@ -189,6 +205,31 @@ public sealed class MathContentLinter : IMathContentLinter
         => value.Contains('$', StringComparison.Ordinal) ||
            value.Contains(@"\(", StringComparison.Ordinal) ||
            value.Contains(@"\[", StringComparison.Ordinal);
+
+    private static bool IsUnsafeMarkupHandledExplicitly(string fieldPath)
+        => string.Equals(fieldPath, "text", StringComparison.Ordinal)
+           || fieldPath.StartsWith("options[", StringComparison.Ordinal)
+           || fieldPath.StartsWith("hints[", StringComparison.Ordinal);
+
+    private static string GetUnsafeMarkupRuleId(string fieldPath)
+        => fieldPath switch
+        {
+            "correctAnswer" => "correctAnswer.unsafe_markup",
+            "explanation" => "explanation.unsafe_markup",
+            _ when fieldPath.StartsWith("steps[", StringComparison.Ordinal) && fieldPath.EndsWith("].text", StringComparison.Ordinal) => "steps.unsafe_markup",
+            _ when fieldPath.StartsWith("steps[", StringComparison.Ordinal) && fieldPath.EndsWith("].hint", StringComparison.Ordinal) => "steps.hint_unsafe_markup",
+            _ => "content.unsafe_markup"
+        };
+
+    private static string GetUnsafeMarkupMessage(string fieldPath)
+        => fieldPath switch
+        {
+            "correctAnswer" => "Correct answer contains unsafe markup.",
+            "explanation" => "Explanation contains unsafe markup.",
+            _ when fieldPath.StartsWith("steps[", StringComparison.Ordinal) && fieldPath.EndsWith("].text", StringComparison.Ordinal) => "Step explanation contains unsafe markup.",
+            _ when fieldPath.StartsWith("steps[", StringComparison.Ordinal) && fieldPath.EndsWith("].hint", StringComparison.Ordinal) => "Step hint contains unsafe markup.",
+            _ => "Content contains unsafe markup."
+        };
 
     private static ValidationIssueDto Error(string ruleId, string message, string? fieldPath = null, string? suggestion = null)
         => new(ValidationStageNames.Lint, ValidationIssueSeverities.Error, ruleId, message, fieldPath, suggestion);
@@ -258,7 +299,13 @@ public sealed class LatexValidationService : ILatexValidationService
                 fieldValid ? QuestionAuthoringContentSupport.BuildSafeFallbackText(normalizedValue) : QuestionAuthoringContentSupport.BuildSafeFallbackText(field.Value)));
         }
 
-        return new LatexValidationResultDto(details.All(x => x.IsValid), details);
+        var orderedDetails = details
+            .OrderBy(x => x.FieldPath, StringComparer.Ordinal)
+            .ThenByDescending(x => x.IsValid)
+            .ThenBy(x => x.ErrorCode ?? string.Empty, StringComparer.Ordinal)
+            .ToArray();
+
+        return new LatexValidationResultDto(orderedDetails.All(x => x.IsValid), orderedDetails);
     }
 
     private static string BuildNormalizedField(
@@ -325,7 +372,11 @@ public sealed class MathNormalizationService : IMathNormalizationService
             fields.Add(new NormalizedContentFieldDto(field.Path, field.Value, normalized, segments));
         }
 
-        return new QuestionNormalizationResultDto(true, fields);
+        var orderedFields = fields
+            .OrderBy(x => x.FieldPath, StringComparer.Ordinal)
+            .ToArray();
+
+        return new QuestionNormalizationResultDto(true, orderedFields);
     }
 
     private static IEnumerable<(string Path, string Value)> EnumerateFields(QuestionAuthoringRequest request)
@@ -681,6 +732,7 @@ public sealed class QuestionPreviewService : IQuestionPreviewService
         QuestionValidationSummaryDto summary)
     {
         var safePreviewFields = normalized.Fields
+            .OrderBy(x => x.FieldPath, StringComparer.Ordinal)
             .ToDictionary(
                 x => x.FieldPath,
                 x => (string?)(latex.Fields.FirstOrDefault(f => f.FieldPath == x.FieldPath)?.SafeFallbackText ?? x.NormalizedValue),
@@ -723,6 +775,19 @@ public sealed class QuestionPublishGuardService : IQuestionPublishGuardService
 
         foreach (var result in equivalenceChecks.Where(x => !x.IsEquivalent))
         {
+            if (string.Equals(result.ComparisonMode, "validation", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(result.ComparisonMode, "invalid", StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add(new ValidationIssueDto(
+                    ValidationStageNames.Equivalence,
+                    ValidationIssueSeverities.Error,
+                    "equivalence.validation_error",
+                    result.Reason ?? "Correct answer expression could not be validated for equivalence.",
+                    "correctAnswer",
+                    "Fix the correct answer expression before publishing."));
+                continue;
+            }
+
             issues.Add(new ValidationIssueDto(
                 ValidationStageNames.Equivalence,
                 ValidationIssueSeverities.Error,
@@ -737,15 +802,23 @@ public sealed class QuestionPublishGuardService : IQuestionPublishGuardService
             issues.Add(stepIssue);
         }
 
-        var errorCount = issues.Count(x => string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.Ordinal));
-        var warningCount = issues.Count(x => string.Equals(x.Severity, ValidationIssueSeverities.Warning, StringComparison.Ordinal));
+        var orderedIssues = issues
+            .OrderByDescending(x => string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.Ordinal))
+            .ThenBy(x => x.Stage, StringComparer.Ordinal)
+            .ThenBy(x => x.FieldPath ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(x => x.RuleId, StringComparer.Ordinal)
+            .ThenBy(x => x.Message, StringComparer.Ordinal)
+            .ToArray();
+
+        var errorCount = orderedIssues.Count(x => string.Equals(x.Severity, ValidationIssueSeverities.Error, StringComparison.Ordinal));
+        var warningCount = orderedIssues.Count(x => string.Equals(x.Severity, ValidationIssueSeverities.Warning, StringComparison.Ordinal));
         var status = errorCount > 0
             ? QuestionValidationStatuses.Failed
             : warningCount > 0
                 ? QuestionValidationStatuses.PassedWithWarnings
                 : QuestionValidationStatuses.Passed;
 
-        return new QuestionValidationSummaryDto(errorCount == 0, status, errorCount, warningCount, issues);
+        return new QuestionValidationSummaryDto(errorCount == 0, status, errorCount, warningCount, orderedIssues);
     }
 }
 

@@ -126,6 +126,49 @@ public sealed class QuestionEntityTests
         Assert.Equal("42", question.CorrectAnswer);
     }
 
+    [Fact]
+    public void GetExpectedAnswerText_MultipleChoicePrefersCanonicalOptionOverLegacyCorrectAnswer()
+    {
+        var question = NewQuestion();
+        question.ReplaceOptions(new[]
+        {
+            OptionWithId(10, "Canonical", true, 1),
+            OptionWithId(11, "Wrong", false, 2)
+        });
+        question.SetCorrectAnswer("Legacy");
+
+        var expected = question.GetExpectedAnswerText();
+
+        Assert.Equal("Canonical", expected);
+    }
+
+    [Fact]
+    public void MatchesSubmittedAnswer_MultipleChoiceIgnoresLegacyCorrectAnswerWhenCanonicalOptionExists()
+    {
+        var question = NewQuestion();
+        question.ReplaceOptions(new[]
+        {
+            OptionWithId(10, "Canonical", true, 1),
+            OptionWithId(11, "Wrong", false, 2)
+        });
+        question.SetCorrectAnswer("Legacy");
+
+        Assert.True(question.MatchesSubmittedAnswer("Canonical"));
+        Assert.True(question.MatchesSubmittedAnswer("10"));
+        Assert.False(question.MatchesSubmittedAnswer("Legacy"));
+    }
+
+    [Fact]
+    public void MatchesSubmittedAnswer_MultipleChoiceFallsBackToLegacyCorrectAnswerForLegacyRows()
+    {
+        var question = NewQuestion();
+        question.ReplaceOptions(new[] { OptionWithId(10, "Wrong", false, 1) });
+        question.SetCorrectAnswer("Legacy");
+
+        Assert.True(question.MatchesSubmittedAnswer("Legacy"));
+        Assert.False(question.MatchesSubmittedAnswer("Wrong"));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(4)]

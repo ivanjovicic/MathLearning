@@ -38,12 +38,12 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
 
         var successUserId = NewUserId("quiz-success");
         await EnsureUserAsync(successUserId);
-        var quizId = Guid.NewGuid().ToString();
+        var successQuiz = await StartIssuedQuizAsync(successUserId);
 
         var successPayload = new
         {
-            quizId,
-            questionId = 1,
+            quizId = successQuiz.QuizId.ToString(),
+            questionId = successQuiz.QuestionId,
             answer = "2",
             timeSpentSeconds = 5,
             operationId = "quiz-observe-1",
@@ -54,8 +54,8 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
         Assert.Equal(HttpStatusCode.OK, (await PostAsUserAsync(successUserId, "/api/quiz/answer", successPayload)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await PostAsUserAsync(successUserId, "/api/quiz/answer", new
         {
-            quizId,
-            questionId = 1,
+            quizId = successQuiz.QuizId.ToString(),
+            questionId = successQuiz.QuestionId,
             answer = "3",
             timeSpentSeconds = 5,
             operationId = "quiz-observe-1",
@@ -64,10 +64,11 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
 
         var rollbackUserId = NewUserId("quiz-rollback");
         await EnsureUserWithoutProfileAsync(rollbackUserId);
+        var rollbackQuiz = await StartIssuedQuizAsync(rollbackUserId);
         Assert.Equal(HttpStatusCode.InternalServerError, (await PostAsUserAsync(rollbackUserId, "/api/quiz/answer", new
         {
-            quizId = Guid.NewGuid().ToString(),
-            questionId = 1,
+            quizId = rollbackQuiz.QuizId.ToString(),
+            questionId = rollbackQuiz.QuestionId,
             answer = "2",
             timeSpentSeconds = 5,
             operationId = "quiz-observe-rollback",
@@ -256,6 +257,25 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
             db.UserProfiles.Remove(profile);
             await db.SaveChangesAsync();
         }
+    }
+
+    private async Task<(Guid QuizId, int QuestionId)> StartIssuedQuizAsync(string userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var subtopicId = await db.Questions.Select(q => q.SubtopicId).FirstAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/quiz/start", new
+        {
+            subtopicId,
+            questionCount = 1
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return (
+            Guid.Parse(payload.GetProperty("quizId").GetString()!),
+            payload.GetProperty("questions").EnumerateArray().Single().GetProperty("id").GetInt32());
     }
 
     private async Task EnsureCosmeticItemAsync(string key, string name)

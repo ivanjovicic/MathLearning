@@ -320,12 +320,14 @@ public sealed class StepExplanationService : IStepExplanationService
 
     private static string? GetExpectedAnswer(Question question, string language)
     {
-        if (!string.IsNullOrWhiteSpace(question.CorrectAnswer))
-            return question.CorrectAnswer;
+        if (string.Equals(question.Type, "multiple_choice", StringComparison.OrdinalIgnoreCase))
+        {
+            return question.GetCanonicalCorrectOption() is { } correctOption
+                ? TranslationHelper.GetOptionText(correctOption, language)
+                : question.GetExpectedAnswerText();
+        }
 
-        return question.Options.FirstOrDefault(o => o.IsCorrect) is { } correctOption
-            ? TranslationHelper.GetOptionText(correctOption, language)
-            : null;
+        return question.GetExpectedAnswerText();
     }
 
     private static DifficultyLevel MapQuestionDifficulty(int difficulty) => difficulty switch

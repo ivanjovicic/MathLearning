@@ -290,6 +290,69 @@ namespace MathLearning.Domain.Entities
             CorrectAnswer = correctOption.Text;
         }
 
+        public QuestionOption? GetCanonicalCorrectOption()
+        {
+            if (!IsMultipleChoiceType())
+            {
+                return null;
+            }
+
+            if (CorrectOptionId.HasValue)
+            {
+                var explicitOption = Options.FirstOrDefault(x => x.Id == CorrectOptionId.Value);
+                if (explicitOption is not null)
+                {
+                    return explicitOption;
+                }
+            }
+
+            return Options
+                .OrderBy(x => x.Order)
+                .FirstOrDefault(x => x.IsCorrect);
+        }
+
+        public string? GetExpectedAnswerText()
+        {
+            if (IsOpenAnswerType())
+            {
+                return string.IsNullOrWhiteSpace(CorrectAnswer) ? null : CorrectAnswer;
+            }
+
+            var correctOption = GetCanonicalCorrectOption();
+            if (!string.IsNullOrWhiteSpace(correctOption?.Text))
+            {
+                return correctOption.Text;
+            }
+
+            return string.IsNullOrWhiteSpace(CorrectAnswer) ? null : CorrectAnswer;
+        }
+
+        public bool MatchesSubmittedAnswer(string? submittedAnswer)
+        {
+            var normalized = submittedAnswer?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (!IsMultipleChoiceType())
+            {
+                return !string.IsNullOrWhiteSpace(CorrectAnswer) &&
+                       string.Equals(CorrectAnswer.Trim(), normalized, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var correctOption = GetCanonicalCorrectOption();
+            if (correctOption is not null)
+            {
+                var parsedId = int.TryParse(normalized, out var optionId) ? optionId : -1;
+                return correctOption.Id == optionId ||
+                       string.Equals(correctOption.Text.Trim(), normalized, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return !string.IsNullOrWhiteSpace(CorrectAnswer) &&
+                   string.Equals(CorrectAnswer.Trim(), normalized, StringComparison.OrdinalIgnoreCase);
+        }
+
         public void EnsureAnswerInvariant()
         {
             if (IsMultipleChoiceType() && !CorrectOptionId.HasValue)

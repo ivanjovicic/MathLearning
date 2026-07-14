@@ -48,7 +48,7 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
             services.AddDbContext<ApiDbContext>(options => options.UseInMemoryDatabase(_apiDbName));
             services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(_appDbName));
 
-            var removalKeywords = new[] { "IndexMaintenance", "XpReset", "WeaknessAnalysis", "WeaknessAnalysisScheduler", "WeaknessAnalysisDailyHostedService", "Hangfire" };
+            var removalKeywords = new[] { "IndexMaintenance", "XpReset", "WeaknessAnalysis", "WeaknessAnalysisScheduler", "WeaknessAnalysisDailyHostedService", "Hangfire", "Outbox" };
             var hosted = services.Where(sd => sd.ServiceType == typeof(IHostedService)).ToList();
             foreach (var sd in hosted)
             {

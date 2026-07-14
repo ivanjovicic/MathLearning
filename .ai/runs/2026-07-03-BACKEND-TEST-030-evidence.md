@@ -62,7 +62,9 @@ Follow-up: BACKEND-TEST-043.
 
 ## Completion
 
-88%
+75%
+
+Commit SHA: 4a8e30f4820c68bb69b2afa1c8de59a4d3830bfd
 
 ## Key commits
 

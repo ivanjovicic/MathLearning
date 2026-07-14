@@ -28,13 +28,14 @@ public sealed class MobileMutationContractIntegrationTests : IClassFixture<Custo
     {
         var userId = NewUserId("quiz-answer");
         await EnsureUserAsync(userId, coins: 0, xp: 0);
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
 
         const string operationId = "mobile-quiz-answer-op";
         const string idempotencyKey = "mobile-quiz-answer-key";
         var payload = new
         {
-            quizId = Guid.NewGuid().ToString(),
-            questionId = 1,
+            quizId = issuedQuiz.QuizId.ToString(),
+            questionId = issuedQuiz.QuestionId,
             answer = "2",
             timeSpentSeconds = 5,
             operationId,
@@ -54,7 +55,7 @@ public sealed class MobileMutationContractIntegrationTests : IClassFixture<Custo
         var conflict = await PostAsUserAsync(userId, "/api/quiz/answer", new
         {
             quizId = payload.quizId,
-            questionId = 1,
+            questionId = issuedQuiz.QuestionId,
             answer = "3",
             timeSpentSeconds = 5,
             operationId,
@@ -62,6 +63,52 @@ public sealed class MobileMutationContractIntegrationTests : IClassFixture<Custo
         });
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         await AssertBusinessErrorCodeAsync(conflict, "idempotency_conflict");
+    }
+
+    [Fact]
+    public async Task QuizAnswer_RejectsQuestionNotIssuedInSession()
+    {
+        var userId = NewUserId("quiz-answer-question");
+        await EnsureUserAsync(userId, coins: 0, xp: 0);
+        var issuedQuiz = await StartIssuedQuizAsync(userId);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var foreignQuestionId = await db.Questions
+            .Where(q => q.Id != issuedQuiz.QuestionId)
+            .Select(q => q.Id)
+            .FirstAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/quiz/answer", new
+        {
+            quizId = issuedQuiz.QuizId.ToString(),
+            questionId = foreignQuestionId,
+            answer = "2",
+            timeSpentSeconds = 5
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task QuizAnswer_RejectsSessionOwnedByDifferentUser()
+    {
+        var userA = NewUserId("quiz-answer-owner-a");
+        var userB = NewUserId("quiz-answer-owner-b");
+        await EnsureUserAsync(userA, coins: 0, xp: 0);
+        await EnsureUserAsync(userB, coins: 0, xp: 0);
+
+        var issuedQuiz = await StartIssuedQuizAsync(userA);
+
+        var response = await PostAsUserAsync(userB, "/api/quiz/answer", new
+        {
+            quizId = issuedQuiz.QuizId.ToString(),
+            questionId = issuedQuiz.QuestionId,
+            answer = "2",
+            timeSpentSeconds = 5
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -306,6 +353,25 @@ public sealed class MobileMutationContractIntegrationTests : IClassFixture<Custo
         profile.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+    }
+
+    private async Task<(Guid QuizId, int QuestionId)> StartIssuedQuizAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var subtopicId = await db.Questions.Select(q => q.SubtopicId).FirstAsync();
+
+        var response = await PostAsUserAsync(userId, "/api/quiz/start", new
+        {
+            subtopicId,
+            questionCount = 1
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await ReadJsonAsync(response);
+        var quizId = Guid.Parse(payload.GetProperty("quizId").GetString()!);
+        var questionId = payload.GetProperty("questions").EnumerateArray().Single().GetProperty("id").GetInt32();
+        return (quizId, questionId);
     }
 
     private async Task EnsureDailyRunCompletedAsync(string userId, DateOnly day)

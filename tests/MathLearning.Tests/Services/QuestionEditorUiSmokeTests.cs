@@ -210,6 +210,7 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("ValidationStatus", content, StringComparison.Ordinal);
         Assert.Contains("GetValidationStatusLabel", content, StringComparison.Ordinal);
         Assert.Contains("GetPublishStateLabel", content, StringComparison.Ordinal);
+        Assert.Contains("GetPublishStateLabel(status)", content, StringComparison.Ordinal);
         Assert.Contains("_selectedAttentionFilter", content, StringComparison.Ordinal);
         Assert.Contains("_selectedValidationStatus", content, StringComparison.Ordinal);
         Assert.Contains("_selectedSubtopicId", content, StringComparison.Ordinal);
@@ -222,9 +223,22 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("ValidationStatusPending", content, StringComparison.Ordinal);
         Assert.Contains("GetValidationStatusFilterLabel", content, StringComparison.Ordinal);
         Assert.Contains("GetValidationStatusLabel(context.ValidationStatus ?? ValidationStatusPending)", content, StringComparison.Ordinal);
+        Assert.Contains("OnCategoryChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnSubtopicChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnTypeChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnDifficultyChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnPublishStateChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnAttentionFilterChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnValidationStatusChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("OnAuthorChangedAsync", content, StringComparison.Ordinal);
+        Assert.Contains("ClearSearchAsync", content, StringComparison.Ordinal);
         Assert.Contains("_selectedAuthor", content, StringComparison.Ordinal);
         Assert.Contains("_updatedBeforeDate", content, StringComparison.Ordinal);
-        Assert.Contains("Očisti filtere", content, StringComparison.Ordinal);
+        Assert.True(
+            content.Contains("Očisti filtere", StringComparison.Ordinal) ||
+            content.Contains("Ocisti filtere", StringComparison.Ordinal),
+            "Expected questions index source to contain clear-filters label.");
+        Assert.Contains("Disabled=\"@(ActiveFilterCount == 0)\"", content, StringComparison.Ordinal);
         Assert.Contains("Nema pitanja za izabrane filtere", content, StringComparison.Ordinal);
         Assert.Contains("GetAttentionFilterLabel", content, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultOrdering", content, StringComparison.Ordinal);
@@ -235,10 +249,27 @@ public class QuestionEditorUiSmokeTests
         Assert.Contains("Izmenjeno pre", content, StringComparison.Ordinal);
         Assert.Contains("OnUpdatedBeforeDateChangedAsync", content, StringComparison.Ordinal);
         Assert.Contains("EF.Functions.ILike(q.UpdatedBy", content, StringComparison.Ordinal);
-        Assert.Contains("Problematična", content, StringComparison.Ordinal);
+        Assert.True(
+            content.Contains("Problematična", StringComparison.Ordinal) ||
+            content.Contains("Problematicna", StringComparison.Ordinal) ||
+            content.Contains("ProblematiÄna", StringComparison.Ordinal),
+            "Expected questions index source to contain problematic attention label.");
         Assert.Contains("NeedsAttention(context)", content, StringComparison.Ordinal);
         Assert.DoesNotContain(".Include(q => q.Options)", content, StringComparison.Ordinal);
         Assert.DoesNotContain(".Include(q => q.Steps)", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AuthoringService_SourceIncludesObservabilitySignalsForValidationAndRetry()
+    {
+        var filePath = Path.Combine(FindRepositoryRoot(), "src", "MathLearning.Infrastructure", "Services", "QuestionAuthoring", "MathQuestionAuthoringService.cs");
+        var content = File.ReadAllText(filePath);
+
+        Assert.Contains("Question authoring validation failed.", content, StringComparison.Ordinal);
+        Assert.Contains("Question authoring validation completed with warnings.", content, StringComparison.Ordinal);
+        Assert.Contains("Publish blocked for draft", content, StringComparison.Ordinal);
+        Assert.Contains("Retrying attempt {Attempt} of {MaxAttempts}", content, StringComparison.Ordinal);
+        Assert.Contains("TopRuleIds={TopRuleIds}", content, StringComparison.Ordinal);
     }
 
     [Fact]

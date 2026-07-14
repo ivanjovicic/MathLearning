@@ -2,5 +2,5 @@
 
 public record QuizResponse(
     Guid QuizId,
-    List<QuestionDto> Questions
+    List<QuizQuestionDto> Questions
 );

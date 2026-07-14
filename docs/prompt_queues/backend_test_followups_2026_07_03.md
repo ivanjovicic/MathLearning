@@ -18,7 +18,7 @@ Target repo: `ivanjovicic/MathLearning`
 | ID | Priority | Status | Purpose |
 |---|---|---|---|
 | BACKEND-TEST-022 | P0 | Prompt-ready | Durable, idempotent delivery of quiz/offline attempts to analytics after authoritative settlement. |
-| BACKEND-TEST-023 | P0/P1 | Prompt-ready | Multi-instance-safe outbox claiming, duplicate-publish defense and poison-message lifecycle. |
+| BACKEND-TEST-023 | P0/P1 | Runtime-fixed / Workflow validation needed | Multi-instance-safe outbox claiming now uses `FOR UPDATE SKIP LOCKED` plus retry/dead-letter state; PostgreSQL proof still needs CI or valid local credentials. |
 | BACKEND-TEST-024 | P1 | Prompt-ready | Make maintenance routes testable/read-only where appropriate and add positive admin tests. |
 | BACKEND-TEST-025 | P1 | Prompt-ready | Bound bug report input/screenshot handling and prevent orphan screenshot storage. |
 | BACKEND-TEST-026 | P1 | Prompt-ready | Minimize public health/metrics/monitoring information while retaining platform probes. |
@@ -27,10 +27,19 @@ Target repo: `ivanjovicic/MathLearning`
 | BACKEND-TEST-029 | P1 | Prompt-ready | Add analytics/recommendation HTTP contract and user-scope coverage. |
 | BACKEND-TEST-030 | P1 | Prompt-ready | Add explanation endpoint validation, safe-error and cancellation coverage. |
 | BACKEND-TEST-031 | P1 | Prompt-ready | Make weakness scheduling bounded, deduplicated and restart-safe or document accepted loss. |
-| BACKEND-TEST-032 | P0/P1 | Prompt-ready | Run provider-specific PostgreSQL concurrency/locking/constraint integration tests. |
+| BACKEND-TEST-032 | P0/P1 | Implemented / Workflow validation needed | Shared PostgreSQL provider harness and initial authority tests are wired; exact workflow/local provider execution still needs valid PostgreSQL maintenance credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-032-evidence.md`. |
 | BACKEND-TEST-033 | P1 | Prompt-ready | Add cancellation and rollback matrix for every canonical P0 mutation. |
 | BACKEND-TEST-034 | P1/P2 | Prompt-ready | Prove legacy route parity/deprecation and prevent duplicate settlement surfaces. |
 | BACKEND-TEST-035 | P1 | Prompt-ready | Audit all authorization tests for false “anonymous” coverage and migrate to explicit anonymous mode. |
+
+## Canonical ownership notes
+
+| Test row | Canonical owner | Note |
+|---|---|---|
+| BACKEND-TEST-023 | BE-PERF-016 | Keep this row as the test-side contract and regression gate for the shared outbox claim/lease/backoff behavior. |
+| BACKEND-TEST-031 | BE-PERF-009 | Keep this row as the validation wrapper for the bounded weakness scheduler. |
+| BACKEND-TEST-032 | BE-PERF-012, BE-PERF-015, BE-PERF-016 | Provider-specific PostgreSQL proof is shared with the adaptive/practice/outbox lanes. |
+| BACKEND-TEST-033 | BE-PERF-012 and BE-PERF-015 | Cancellation/rollback proof belongs to the canonical P0 mutation lanes. |
 
 ---
 
@@ -87,6 +96,9 @@ Cross-repo sync: required if HTTP success/error semantics change.
 
 Run mode: refactor + relational concurrency tests  
 Risk: P0/P1 duplicate external effects, infinite retry, sensitive error persistence
+Canonical owner: BE-PERF-016; keep this row as the test-side contract and regression gate for claim/lease/backoff behavior.
+Linked to: BACKEND-TEST-032, BACKEND-TEST-033, BACKEND-LATEST-QUEUE-002
+Primary runtime evidence: canonical BE-PERF-016 implementation log; this row adds contract/regression/provider evidence only.
 
 ### Problem
 
@@ -107,6 +119,12 @@ The processor selects all unprocessed rows, publishes, then marks them processed
 4. Add max attempts/backoff/dead-letter state and operator replay rules.
 5. Redact/truncate persisted `LastError`.
 6. Recover abandoned claims after worker death.
+
+Status update 2026-07-14:
+
+- Implemented with a scoped `OutboxBatchProcessor`, PostgreSQL `FOR UPDATE SKIP LOCKED` row claiming, `NextAttemptUtc`/`DeadLetteredUtc`, redacted persisted errors, and hosted-service registration.
+- Added provider-gated regression coverage in `tests/MathLearning.Tests/Infrastructure/OutboxBatchProcessorTests.cs`.
+- Local compile/no-op validation passed, but local PostgreSQL proof is still blocked by `28P01 password authentication failed for user "postgres"`; keep this row in workflow-validation state until CI or a valid local maintenance connection string is available.
 
 ### Required tests
 
@@ -330,6 +348,9 @@ Replace direct `ex.Message` responses if service messages can contain internal d
 
 Run mode: architecture decision + scheduler tests  
 Risk: P1 lost/duplicated analysis and memory pressure
+Canonical owner: BE-PERF-009; this row validates the bounded weakness scheduler contract.
+Linked to: BACKEND-LATEST-QUEUE-002
+Primary runtime evidence: canonical BE-PERF-009 implementation log; this row adds scheduler contract/regression evidence only.
 
 ### Problem
 
@@ -359,6 +380,10 @@ The scheduler uses an unbounded in-memory channel. Jobs are lost on restart, dup
 
 Run mode: CI test lane  
 Risk: P0/P1 false confidence from InMemory/SQLite
+Canonical owner: BE-PERF-012, BE-PERF-015 and BE-PERF-016; this row proves the PostgreSQL provider lane rather than duplicating implementation.
+Depends on: canonical runtime changes in BE-PERF-012, BE-PERF-015 or BE-PERF-016 when provider proof is the blocker.
+Linked to: BACKEND-LATEST-QUEUE-002
+Primary evidence rule: provider-proof logs may be shared across linked canonical owners; do not fork a second PostgreSQL harness.
 
 ### Required work
 
@@ -386,6 +411,10 @@ The workflow must publish TRX and coverage artifacts for the PostgreSQL lane and
 
 Run mode: endpoint/service integration tests  
 Risk: P1 partial settlement during client disconnect/shutdown
+Canonical owner: BE-PERF-012 and BE-PERF-015; this row proves the cancellation/rollback matrix around the canonical P0 mutations.
+Depends on: canonical runtime changes in BE-PERF-012 or BE-PERF-015
+Linked to: BACKEND-LATEST-QUEUE-002
+Primary evidence rule: share deterministic rollback/cancellation fixtures across linked mutation owners; do not create a second failure-injection framework.
 
 ### Scope
 

@@ -1,5 +1,7 @@
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Tests.Services;
 
@@ -16,6 +18,29 @@ public sealed class RefreshTokenServiceSecurityTests
         Assert.NotEqual(first, second);
         Assert.Equal(64, Convert.FromBase64String(first).Length);
         Assert.Equal(64, Convert.FromBase64String(second).Length);
+        Assert.Equal(88, first.Length);
+        Assert.Equal(88, second.Length);
+    }
+
+    [Fact]
+    public void GeneratedRefreshToken_FitsConfiguredEntityMaxLength()
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        using var db = new ApiDbContext(options);
+
+        var tokenProperty = db.Model
+            .FindEntityType(typeof(RefreshToken))?
+            .FindProperty(nameof(RefreshToken.Token));
+
+        Assert.NotNull(tokenProperty);
+        Assert.Equal(128, tokenProperty!.GetMaxLength());
+
+        var token = RefreshTokenService.GenerateRefreshToken();
+
+        Assert.True(token.Length <= tokenProperty.GetMaxLength());
     }
 
     [Fact]

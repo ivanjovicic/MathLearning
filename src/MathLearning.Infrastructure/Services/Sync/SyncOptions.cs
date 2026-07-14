@@ -11,4 +11,5 @@ public sealed class SyncOptions
     public int DeadLetterRedriveIntervalSeconds { get; set; } = 60;
     public int DeadLetterRedriveBatchSize { get; set; } = 20;
     public int MaxDeadLetterRedriveAttempts { get; set; } = 10;
+    public int ProgressSyncMaxOfflineWindowDays { get; set; } = 30;
 }
