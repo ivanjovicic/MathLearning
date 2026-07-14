@@ -133,6 +133,21 @@ Owner: `ProgressEndpoints.cs`
 
 ---
 
+## Leaderboard
+
+Owner: `LeaderboardEndpoints.cs`
+
+| Method | Route | Auth | Status | Notes |
+|---|---|---|---|---|
+| GET | `/api/leaderboard/student` | Auth | Canonical | String-safe rank/pagination contract. Cursor is versioned and bound to normalized `scope` + `period`; invalid or mismatched cursors return `400`. |
+| GET | `/api/leaderboard/friends` | Auth | Canonical | Friends leaderboard; `/api/leaderboard/rivals` remains the compatibility alias. |
+| GET | `/api/leaderboard/global` | Auth | Legacy canonical read | Legacy global leaderboard read surface. |
+| GET | `/api/leaderboard/schools` | Auth | Canonical | School aggregate leaderboard. |
+| GET | `/api/leaderboard/schools/{schoolId}` | Auth | Canonical | School leaderboard details / neighbors. |
+| GET | `/api/leaderboard/schools/history/{schoolId}` | Auth | Canonical | School leaderboard history. |
+
+---
+
 ## Economy / seasons / shop
 
 Owner: `EconomySettlementEndpoints.cs`
@@ -160,8 +175,8 @@ Owners: `CosmeticsEndpoints.cs`, `AvatarEndpoints.cs`, `DailyRunEndpoints.cs`
 | GET | `/api/cosmetics/inventory` | Auth | Canonical mobile | Current-user inventory/fragments. |
 | GET | `/api/cosmetics/avatar` | Auth | Canonical mobile | Current equipped slots. |
 | PUT | `/api/cosmetics/avatar` | Auth | Canonical mobile | Ownership-validated equip. |
-| POST | `/api/cosmetics/items/{itemKey}/claim` | Auth | Canonical P0 | Cosmetics ledger. |
-| POST | `/api/cosmetics/fragments/grant` | Auth | Canonical P0 | Cosmetics ledger. |
+| POST | `/api/cosmetics/items/{itemKey}/claim` | Auth | Canonical P0 | Consume server-issued cosmetic item entitlement via cosmetics ledger. |
+| POST | `/api/cosmetics/fragments/grant` | Auth | Canonical P0 | Daily Run server-derived grant or consume server-issued fragment entitlement via cosmetics ledger. |
 | POST | `/api/daily-run/chest/claim` | Auth | Canonical P0 | Server-authoritative Policy B idempotency. |
 
 Legacy avatar routes remain compatibility-only. Do not expand them for new mobile behavior.
@@ -172,9 +187,9 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 
 | Route family | Auth | Status | Notes |
 |---|---|---|---|
-| `/api/hints/*` | Auth | Mixed canonical/legacy read | Paid hint settlement belongs to `/api/economy/hints/use`. |
-| `/api/coins/*` | Auth | Legacy | Do not use for new settlement. |
-| `/api/powerups/*` | Auth | Legacy/feature | Inspect before modification. |
+| `/api/hints/*` | Auth | Canonical read + deprecated aliases | `POST /api/economy/hints/use` is the only paid-hint settlement path; `GET /api/hints/questions/{id}/*` is read-only and legacy `/api/questions/{id}/hint/*` aliases return `410 Gone`. |
+| `/api/coins/*` | Auth | Legacy read + removed mutations | `POST /api/coins/earn` and `POST /api/coins/spend` return `410 Gone`; keep `/balance`, `/history`, and `/leaderboard` as compatibility read models only. |
+| `/api/powerups/*` | Auth | Legacy read + removed mutation | `POST /api/powerups/streak-freeze/buy` returns `410 Gone`; canonical purchase is `/api/shop/streak-freeze/purchase`. |
 
 ---
 
@@ -244,6 +259,7 @@ Endpoint and service layers both normalize bug-report paging for defense-in-dept
 | `POST /api/seasons/milestones/{milestoneId}/claim` | `season_milestone_claim` | Economy contract/idempotency tests. |
 | `POST /api/cosmetics/fragments/grant` | `cosmetics_fragment_grant` | Cosmetics contract/idempotency tests. |
 | `POST /api/cosmetics/items/{itemKey}/claim` | `cosmetics_item_claim` | Cosmetics contract/idempotency tests. |
+| `POST /api/cosmetics/purchase` | `cosmetics_shop_purchase` | Cosmetics purchase/idempotency tests. |
 | `POST /api/economy/coins/spend` | `economy_coins_spend` | Economy idempotency/contract tests. |
 | `POST /api/economy/hints/use` | `economy_hint_use` | Economy idempotency/contract tests. |
 | `POST /api/economy/rewards/claim` | `economy_reward_claim` | Economy idempotency/contract tests. |

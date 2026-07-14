@@ -50,6 +50,7 @@ public static class MobileEconomyContractPayloads
     public static IReadOnlyDictionary<string, object?> CosmeticItemClaim(
         string idempotencyKey,
         string sourceType,
+        Guid? entitlementId = null,
         string? sourceEvent = null,
         string? operationId = null,
         string? transactionId = null,
@@ -66,6 +67,11 @@ public static class MobileEconomyContractPayloads
         if (!string.IsNullOrWhiteSpace(transactionId))
         {
             payload["transactionId"] = transactionId;
+        }
+
+        if (entitlementId.HasValue && entitlementId.Value != Guid.Empty)
+        {
+            payload["entitlementId"] = entitlementId.Value;
         }
 
         if (!string.IsNullOrWhiteSpace(sourceEvent))
@@ -86,6 +92,7 @@ public static class MobileEconomyContractPayloads
         string fragmentName,
         int copies,
         string sourceType = "reward",
+        Guid? entitlementId = null,
         string? operationId = null,
         string? transactionId = null)
     {
@@ -97,6 +104,32 @@ public static class MobileEconomyContractPayloads
             ["copies"] = copies,
             ["source"] = sourceType,
             ["sourceType"] = sourceType
+        };
+
+        if (!string.IsNullOrWhiteSpace(transactionId))
+        {
+            payload["transactionId"] = transactionId;
+        }
+
+        if (entitlementId.HasValue && entitlementId.Value != Guid.Empty)
+        {
+            payload["entitlementId"] = entitlementId.Value;
+        }
+
+        return payload;
+    }
+
+    public static IReadOnlyDictionary<string, object?> CosmeticPurchase(
+        string idempotencyKey,
+        int cosmeticItemId,
+        string? operationId = null,
+        string? transactionId = null)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["idempotencyKey"] = idempotencyKey,
+            ["operationId"] = operationId ?? idempotencyKey,
+            ["cosmeticItemId"] = cosmeticItemId
         };
 
         if (!string.IsNullOrWhiteSpace(transactionId))

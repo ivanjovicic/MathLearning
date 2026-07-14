@@ -70,6 +70,39 @@ public interface ICosmeticRewardService
         CancellationToken cancellationToken);
 }
 
+public interface ICosmeticEntitlementService
+{
+    Task<CosmeticEntitlementDto?> GetEntitlementAsync(
+        string userId,
+        Guid entitlementId,
+        CancellationToken cancellationToken);
+
+    Task<CosmeticEntitlementDto> CreateItemEntitlementAsync(
+        string userId,
+        int cosmeticItemId,
+        string sourceType,
+        string sourceRef,
+        string operationKey,
+        CancellationToken cancellationToken);
+
+    Task<CosmeticEntitlementDto> CreateFragmentEntitlementAsync(
+        string userId,
+        int cosmeticItemId,
+        int quantity,
+        string sourceType,
+        string sourceRef,
+        string operationKey,
+        CancellationToken cancellationToken);
+
+    Task<bool> TryConsumeEntitlementAsync(
+        string userId,
+        Guid entitlementId,
+        string operationType,
+        string operationId,
+        string idempotencyKey,
+        CancellationToken cancellationToken);
+}
+
 public interface IMobileCosmeticsService
 {
     Task<MobileCosmeticCatalogResponseDto> GetPublishedCatalogAsync(

@@ -20,14 +20,30 @@ public static class LeaderboardRankingUtils
         string period,
         UserProfile me,
         int myScore,
-        int myId,
+        string myUserId,
         string userId,
         CancellationToken ct = default)
     {
         var query = BuildScopeQuery(db, scope, me, userId);
+        if (!db.Database.IsRelational())
+        {
+            var users = await query
+                .Select(u => new
+                {
+                    u.UserId,
+                    Score = ScoreSelector.ScoreOf(u, period)
+                })
+                .ToListAsync(ct);
+
+            var higherLocal = users.Count(u =>
+                u.Score > myScore ||
+                (u.Score == myScore && StringComparer.Ordinal.Compare(u.UserId, myUserId) < 0));
+            return higherLocal + 1;
+        }
+
         var higher = await query.CountAsync(u =>
             ScoreSelector.ScoreOf(u, period) > myScore ||
-            (ScoreSelector.ScoreOf(u, period) == myScore && int.Parse(u.UserId) < myId), ct);
+            (ScoreSelector.ScoreOf(u, period) == myScore && u.UserId.CompareTo(myUserId) < 0), ct);
         return higher + 1;
     }
 

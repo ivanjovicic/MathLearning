@@ -110,7 +110,10 @@ public record EquipCosmeticBatchRequest(
 );
 
 public record PurchaseCosmeticRequest(
-    int CosmeticItemId
+    int CosmeticItemId,
+    string? OperationId = null,
+    string? IdempotencyKey = null,
+    string? TransactionId = null
 );
 
 public record PurchaseCosmeticResponse(
@@ -163,6 +166,20 @@ public record CosmeticUnlockResultDto(
     string SourceType,
     string SourceRef,
     DateTime UnlockedAtUtc
+);
+
+public record CosmeticEntitlementDto(
+    Guid Id,
+    string UserId,
+    string EntitlementType,
+    int CosmeticItemId,
+    string ItemKey,
+    string? FragmentLabel,
+    int Quantity,
+    string SourceType,
+    string SourceRef,
+    DateTime GrantedAtUtc,
+    DateTime? ConsumedAtUtc
 );
 
 public record CosmeticRewardSourceRequest(

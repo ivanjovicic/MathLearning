@@ -60,14 +60,15 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
         await EnsureCurrentPeriodAsync(period);
 
         var query = CurrentSchoolScoreQuery(periodInfo);
-        var cur = CursorCodec.Decode(cursor);
+        var schoolCursorId = CursorCodec.DecodeSchoolId(cursor);
 
-        if (cur is not null)
+        if (schoolCursorId is not null)
         {
-            var compositeCursor = FromCursorScore(cur.Score);
+            var decoded = CursorCodec.Decode(cursor)!;
+            var compositeCursor = FromCursorScore(decoded.Score);
             query = query.Where(x =>
                 x.CompositeScore < compositeCursor ||
-                (x.CompositeScore == compositeCursor && x.SchoolId > cur.Id));
+                (x.CompositeScore == compositeCursor && x.SchoolId > schoolCursorId.Value));
         }
 
         var page = await query
@@ -99,7 +100,7 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
         if (hasMore && page.Count > 0)
         {
             var last = page[^1];
-            nextCursor = CursorCodec.Encode(new LeaderboardCursor(ToCursorScore(last.CompositeScore), last.SchoolId));
+            nextCursor = CursorCodec.EncodeSchool(ToCursorScore(last.CompositeScore), last.SchoolId);
         }
 
         SchoolLeaderboardItemDto? mySchool = null;

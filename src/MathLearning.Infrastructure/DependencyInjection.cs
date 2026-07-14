@@ -51,6 +51,8 @@ public static class DependencyInjection
         services.AddScoped<ICosmeticRewardService>(sp => sp.GetRequiredService<CosmeticPlatformService>());
         services.AddScoped<ICosmeticAdminService>(sp => sp.GetRequiredService<CosmeticPlatformService>());
         services.AddScoped<IMobileCosmeticsService>(sp => sp.GetRequiredService<CosmeticPlatformService>());
+        services.AddScoped<CosmeticEntitlementService>();
+        services.AddScoped<ICosmeticEntitlementService>(sp => sp.GetRequiredService<CosmeticEntitlementService>());
         services.AddScoped<EconomyRewardCatalogService>();
         services.AddScoped<IEconomyRewardCatalogService>(sp => sp.GetRequiredService<EconomyRewardCatalogService>());
         services.AddScoped<EconomyTransactionService>();

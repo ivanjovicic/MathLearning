@@ -1,66 +1,24 @@
-using MathLearning.Infrastructure.Persistance;
-using Microsoft.EntityFrameworkCore;
-
 namespace MathLearning.Api.Endpoints;
 
 public static class PowerupEndpoints
 {
-    private const int StreakFreezeCost = 50;
-    private const int MaxStreakFreezes = 5;
-
     public static void MapPowerupEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/powerups")
             .RequireAuthorization()
             .WithTags("Powerups");
 
-        // ❄️ BUY STREAK FREEZE
-        group.MapPost("/streak-freeze/buy", async (
-            ApiDbContext db,
-            HttpContext ctx) =>
+        group.MapPost("/streak-freeze/buy", (HttpContext ctx) =>
         {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-
-            var profile = await db.UserProfiles
-                .FirstOrDefaultAsync(p => p.UserId == userId);
-
-            if (profile == null)
-                return Results.NotFound(new { error = "Profile not found" });
-
-            if (profile.StreakFreezeCount >= MaxStreakFreezes)
+            ctx.Response.Headers.Append("Sunset", "2026-10-01");
+            return Results.Json(new
             {
-                return Results.Json(new
-                {
-                    error = "Max streak freezes reached",
-                    max = MaxStreakFreezes,
-                    current = profile.StreakFreezeCount
-                }, statusCode: 409);
-            }
-
-            if (profile.Coins < StreakFreezeCost)
-            {
-                return Results.Json(new
-                {
-                    error = "Insufficient coins",
-                    required = StreakFreezeCost,
-                    current = profile.Coins
-                }, statusCode: 402);
-            }
-
-            profile.Coins -= StreakFreezeCost;
-            profile.TotalCoinsSpent += StreakFreezeCost;
-            profile.StreakFreezeCount++;
-            profile.UpdatedAt = DateTime.UtcNow;
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new
-            {
-                coins = profile.Coins,
-                streakFreezeCount = profile.StreakFreezeCount,
-                cost = StreakFreezeCost,
-                max = MaxStreakFreezes
-            });
+                success = false,
+                errorCode = "legacy_route_removed",
+                message = "Use canonical purchase settlement under /api/shop/streak-freeze/purchase.",
+                replacementRoute = "/api/shop/streak-freeze/purchase",
+                removalDate = "2026-10-01"
+            }, statusCode: StatusCodes.Status410Gone);
         })
         .WithName("BuyStreakFreeze");
     }

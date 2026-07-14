@@ -18,6 +18,15 @@ namespace MathLearning.Infrastructure.Services;
 /// </summary>
 public class StudentLeaderboardService : IStudentLeaderboardService
 {
+    private sealed record LeaderboardRow(
+        string UserId,
+        string? DisplayName,
+        string Username,
+        string? AvatarUrl,
+        int Streak,
+        int Level,
+        int Score);
+
     private readonly ApiDbContext _db;
     private readonly ILogger<StudentLeaderboardService> _logger;
     private readonly ICosmeticRewardService? _cosmeticRewardService;
@@ -67,12 +76,15 @@ public class StudentLeaderboardService : IStudentLeaderboardService
             _ => baseQuery
         };
 
-        var cur = CursorCodec.Decode(cursor);
-        if (cur is not null)
+        var normalizedScope = string.IsNullOrWhiteSpace(scope) ? "global" : scope.Trim().ToLowerInvariant();
+        var normalizedPeriod = string.IsNullOrWhiteSpace(period) ? "all_time" : period.Trim().ToLowerInvariant();
+        var cur = CursorCodec.DecodeStudentOrThrow(cursor, normalizedScope, normalizedPeriod);
+        var useClientStringOrdering = !_db.Database.IsRelational();
+        if (cur is not null && !useClientStringOrdering)
         {
             baseQuery = baseQuery.Where(u =>
                 ScoreSelector.ScoreOf(u, period) < cur.Score ||
-                (ScoreSelector.ScoreOf(u, period) == cur.Score && int.Parse(u.UserId) > cur.Id));
+                (ScoreSelector.ScoreOf(u, period) == cur.Score && u.UserId.CompareTo(cur.UserId!) > 0));
         }
 
         var orderedQuery = period.ToLowerInvariant() switch
@@ -83,19 +95,46 @@ public class StudentLeaderboardService : IStudentLeaderboardService
             _ => baseQuery.OrderByDescending(x => x.Xp).ThenBy(x => x.UserId)
         };
 
-        var page = await orderedQuery
-            .Take(limit + 1)
-            .Select(u => new
+        List<LeaderboardRow> page;
+        if (useClientStringOrdering)
+        {
+            var allRows = await orderedQuery
+                .Select(u => new LeaderboardRow(
+                    u.UserId,
+                    u.DisplayName,
+                    u.Username,
+                    u.AvatarUrl,
+                    u.Streak,
+                    u.Level,
+                    ScoreSelector.ScoreOf(u, period)))
+                .ToListAsync(ct);
+
+            if (cur is not null)
             {
-                u.UserId,
-                u.DisplayName,
-                u.Username,
-                u.AvatarUrl,
-                u.Streak,
-                u.Level,
-                Score = ScoreSelector.ScoreOf(u, period)
-            })
-            .ToListAsync(ct);
+                allRows = allRows
+                    .Where(u => u.Score < cur.Score ||
+                                (u.Score == cur.Score && StringComparer.Ordinal.Compare(u.UserId, cur.UserId) > 0))
+                    .ToList();
+            }
+
+            page = allRows
+                .Take(limit + 1)
+                .ToList();
+        }
+        else
+        {
+            page = (await orderedQuery
+                    .Take(limit + 1)
+                    .Select(u => new LeaderboardRow(
+                        u.UserId,
+                        u.DisplayName,
+                        u.Username,
+                        u.AvatarUrl,
+                        u.Streak,
+                        u.Level,
+                        ScoreSelector.ScoreOf(u, period)))
+                    .ToListAsync(ct));
+        }
 
         var hasMore = page.Count > limit;
         if (hasMore)
@@ -110,7 +149,7 @@ public class StudentLeaderboardService : IStudentLeaderboardService
         {
             var first = page[0];
             firstRank = await LeaderboardRankingUtils.ComputeRankAsync(
-                _db, scope, period, me, first.Score, int.Parse(first.UserId), userId, ct);
+                _db, normalizedScope, normalizedPeriod, me, first.Score, first.UserId, userId, ct);
         }
 
         var items = page.Select((x, i) => new LeaderboardItemDto
@@ -129,7 +168,7 @@ public class StudentLeaderboardService : IStudentLeaderboardService
         if (hasMore && page.Count > 0)
         {
             var last = page[^1];
-            nextCursor = CursorCodec.Encode(new LeaderboardCursor(last.Score, int.Parse(last.UserId)));
+            nextCursor = CursorCodec.EncodeStudent(last.Score, last.UserId, normalizedScope, normalizedPeriod);
         }
 
         LeaderboardMeDto? meDto = null;
@@ -137,8 +176,8 @@ public class StudentLeaderboardService : IStudentLeaderboardService
         {
             var myScore = ScoreSelector.ScoreOf(me, period);
             var myRank = await LeaderboardRankingUtils.ComputeRankAsync(
-                _db, scope, period, me, myScore, int.Parse(me.UserId), userId, ct);
-            var totalInScope = await LeaderboardRankingUtils.CountScopeAsync(_db, scope, me, userId, ct);
+                _db, normalizedScope, normalizedPeriod, me, myScore, me.UserId, userId, ct);
+            var totalInScope = await LeaderboardRankingUtils.CountScopeAsync(_db, normalizedScope, me, userId, ct);
 
             var percentile = totalInScope == 0
                 ? 100
@@ -154,8 +193,6 @@ public class StudentLeaderboardService : IStudentLeaderboardService
 
             if (_cosmeticRewardService is not null)
             {
-                var normalizedScope = string.IsNullOrWhiteSpace(scope) ? "global" : scope.Trim().ToLowerInvariant();
-                var normalizedPeriod = string.IsNullOrWhiteSpace(period) ? "all_time" : period.Trim().ToLowerInvariant();
                 var leaderboardSourceRef = BuildLeaderboardSourceRef(normalizedScope, normalizedPeriod);
 
                 await _cosmeticRewardService.ProcessRewardSourceAsync(

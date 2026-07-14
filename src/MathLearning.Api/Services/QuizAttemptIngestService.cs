@@ -3,6 +3,7 @@ using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace MathLearning.Api.Services;
 
@@ -32,15 +33,23 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
 
         var analyticsUserId = UserIdGuidMapper.FromIdentityUserId(userId);
         var subtopicIds = attempts.Select(x => x.SubtopicId).Distinct().ToList();
+        var attemptKeys = attempts.Select(x => x.AttemptKey).Distinct(StringComparer.Ordinal).ToList();
         var subtopicToTopic = await _db.Subtopics
             .AsNoTracking()
             .Where(x => subtopicIds.Contains(x.Id))
             .Select(x => new { x.Id, x.TopicId })
             .ToDictionaryAsync(x => x.Id, x => x.TopicId, ct);
+        var existingAttemptKeys = (await _db.QuizAttempts
+            .AsNoTracking()
+            .Where(x => attemptKeys.Contains(x.AttemptKey))
+            .Select(x => x.AttemptKey)
+            .ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
 
         var nowUtc = DateTime.UtcNow;
         var topicDelta = new Dictionary<int, (int Total, int Correct, DateTime LastAttempt)>();
         var subtopicDelta = new Dictionary<int, (int Total, int Correct, DateTime LastAttempt)>();
+        var persistedAttempts = 0;
 
         var useTransaction = _db.Database.IsRelational();
         await using var tx = useTransaction
@@ -49,12 +58,23 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
 
         foreach (var row in attempts)
         {
-            if (!subtopicToTopic.TryGetValue(row.SubtopicId, out var topicId))
+            if (existingAttemptKeys.Contains(row.AttemptKey))
                 continue;
 
-            _db.QuizAttempts.Add(new QuizAttempt
+            if (!subtopicToTopic.TryGetValue(row.SubtopicId, out var topicId))
+            {
+                _logger.LogWarning(
+                    "Skipping quiz attempt ingest because subtopic {SubtopicId} no longer exists. UserId={UserId} AttemptKeySuffix={AttemptKeySuffix}",
+                    row.SubtopicId,
+                    userId,
+                    row.AttemptKey.Length <= 12 ? row.AttemptKey : row.AttemptKey[^12..]);
+                continue;
+            }
+
+            var attempt = new QuizAttempt
             {
                 Id = Guid.NewGuid(),
+                AttemptKey = row.AttemptKey,
                 UserId = analyticsUserId,
                 QuizId = row.QuizId,
                 QuestionId = row.QuestionId,
@@ -63,7 +83,20 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
                 Correct = row.Correct,
                 TimeSpentMs = Math.Max(0, row.TimeSpentMs),
                 CreatedAt = row.CreatedAtUtc
-            });
+            };
+            _db.QuizAttempts.Add(attempt);
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                existingAttemptKeys.Add(row.AttemptKey);
+                persistedAttempts++;
+            }
+            catch (DbUpdateException ex) when (IsDuplicateAttemptKeyViolation(ex))
+            {
+                _db.Entry(attempt).State = EntityState.Detached;
+                existingAttemptKeys.Add(row.AttemptKey);
+                continue;
+            }
 
             topicDelta[topicId] = MergeDelta(topicDelta.GetValueOrDefault(topicId), row.Correct, row.CreatedAtUtc);
             subtopicDelta[row.SubtopicId] = MergeDelta(subtopicDelta.GetValueOrDefault(row.SubtopicId), row.Correct, row.CreatedAtUtc);
@@ -139,15 +172,30 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
         if (tx is not null)
             await tx.CommitAsync(ct);
 
+        if (persistedAttempts == 0)
+            return;
+
         _scheduler.Enqueue(analyticsUserId);
 
         _logger.LogInformation(
             "Quiz attempts ingested. UserId={UserId} AnalyticsUserId={AnalyticsUserId} Attempts={AttemptsCount} TopicStatsUpdated={TopicStats} SubtopicStatsUpdated={SubtopicStats}",
             userId,
             analyticsUserId,
-            attempts.Count,
+            persistedAttempts,
             topicDelta.Count,
             subtopicDelta.Count);
+    }
+
+    private static bool IsDuplicateAttemptKeyViolation(DbUpdateException ex)
+    {
+        return ex.InnerException switch
+        {
+            PostgresException pg when pg.SqlState == PostgresErrorCodes.UniqueViolation &&
+                                      string.Equals(pg.ConstraintName, "UX_quiz_attempt_attempt_key", StringComparison.Ordinal) => true,
+            Exception sqliteLike when string.Equals(sqliteLike.GetType().Name, "SqliteException", StringComparison.Ordinal) &&
+                                      sqliteLike.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) => true,
+            _ => false
+        };
     }
 
     private static (int Total, int Correct, DateTime LastAttempt) MergeDelta(

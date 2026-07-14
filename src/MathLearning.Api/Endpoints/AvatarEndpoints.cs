@@ -1,6 +1,7 @@
 using FluentValidation;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.Services;
+using MathLearning.Infrastructure.Persistance;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -100,6 +101,8 @@ public static class AvatarEndpoints
 
         group.MapPost("/purchase", async (
             PurchaseCosmeticRequest request,
+            ApiDbContext db,
+            ICosmeticsIdempotencyService idempotencyService,
             ICosmeticInventoryService inventoryService,
             HttpContext ctx,
             CancellationToken cancellationToken) =>
@@ -110,13 +113,71 @@ public static class AvatarEndpoints
                 return Results.Unauthorized();
             }
 
+            if (!CosmeticsEndpointHelpers.TryResolveMutationKeys(
+                    request.OperationId,
+                    request.IdempotencyKey,
+                    request.TransactionId,
+                    out var operationId,
+                    out var idempotencyKey,
+                    out var keyError))
+            {
+                return keyError!;
+            }
+
+            var beginTuple = await CosmeticsEndpointHelpers.TryBeginCosmeticsMutationAsync(
+                idempotencyService,
+                userId,
+                "cosmetics_shop_purchase",
+                operationId,
+                idempotencyKey,
+                new
+                {
+                    operationId,
+                    idempotencyKey,
+                    request.CosmeticItemId
+                },
+                cancellationToken);
+            if (beginTuple.Error is not null)
+            {
+                return beginTuple.Error;
+            }
+
+            var begin = beginTuple.Begin!;
+            var idempotencyResult = CosmeticsEndpointHelpers.HandleCosmeticsIdempotentDecision(begin, markAlreadyClaimed: false);
+            if (idempotencyResult is not null)
+            {
+                return idempotencyResult;
+            }
+
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, cancellationToken);
             try
             {
-                return Results.Ok(await inventoryService.PurchaseAsync(userId, request, cancellationToken));
+                var response = await inventoryService.PurchaseAsync(
+                    userId,
+                    request with { OperationId = operationId, IdempotencyKey = idempotencyKey },
+                    cancellationToken);
+                await idempotencyService.CompleteAsync(begin.LedgerId, response, cancellationToken);
+                if (dbTx is not null) await dbTx.CommitAsync(cancellationToken);
+                return Results.Ok(response);
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                var errorCode = ex.Message switch
+                {
+                    "Cosmetic item not found." => "invalid_item",
+                    "This item cannot be purchased with coins." => "not_purchasable",
+                    "This item is not available for purchase." => "not_purchasable",
+                    "This item is not yet released." => "not_purchasable",
+                    "This item is retired." => "not_purchasable",
+                    "Item already owned." => "already_owned",
+                    "Profile not found." => "profile_not_found",
+                    "Insufficient coins." => "insufficient_balance",
+                    _ => "purchase_failed"
+                };
+                var error = EconomyEndpointHelpers.BusinessError(errorCode, ex.Message);
+                await idempotencyService.FailAsync(begin.LedgerId, errorCode, error, cancellationToken);
+                if (dbTx is not null) await dbTx.CommitAsync(cancellationToken);
+                return Results.Conflict(error);
             }
         });
 

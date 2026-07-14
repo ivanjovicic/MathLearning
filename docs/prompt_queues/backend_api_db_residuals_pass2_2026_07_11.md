@@ -24,9 +24,9 @@ Before implementing any prompt:
 
 | ID | Priority | Status | Purpose | Dependencies / canonical links |
 |---|---:|---|---|---|
-| `BACKEND-API-DB-009` | P0 | Prompt-ready | Replace client-declared cosmetic item/fragment grants with server-authoritative entitlements. | Reuse existing cosmetics ledger; link `BACKEND-TEST-014`, `BACKEND-TEST-032/033` |
-| `BACKEND-API-DB-010` | P0 | Prompt-ready | Remove authoritative behavior from legacy coin/hint/power-up bypass routes. | Link `BACKEND-TEST-034`, `BE-PERF-008`, `BACKEND-API-DB-015` |
-| `BACKEND-API-DB-011` | P0 | Prompt-ready | Make student leaderboard cursor/ranking compatible with string Identity user IDs. | PostgreSQL proof via `BACKEND-TEST-032`; precedes `BACKEND-API-DB-012` |
+| `BACKEND-API-DB-009` | P0 | Runtime-fixed / Needs schema validation | Replace client-declared cosmetic item/fragment grants with server-authoritative entitlements. | Run log `.ai/runs/2026-07-14-BACKEND-API-DB-009-evidence.md`; schema validator still blocked on local PostgreSQL |
+| `BACKEND-API-DB-010` | P0 | Runtime-fixed | Remove authoritative behavior from legacy coin/hint/power-up bypass routes. | Run log `.ai/runs/2026-07-14-BACKEND-API-DB-010-evidence.md`; follow-up is consumer cleanup and final route retirement |
+| `BACKEND-API-DB-011` | P0 | Runtime-fixed | Make student leaderboard cursor/ranking compatible with string Identity user IDs. | Run log `.ai/runs/2026-07-14-BACKEND-API-DB-011-evidence.md`; PostgreSQL `EXPLAIN` proof still pending before parity work in `BACKEND-API-DB-012` |
 | `BACKEND-API-DB-012` | P1 | Prompt-ready | Make Redis and DB leaderboard implementations contract-equivalent for scope, cursor, rank and failover. | Depends on `BACKEND-API-DB-011`; link `BE-PERF-004/005/008` |
 | `BACKEND-API-DB-013` | P1 | Prompt-ready | Unify registration ownership and repair/prevent incomplete Identity-only accounts. | Link registration atomicity tests and mobile contract sync |
 | `BACKEND-API-DB-014` | P1 | Prompt-ready | Retire or correctly rebuild the legacy photo-avatar contract and durable storage path. | Preserve validated file-safety work in `BACKEND-TEST-008` |

@@ -94,6 +94,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     public DbSet<UserAvatarConfig> UserAvatarConfigs => Set<UserAvatarConfig>();
     public DbSet<CosmeticRewardRule> CosmeticRewardRules => Set<CosmeticRewardRule>();
     public DbSet<CosmeticRewardClaim> CosmeticRewardClaims => Set<CosmeticRewardClaim>();
+    public DbSet<CosmeticEntitlement> CosmeticEntitlements => Set<CosmeticEntitlement>();
     public DbSet<SeasonRewardTrackEntry> SeasonRewardTrackEntries => Set<SeasonRewardTrackEntry>();
     public DbSet<UserAppearanceProjection> UserAppearanceProjections => Set<UserAppearanceProjection>();
     public DbSet<UserCosmeticLoadoutProjection> UserCosmeticLoadoutProjections => Set<UserCosmeticLoadoutProjection>();
@@ -1001,11 +1002,15 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
         {
             entity.ToTable("quiz_attempt");
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.AttemptKey).IsRequired().HasMaxLength(160);
             entity.Property(e => e.UserId).IsRequired();
             entity.Property(e => e.QuizId).IsRequired();
             entity.Property(e => e.TimeSpentMs).HasDefaultValue(0);
             entity.Property(e => e.CreatedAt).IsRequired();
 
+            entity.HasIndex(e => e.AttemptKey)
+                  .IsUnique()
+                  .HasDatabaseName("UX_quiz_attempt_attempt_key");
             entity.HasIndex(e => new { e.UserId, e.CreatedAt })
                   .HasDatabaseName("IX_quiz_attempt_user_created_at");
             entity.HasIndex(e => new { e.UserId, e.TopicId, e.CreatedAt })
@@ -1508,6 +1513,35 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                 .HasDatabaseName("UX_cosmetic_reward_claims_user_reward_source");
             entity.HasIndex(e => new { e.UserId, e.ClaimedAtUtc })
                 .HasDatabaseName("IX_cosmetic_reward_claims_user_claimed_at");
+        });
+
+        builder.Entity<CosmeticEntitlement>(entity =>
+        {
+            entity.ToTable("cosmetic_entitlements");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.EntitlementType).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.SourceType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SourceRef).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.OperationKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.GrantedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ConsumedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ConsumedOperationType).HasMaxLength(64);
+            entity.Property(e => e.ConsumedOperationId).HasMaxLength(128);
+            entity.Property(e => e.ConsumedIdempotencyKey).HasMaxLength(128);
+
+            entity.HasOne(e => e.CosmeticItem)
+                .WithMany()
+                .HasForeignKey(e => e.CosmeticItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.UserId, e.OperationKey })
+                .IsUnique()
+                .HasDatabaseName("UX_cosmetic_entitlements_user_operation");
+            entity.HasIndex(e => new { e.UserId, e.EntitlementType, e.ConsumedAtUtc })
+                .HasDatabaseName("IX_cosmetic_entitlements_user_type_consumed");
+            entity.HasIndex(e => new { e.UserId, e.SourceType, e.SourceRef, e.CosmeticItemId, e.Quantity })
+                .HasDatabaseName("IX_cosmetic_entitlements_user_source_item_quantity");
         });
 
         builder.Entity<SeasonRewardTrackEntry>(entity =>

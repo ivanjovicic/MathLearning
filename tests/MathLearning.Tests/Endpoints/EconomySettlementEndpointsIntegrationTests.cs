@@ -1144,13 +1144,25 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         var userId = $"user-item-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId, coins: 100);
         var cometItemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
-        await EnsureCosmeticItemAsync("effect_nova_trail", "Nova Trail");
+        var novaItemId = await EnsureCosmeticItemAsync("effect_nova_trail", "Nova Trail");
+        var cometEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            cometItemId,
+            "reward_track",
+            "season:economy:item:comet");
+        var novaEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            novaItemId,
+            "reward_track",
+            "season:economy:item:nova");
 
         var first = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
             operationId = "item-key-1",
             idempotencyKey = "item-key-1",
-            source = "reward"
+            entitlementId = cometEntitlement.Id
         });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
@@ -1161,7 +1173,7 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         {
             operationId = "item-key-2",
             idempotencyKey = "item-key-2",
-            source = "reward"
+            entitlementId = cometEntitlement.Id
         });
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         var secondPayload = await second.Content.ReadFromJsonAsync<JsonElement>();
@@ -1172,7 +1184,7 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         {
             operationId = "item-key-3",
             idempotencyKey = "item-key-3",
-            source = "reward"
+            entitlementId = novaEntitlement.Id
         });
         Assert.Equal(HttpStatusCode.OK, third.StatusCode);
         var thirdPayload = await third.Content.ReadFromJsonAsync<JsonElement>();
@@ -1183,24 +1195,24 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         {
             operationId = "item-key-invalid",
             idempotencyKey = "item-key-invalid",
-            source = "reward"
+            entitlementId = cometEntitlement.Id
         });
         Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
         var invalidPayload = await invalid.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("invalid_item", invalidPayload.GetProperty("errorCode").GetString());
+        Assert.Equal("entitlement_mismatch", invalidPayload.GetProperty("errorCode").GetString());
 
         var retry = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
             operationId = "item-key-retry",
             idempotencyKey = "item-key-retry",
-            source = "reward"
+            entitlementId = cometEntitlement.Id
         });
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var retryAgain = await PostAsUserAsync(userId, "/api/cosmetics/items/frame_comet/claim", new
         {
             operationId = "item-key-retry",
             idempotencyKey = "item-key-retry",
-            source = "reward"
+            entitlementId = cometEntitlement.Id
         });
         Assert.Equal(HttpStatusCode.OK, retryAgain.StatusCode);
         Assert.Equal(1, await CountOwnedItemAsync(userId, cometItemId));
@@ -1212,14 +1224,28 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         var userId = $"user-fragment-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId, coins: 100);
         var unlockItemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var firstEntitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            unlockItemId,
+            5,
+            "season_milestone",
+            "season:economy:fragment:first");
+        var secondEntitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            unlockItemId,
+            1,
+            "season_milestone",
+            "season:economy:fragment:second");
 
         var grant = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", new
         {
             operationId = "frag-key-1",
             idempotencyKey = "frag-key-1",
+            entitlementId = firstEntitlement.Id,
             fragmentName = "Comet Frame Fragment",
-            copies = 5,
-            source = "reward"
+            copies = 5
         });
         Assert.Equal(HttpStatusCode.OK, grant.StatusCode);
         var grantPayload = await grant.Content.ReadFromJsonAsync<JsonElement>();
@@ -1232,9 +1258,9 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         {
             operationId = "frag-key-1",
             idempotencyKey = "frag-key-1",
+            entitlementId = firstEntitlement.Id,
             fragmentName = "Comet Frame Fragment",
-            copies = 5,
-            source = "reward"
+            copies = 5
         });
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var retryPayload = await retry.Content.ReadFromJsonAsync<JsonElement>();
@@ -1244,9 +1270,9 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         {
             operationId = "frag-key-2",
             idempotencyKey = "frag-key-2",
+            entitlementId = secondEntitlement.Id,
             fragmentName = "Comet Frame Fragment",
-            copies = 1,
-            source = "reward"
+            copies = 1
         });
         Assert.Equal(HttpStatusCode.OK, secondGrant.StatusCode);
 
@@ -1651,7 +1677,15 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
 
         var existing = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Key == key);
         if (existing is not null)
+        {
+            if (key == "frame_comet" && string.IsNullOrWhiteSpace(existing.FragmentLabel))
+            {
+                existing.FragmentLabel = "Comet Frame Fragment";
+                existing.FragmentsRequired = 5;
+                await db.SaveChangesAsync();
+            }
             return existing.Id;
+        }
 
         var item = new CosmeticItem
         {
@@ -1661,6 +1695,8 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             Rarity = "common",
             AssetPath = "/assets/test.png",
             UnlockType = CosmeticUnlockTypes.RewardRule,
+            FragmentLabel = key == "frame_comet" ? "Comet Frame Fragment" : null,
+            FragmentsRequired = key == "frame_comet" ? 5 : null,
             IsActive = true,
             AssetVersion = "1"
         };

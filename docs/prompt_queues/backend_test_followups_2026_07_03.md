@@ -17,7 +17,7 @@ Target repo: `ivanjovicic/MathLearning`
 
 | ID | Priority | Status | Purpose |
 |---|---|---|---|
-| BACKEND-TEST-022 | P0 | Prompt-ready | Durable, idempotent delivery of quiz/offline attempts to analytics after authoritative settlement. |
+| BACKEND-TEST-022 | P0 | Runtime-fixed / Needs schema validation | Durable quiz/offline analytics ingest now uses transactional outbox handoff plus `AttemptKey` dedupe; focused tests passed, schema script still needs reachable PostgreSQL. |
 | BACKEND-TEST-023 | P0/P1 | Runtime-fixed / Workflow validation needed | Multi-instance-safe outbox claiming now uses `FOR UPDATE SKIP LOCKED` plus retry/dead-letter state; PostgreSQL proof still needs CI or valid local credentials. |
 | BACKEND-TEST-024 | P1 | Prompt-ready | Make maintenance routes testable/read-only where appropriate and add positive admin tests. |
 | BACKEND-TEST-025 | P1 | Prompt-ready | Bound bug report input/screenshot handling and prevent orphan screenshot storage. |
@@ -69,6 +69,12 @@ Quiz/offline answer settlement commits authoritative answer/XP state before `IQu
 4. Make consumer retries idempotent for attempt rows and topic/subtopic stats.
 5. Do not return failure after authoritative settlement merely because asynchronous analytics delivery is pending.
 6. Add observability for pending/retried/failed ingest without raw payload leakage.
+
+Status update 2026-07-14:
+
+- Implemented by enqueuing `QuizAttemptIngestRequested` into the shared outbox from the same `ApiDbContext` transaction that writes authoritative answer/audit state.
+- Added stable `AttemptKey` dedupe on `quiz_attempt`, plus endpoint tests proving client success while pending ingest remains recoverable.
+- Focused runtime tests and `has-pending-model-changes` passed; `scripts/db/validate-schema.ps1` timed out because no reachable local PostgreSQL instance was available for full schema validation.
 
 ### Required tests
 

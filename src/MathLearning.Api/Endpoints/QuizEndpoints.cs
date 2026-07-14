@@ -4,6 +4,7 @@ using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Api.Services;
 using MathLearning.Domain.Entities;
+using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Infrastructure.Services;
@@ -162,7 +163,6 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx,
             MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
-            IQuizAttemptIngestService ingestService,
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             IIdempotencyLedgerService idempotencyService,
@@ -317,14 +317,6 @@ public static class QuizEndpoints
                 if (processingResult.IsReplay)
                     return processingResult.ReplayResult!;
 
-                if (processingResult.ShouldIngest && processingResult.AttemptResult?.IngestItem != null)
-                {
-                    await ingestService.IngestAttemptsAsync(
-                        userId,
-                        [processingResult.AttemptResult.IngestItem],
-                        ctx.RequestAborted);
-                }
-
                 return Results.Ok(processingResult.ResponseBody!);
             }
 
@@ -372,14 +364,6 @@ public static class QuizEndpoints
                 ctx.RequestAborted,
                 uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
 
-            if (legacyProcessingResult.AttemptResult.IngestItem != null)
-            {
-                await ingestService.IngestAttemptsAsync(
-                    userId,
-                    [legacyProcessingResult.AttemptResult.IngestItem],
-                    ctx.RequestAborted);
-            }
-
             var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
             var legacyResponse = await BuildSubmitAnswerResponseAsync(
                 db,
@@ -397,7 +381,6 @@ public static class QuizEndpoints
             OfflineBatchSubmitRequest request,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService,
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             ILogger<Program> logger) =>
@@ -407,7 +390,6 @@ public static class QuizEndpoints
                 request,
                 db,
                 ctx,
-                ingestService,
                 xpTrackingService,
                 xpTrackingOptions.Value.EnableAntiCheat,
                 logger,
@@ -419,7 +401,6 @@ public static class QuizEndpoints
             JsonElement payload,
             ApiDbContext db,
             HttpContext ctx,
-            IQuizAttemptIngestService ingestService,
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             ILogger<Program> logger) =>
@@ -475,7 +456,6 @@ public static class QuizEndpoints
                 new OfflineBatchSubmitRequest(sessionToken, answers),
                 db,
                 ctx,
-                ingestService,
                 xpTrackingService,
                 xpTrackingOptions.Value.EnableAntiCheat,
                 logger,
@@ -690,7 +670,6 @@ public static class QuizEndpoints
         OfflineBatchSubmitRequest request,
         ApiDbContext db,
         HttpContext ctx,
-        IQuizAttemptIngestService ingestService,
         XpTrackingService xpTrackingService,
         bool enableAntiCheat,
         ILogger logger,
@@ -718,7 +697,7 @@ public static class QuizEndpoints
             timestampIssues.AddRange(upstreamIssues);
 
         var transactionResult = normalizedAnswers.Count == 0
-            ? new OfflineBatchTransactionResult(0, Array.Empty<QuizAttemptIngestItem>())
+            ? new OfflineBatchTransactionResult(0)
             : await ProcessOfflineBatchAsync(
                 db,
                 xpTrackingService,
@@ -728,9 +707,6 @@ public static class QuizEndpoints
                 normalizedAnswers,
                 enableAntiCheat,
                 ctx.RequestAborted);
-
-        if (transactionResult.IngestRows.Count > 0)
-            await ingestService.IngestAttemptsAsync(userId, transactionResult.IngestRows, ctx.RequestAborted);
 
         var overview = await CalculateUserOverview(db, userId);
 
@@ -810,7 +786,6 @@ public static class QuizEndpoints
                     .ToDictionaryAsync(q => q.Id, cancellationToken);
 
                 var imported = 0;
-                var ingestRows = new List<QuizAttemptIngestItem>(answers.Count);
 
                 foreach (var answer in answers)
                 {
@@ -843,11 +818,9 @@ public static class QuizEndpoints
                         continue;
 
                     imported++;
-                    if (result.IngestItem != null)
-                        ingestRows.Add(result.IngestItem);
                 }
 
-                return new OfflineBatchTransactionResult(imported, ingestRows);
+                return new OfflineBatchTransactionResult(imported);
             },
             cancellationToken,
             uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
@@ -1018,12 +991,30 @@ public static class QuizEndpoints
         });
 
         var ingestItem = new QuizAttemptIngestItem(
+            AttemptKey: BuildQuizAttemptIngestKey(
+                userId,
+                input.QuizSessionId,
+                input.QuestionId,
+                input.AnsweredAtUtc,
+                input.Source),
             QuizId: input.QuizSessionId,
             QuestionId: input.QuestionId,
             SubtopicId: input.Question.SubtopicId,
             Correct: isCorrect,
             TimeSpentMs: Math.Max(0, input.TimeSpentSeconds) * 1000,
             CreatedAtUtc: input.AnsweredAtUtc);
+
+        QuizAttemptIngestOutbox.Enqueue(
+            db,
+            new QuizAttemptIngestRequested(
+                userId,
+                ingestItem.AttemptKey,
+                ingestItem.QuizId,
+                ingestItem.QuestionId,
+                ingestItem.SubtopicId,
+                ingestItem.Correct,
+                ingestItem.TimeSpentMs,
+                ingestItem.CreatedAtUtc));
 
         return new AnswerAttemptResult(
             WasImported: true,
@@ -1168,6 +1159,14 @@ public static class QuizEndpoints
 
     private static string BuildAnswerKey(int questionId, DateTime answeredAt)
         => $"{questionId}:{answeredAt.Ticks}";
+
+    private static string BuildQuizAttemptIngestKey(
+        string userId,
+        Guid quizSessionId,
+        int questionId,
+        DateTime answeredAtUtc,
+        string source)
+        => $"{source}:{userId}:{quizSessionId:N}:{questionId}:{answeredAtUtc.Ticks}";
 
     // ?? Helper za resolving user language
     private static async Task<string> ResolveUserLang(
@@ -1361,9 +1360,7 @@ public static class QuizEndpoints
         public IResult Result { get; } = result;
     }
 
-    private sealed record OfflineBatchTransactionResult(
-        int ImportedCount,
-        IReadOnlyList<QuizAttemptIngestItem> IngestRows);
+    private sealed record OfflineBatchTransactionResult(int ImportedCount);
 }
 
 

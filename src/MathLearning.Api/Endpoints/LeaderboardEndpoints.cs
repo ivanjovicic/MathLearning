@@ -7,6 +7,7 @@ using MathLearning.Core.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Infrastructure.Services.Performance;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -246,11 +247,24 @@ public static class LeaderboardEndpoints
             scope = NormalizeLeaderboardScope(scope, "global");
             period = NormalizeLeaderboardPeriod(period, "all_time");
             limit = Math.Clamp(limit, 1, MaxLeaderboardLimit);
-            var result = await studentLeaderboardService.GetLeaderboardAsync(userId, scope, period, limit, cursor, includeMe, ct);
-            return Results.Ok(result);
+            try
+            {
+                var result = await studentLeaderboardService.GetLeaderboardAsync(userId, scope, period, limit, cursor, includeMe, ct);
+                return Results.Ok(result);
+            }
+            catch (LeaderboardCursorException ex)
+            {
+                return Results.BadRequest(new
+                {
+                    success = false,
+                    errorCode = ex.ErrorCode,
+                    message = ex.Message
+                });
+            }
         })
         .WithName("GetStudentLeaderboard")
-        .WithSummary("Get student leaderboard (DB-backed, full cosmetics and badge processing)");
+        .WithSummary("Get student leaderboard (DB-backed, full cosmetics and badge processing)")
+        .WithDescription("Uses a versioned student cursor bound to normalized scope and period. Invalid, mismatched, or unsupported student cursors return 400.");
 
         group.MapPost("/admin/add-xp/{userId}", async (
             [FromServices] IXpTrackingService xpService,

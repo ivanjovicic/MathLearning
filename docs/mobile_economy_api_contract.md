@@ -26,9 +26,11 @@ Business errors return:
 
 ## Legacy Endpoints (Not Used by Flutter Runtime)
 The following endpoints are NOT called by Flutter runtime and exist only for non-mobile backward compatibility:
-- `POST /api/coins/earn` — deprecated; use `POST /api/economy/rewards/claim` instead
-- `POST /api/coins/spend` — deprecated; use `POST /api/economy/coins/spend` (Flutter endpoint below)
-- `POST /api/cosmetics/purchase` — deprecated; use `POST /api/cosmetics/items/{itemKey}/claim` instead
+- `POST /api/coins/earn` - returns `410 Gone`; use `POST /api/economy/rewards/claim` instead
+- `POST /api/coins/spend` - returns `410 Gone`; use `POST /api/economy/coins/spend` (Flutter endpoint below)
+- `POST /api/powerups/streak-freeze/buy` - returns `410 Gone`; use `POST /api/shop/streak-freeze/purchase`
+- `GET /api/questions/{id}/hint/formula|clue` and `POST /api/questions/{id}/hint/eliminate` - return `410 Gone`; unlock through `POST /api/economy/hints/use`, then read via `GET /api/hints/questions/{id}/*`
+- `POST /api/cosmetics/purchase` - canonical server-priced shop purchase path for coin-bought cosmetics
 
 ## Endpoints
 
@@ -55,6 +57,10 @@ Request:
 }
 ```
 Server validates hint type/cost and returns authoritative `coins`, `freeHints`, `spentCoins`, `usedFreeHint`.
+Hint content retrieval is read-only after settlement:
+- locked `GET /api/hints/questions/{id}/formula|clue|solution` returns `200` with `requiresUnlock=true` and no mutation;
+- unlocked reads return stored content with `alreadyUsed=true` and `cost=0`;
+- `POST /api/hints/questions/{id}/eliminate` only replays an already unlocked elimination result and otherwise returns `409 hint_not_unlocked`.
 
 ### 3) `GET /api/economy/rewards/preview`
 Query params:
@@ -181,15 +187,13 @@ Request:
 {
   "operationId": "string",
   "idempotencyKey": "string",
-  "transactionId": "optional-daily-run-alias",
-  "source": "season|dailyRun|shop|admin|reward",
-  "metadata": {}
+  "entitlementId": "guid"
 }
 ```
 Path parameter `itemKey` is the public cosmetic key used by mobile inventory/catalog (for example `frame_comet`, `effect_nova_trail`), not a numeric database id.
-Server resolves ownership; response returns refreshed `inventory` (string item keys) and `fragmentProgress`.
-Idempotency is scoped per authenticated `userId`. Both `operationId` and `idempotencyKey` are required unless `transactionId` is supplied (Daily Run), in which case it may satisfy both.
-Duplicate retries with the same keys replay `alreadyClaimed: true`. Payload conflicts return `409` with `conflict: true` and `errorCode: "idempotency_conflict"`.
+Server resolves the granted item and provenance from the stored entitlement. Client `source`, `sourceType`, `sourceEvent`, price and metadata are not authoritative for this route.
+Idempotency is scoped per authenticated `userId`. `operationId` and `idempotencyKey` are required.
+Missing entitlement returns `409 not_eligible`. Route/key mismatches return `409 entitlement_mismatch`. Duplicate retries with the same keys replay `alreadyClaimed: true`. Same keys with a different `entitlementId` return `409 idempotency_conflict`.
 
 ### 8) `POST /api/cosmetics/fragments/grant`
 Request:
@@ -198,16 +202,31 @@ Request:
   "operationId": "string",
   "idempotencyKey": "string",
   "transactionId": "optional-daily-run-alias",
+  "entitlementId": "guid for non-daily-run flows",
   "fragmentName": "Comet Frame Fragment",
   "copies": 1,
-  "source": "dailyRun|season|reward",
-  "metadata": {}
+  "source": "dailyRun"
 }
 ```
+For Daily Run, server derives `fragmentName` and `copies` from `DailyRunChestClaim` plus completed season settlement for the same `transactionId`.
+For every non-Daily-Run flow, server derives fragment target, quantity and provenance from the stored entitlement. Client `fragmentName`, `copies`, `source`, `sourceType`, `sourceEvent` and metadata are not authoritative.
 Server increments fragment progress once per idempotency scope and may unlock mapped item server-side.
 Daily Run clients should send the chest `transactionId` as `idempotencyKey` (and may reuse it as `operationId`).
 Every settled response includes authoritative `progress { itemId, collectedFragments, requiredFragments, updatedAt, unlockedAt }` plus refreshed `inventory` and `fragmentProgress`.
 When the threshold is reached, response also includes `unlockedItemId` and optional `unlockedInventory`.
+
+### 9) `POST /api/cosmetics/purchase`
+Request:
+```json
+{
+  "operationId": "string",
+  "idempotencyKey": "string",
+  "cosmeticItemId": 123
+}
+```
+Server derives current price, release/retirement visibility and purchase eligibility from the catalog. Client price/source metadata is ignored.
+Duplicate retries with the same keys replay the original purchase result. Same keys with a different item return `409 idempotency_conflict`.
+Hidden, inactive, unreleased, retired, default-only and non-purchasable items return `409 not_purchasable`. Insufficient balance returns `409 insufficient_balance`.
 
 ## Flutter Methods to Replace
 - `CoinProvider.trySpendCoins`
@@ -237,7 +256,7 @@ Cross-device correctness depends on backend idempotency + authoritative refresh:
 - Admin-only reward overrides are exposed through a separate authenticated admin endpoint: `POST /api/admin/economy/rewards/grant`. They are not supported by the mobile runtime endpoint.
 - Admin overrides are audited in a dedicated `admin_economy_reward_grants` table and duplicate `grantId` values for the same user do not mint twice.
 - `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` provenance as authority and returns `fragmentGrant { transactionId, fragmentName, copies }` for the follow-up cosmetics grant.
-- `POST /api/cosmetics/fragments/grant` with `source`/`sourceType = dailyRun` requires a matching `DailyRunChestClaim` and completed season daily-run settlement for the same `transactionId`. Server uses chest-authoritative `fragmentName` and `copies` (1–3); mobile should send `operationId` = `idempotencyKey` = chest `transactionId`.
+- `POST /api/cosmetics/fragments/grant` with `source`/`sourceType = dailyRun` requires a matching `DailyRunChestClaim` and completed season daily-run settlement for the same `transactionId`. Server uses chest-authoritative `fragmentName` and `copies` (1-3); mobile should send `operationId` = `idempotencyKey` = chest `transactionId`.
 - All new economy settlement endpoints require auth and `idempotencyKey`.
 - Same `idempotencyKey` with a different request payload returns `409` with `errorCode = "idempotency_conflict"`.
 - Business failures do not mint rewards or mutate balances/progress.

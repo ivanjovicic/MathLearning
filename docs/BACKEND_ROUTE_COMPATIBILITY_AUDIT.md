@@ -32,7 +32,7 @@ It does **not** remove routes. It only documents ownership, auth behavior, evide
 | `/api/leaderboard/friends` | `LeaderboardEndpoints.cs` | Mixed/Auth | `LeaderboardEndpointsIntegrationTests.cs` | Keep canonical. Freeze `/api/leaderboard/rivals` as the compatibility alias. |
 | `/api/leaderboard/global` | `LeaderboardEndpoints.cs` | Mixed/Auth | `LeaderboardEndpointsIntegrationTests.cs` | Keep canonical. |
 | `/api/leaderboard/schools*` | `LeaderboardEndpoints.cs` | Mixed/Auth | `LeaderboardEndpointsIntegrationTests.cs` | Keep canonical. |
-| `/api/leaderboard/student` | `LeaderboardEndpoints.cs` | Mixed/Auth | leaderboard endpoint coverage | Keep canonical. |
+| `/api/leaderboard/student` | `LeaderboardEndpoints.cs` | Mixed/Auth | `StudentLeaderboardStringIdentityIntegrationTests.cs`, `LeaderboardCursorCodecTests.cs` | Keep canonical. String-safe v2 cursor is bound to normalized scope/period and bad cursors return `400`. |
 | `/api/users/profile` | `UserEndpoints.cs` | Auth | user/profile contract tests | Keep canonical mobile profile bootstrap. |
 | `/api/cosmetics/avatar` | `CosmeticsEndpoints.cs` | Auth | `MobileCompatibilityEndpointsIntegrationTests.cs`, `MobileCosmetics*` tests | Keep canonical avatar surface. |
 

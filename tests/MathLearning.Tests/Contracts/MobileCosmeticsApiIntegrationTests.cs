@@ -35,6 +35,12 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
         var userId = NewUserId("claim-first");
         await EnsureUserAsync(userId);
         var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:api:claim-first");
 
         var idempotencyKey = $"claim-first-{Guid.NewGuid():N}";
         var response = await PostAsUserAsync(
@@ -43,6 +49,7 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: idempotencyKey,
                 sourceType: "reward",
+                entitlementId: entitlement.Id,
                 sourceEvent: "level:7"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -61,11 +68,18 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
         var userId = NewUserId("claim-replay");
         await EnsureUserAsync(userId);
         var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:api:claim-replay");
 
         const string idempotencyKey = "claim-replay-key";
         var claimPayload = MobileEconomyContractPayloads.CosmeticItemClaim(
             idempotencyKey: idempotencyKey,
             sourceType: "reward",
+            entitlementId: entitlement.Id,
             sourceEvent: "level:7");
 
         var first = await PostAsUserAsync(userId, $"/api/cosmetics/items/{FrameCometKey}/claim", claimPayload);
@@ -90,12 +104,25 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     {
         var userId = NewUserId("claim-conflict");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:api:claim-conflict");
+        var secondEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:api:claim-conflict:2");
 
         const string idempotencyKey = "claim-conflict-key";
         var firstPayload = MobileEconomyContractPayloads.CosmeticItemClaim(
             idempotencyKey: idempotencyKey,
             sourceType: "reward",
+            entitlementId: entitlement.Id,
             sourceEvent: "level:7",
             metadata: new Dictionary<string, object?> { ["sourceEvent"] = "level:7" });
 
@@ -105,6 +132,7 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
         var conflictPayload = MobileEconomyContractPayloads.CosmeticItemClaim(
             idempotencyKey: idempotencyKey,
             sourceType: "reward",
+            entitlementId: secondEntitlement.Id,
             sourceEvent: "milestone:2",
             metadata: new Dictionary<string, object?> { ["sourceEvent"] = "milestone:2" });
 
@@ -120,7 +148,14 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     {
         var userId = NewUserId("frag-increment");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            2,
+            "season_milestone",
+            "season:api:frag-increment");
 
         const string idempotencyKey = "frag-increment-1";
         var response = await PostAsUserAsync(
@@ -129,7 +164,8 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
             MobileEconomyContractPayloads.CosmeticFragmentGrant(
                 idempotencyKey: idempotencyKey,
                 fragmentName: FrameCometFragment,
-                copies: 2));
+                copies: 2,
+                entitlementId: entitlement.Id));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await ReadJsonAsync(response);
@@ -145,13 +181,21 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     {
         var userId = NewUserId("frag-replay");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            2,
+            "season_milestone",
+            "season:api:frag-replay");
 
         const string transactionId = "frag-tx-replay-001";
         var grantPayload = MobileEconomyContractPayloads.CosmeticFragmentGrant(
             idempotencyKey: transactionId,
             fragmentName: FrameCometFragment,
             copies: 2,
+            entitlementId: entitlement.Id,
             transactionId: transactionId);
 
         var first = await PostAsUserAsync(userId, "/api/cosmetics/fragments/grant", grantPayload);
@@ -175,6 +219,13 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
         var userId = NewUserId("frag-unlock");
         await EnsureUserAsync(userId);
         var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            FrameCometFragmentsRequired,
+            "season_milestone",
+            "season:api:frag-unlock");
 
         var response = await PostAsUserAsync(
             userId,
@@ -182,7 +233,8 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
             MobileEconomyContractPayloads.CosmeticFragmentGrant(
                 idempotencyKey: $"frag-unlock-{Guid.NewGuid():N}",
                 fragmentName: FrameCometFragment,
-                copies: FrameCometFragmentsRequired));
+                copies: FrameCometFragmentsRequired,
+                entitlementId: entitlement.Id));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await ReadJsonAsync(response);
@@ -199,15 +251,22 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     {
         var userId = NewUserId("avatar-403");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
         await EnsureCosmeticItemAsync("frame_not_owned", "Locked Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:api:avatar-403");
 
         await PostAsUserAsync(
             userId,
             $"/api/cosmetics/items/{FrameCometKey}/claim",
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: $"avatar-claim-{Guid.NewGuid():N}",
-                sourceType: "reward"));
+                sourceType: "reward",
+                entitlementId: entitlement.Id));
 
         var response = await PutAsUserAsync(
             userId,
@@ -225,14 +284,21 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     {
         var userId = NewUserId("avatar-persist");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame", category: "frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame", category: "frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:api:avatar-persist");
 
         await PostAsUserAsync(
             userId,
             $"/api/cosmetics/items/{FrameCometKey}/claim",
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: $"avatar-persist-claim-{Guid.NewGuid():N}",
-                sourceType: "reward"));
+                sourceType: "reward",
+                entitlementId: entitlement.Id));
 
         var putResponse = await PutAsUserAsync(
             userId,
@@ -278,7 +344,14 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
     {
         var userId = NewUserId("inventory-authoritative");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            FrameCometFragmentsRequired,
+            "season_milestone",
+            "season:api:inventory-authoritative");
 
         var grant = await PostAsUserAsync(
             userId,
@@ -286,7 +359,8 @@ public sealed class MobileCosmeticsApiIntegrationTests : IClassFixture<CustomWeb
             MobileEconomyContractPayloads.CosmeticFragmentGrant(
                 idempotencyKey: $"inventory-unlock-{Guid.NewGuid():N}",
                 fragmentName: FrameCometFragment,
-                copies: FrameCometFragmentsRequired));
+                copies: FrameCometFragmentsRequired,
+                entitlementId: entitlement.Id));
         Assert.Equal(HttpStatusCode.OK, grant.StatusCode);
         var grantPayload = await ReadJsonAsync(grant);
         Assert.True(grantPayload.GetProperty("itemUnlocked").GetBoolean());

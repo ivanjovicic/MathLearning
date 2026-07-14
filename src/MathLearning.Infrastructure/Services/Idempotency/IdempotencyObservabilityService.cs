@@ -94,6 +94,7 @@ public sealed class IdempotencyObservabilityService
         {
             "cosmetics_item_claim" => "POST /api/cosmetics/items/{itemKey}/claim",
             "cosmetics_fragment_grant" => "POST /api/cosmetics/fragments/grant",
+            "cosmetics_shop_purchase" => "POST /api/cosmetics/purchase",
             _ => $"operation:{operationType}"
         };
     }

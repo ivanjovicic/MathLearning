@@ -46,6 +46,11 @@ Contract coverage: `MobileMutationContractIntegrationTests.cs`, `MobileApiRouteC
 - `CosmeticItemClaimRequest` binds `sourceType` and `sourceEvent`; canonical hash includes `source`, `sourceEvent`, and `metadata`.
 - Same keys with different `sourceEvent` (even without metadata change) → `409` + `idempotency_conflict`.
 - Fragment grant hash also includes `sourceEvent` when provided.
+- `POST /api/cosmetics/items/{itemKey}/claim` now requires a server-issued `CosmeticEntitlement` and derives item/source provenance from that record.
+- Non-Daily-Run `POST /api/cosmetics/fragments/grant` now requires a server-issued `CosmeticEntitlement`; Daily Run still derives from `DailyRunChestClaim` plus completed season settlement.
+- Public request `source`, `sourceType`, `sourceEvent`, `metadata`, fragment quantity and price are no longer authoritative.
+- New shop purchase idempotency owner: `cosmetics_shop_purchase` on `POST /api/cosmetics/purchase`.
+- Reconciliation policy: do not silently revoke historical rows; audit unverifiable legacy grants by `user_cosmetics.Source/SourceRef` values that do not map to trusted settlement or entitlement records before any cleanup.
 
 Tests: `CosmeticsMutationResponseTests.cs`, `MobileCosmeticsApiIntegrationTests.cs`, `MobileCosmeticsContractIntegrationTests.cs`
 Contract coverage: `MobileApiRouteContractTests.cs`
@@ -85,6 +90,13 @@ Why this is the lowest-risk direction:
 - Delivery remains at-least-once. Consumers must stay idempotent because a worker can still fail after publish and before commit.
 - Operators can replay a dead-lettered row by clearing `DeadLetteredUtc`, `NextAttemptUtc`, and resetting attempt state after triage.
 - Evidence: `tests/MathLearning.Tests/Infrastructure/OutboxBatchProcessorTests.cs`, migration `20260714124712_AddOutboxRetryAndDeadLetter`
+
+## Durable quiz/offline analytics ingest
+
+- Quiz answer and offline batch settlement now enqueue `QuizAttemptIngestRequested` into the shared outbox inside the authoritative `ApiDbContext` transaction instead of calling analytics ingest inline after commit.
+- Client success no longer depends on immediate weakness/analytics processing; pending delivery is recoverable through the outbox worker.
+- `quiz_attempt` now stores a stable `AttemptKey`, and ingest deduplicates by that key before updating topic/subtopic aggregates.
+- Evidence: `tests/MathLearning.Tests/Endpoints/DurableQuizAttemptIngestEndpointTests.cs`, `tests/MathLearning.Tests/Services/QuizAttemptIngestServiceRelationalTests.cs`, migration `20260714132651_AddQuizAttemptIngestAttemptKey`
 - `DailyRunChestClaimIdempotency` is intentionally not a generic ledger. Its authority is the domain claim row plus
   `(userId, day)` uniqueness, and its replay semantics are "replay by business identity" rather than "same key or
   conflict".
@@ -207,8 +219,8 @@ Intentional exceptions remain only for admin-targeted routes, where:
 | `POST /api/seasons/daily-run-claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration + contract tests | None |
 | `POST /api/seasons/milestones/{milestoneId}/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | economy integration tests | None |
 | `PUT /api/cosmetics/avatar` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics API/contract tests | None |
-| `POST /api/cosmetics/items/{itemKey}/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics contract + mutation response tests | None |
-| `POST /api/cosmetics/fragments/grant` | authenticated `userId` via `EndpointUser.GetUserId(ctx)` | Safe | cosmetics contract + mutation response tests | None |
+| `POST /api/cosmetics/items/{itemKey}/claim` | authenticated `userId` via `EndpointUser.GetUserId(ctx)`; item grant derived from `CosmeticEntitlement` | Safe | cosmetics contract + mutation response tests | Client source metadata no longer authoritative; requires server-issued `entitlementId`. |
+| `POST /api/cosmetics/fragments/grant` | authenticated `userId` via `EndpointUser.GetUserId(ctx)`; Daily Run derives from chest/season settlement, non-daily derives from `CosmeticEntitlement` | Safe | cosmetics contract + mutation response tests | Non-Daily-Run flow requires server-issued `entitlementId`. |
 | `PATCH /users/{userId}/settings` | route `userId` must equal authenticated `userId`; writes use authenticated id | Safe | `UserSettingsEndpointsIntegrationTests.cs`, `MutationUserScopeIntegrationTests.cs` | None |
 | `PUT /api/users/profile` | authenticated `userId` from auth claim | Safe | `MutationUserScopeIntegrationTests.cs` | None |
 | `POST /api/progress/sync` | authenticated `userId` from auth claim; payload has no trusted `userId` field | Safe | `MutationUserScopeIntegrationTests.cs` | None |
@@ -221,7 +233,7 @@ Intentional exceptions remain only for admin-targeted routes, where:
 | `POST /api/admin/economy/rewards/grant` | actor from auth; target user from request body | Safe with documented admin exception | `EconomySettlementEndpointsIntegrationTests.cs` | Keep admin-only |
 | `POST /api/leaderboard/admin/add-xp/{userId}` | target user from route; admin-only auth policy | Safe with documented admin exception | admin endpoint coverage is limited | Add explicit admin audit tests if this route becomes release-critical |
 | `POST /api/leaderboard/admin/reset-xp/{userId}` | target user from route; admin-only auth policy | Safe with documented admin exception | admin endpoint coverage is limited | Add explicit admin audit tests if this route becomes release-critical |
-| Legacy `/api/coins/earn` and `/api/coins/spend` | authenticated `userId` from auth claim | Safe but legacy | legacy coverage limited | Keep in deprecation plan; do not expand usage |
+| Legacy `/api/coins/earn` and `/api/coins/spend` | authenticated `userId` from auth claim | Compatibility-only; mutations removed | `LegacyEconomyCompatibilityEndpointsTests.cs` | Routes now return `410 Gone`; keep read-model endpoints only |
 
 ### Idempotency ledger scope notes
 
@@ -452,8 +464,11 @@ Do not remove legacy routes blindly in the first pass. Instead:
 | `/api/economy/*` | Canonical authenticated economy mutation surface | mobile contract docs + contract/idempotency tests | Keep canonical |
 | `/api/shop/streak-freeze/purchase` | Canonical authenticated shop mutation | mobile contract docs + contract/idempotency tests | Keep canonical |
 | `/api/cosmetics/catalog|inventory|avatar|items/{itemKey}/claim|fragments/grant` | Canonical mobile cosmetics/runtime authority surface | mobile contract docs + contract tests | Keep canonical |
-| `/api/coins/earn` | Legacy write route | backend code only; explicitly called legacy in mobile docs | Freeze, do not expand |
-| `/api/coins/spend` | Legacy write route | backend code only; explicitly called legacy in mobile docs | Freeze, do not expand |
+| `/api/coins/earn` | Legacy compatibility route returning `410 Gone` | backend code only; explicitly called legacy in mobile docs | Keep removed; do not reintroduce write behavior |
+| `/api/coins/spend` | Legacy compatibility route returning `410 Gone` | backend code only; explicitly called legacy in mobile docs | Keep removed; do not reintroduce write behavior |
+| `/api/questions/{id}/hint/*` | Legacy paid-hint aliases returning `410 Gone` | backend code only; canonical mobile flow uses `/api/economy/hints/use` then `/api/hints/questions/{id}/*` | Keep removed; do not bypass settlement |
+| `/api/powerups/streak-freeze/buy` | Legacy compatibility route returning `410 Gone` | backend code only; canonical mobile flow uses `/api/shop/streak-freeze/purchase` | Keep removed; do not reintroduce direct purchase writes |
+| `/api/leaderboard/student` | Canonical string-safe student leaderboard read | backend code + `StudentLeaderboardStringIdentityIntegrationTests.cs`, `LeaderboardCursorCodecTests.cs` | Cursor v2 is bound to normalized scope/period; invalid or cross-context cursors return `400` |
 | `/api/coins/balance|history|leaderboard` | Legacy/read-model surface | older compatibility flows possible; no current canonical mobile settlement docs | Keep temporarily as compatibility/read-only surface |
 | `/api/avatar/me` | Legacy current-user avatar read route with non-canonical response shape | backend code + legacy-shape guard test | Keep temporarily, no new behavior; do not treat as canonical mobile contract |
 | `/api/profile/{userId}/appearance` | Compatibility public appearance alias | backend code + new alias equivalence test | Keep temporarily, no new behavior |

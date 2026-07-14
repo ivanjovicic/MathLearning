@@ -205,6 +205,8 @@ public static class CosmeticsEndpoints
 
             ApiDbContext db,
 
+            ICosmeticEntitlementService entitlementService,
+
             ICosmeticsIdempotencyService idempotencyService,
 
             HttpContext ctx,
@@ -249,11 +251,19 @@ public static class CosmeticsEndpoints
 
             var normalizedItemKey = itemKey.Trim();
 
+            if (!request.EntitlementId.HasValue || request.EntitlementId == Guid.Empty)
 
+                return Results.Conflict(EconomyEndpointHelpers.BusinessError("not_eligible", "A server-issued cosmetic entitlement is required."));
 
-            var source = CosmeticsEndpointHelpers.ResolveSource(request.Source, request.SourceType);
+            var entitlement = await entitlementService.GetEntitlementAsync(userId, request.EntitlementId.Value, ct);
 
-            var sourceEvent = CosmeticsEndpointHelpers.NormalizeSourceEvent(request.SourceEvent);
+            if (entitlement is null || !string.Equals(entitlement.EntitlementType, CosmeticEntitlementTypes.Item, StringComparison.OrdinalIgnoreCase))
+
+                return Results.Conflict(EconomyEndpointHelpers.BusinessError("not_eligible", "Cosmetic entitlement was not found for this user."));
+
+            if (!string.Equals(entitlement.ItemKey, normalizedItemKey, StringComparison.OrdinalIgnoreCase))
+
+                return Results.Conflict(EconomyEndpointHelpers.BusinessError("entitlement_mismatch", "Entitlement does not match the requested cosmetic item."));
 
             var beginTuple = await CosmeticsEndpointHelpers.TryBeginCosmeticsMutationAsync(
 
@@ -275,13 +285,13 @@ public static class CosmeticsEndpoints
 
                     idempotencyKey,
 
+                    entitlementId = entitlement.Id,
+
                     itemKey = normalizedItemKey,
 
-                    source,
+                    sourceType = entitlement.SourceType,
 
-                    sourceEvent,
-
-                    request.Metadata
+                    sourceRef = entitlement.SourceRef
 
                 },
 
@@ -303,7 +313,7 @@ public static class CosmeticsEndpoints
 
             await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
 
-            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Key == normalizedItemKey, ct);
+            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entitlement.CosmeticItemId, ct);
 
             if (item is null || !item.IsActive)
 
@@ -331,6 +341,28 @@ public static class CosmeticsEndpoints
 
             {
 
+                var consumed = await entitlementService.TryConsumeEntitlementAsync(
+                    userId,
+                    entitlement.Id,
+                    "cosmetics_item_claim",
+                    operationId,
+                    idempotencyKey,
+                    ct);
+
+                if (!consumed)
+
+                {
+
+                    var error = EconomyEndpointHelpers.BusinessError("not_eligible", "Cosmetic entitlement has already been consumed.");
+
+                    await idempotencyService.FailAsync(begin.LedgerId, "not_eligible", error, ct);
+
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
+
+                    return Results.Conflict(error);
+
+                }
+
                 db.UserCosmeticInventories.Add(new UserCosmeticInventory
 
                 {
@@ -339,15 +371,11 @@ public static class CosmeticsEndpoints
 
                     CosmeticItemId = item.Id,
 
-                    Source = string.IsNullOrWhiteSpace(source) ? "reward" : source,
+                    Source = entitlement.SourceType,
 
-                    SourceRef = string.IsNullOrWhiteSpace(sourceEvent)
+                    SourceRef = entitlement.SourceRef,
 
-                        ? $"{source}:{idempotencyKey}"
-
-                        : $"{source}:{sourceEvent}",
-
-                    GrantReason = "Cosmetic claim endpoint",
+                    GrantReason = "Cosmetic entitlement claim",
 
                     SeasonId = item.SeasonId,
 
@@ -407,6 +435,8 @@ public static class CosmeticsEndpoints
 
             ApiDbContext db,
 
+            ICosmeticEntitlementService entitlementService,
+
             ICosmeticsIdempotencyService idempotencyService,
 
             ICosmeticsFragmentService fragmentService,
@@ -448,10 +478,10 @@ public static class CosmeticsEndpoints
 
 
             var source = CosmeticsEndpointHelpers.ResolveSource(request.Source, request.SourceType);
-            var sourceEvent = CosmeticsEndpointHelpers.NormalizeSourceEvent(request.SourceEvent);
             var transactionId = DailyRunCosmeticsSettlement.ResolveTransactionId(request.TransactionId, operationId);
             string fragmentName;
             int copies;
+            CosmeticEntitlementDto? entitlement = null;
 
             if (DailyRunCosmeticsSettlement.IsDailyRunSource(source))
             {
@@ -465,13 +495,26 @@ public static class CosmeticsEndpoints
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(request.FragmentName))
-                    return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_fragment", "FragmentName is required."));
-                if (request.Copies <= 0)
-                    return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_copies", "Copies must be greater than zero."));
+                if (!request.EntitlementId.HasValue || request.EntitlementId == Guid.Empty)
+                    return Results.Conflict(EconomyEndpointHelpers.BusinessError("not_eligible", "A server-issued cosmetic entitlement is required."));
 
-                fragmentName = request.FragmentName.Trim();
-                copies = request.Copies;
+                entitlement = await entitlementService.GetEntitlementAsync(userId, request.EntitlementId.Value, ct);
+                if (entitlement is null || !string.Equals(entitlement.EntitlementType, CosmeticEntitlementTypes.Fragment, StringComparison.OrdinalIgnoreCase))
+                    return Results.Conflict(EconomyEndpointHelpers.BusinessError("not_eligible", "Cosmetic entitlement was not found for this user."));
+
+                fragmentName = entitlement.FragmentLabel ?? entitlement.ItemKey;
+                copies = entitlement.Quantity;
+
+                if (!string.IsNullOrWhiteSpace(request.FragmentName) &&
+                    !string.Equals(request.FragmentName.Trim(), fragmentName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.Conflict(EconomyEndpointHelpers.BusinessError("entitlement_mismatch", "Entitlement does not match the requested fragment."));
+                }
+
+                if (request.Copies > 0 && request.Copies != copies)
+                {
+                    return Results.Conflict(EconomyEndpointHelpers.BusinessError("entitlement_mismatch", "Entitlement does not match the requested fragment quantity."));
+                }
             }
 
             var beginTuple = await CosmeticsEndpointHelpers.TryBeginCosmeticsMutationAsync(
@@ -494,17 +537,17 @@ public static class CosmeticsEndpoints
 
                     idempotencyKey,
 
+                    entitlementId = entitlement?.Id,
+
                     transactionId,
 
                     fragmentName,
 
                     copies,
 
-                    source,
+                    sourceType = entitlement?.SourceType ?? source,
 
-                    sourceEvent,
-
-                    request.Metadata
+                    sourceRef = entitlement?.SourceRef ?? transactionId
 
                 },
 
@@ -537,6 +580,24 @@ public static class CosmeticsEndpoints
 
 
             await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+
+            if (entitlement is not null)
+            {
+                var consumed = await entitlementService.TryConsumeEntitlementAsync(
+                    userId,
+                    entitlement.Id,
+                    "cosmetics_fragment_grant",
+                    operationId,
+                    idempotencyKey,
+                    ct);
+                if (!consumed)
+                {
+                    var error = EconomyEndpointHelpers.BusinessError("not_eligible", "Cosmetic entitlement has already been consumed.");
+                    await idempotencyService.FailAsync(begin.LedgerId, "not_eligible", error, ct);
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
+                    return Results.Conflict(error);
+                }
+            }
 
             var nowUtc = DateTime.UtcNow;
 
@@ -684,6 +745,8 @@ public sealed record CosmeticItemClaimRequest(
 
     string? TransactionId,
 
+    Guid? EntitlementId,
+
     string? Source,
 
     string? SourceType,
@@ -727,6 +790,8 @@ public sealed record CosmeticFragmentGrantRequest(
     string? IdempotencyKey,
 
     string? TransactionId,
+
+    Guid? EntitlementId,
 
     string? FragmentName,
 

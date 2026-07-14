@@ -40,6 +40,7 @@ public class WeaknessAnalysisServiceIntegrationTests
             attempts:
             [
                 new QuizAttemptIngestItem(
+                    AttemptKey: $"attempt:{Guid.NewGuid():N}",
                     QuizId: Guid.NewGuid(),
                     QuestionId: 1,
                     SubtopicId: 1,
@@ -77,6 +78,7 @@ public class WeaknessAnalysisServiceIntegrationTests
             var questionId = (i % 20) + 1;
             var correct = i < 900; // 90% accuracy
             attempts.Add(new QuizAttemptIngestItem(
+                AttemptKey: $"attempt:{i}:{Guid.NewGuid():N}",
                 QuizId: quizId,
                 QuestionId: questionId,
                 SubtopicId: 1,

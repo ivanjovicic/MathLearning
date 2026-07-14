@@ -267,12 +267,23 @@ public sealed partial class CosmeticPlatformService
         var item = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Id == request.CosmeticItemId, cancellationToken)
             ?? throw new InvalidOperationException("Cosmetic item not found.");
 
+        var nowUtc = DateTime.UtcNow;
         if (!item.CoinPrice.HasValue || item.CoinPrice.Value <= 0)
         {
             throw new InvalidOperationException("This item cannot be purchased with coins.");
         }
 
-        if (item.RetirementDate.HasValue && item.RetirementDate.Value <= DateTime.UtcNow)
+        if (!item.IsActive || item.IsHidden || item.IsDefault)
+        {
+            throw new InvalidOperationException("This item is not available for purchase.");
+        }
+
+        if (item.ReleaseDate.HasValue && item.ReleaseDate.Value > nowUtc)
+        {
+            throw new InvalidOperationException("This item is not yet released.");
+        }
+
+        if (item.RetirementDate.HasValue && item.RetirementDate.Value <= nowUtc)
         {
             throw new InvalidOperationException("This item is retired.");
         }
@@ -291,7 +302,7 @@ public sealed partial class CosmeticPlatformService
 
         profile.Coins -= item.CoinPrice.Value;
         profile.TotalCoinsSpent += item.CoinPrice.Value;
-        profile.UpdatedAt = DateTime.UtcNow;
+        profile.UpdatedAt = nowUtc;
 
         await TryGrantItemAsync(userId, item, CosmeticUnlockTypes.Shop, $"shop:{item.Id}", $"Purchased {item.Name}", cancellationToken);
         await LogTelemetryAsync(CosmeticTelemetryEventTypes.Purchase, userId, item.Id, item.SeasonId, new { coinsSpent = item.CoinPrice.Value });

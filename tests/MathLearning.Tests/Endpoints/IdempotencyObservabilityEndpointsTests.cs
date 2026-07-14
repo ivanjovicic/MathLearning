@@ -117,39 +117,52 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
 
         var cosmeticsUserId = NewUserId("cosmetics");
         await EnsureUserAsync(cosmeticsUserId);
-        await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            factory.Services,
+            cosmeticsUserId,
+            itemId,
+            "reward_track",
+            "season:observe:item");
+        var secondEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            factory.Services,
+            cosmeticsUserId,
+            itemId,
+            "reward_track",
+            "season:observe:item:2");
+        var inactiveItemId = await EnsureCosmeticItemAsync("frame_observe_inactive", "Inactive Observe Frame");
+        await SetCosmeticItemActiveAsync(inactiveItemId, isActive: false);
+        var inactiveEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            factory.Services,
+            cosmeticsUserId,
+            inactiveItemId,
+            "reward_track",
+            "season:observe:item:inactive");
 
         Assert.Equal(HttpStatusCode.OK, (await PostAsUserAsync(cosmeticsUserId, "/api/cosmetics/items/frame_comet/claim", new
         {
             operationId = "cos-observe-1",
             idempotencyKey = "cos-observe-1",
-            source = "reward",
-            sourceType = "reward",
-            sourceEvent = "level:7"
+            entitlementId = entitlement.Id
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await PostAsUserAsync(cosmeticsUserId, "/api/cosmetics/items/frame_comet/claim", new
         {
             operationId = "cos-observe-1",
             idempotencyKey = "cos-observe-1",
-            source = "reward",
-            sourceType = "reward",
-            sourceEvent = "level:7"
+            entitlementId = entitlement.Id
         })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await PostAsUserAsync(cosmeticsUserId, "/api/cosmetics/items/frame_comet/claim", new
         {
             operationId = "cos-observe-1",
             idempotencyKey = "cos-observe-1",
-            source = "reward",
-            sourceType = "reward",
+            entitlementId = secondEntitlement.Id,
             sourceEvent = "milestone:2"
         })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await PostAsUserAsync(cosmeticsUserId, "/api/cosmetics/items/missing-item/claim", new
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsUserAsync(cosmeticsUserId, "/api/cosmetics/items/frame_observe_inactive/claim", new
         {
             operationId = "cos-observe-fail",
             idempotencyKey = "cos-observe-fail",
-            source = "reward",
-            sourceType = "reward",
-            sourceEvent = "broken:1"
+            entitlementId = inactiveEntitlement.Id
         })).StatusCode);
 
         var snapshot = await GetAdminSnapshotAsync();
@@ -278,14 +291,15 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
             payload.GetProperty("questions").EnumerateArray().Single().GetProperty("id").GetInt32());
     }
 
-    private async Task EnsureCosmeticItemAsync(string key, string name)
+    private async Task<int> EnsureCosmeticItemAsync(string key, string name)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        if (await db.CosmeticItems.AnyAsync(x => x.Key == key))
-            return;
+        var existing = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Key == key);
+        if (existing is not null)
+            return existing.Id;
 
-        db.CosmeticItems.Add(new CosmeticItem
+        var item = new CosmeticItem
         {
             Key = key,
             Name = name,
@@ -299,7 +313,18 @@ public sealed class IdempotencyObservabilityEndpointsTests : IClassFixture<Custo
             AssetVersion = "1",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
-        });
+        };
+        db.CosmeticItems.Add(item);
+        await db.SaveChangesAsync();
+        return item.Id;
+    }
+
+    private async Task SetCosmeticItemActiveAsync(int itemId, bool isActive)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var item = await db.CosmeticItems.FirstAsync(x => x.Id == itemId);
+        item.IsActive = isActive;
         await db.SaveChangesAsync();
     }
 

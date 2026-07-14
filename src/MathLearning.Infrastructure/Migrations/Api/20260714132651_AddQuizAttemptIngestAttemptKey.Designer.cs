@@ -3,6 +3,7 @@ using System;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MathLearning.Infrastructure.Migrations.Api
 {
     [DbContext(typeof(ApiDbContext))]
-    partial class ApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714132651_AddQuizAttemptIngestAttemptKey")]
+    partial class AddQuizAttemptIngestAttemptKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -614,78 +617,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasDatabaseName("IX_cosmetic_audit_log_entity_occurred");
 
                     b.ToTable("cosmetic_audit_log", (string)null);
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticEntitlement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ConsumedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ConsumedIdempotencyKey")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("ConsumedOperationId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("ConsumedOperationType")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("CosmeticItemId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("EntitlementType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTime>("GrantedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("OperationKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SourceRef")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("SourceType")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CosmeticItemId");
-
-                    b.HasIndex("UserId", "OperationKey")
-                        .IsUnique()
-                        .HasDatabaseName("UX_cosmetic_entitlements_user_operation");
-
-                    b.HasIndex("UserId", "EntitlementType", "ConsumedAtUtc")
-                        .HasDatabaseName("IX_cosmetic_entitlements_user_type_consumed");
-
-                    b.HasIndex("UserId", "SourceType", "SourceRef", "CosmeticItemId", "Quantity")
-                        .HasDatabaseName("IX_cosmetic_entitlements_user_source_item_quantity");
-
-                    b.ToTable("cosmetic_entitlements", (string)null);
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticItem", b =>
@@ -5256,17 +5187,6 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Navigation("Subtopic");
 
                     b.Navigation("Topic");
-                });
-
-            modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticEntitlement", b =>
-                {
-                    b.HasOne("MathLearning.Domain.Entities.CosmeticItem", "CosmeticItem")
-                        .WithMany()
-                        .HasForeignKey("CosmeticItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CosmeticItem");
                 });
 
             modelBuilder.Entity("MathLearning.Domain.Entities.CosmeticItem", b =>

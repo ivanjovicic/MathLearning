@@ -54,7 +54,20 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
     {
         var userId = $"mobile-cosmetics-inventory-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var itemEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:contract:inventory:item");
+        var fragmentEntitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            2,
+            "season_milestone",
+            "season:contract:inventory:fragment");
 
         await PostAsUserAsync(
             userId,
@@ -62,6 +75,7 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: $"inventory-claim-{Guid.NewGuid():N}",
                 sourceType: "reward",
+                entitlementId: itemEntitlement.Id,
                 operationId: $"inventory-claim-{Guid.NewGuid():N}"));
 
         await PostAsUserAsync(
@@ -71,6 +85,7 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
                 idempotencyKey: $"inventory-fragment-{Guid.NewGuid():N}",
                 fragmentName: "Comet Frame Fragment",
                 copies: 2,
+                entitlementId: fragmentEntitlement.Id,
                 operationId: $"inventory-fragment-{Guid.NewGuid():N}"));
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/cosmetics/inventory");
@@ -89,15 +104,22 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
     {
         var userId = $"mobile-cosmetics-avatar-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync("frame_comet", "Comet Frame", category: "frame");
+        var itemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame", category: "frame");
         await EnsureCosmeticItemAsync("frame_not_owned", "Locked Frame", category: "frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:contract:avatar");
 
         await PostAsUserAsync(
             userId,
             "/api/cosmetics/items/frame_comet/claim",
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: $"avatar-claim-{Guid.NewGuid():N}",
-                sourceType: "reward"));
+                sourceType: "reward",
+                entitlementId: entitlement.Id));
 
         var update = await SendAsUserAsync(
             userId,
@@ -218,17 +240,18 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
         }
     }
 
-    private async Task EnsureCosmeticItemAsync(
+    private async Task<int> EnsureCosmeticItemAsync(
         string key,
         string name,
         string category = "frame")
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        if (await db.CosmeticItems.AnyAsync(x => x.Key == key))
-            return;
+        var existing = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Key == key);
+        if (existing is not null)
+            return existing.Id;
 
-        db.CosmeticItems.Add(new CosmeticItem
+        var item = new CosmeticItem
         {
             Key = key,
             Name = name,
@@ -242,8 +265,10 @@ public sealed class MobileCosmeticsContractIntegrationTests : IClassFixture<Cust
             AssetVersion = "1",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
-        });
+        };
+        db.CosmeticItems.Add(item);
         await db.SaveChangesAsync();
+        return item.Id;
     }
 
     private async Task SeedDailyRunChestClaimAsync(string userId, string transactionId, int fragmentCopies)

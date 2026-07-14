@@ -10,6 +10,7 @@ public static class WeaknessLevels
 public class QuizAttempt
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public string AttemptKey { get; set; } = string.Empty;
     public Guid UserId { get; set; }
     public Guid QuizId { get; set; }
     public int QuestionId { get; set; }

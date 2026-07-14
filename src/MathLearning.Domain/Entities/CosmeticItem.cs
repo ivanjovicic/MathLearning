@@ -180,6 +180,31 @@ public class CosmeticRewardClaim
     public CosmeticItem CosmeticItem { get; set; } = null!;
 }
 
+public static class CosmeticEntitlementTypes
+{
+    public const string Item = "item";
+    public const string Fragment = "fragment";
+}
+
+public class CosmeticEntitlement
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string UserId { get; set; } = string.Empty;
+    public string EntitlementType { get; set; } = CosmeticEntitlementTypes.Item;
+    public int CosmeticItemId { get; set; }
+    public int Quantity { get; set; } = 1;
+    public string SourceType { get; set; } = string.Empty;
+    public string SourceRef { get; set; } = string.Empty;
+    public string OperationKey { get; set; } = string.Empty;
+    public DateTime GrantedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ConsumedAtUtc { get; set; }
+    public string? ConsumedOperationType { get; set; }
+    public string? ConsumedOperationId { get; set; }
+    public string? ConsumedIdempotencyKey { get; set; }
+
+    public CosmeticItem CosmeticItem { get; set; } = null!;
+}
+
 public class SeasonRewardTrackEntry
 {
     public int Id { get; set; }

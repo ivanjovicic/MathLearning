@@ -36,7 +36,13 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
     {
         var userId = NewUserId("item-inventory");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:mutation:item-inventory");
 
         var response = await PostAsUserAsync(
             userId,
@@ -44,6 +50,7 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: $"claim-inv-{Guid.NewGuid():N}",
                 sourceType: "reward",
+                entitlementId: entitlement.Id,
                 sourceEvent: "level:7"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -57,7 +64,14 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
     {
         var userId = NewUserId("frag-inventory");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            FrameCometFragmentsRequired,
+            "season_milestone",
+            "season:mutation:frag-inventory");
 
         var response = await PostAsUserAsync(
             userId,
@@ -65,7 +79,8 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
             MobileEconomyContractPayloads.CosmeticFragmentGrant(
                 idempotencyKey: $"frag-inv-{Guid.NewGuid():N}",
                 fragmentName: FrameCometFragment,
-                copies: FrameCometFragmentsRequired));
+                copies: FrameCometFragmentsRequired,
+                entitlementId: entitlement.Id));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await ReadJsonAsync(response);
@@ -82,7 +97,19 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
     {
         var userId = NewUserId("source-event-hash");
         await EnsureUserAsync(userId);
-        await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync(FrameCometKey, "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:mutation:source-event");
+        var secondEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:mutation:source-event:2");
 
         const string idempotencyKey = "claim-source-event-only";
         var first = await PostAsUserAsync(
@@ -92,6 +119,7 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
             {
                 ["idempotencyKey"] = idempotencyKey,
                 ["operationId"] = idempotencyKey,
+                ["entitlementId"] = entitlement.Id,
                 ["source"] = "reward",
                 ["sourceType"] = "reward",
                 ["sourceEvent"] = "level:7"
@@ -105,6 +133,7 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
             {
                 ["idempotencyKey"] = idempotencyKey,
                 ["operationId"] = idempotencyKey,
+                ["entitlementId"] = secondEntitlement.Id,
                 ["source"] = "reward",
                 ["sourceType"] = "reward",
                 ["sourceEvent"] = "milestone:2"
@@ -159,14 +188,15 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
         await db.SaveChangesAsync();
     }
 
-    private async Task EnsureCosmeticItemAsync(string key, string name)
+    private async Task<int> EnsureCosmeticItemAsync(string key, string name)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-        if (await db.CosmeticItems.AnyAsync(x => x.Key == key))
-            return;
+        var existing = await db.CosmeticItems.FirstOrDefaultAsync(x => x.Key == key);
+        if (existing is not null)
+            return existing.Id;
 
-        db.CosmeticItems.Add(new CosmeticItem
+        var item = new CosmeticItem
         {
             Key = key,
             Name = name,
@@ -180,7 +210,9 @@ public sealed class CosmeticsMutationResponseTests : IClassFixture<CustomWebAppl
             AssetVersion = "1",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
-        });
+        };
+        db.CosmeticItems.Add(item);
         await db.SaveChangesAsync();
+        return item.Id;
     }
 }

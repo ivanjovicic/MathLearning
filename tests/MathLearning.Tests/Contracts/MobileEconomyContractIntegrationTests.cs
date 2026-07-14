@@ -118,11 +118,24 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
     {
         var userId = $"mobile-contract-item-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId, coins: 0, xp: 0);
-        await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var itemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:7:tier:3");
+        var secondEntitlement = await CosmeticEntitlementTestSeeder.SeedItemEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            "reward_track",
+            "season:7:tier:4");
 
         var firstPayload = MobileEconomyContractPayloads.CosmeticItemClaim(
             idempotencyKey: "cosmetic_claim/user-a/reward/level:7/frame_comet",
             sourceType: "reward",
+            entitlementId: entitlement.Id,
             sourceEvent: "level:7");
 
         var first = await PostAsUserAsync(
@@ -144,6 +157,7 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
         var conflictPayload = MobileEconomyContractPayloads.CosmeticItemClaim(
             idempotencyKey: "cosmetic_claim/user-a/reward/level:7/frame_comet",
             sourceType: "season",
+            entitlementId: secondEntitlement.Id,
             sourceEvent: "milestone:2");
 
         var conflict = await PostAsUserAsync(
@@ -156,14 +170,14 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
         Assert.True(conflictResponse.GetProperty("conflict").GetBoolean());
         Assert.False(conflictResponse.GetProperty("alreadyProcessed").GetBoolean());
 
-        var invalidItem = await PostAsUserAsync(
+        var missingEntitlement = await PostAsUserAsync(
             userId,
-            "/api/cosmetics/items/frame_not_in_catalog/claim",
+            "/api/cosmetics/items/frame_comet/claim",
             MobileEconomyContractPayloads.CosmeticItemClaim(
                 idempotencyKey: $"cosmetic-claim-invalid-{Guid.NewGuid():N}",
                 sourceType: "reward"));
-        Assert.Equal(HttpStatusCode.Conflict, invalidItem.StatusCode);
-        await AssertBusinessErrorCodeAsync(invalidItem, "invalid_item");
+        Assert.Equal(HttpStatusCode.Conflict, missingEntitlement.StatusCode);
+        await AssertBusinessErrorCodeAsync(missingEntitlement, "not_eligible");
     }
 
     [Fact]
@@ -171,12 +185,21 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
     {
         var userId = $"mobile-contract-fragment-{Guid.NewGuid():N}";
         await EnsureUserAsync(userId, coins: 0, xp: 0);
+        var itemId = await EnsureCosmeticItemAsync("frame_comet", "Comet Frame");
+        var entitlement = await CosmeticEntitlementTestSeeder.SeedFragmentEntitlementAsync(
+            _factory.Services,
+            userId,
+            itemId,
+            1,
+            "season_milestone",
+            "season:5:milestone:9");
 
         var idempotencyKey = $"frag:{Guid.NewGuid():N}";
         var firstPayload = MobileEconomyContractPayloads.CosmeticFragmentGrant(
             idempotencyKey: idempotencyKey,
             fragmentName: "Comet Frame Fragment",
-            copies: 1);
+            copies: 1,
+            entitlementId: entitlement.Id);
 
         var first = await PostAsUserAsync(
             userId,
@@ -202,22 +225,21 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
             MobileEconomyContractPayloads.CosmeticFragmentGrant(
                 idempotencyKey: idempotencyKey,
                 fragmentName: "Comet Frame Fragment",
-                copies: 2));
+                copies: 2,
+                entitlementId: entitlement.Id));
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         var conflictResponse = await ReadJsonAsync(conflict);
-        Assert.Equal("idempotency_conflict", conflictResponse.GetProperty("errorCode").GetString());
-        Assert.True(conflictResponse.GetProperty("conflict").GetBoolean());
-        Assert.False(conflictResponse.GetProperty("alreadyProcessed").GetBoolean());
+        Assert.Equal("entitlement_mismatch", conflictResponse.GetProperty("errorCode").GetString());
 
-        var invalidCopies = await PostAsUserAsync(
+        var missingEntitlement = await PostAsUserAsync(
             userId,
             "/api/cosmetics/fragments/grant",
             MobileEconomyContractPayloads.CosmeticFragmentGrant(
                 idempotencyKey: $"frag-invalid:{Guid.NewGuid():N}",
                 fragmentName: "Comet Frame Fragment",
                 copies: 0));
-        Assert.Equal(HttpStatusCode.BadRequest, invalidCopies.StatusCode);
-        await AssertBusinessErrorCodeAsync(invalidCopies, "invalid_copies");
+        Assert.Equal(HttpStatusCode.Conflict, missingEntitlement.StatusCode);
+        await AssertBusinessErrorCodeAsync(missingEntitlement, "not_eligible");
     }
 
     [Fact]

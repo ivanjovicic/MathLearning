@@ -9,6 +9,7 @@ public interface IQuizAttemptIngestService
 }
 
 public sealed record QuizAttemptIngestItem(
+    string AttemptKey,
     Guid QuizId,
     int QuestionId,
     int SubtopicId,

@@ -157,10 +157,46 @@ Business failures return `400` with `{ "error": "message" }`.
 
 See [mobile_economy_api_contract.md](./mobile_economy_api_contract.md#7-post-apicosmeticsitemsitemkeyclaim).
 
+This route now consumes a server-issued `entitlementId`; arbitrary client-declared reward sources are rejected.
+
 Response includes refreshed `inventory` (string item keys) and `fragmentProgress`.
+
+## Leaderboard
+
+Auth: Required.
+
+### `GET /api/leaderboard/student`
+
+Canonical student leaderboard read for mobile clients.
+
+Query params:
+- `scope`: `global|school|faculty|friends`
+- `period`: `all_time|week|month|day`
+- `limit`: clamped to `1..200`
+- `cursor`: optional versioned pagination token
+- `includeMe`: optional; includes the caller's `me` rank block when `true`
+
+Ordering is deterministic:
+- `score DESC`
+- `userId ASC`
+
+Cursor contract:
+- `nextCursor` is an opaque Base64 token produced by the backend
+- current student cursor payload is version `v=2`
+- cursor is bound to normalized `scope` and `period`
+- a cursor from another scope/period must not be reused
+- malformed, oversized, missing-field or unsupported-version cursors return `400`
+
+Stable cursor error codes:
+- `invalid_cursor`
+- `cursor_too_large`
+- `unsupported_cursor_version`
+- `cursor_context_mismatch`
 
 ### `POST /api/cosmetics/fragments/grant`
 
 See [mobile_economy_api_contract.md](./mobile_economy_api_contract.md#8-post-apicosmeticsfragmentsgrant).
+
+Non-Daily-Run fragment grants now require a server-issued `entitlementId`. Daily Run remains server-derived from `transactionId`.
 
 Response includes refreshed `inventory` (string item keys) and `fragmentProgress`.

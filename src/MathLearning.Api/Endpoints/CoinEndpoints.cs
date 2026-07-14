@@ -1,4 +1,6 @@
-﻿using MathLearning.Infrastructure.Persistance;
+using System.Text.Json;
+using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Api.Endpoints;
@@ -11,10 +13,9 @@ public static class CoinEndpoints
         // Do not add new backend-authoritative mobile settlement behavior under /api/coins/*.
         // Canonical authenticated mutation routes live under /api/economy/*.
         var group = app.MapGroup("/api/coins")
-                       .RequireAuthorization()
-                       .WithTags("Coins");
+            .RequireAuthorization()
+            .WithTags("Coins");
 
-        // 💰 GET COIN BALANCE
         group.MapGet("/balance", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -46,110 +47,45 @@ public static class CoinEndpoints
         })
         .WithName("GetCoinBalance");
 
-        // 🎁 EARN COINS (called after correct answer)
-        group.MapPost("/earn", async (
-            ApiDbContext db,
-            HttpContext ctx,
-            int amount,
-            string? reason = null) =>
+        group.MapPost("/earn", (HttpContext ctx) =>
         {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-
-            var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
-            if (profile == null)
-            {
-                return Results.NotFound(new { error = "Profile not found" });
-            }
-
-            profile.Coins += amount;
-            profile.TotalCoinsEarned += amount;
-            profile.UpdatedAt = DateTime.UtcNow;
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new
-            {
-                message = $"Earned {amount} coins",
-                reason = reason ?? "Unknown",
-                newBalance = profile.Coins,
-                totalEarned = profile.TotalCoinsEarned
-            });
+            ctx.Response.Headers.Append("Sunset", "2026-10-01");
+            return Results.Json(
+                LegacyMutationDeprecated(
+                    "legacy_route_removed",
+                    "Use canonical reward settlement under /api/economy/rewards/claim or audited admin grant flows."),
+                statusCode: StatusCodes.Status410Gone);
         })
         .WithName("EarnCoins");
 
-        // 💸 SPEND COINS (manual - usually hints handle this)
-        group.MapPost("/spend", async (
-            ApiDbContext db,
-            HttpContext ctx,
-            int amount,
-            string? reason = null) =>
+        group.MapPost("/spend", (HttpContext ctx) =>
         {
-            string userId = ctx.User.FindFirst("userId")!.Value;
-
-            var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
-            if (profile == null)
-            {
-                return Results.NotFound(new { error = "Profile not found" });
-            }
-
-            if (profile.Coins < amount)
-            {
-                return Results.Json(new
-                {
-                    error = "Insufficient coins",
-                    required = amount,
-                    current = profile.Coins
-                }, statusCode: 402);
-            }
-
-            profile.Coins -= amount;
-            profile.TotalCoinsSpent += amount;
-            profile.UpdatedAt = DateTime.UtcNow;
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new
-            {
-                message = $"Spent {amount} coins",
-                reason = reason ?? "Unknown",
-                newBalance = profile.Coins,
-                totalSpent = profile.TotalCoinsSpent
-            });
+            ctx.Response.Headers.Append("Sunset", "2026-10-01");
+            return Results.Json(
+                LegacyMutationDeprecated(
+                    "legacy_route_removed",
+                    "Use canonical spend settlement under /api/economy/coins/spend."),
+                statusCode: StatusCodes.Status410Gone);
         })
         .WithName("SpendCoins");
 
-        // 📊 GET COIN HISTORY
         group.MapGet("/history", async (
             ApiDbContext db,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
 
-            // Get hint usage (coin spending)
-            var hints = await db.UserHints
-                .Where(h => h.UserId == userId)
-                .OrderByDescending(h => h.UsedAt)
+            var transactions = await db.EconomyTransactions
+                .AsNoTracking()
+                .Where(x => x.UserId == userId && x.Status == EconomyTransactionStatus.Completed)
+                .OrderByDescending(x => x.CompletedAtUtc ?? x.CreatedAtUtc)
                 .Take(50)
-                .Select(h => new
-                {
-                    type = "spent",
-                    amount = h.HintType == "formula" ? -5 :
-                             h.HintType == "clue" ? -10 :
-                             h.HintType == "eliminate" ? -15 :
-                             h.HintType == "solution" ? -20 : 0,
-                    reason = $"Used {h.HintType} hint",
-                    timestamp = h.UsedAt
-                })
                 .ToListAsync();
 
-            // TODO: Get coin earnings (from correct answers)
-            // This requires tracking coin transactions separately
-
-            return Results.Ok(hints);
+            return Results.Ok(transactions.Select(BuildHistoryRow));
         })
         .WithName("GetCoinHistory");
 
-        // 🏆 LEADERBOARD (richest users)
         group.MapGet("/leaderboard", async (
             ApiDbContext db,
             int limit = 10) =>
@@ -159,7 +95,7 @@ public static class CoinEndpoints
                 .Take(limit)
                 .Select(p => new
                 {
-                    rank = 0, // Will be set below
+                    rank = 0,
                     username = p.Username,
                     coins = p.Coins,
                     level = p.Level,
@@ -168,7 +104,6 @@ public static class CoinEndpoints
                 })
                 .ToListAsync();
 
-            // Add ranks
             var ranked = richestUsers.Select((user, index) => new
             {
                 rank = index + 1,
@@ -182,5 +117,120 @@ public static class CoinEndpoints
             return Results.Ok(ranked);
         })
         .WithName("GetCoinLeaderboard");
+    }
+
+    private static object LegacyMutationDeprecated(string errorCode, string message) => new
+    {
+        success = false,
+        errorCode,
+        message,
+        replacementRoute = "/api/economy/*",
+        removalDate = "2026-10-01"
+    };
+
+    private static object BuildHistoryRow(EconomyTransaction transaction)
+    {
+        var amount = ResolveTransactionAmount(transaction);
+        return new
+        {
+            type = amount >= 0 ? "earned" : "spent",
+            amount,
+            transactionType = transaction.TransactionType,
+            idempotencyKey = transaction.IdempotencyKey,
+            operationId = transaction.OperationId,
+            status = transaction.Status.ToString(),
+            timestamp = transaction.CompletedAtUtc ?? transaction.CreatedAtUtc
+        };
+    }
+
+    private static int ResolveTransactionAmount(EconomyTransaction transaction)
+    {
+        return transaction.TransactionType switch
+        {
+            "economy_coins_spend" => -TryReadJsonInt(transaction.RequestJson, "Amount"),
+            "economy_hint_use" => -FirstNonZero(
+                TryReadJsonInt(transaction.ResultJson, "SpentCoins"),
+                TryReadJsonInt(transaction.RequestJson, "CostCoins")),
+            "shop_streak_freeze_purchase" => -TryReadJsonInt(transaction.ResultJson, "SpentCoins"),
+            "admin_reward_grant" => TryReadJsonInt(transaction.RequestJson, "Coins"),
+            "economy_reward_claim" => FirstNonZero(
+                TryReadNestedJsonInt(transaction.ResultJson, "Reward", "Coins"),
+                TryReadJsonInt(transaction.RequestJson, "Coins")),
+            _ => 0
+        };
+    }
+
+    private static int FirstNonZero(params int[] values)
+        => values.FirstOrDefault(x => x != 0);
+
+    private static int TryReadJsonInt(string? json, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return 0;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return TryGetIntValue(document.RootElement, propertyName);
+        }
+        catch (JsonException)
+        {
+            return 0;
+        }
+    }
+
+    private static int TryReadNestedJsonInt(string? json, string parentProperty, string childProperty)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return 0;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return TryGetPropertyValue(document.RootElement, parentProperty, out var parent)
+                   && parent.ValueKind == JsonValueKind.Object
+                ? TryGetIntValue(parent, childProperty)
+                : 0;
+        }
+        catch (JsonException)
+        {
+            return 0;
+        }
+    }
+
+    private static int TryGetIntValue(JsonElement element, string propertyName)
+        => TryGetPropertyValue(element, propertyName, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt32()
+            : 0;
+
+    private static bool TryGetPropertyValue(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            value = default;
+            return false;
+        }
+
+        if (element.TryGetProperty(propertyName, out value))
+            return true;
+
+        var camelCaseName = JsonNamingPolicy.CamelCase.ConvertName(propertyName);
+        if (!string.Equals(camelCaseName, propertyName, StringComparison.Ordinal) &&
+            element.TryGetProperty(camelCaseName, out value))
+        {
+            return true;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
     }
 }

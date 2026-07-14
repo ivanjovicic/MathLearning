@@ -49,9 +49,9 @@ public sealed class QuizAttemptIngestServiceRelationalTests
             userId,
             new[]
             {
-                new QuizAttemptIngestItem(quizId, 101, subtopicId, true, -50, firstAt),
-                new QuizAttemptIngestItem(quizId, 102, subtopicId, false, 1_500, secondAt),
-                new QuizAttemptIngestItem(quizId, 103, subtopicId, true, 2_500, lastAt)
+                new QuizAttemptIngestItem($"attempt:{quizId:N}:101:{firstAt.Ticks}", quizId, 101, subtopicId, true, -50, firstAt),
+                new QuizAttemptIngestItem($"attempt:{quizId:N}:102:{secondAt.Ticks}", quizId, 102, subtopicId, false, 1_500, secondAt),
+                new QuizAttemptIngestItem($"attempt:{quizId:N}:103:{lastAt.Ticks}", quizId, 103, subtopicId, true, 2_500, lastAt)
             });
 
         await using var verification = database.CreateContext();
@@ -129,7 +129,7 @@ public sealed class QuizAttemptIngestServiceRelationalTests
             userId,
             new[]
             {
-                new QuizAttemptIngestItem(Guid.NewGuid(), 201, subtopicId, true, 800, olderAttempt)
+                new QuizAttemptIngestItem($"attempt:existing:{olderAttempt.Ticks}", Guid.NewGuid(), 201, subtopicId, true, 800, olderAttempt)
             });
 
         await using var verification = database.CreateContext();
@@ -150,6 +150,71 @@ public sealed class QuizAttemptIngestServiceRelationalTests
     }
 
     [Fact]
+    public async Task DuplicateAttemptKey_DoesNotDuplicateAttemptsOrStats()
+    {
+        await using var database = await IngestTestDatabase.CreateAsync();
+        var (topicId, subtopicId) = await database.SeedTopicAsync();
+        await using var db = database.CreateContext();
+        var scheduler = new RecordingWeaknessAnalysisScheduler();
+        var service = CreateService(db, scheduler);
+        var userId = $"dedupe-ingest-{Guid.NewGuid():N}";
+        var mappedUserId = UserIdGuidMapper.FromIdentityUserId(userId);
+        var attemptedAt = DateTime.UtcNow.AddMinutes(-2);
+        var attempt = new QuizAttemptIngestItem(
+            $"attempt:dedupe:{Guid.NewGuid():N}",
+            Guid.NewGuid(),
+            901,
+            subtopicId,
+            true,
+            1200,
+            attemptedAt);
+
+        await service.IngestAttemptsAsync(userId, [attempt], CancellationToken.None);
+        await service.IngestAttemptsAsync(userId, [attempt], CancellationToken.None);
+
+        await using var verification = database.CreateContext();
+        var attempts = await verification.QuizAttempts.Where(x => x.UserId == mappedUserId).ToListAsync();
+        Assert.Single(attempts);
+        Assert.Equal(attempt.AttemptKey, attempts[0].AttemptKey);
+
+        var topicStat = await verification.UserTopicStats.SingleAsync(x => x.UserId == mappedUserId && x.TopicId == topicId);
+        Assert.Equal(1, topicStat.TotalQuestions);
+        Assert.Equal(1, topicStat.CorrectAnswers);
+
+        var subtopicStat = await verification.UserSubtopicStats.SingleAsync(x => x.UserId == mappedUserId && x.SubtopicId == subtopicId);
+        Assert.Equal(1, subtopicStat.TotalQuestions);
+        Assert.Equal(1, subtopicStat.CorrectAnswers);
+        Assert.Single(scheduler.EnqueuedUserIds);
+    }
+
+    [Fact]
+    public async Task MissingSubtopic_IsSkippedWithoutPersistingAttempts()
+    {
+        await using var database = await IngestTestDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var scheduler = new RecordingWeaknessAnalysisScheduler();
+        var service = CreateService(db, scheduler);
+
+        await service.IngestAttemptsAsync(
+            "missing-subtopic-user",
+            [new QuizAttemptIngestItem(
+                $"attempt:missing:{Guid.NewGuid():N}",
+                Guid.NewGuid(),
+                999,
+                SubtopicId: 424242,
+                Correct: true,
+                TimeSpentMs: 500,
+                CreatedAtUtc: DateTime.UtcNow)],
+            CancellationToken.None);
+
+        await using var verification = database.CreateContext();
+        Assert.False(await verification.QuizAttempts.AnyAsync());
+        Assert.False(await verification.UserTopicStats.AnyAsync());
+        Assert.False(await verification.UserSubtopicStats.AnyAsync());
+        Assert.Empty(scheduler.EnqueuedUserIds);
+    }
+
+    [Fact]
     public async Task FailureAfterSqlWasIssued_RollsBackAttemptsAndStatsAndDoesNotScheduleAnalysis()
     {
         var failureInterceptor = new ThrowAfterIngestSaveInterceptor();
@@ -167,6 +232,7 @@ public sealed class QuizAttemptIngestServiceRelationalTests
                 new[]
                 {
                     new QuizAttemptIngestItem(
+                        $"attempt:rollback:{Guid.NewGuid():N}",
                         Guid.NewGuid(),
                         301,
                         subtopicId,
@@ -202,6 +268,7 @@ public sealed class QuizAttemptIngestServiceRelationalTests
                 new[]
                 {
                     new QuizAttemptIngestItem(
+                        $"attempt:cancel:{Guid.NewGuid():N}",
                         Guid.NewGuid(),
                         401,
                         subtopicId,
