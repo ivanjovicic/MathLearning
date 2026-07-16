@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace MathLearning.Tests.Endpoints;
 
@@ -153,6 +154,34 @@ public sealed class BugEndpointAuthorizationTests :
         Assert.Equal("open", factory.BugService.LastAdminStatus);
         Assert.Equal("high", factory.BugService.LastAdminSeverity);
         Assert.Equal(3, factory.BugService.AdminCalls);
+    }
+
+    [Fact]
+    public async Task AnonymousUser_CannotReadBugScreenshotStaticFiles()
+    {
+        using var scope = factory.Services.CreateScope();
+        var env = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        var uploadsRoot = Path.Combine(env.ContentRootPath, "uploads", "screenshots");
+        Directory.CreateDirectory(uploadsRoot);
+
+        var fileName = $"bug-shot-{Guid.NewGuid():N}.png";
+        var filePath = Path.Combine(uploadsRoot, fileName);
+        await File.WriteAllBytesAsync(filePath, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        try
+        {
+            using var request = AnonymousRequest(HttpMethod.Get, $"/uploads/screenshots/{fileName}");
+
+            var response = await client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal(0, factory.BugService.TotalCalls);
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
     }
 
     private static BugReportRequest CreateReportRequest() => new(

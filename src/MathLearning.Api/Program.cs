@@ -602,6 +602,13 @@ try
         RequestPath = "/uploads",
         OnPrepareResponse = ctx =>
         {
+            if (ctx.Context.Request.Path.StartsWithSegments("/uploads/screenshots", StringComparison.OrdinalIgnoreCase))
+            {
+                ctx.Context.Response.StatusCode = StatusCodes.Status404NotFound;
+                ctx.Context.Response.ContentLength = 0;
+                return;
+            }
+
             if (ctx.Context.Request.Path.StartsWithSegments("/uploads/avatars", StringComparison.OrdinalIgnoreCase))
             {
                 ctx.Context.Response.StatusCode = StatusCodes.Status404NotFound;
