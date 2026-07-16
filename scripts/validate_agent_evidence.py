@@ -1,28 +1,17 @@
 #!/usr/bin/env python3
-"""Validate backend agent evidence rows and run logs.
+"""Validate backend queue evidence and compact/legacy run logs.
 
-Docs/tooling-only checker for the rules in:
+Fast path:
+    python scripts/validate_agent_evidence.py --changed-from <base> --verify-git
 
-- docs/AGENT_SHARED_OPERATING_STANDARD.md
-- docs/AGENT_RUN_LOG_ENFORCEMENT.md
-- docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md
-- docs/ai/learning/MISTAKE_LEDGER.md
-
-Run from repository root:
-
-    python scripts/validate_agent_evidence.py
-
-Behavior:
-- FAIL for clear violations in modern/high-confidence Done rows.
-- FAIL for referenced run logs that are missing or internally inconsistent.
-- WARN for older/legacy rows/logs where the repository historically allowed less evidence.
-- Never guesses model names, elapsed time, token counts, validation results, or CI proof.
+The changed-range mode validates only changed queue rows and changed/referenced run
+logs, so historical evidence debt cannot hide or block the current task.
 """
-
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -31,28 +20,32 @@ ROOT = Path(__file__).resolve().parents[1]
 QUEUE_DIR = ROOT / "docs" / "prompt_queues"
 RUNS_DIR = ROOT / ".ai" / "runs"
 MISTAKE_LEDGER = ROOT / "docs" / "ai" / "learning" / "MISTAKE_LEDGER.md"
-
 STRICT_GATE_DATE = "2026-07-01"
-
-MISSING_PROOF_WORDS = (
-    "missing",
-    "not run",
-    "not verified",
-    "not implemented",
-    "not created",
-    "target evidence",
-    "evidence gap",
-    "no run log",
-    "without run-log",
-    "without run log",
-)
 
 DONE_RE = re.compile(r"\bDone\b(?:\s+(\d{1,3})%)?", re.IGNORECASE)
 DATE_RE = re.compile(r"20\d{2}-\d{2}-\d{2}")
-RUN_LOG_RE = re.compile(r"Run log:\s*([^;|)]+)", re.IGNORECASE)
 RUN_PATH_RE = re.compile(r"\.ai/runs/[A-Za-z0-9_./\-]+\.md")
 MISTAKE_ID_RE = re.compile(r"\bBACKEND-MISTAKE-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
-COMPLETION_LOG_RE = re.compile(r"Completion %\s*\n\s*(?:[-*]\s*)?(\d{1,3})", re.IGNORECASE)
+COMMIT_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
+HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+ALLOWED_LANES = {
+    "known-fix", "investigation", "validation-only", "tests", "docs-evidence", "audit", "review"
+}
+ALLOWED_STATES = {
+    "In progress", "Needs validation", "Needs evidence sync", "Needs merge", "Blocked", "Done", "Archived"
+}
+BUDGET_LIMITS = {
+    "micro": {"inspected": 6, "changed": 2, "searches": 1},
+    "low": {"inspected": 11, "changed": 3, "searches": 2},
+    "medium": {"inspected": 20, "changed": 6, "searches": 4},
+    "high": {"inspected": 28, "changed": 10, "searches": 6},
+}
+MISSING_PROOF_WORDS = (
+    "missing", "not run", "not verified", "not implemented", "not created", "evidence gap", "without proof"
+)
+PLACEHOLDER_COMMIT_WORDS = (
+    "uncommitted", "pending", "unknown commit", "unknown-commit", "unknown-not-recorded", "open"
+)
 
 
 @dataclass(frozen=True)
@@ -62,58 +55,45 @@ class Finding:
     line_no: int
     message: str
 
-    def format(self) -> str:
+    def format(self, root: Path = ROOT) -> str:
         try:
-            rel = self.path.relative_to(ROOT)
+            shown = self.path.relative_to(root)
         except ValueError:
-            rel = self.path
-        return f"[{self.severity}] {rel}:{self.line_no} - {self.message}"
+            shown = self.path
+        return f"[{self.severity}] {shown}:{self.line_no} - {self.message}"
 
 
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def iter_queue_files() -> Iterable[Path]:
-    if not QUEUE_DIR.exists():
-        return []
-    return sorted(QUEUE_DIR.glob("*.md"))
+def field_value(text: str, name: str) -> str | None:
+    match = re.search(rf"^\s*{re.escape(name)}\s*:\s*(.*)$", text, re.IGNORECASE | re.MULTILINE)
+    return match.group(1).strip() if match else None
 
 
-def iter_run_logs() -> Iterable[Path]:
-    if not RUNS_DIR.exists():
-        return []
-    return sorted(RUNS_DIR.glob("*.md"))
+def section_text(text: str, heading: str) -> str:
+    match = re.search(rf"^##\s+{re.escape(heading)}\s*$", text, re.IGNORECASE | re.MULTILINE)
+    if not match:
+        return ""
+    tail = text[match.end():]
+    boundary = re.search(r"^##\s+", tail, re.MULTILINE)
+    return tail[: boundary.start()] if boundary else tail
 
 
-def load_mistake_ids() -> set[str]:
-    if not MISTAKE_LEDGER.exists():
-        return set()
-    return set(MISTAKE_ID_RE.findall(read_text(MISTAKE_LEDGER)))
+def load_mistake_ids(root: Path = ROOT) -> set[str]:
+    path = root / MISTAKE_LEDGER.relative_to(ROOT)
+    return set(MISTAKE_ID_RE.findall(read_text(path))) if path.exists() else set()
 
 
-def extract_date(line: str) -> str | None:
-    match = DATE_RE.search(line)
-    return match.group(0) if match else None
+def iter_queue_files(root: Path = ROOT) -> Iterable[Path]:
+    directory = root / QUEUE_DIR.relative_to(ROOT)
+    return sorted(directory.glob("*.md")) if directory.exists() else []
 
 
-def is_modern_row(line: str) -> bool:
-    date = extract_date(line)
-    if date and date >= STRICT_GATE_DATE:
-        return True
-    lowered = line.lower()
-    return "evidence gap" in lowered or "run log:" in lowered
-
-
-def is_strict_log(text: str, path: Path, referenced_logs: set[Path]) -> bool:
-    if path in referenced_logs:
-        return True
-    markers = (
-        "Relevant prior mistakes read:",
-        "How this run avoids prior mistakes:",
-        "## Mistakes observed",
-    )
-    return any(marker in text for marker in markers)
+def iter_run_logs(root: Path = ROOT) -> Iterable[Path]:
+    directory = root / RUNS_DIR.relative_to(ROOT)
+    return sorted(directory.glob("*.md")) if directory.exists() else []
 
 
 def is_table_row(line: str) -> bool:
@@ -122,254 +102,306 @@ def is_table_row(line: str) -> bool:
 
 
 def first_cell(line: str) -> str:
-    parts = [part.strip() for part in line.strip().strip("|").split("|")]
-    return parts[0] if parts else "unknown"
+    cells = [part.strip() for part in line.strip().strip("|").split("|")]
+    return cells[0] if cells else "unknown"
 
 
-def has_casefold(text: str, needle: str) -> bool:
-    return needle.casefold() in text.casefold()
-
-
-def missing_done_row_fields(line: str) -> list[str]:
-    required = [
-        "Model:",
-        "Run log:",
-        "Mistakes:",
-        "Waste:",
-        "Missed:",
-        "Follow-up:",
-        "Residual risk:",
-    ]
-    return [field for field in required if not has_casefold(line, field)]
+def is_modern_row(line: str) -> bool:
+    date_match = DATE_RE.search(line)
+    if date_match and date_match.group(0) >= STRICT_GATE_DATE:
+        return True
+    lowered = line.casefold()
+    return "run log:" in lowered or "evidence gap" in lowered
 
 
 def extract_run_log_paths(line: str) -> list[str]:
     return RUN_PATH_RE.findall(line)
 
 
-def row_has_run_log_fallback(line: str) -> bool:
-    match = RUN_LOG_RE.search(line)
-    if not match:
-        return False
-    value = match.group(1).strip().casefold()
-    return value.startswith("fallback")
-
-
 def row_score(line: str) -> int | None:
     match = DONE_RE.search(line)
-    if not match or match.group(1) is None:
-        return None
-    return int(match.group(1))
+    return int(match.group(1)) if match and match.group(1) else None
 
 
-def residual_risk_text(line: str) -> str:
-    lower = line.casefold()
-    idx = lower.find("residual risk:")
-    return line[idx:] if idx >= 0 else line
-
-
-def row_has_missing_proof_but_claims_100(line: str) -> bool:
-    score = row_score(line)
-    if score != 100:
-        return False
-    risk = residual_risk_text(line).casefold()
-    return any(word in risk for word in MISSING_PROOF_WORDS)
-
-
-def validate_queue_row(path: Path, line_no: int, line: str) -> tuple[list[Finding], set[Path]]:
+def validate_queue_row(path: Path, line_no: int, line: str, root: Path = ROOT) -> tuple[list[Finding], set[Path]]:
     findings: list[Finding] = []
-    referenced_logs: set[Path] = set()
+    referenced: set[Path] = set()
     if not is_table_row(line) or not DONE_RE.search(line):
-        return findings, referenced_logs
-
+        return findings, referenced
     severity = "FAIL" if is_modern_row(line) else "WARN"
     prompt_id = first_cell(line)
-
-    missing = missing_done_row_fields(line)
+    required = ("Run log:", "Validation:", "Residual risk:")
+    missing = [field for field in required if field.casefold() not in line.casefold()]
     if missing:
-        findings.append(
-            Finding(
-                severity,
-                path,
-                line_no,
-                f"{prompt_id} Done row is missing required evidence fields: {', '.join(missing)}",
-            )
+        findings.append(Finding(severity, path, line_no, f"{prompt_id} Done row missing compact evidence fields: {', '.join(missing)}"))
+    paths = extract_run_log_paths(line)
+    if "run log:" in line.casefold() and "run log: fallback" not in line.casefold() and not paths:
+        findings.append(Finding(severity, path, line_no, f"{prompt_id} Run log field has no .ai/runs/*.md path"))
+    for raw in paths:
+        target = root / raw
+        referenced.add(target)
+        if not target.exists():
+            findings.append(Finding("FAIL", path, line_no, f"{prompt_id} references missing run log: {raw}"))
+    score = row_score(line)
+    if score == 100:
+        residual = line[line.casefold().find("residual risk:"):].casefold()
+        if any(word in residual for word in MISSING_PROOF_WORDS):
+            findings.append(Finding("FAIL", path, line_no, f"{prompt_id} claims 100% while residual proof is missing"))
+    if any(word in line.casefold() for word in PLACEHOLDER_COMMIT_WORDS) and "commit" in line.casefold():
+        if "commit self" not in line.casefold() and "commit: self" not in line.casefold():
+            findings.append(Finding(severity, path, line_no, f"{prompt_id} uses unresolved commit placeholder"))
+    return findings, referenced
+
+
+def parse_int_field(text: str, name: str) -> int | None:
+    raw = field_value(text, name)
+    return int(raw) if raw and raw.isdigit() else None
+
+
+def commit_value(text: str) -> str:
+    return field_value(text, "Commit SHA") or section_text(text, "Commit SHA").strip(" \n-")
+
+
+def resolve_self_commit(path: Path, root: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%H", "--", str(path.relative_to(root))],
+            cwd=root, text=True, capture_output=True, check=True, timeout=15,
         )
-
-    if "Run log:" in line and not row_has_run_log_fallback(line):
-        paths = extract_run_log_paths(line)
-        if not paths:
-            findings.append(Finding(severity, path, line_no, f"{prompt_id} has Run log field but no .ai/runs/*.md path"))
-        for run_path in paths:
-            target = ROOT / run_path
-            referenced_logs.add(target)
-            if not target.exists():
-                findings.append(Finding("FAIL", path, line_no, f"{prompt_id} references missing run log: {run_path}"))
-
-    if row_has_missing_proof_but_claims_100(line):
-        findings.append(
-            Finding("FAIL", path, line_no, f"{prompt_id} claims 100% while residual risk/evidence text says proof is missing")
-        )
-
-    return findings, referenced_logs
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    value = result.stdout.strip()
+    return value if COMMIT_RE.fullmatch(value) else None
 
 
-def field_exists(text: str, field_name: str) -> bool:
-    return re.search(rf"^\s*{re.escape(field_name)}\s*:", text, re.IGNORECASE | re.MULTILINE) is not None
-
-
-def field_has_value_or_placeholder(text: str, field_name: str, placeholders: tuple[str, ...]) -> bool:
-    match = re.search(rf"^\s*{re.escape(field_name)}\s*:\s*(.*)$", text, re.IGNORECASE | re.MULTILINE)
-    if not match:
-        return False
-    value = match.group(1).strip()
-    return bool(value) or any(token in text for token in placeholders)
-
-
-def section_text(text: str, heading: str) -> str:
-    pattern = re.compile(rf"^##\s+{re.escape(heading)}\s*$", re.IGNORECASE | re.MULTILINE)
-    match = pattern.search(text)
-    if not match:
-        return ""
-    start = match.end()
-    next_heading = re.search(r"^##\s+", text[start:], re.MULTILINE)
-    end = start + next_heading.start() if next_heading else len(text)
-    return text[start:end]
-
-
-def log_completion_score(text: str) -> int | None:
-    match = COMPLETION_LOG_RE.search(text)
-    return int(match.group(1)) if match else None
-
-
-def validate_run_log(path: Path, known_mistakes: set[str], referenced_logs: set[Path]) -> list[Finding]:
+def validate_commit(path: Path, text: str, strict: bool, verify_git: bool, root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    text = read_text(path)
-    strict = is_strict_log(text, path, referenced_logs)
+    value = commit_value(text).strip()
     severity = "FAIL" if strict else "WARN"
-
-    required_fields = [
-        "Prompt ID",
-        "Queue",
-        "Agent/tool",
-        "Model provider",
-        "Model name/id",
-        "Model mode/settings",
-        "Client/IDE",
-        "Run mode",
-        "Token budget",
-        "Elapsed time",
-        "Phase time breakdown",
-        "Commit SHA",
-    ]
-    for field in required_fields:
-        if not field_exists(text, field):
-            findings.append(Finding(severity, path, 1, f"run log missing required field: {field}:"))
-
-    if field_exists(text, "Model name/id") and not field_has_value_or_placeholder(text, "Model name/id", ("unknown-not-exposed",)):
-        findings.append(Finding("FAIL" if strict else "WARN", path, 1, "Model name/id must be present or explicitly unknown-not-exposed"))
-
-    for field in ("Elapsed time", "Phase time breakdown"):
-        if field_exists(text, field) and not field_has_value_or_placeholder(text, field, ("unknown-not-recorded",)):
-            findings.append(Finding("FAIL" if strict else "WARN", path, 1, f"{field} must be present or explicitly unknown-not-recorded"))
-
-    if "## Mistakes observed" not in text:
-        findings.append(Finding(severity, path, 1, "run log missing ## Mistakes observed section"))
-    else:
-        mistakes_section = section_text(text, "Mistakes observed")
-        if "none" not in mistakes_section.casefold():
-            mistake_ids = set(MISTAKE_ID_RE.findall(mistakes_section))
-            if not mistake_ids:
-                findings.append(Finding("FAIL" if strict else "WARN", path, 1, "Mistakes observed is not 'none' and has no BACKEND-MISTAKE-* ID"))
-            unknown = sorted(mistake_ids - known_mistakes)
-            for mistake_id in unknown:
-                findings.append(Finding("FAIL", path, 1, f"unknown mistake ID referenced: {mistake_id}"))
-            if "repeated" in mistakes_section.casefold():
-                required_repeat_phrases = (
-                    "Prevention added:",
-                    "Did this run update a rule/prompt/test/queue:",
-                )
-                missing_repeat = [phrase for phrase in required_repeat_phrases if phrase not in mistakes_section]
-                if missing_repeat:
-                    findings.append(
-                        Finding(
-                            "FAIL" if strict else "WARN",
-                            path,
-                            1,
-                            "repeated mistake section missing prevention/update fields: " + ", ".join(missing_repeat),
-                        )
-                    )
-
-    score = log_completion_score(text)
-    residual = section_text(text, "Residual risk").casefold()
-    if score == 100 and any(word in residual for word in MISSING_PROOF_WORDS):
-        findings.append(Finding("FAIL", path, 1, "run log claims 100% while residual risk says proof/evidence is missing"))
-
+    if not value:
+        return [Finding(severity, path, 1, "run log missing Commit SHA")]
+    lowered = value.casefold()
+    if lowered == "self":
+        if verify_git and not resolve_self_commit(path, root):
+            findings.append(Finding("FAIL", path, 1, "Commit SHA: self could not be resolved from git history"))
+        return findings
+    if any(word in lowered for word in PLACEHOLDER_COMMIT_WORDS):
+        findings.append(Finding(severity, path, 1, "Commit SHA must be a real hash or the self sentinel"))
+    elif not COMMIT_RE.search(value):
+        findings.append(Finding(severity, path, 1, "Commit SHA must contain a real hash or self"))
     return findings
 
 
-def validate_all(strict_legacy: bool = False, all_run_logs: bool = True) -> list[Finding]:
+def completion_score(text: str) -> int | None:
+    direct = field_value(text, "Completion %")
+    if direct and direct.isdigit():
+        return int(direct)
+    match = re.search(r"Completion %\s*\n\s*[-*]?\s*(\d{1,3})", text, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def validate_v2_log(path: Path, text: str, known_mistakes: set[str], verify_git: bool, root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    referenced_logs: set[Path] = set()
-    known_mistakes = load_mistake_ids()
+    required = (
+        "Prompt ID", "Queue", "Agent/tool", "Model provider", "Model name/id", "Client/IDE",
+        "Run mode", "Token budget", "Started at UTC", "Completed at UTC", "Elapsed time",
+        "Relevant prior mistakes read", "How this run avoids prior mistakes", "Owner/hypothesis",
+        "Files inspected", "Files changed", "Searches", "Validation runs", "Failed retries",
+        "Mistakes observed", "Waste", "Missed", "Follow-up", "Residual risk",
+        "Documentation impact", "Cross-repo impact", "State", "Branch/PR", "Commit SHA", "Completion %",
+    )
+    for name in required:
+        value = field_value(text, name)
+        if value is None or not value:
+            findings.append(Finding("FAIL", path, 1, f"v2 run log missing field: {name}"))
+        elif value.casefold() == "open":
+            findings.append(Finding("FAIL", path, 1, f"v2 run log still open: {name}"))
+    lane = field_value(text, "Run mode") or ""
+    if lane not in ALLOWED_LANES:
+        findings.append(Finding("FAIL", path, 1, f"Run mode must be one lane, got: {lane}"))
+    budget = (field_value(text, "Token budget") or "").casefold()
+    if budget not in BUDGET_LIMITS:
+        findings.append(Finding("FAIL", path, 1, f"unknown Token budget: {budget}"))
+    state = field_value(text, "State") or ""
+    if state not in ALLOWED_STATES:
+        findings.append(Finding("FAIL", path, 1, f"unknown delivery State: {state}"))
+    for name in ("Files inspected", "Files changed", "Searches", "Validation runs", "Failed retries"):
+        if parse_int_field(text, name) is None:
+            findings.append(Finding("FAIL", path, 1, f"{name} must be numeric"))
+    score = completion_score(text)
+    if score is None or not 0 <= score <= 100:
+        findings.append(Finding("FAIL", path, 1, "Completion % must be 0..100"))
+        score = 0
+    if budget in BUDGET_LIMITS:
+        limits = BUDGET_LIMITS[budget]
+        values = {
+            "inspected": parse_int_field(text, "Files inspected") or 0,
+            "changed": parse_int_field(text, "Files changed") or 0,
+            "searches": parse_int_field(text, "Searches") or 0,
+        }
+        breaches = [f"{name}={values[name]}>{limits[name]}" for name in values if values[name] > limits[name]]
+        if breaches and score > 79:
+            findings.append(Finding("FAIL", path, 1, "budget breach requires Completion <=79: " + ", ".join(breaches)))
+    mistakes = field_value(text, "Mistakes observed") or ""
+    if mistakes.casefold() != "none":
+        ids = set(MISTAKE_ID_RE.findall(mistakes))
+        if not ids:
+            findings.append(Finding("FAIL", path, 1, "Mistakes observed must be none or include BACKEND-MISTAKE-* IDs"))
+        for unknown in sorted(ids - known_mistakes):
+            findings.append(Finding("FAIL", path, 1, f"unknown mistake ID: {unknown}"))
+        if "repeated" in mistakes.casefold() and "prevention=" not in mistakes.casefold():
+            findings.append(Finding("FAIL", path, 1, "repeated mistake must include prevention=<change>"))
+    validation = (field_value(text, "Validation run") or "").casefold()
+    failed_validation = any(word in validation for word in (" fail", "failed", "failure", "timeout"))
+    if failed_validation and (state == "Done" or score > 79):
+        findings.append(Finding("FAIL", path, 1, "failed validation requires a non-Done state and Completion <=79"))
+    residual = (field_value(text, "Residual risk") or "").casefold()
+    if score == 100 and residual not in {"none", "none.", "no material residual risk"}:
+        findings.append(Finding("FAIL", path, 1, "100% completion requires no material residual risk"))
+    if state == "Done" and score < 95:
+        findings.append(Finding("FAIL", path, 1, "Done state requires Completion >=95"))
+    findings.extend(validate_commit(path, text, True, verify_git, root))
+    if len(text.splitlines()) > 90:
+        findings.append(Finding("WARN", path, 1, "v2 run log exceeds 90 lines; keep evidence compact"))
+    return findings
 
-    if not known_mistakes:
-        findings.append(Finding("FAIL", MISTAKE_LEDGER, 1, "mistake ledger missing or contains no BACKEND-MISTAKE-* IDs"))
 
-    for queue_file in iter_queue_files():
-        for idx, line in enumerate(read_text(queue_file).splitlines(), start=1):
-            row_findings, row_logs = validate_queue_row(queue_file, idx, line)
-            referenced_logs.update(row_logs)
-            if strict_legacy:
-                row_findings = [Finding("FAIL", f.path, f.line_no, f.message) for f in row_findings]
-            findings.extend(row_findings)
-
-    if RUNS_DIR.exists():
-        logs_to_check = set(iter_run_logs()) if all_run_logs else referenced_logs
-        for run_log in sorted(logs_to_check):
-            if run_log.exists():
-                log_findings = validate_run_log(run_log, known_mistakes, referenced_logs)
-                if strict_legacy:
-                    log_findings = [Finding("FAIL", f.path, f.line_no, f.message) for f in log_findings]
-                findings.extend(log_findings)
+def validate_legacy_log(path: Path, text: str, known_mistakes: set[str], strict: bool, verify_git: bool, root: Path) -> list[Finding]:
+    severity = "FAIL" if strict else "WARN"
+    findings: list[Finding] = []
+    required = (
+        "Prompt ID", "Queue", "Agent/tool", "Model provider", "Model name/id", "Client/IDE",
+        "Run mode", "Token budget", "Elapsed time", "Phase time breakdown",
+    )
+    for name in required:
+        if field_value(text, name) is None:
+            findings.append(Finding(severity, path, 1, f"legacy run log missing field: {name}"))
+    mistakes_section = section_text(text, "Mistakes observed")
+    if not mistakes_section and field_value(text, "Mistakes observed") is None:
+        findings.append(Finding(severity, path, 1, "legacy run log missing Mistakes observed"))
     else:
-        findings.append(Finding("FAIL", RUNS_DIR, 1, ".ai/runs directory does not exist"))
+        content = mistakes_section or field_value(text, "Mistakes observed") or ""
+        if "none" not in content.casefold():
+            ids = set(MISTAKE_ID_RE.findall(content))
+            if not ids:
+                findings.append(Finding(severity, path, 1, "legacy mistakes are not none and contain no ID"))
+            for unknown in sorted(ids - known_mistakes):
+                findings.append(Finding("FAIL", path, 1, f"unknown mistake ID: {unknown}"))
+    score = completion_score(text)
+    residual = section_text(text, "Residual risk").casefold()
+    if score == 100 and any(word in residual for word in MISSING_PROOF_WORDS):
+        findings.append(Finding("FAIL", path, 1, "legacy log claims 100% with missing proof"))
+    findings.extend(validate_commit(path, text, strict, verify_git, root))
+    return findings
 
+
+def validate_run_log(path: Path, known_mistakes: set[str], referenced: set[Path], *, verify_git: bool = False, root: Path = ROOT) -> list[Finding]:
+    text = read_text(path)
+    if (field_value(text, "Evidence format") or "").casefold() == "v2":
+        return validate_v2_log(path, text, known_mistakes, verify_git, root)
+    strict = path in referenced or any(marker in text for marker in ("Relevant prior mistakes read:", "## Mistakes observed"))
+    return validate_legacy_log(path, text, known_mistakes, strict, verify_git, root)
+
+
+def git_changed_paths(base: str, root: Path = ROOT) -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--diff-filter=AM", "--name-only", f"{base}...HEAD"],
+        cwd=root, text=True, capture_output=True, check=True, timeout=30,
+    )
+    return [line.strip().replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
+
+
+def changed_line_numbers(path: Path, base: str, root: Path = ROOT) -> set[int]:
+    try:
+        rel = path.relative_to(root).as_posix()
+    except ValueError:
+        return set()
+    result = subprocess.run(
+        ["git", "diff", "--unified=0", f"{base}...HEAD", "--", rel],
+        cwd=root, text=True, capture_output=True, check=True, timeout=30,
+    )
+    numbers: set[int] = set()
+    for line in result.stdout.splitlines():
+        match = HUNK_RE.match(line)
+        if not match:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2) or "1")
+        numbers.update(range(start, start + count))
+    return numbers
+
+
+def validate_changed(base: str, *, verify_git: bool = False, root: Path = ROOT) -> list[Finding]:
+    findings: list[Finding] = []
+    referenced: set[Path] = set()
+    known = load_mistake_ids(root)
+    if not known:
+        findings.append(Finding("FAIL", root / MISTAKE_LEDGER.relative_to(ROOT), 1, "mistake ledger missing/no IDs"))
+    changed = git_changed_paths(base, root)
+    changed_logs: set[Path] = set()
+    for raw in changed:
+        path = root / raw
+        if raw.startswith("docs/prompt_queues/") and raw.endswith(".md") and path.exists():
+            touched = changed_line_numbers(path, base, root)
+            for line_no, line in enumerate(read_text(path).splitlines(), 1):
+                if line_no in touched:
+                    row_findings, row_logs = validate_queue_row(path, line_no, line, root)
+                    findings.extend(row_findings)
+                    referenced.update(row_logs)
+        if raw.startswith(".ai/runs/") and raw.endswith(".md") and not raw.endswith("README.md") and path.exists():
+            changed_logs.add(path)
+    for log in sorted(changed_logs | referenced):
+        if log.exists():
+            findings.extend(validate_run_log(log, known, referenced | changed_logs, verify_git=verify_git, root=root))
+    return findings
+
+
+def validate_all(*, strict_legacy: bool = False, referenced_only: bool = False, verify_git: bool = False, root: Path = ROOT) -> list[Finding]:
+    findings: list[Finding] = []
+    referenced: set[Path] = set()
+    known = load_mistake_ids(root)
+    if not known:
+        findings.append(Finding("FAIL", root / MISTAKE_LEDGER.relative_to(ROOT), 1, "mistake ledger missing/no IDs"))
+    for queue in iter_queue_files(root):
+        for line_no, line in enumerate(read_text(queue).splitlines(), 1):
+            row_findings, row_logs = validate_queue_row(queue, line_no, line, root)
+            if strict_legacy:
+                row_findings = [Finding("FAIL", item.path, item.line_no, item.message) for item in row_findings]
+            findings.extend(row_findings)
+            referenced.update(row_logs)
+    logs = referenced if referenced_only else set(iter_run_logs(root))
+    for log in sorted(logs):
+        if log.exists():
+            log_findings = validate_run_log(log, known, referenced, verify_git=verify_git, root=root)
+            if strict_legacy:
+                log_findings = [Finding("FAIL", item.path, item.line_no, item.message) for item in log_findings]
+            findings.extend(log_findings)
     return findings
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate agent queue rows and .ai/runs evidence logs.")
-    parser.add_argument("--strict-legacy", action="store_true", help="Treat legacy warnings as failures.")
-    parser.add_argument(
-        "--referenced-run-logs-only",
-        action="store_true",
-        help="Validate only run logs referenced by queue rows, instead of scanning all .ai/runs logs.",
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--changed-from")
+    parser.add_argument("--referenced-run-logs-only", action="store_true")
+    parser.add_argument("--strict-legacy", action="store_true")
+    parser.add_argument("--verify-git", action="store_true")
     args = parser.parse_args(argv)
-
-    findings = validate_all(strict_legacy=args.strict_legacy, all_run_logs=not args.referenced_run_logs_only)
-    failures = [f for f in findings if f.severity == "FAIL"]
-    warnings = [f for f in findings if f.severity == "WARN"]
-
-    print("Agent evidence validation")
-    print(f"Root: {ROOT}")
-    print(f"Queue files: {len(list(iter_queue_files()))}")
-    print(f"Run logs scanned: {'all' if not args.referenced_run_logs_only else 'referenced only'}")
-    print(f"Failures: {len(failures)}")
-    print(f"Warnings: {len(warnings)}")
-
-    if findings:
-        print("\nFindings:")
-        for finding in findings:
-            print("- " + finding.format())
-
-    if failures:
-        print("\nResult: FAIL")
-        return 1
-
-    print("\nResult: PASS")
-    return 0
+    if args.changed_from:
+        findings = validate_changed(args.changed_from, verify_git=args.verify_git)
+        scope = f"changed-from {args.changed_from}"
+    else:
+        findings = validate_all(
+            strict_legacy=args.strict_legacy,
+            referenced_only=args.referenced_run_logs_only,
+            verify_git=args.verify_git,
+        )
+        scope = "referenced" if args.referenced_run_logs_only else "all"
+    failures = [item for item in findings if item.severity == "FAIL"]
+    warnings = [item for item in findings if item.severity == "WARN"]
+    print(f"Agent evidence validation: scope={scope} failures={len(failures)} warnings={len(warnings)}")
+    for finding in findings:
+        print(finding.format())
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
