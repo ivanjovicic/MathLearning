@@ -279,8 +279,8 @@ try
                     app.Environment.EnvironmentName);
             }
 
-            var schemaStatus = await schemaGuard.CheckAsync(db);
-            schemaState.Update(schemaStatus);
+        var schemaStatus = await schemaGuard.CheckAsync(db);
+        schemaState.Update(schemaStatus);
 
             if (!schemaStatus.IsSchemaReady)
             {
@@ -289,12 +289,53 @@ try
 
             databaseStartupSucceeded = true;
 
-            await CosmeticStartupSeeder.EnsureCosmeticItemsAsync(scope.ServiceProvider, CancellationToken.None);
+            var applyCosmeticCatalog = args.Any(x => string.Equals(x, "--apply-cosmetic-catalog", StringComparison.OrdinalIgnoreCase));
+            var cosmeticCatalogService = scope.ServiceProvider.GetRequiredService<ICosmeticCatalogService>();
+            if (applyCosmeticCatalog)
+            {
+                var importResult = await cosmeticCatalogService.ApplyCatalogManifestAsync(CancellationToken.None);
+                Log.Information(
+                    "Applied cosmetic catalog manifest. Revision={Revision} Checksum={Checksum} Applied={Applied} AlreadyInstalled={AlreadyInstalled}",
+                    importResult.RevisionKey,
+                    importResult.Checksum,
+                    importResult.Applied,
+                    importResult.AlreadyInstalled);
+
+                var postImportReadiness = await cosmeticCatalogService.GetCatalogReadinessAsync(CancellationToken.None);
+                if (!postImportReadiness.IsReady)
+                {
+                    throw new InvalidOperationException(
+                        $"Cosmetic catalog import finished but readiness failed: {postImportReadiness.Reason}");
+                }
+
+                return;
+            }
 
             userProfileIdentitySchemaReady = await HasUserProfileIdentitySchemaAsync(db);
 
             var designTokenQueryService = scope.ServiceProvider.GetRequiredService<IDesignTokenQueryService>();
             await designTokenQueryService.EnsureInitializedAsync(CancellationToken.None);
+
+            var catalogReadiness = await cosmeticCatalogService.GetCatalogReadinessAsync(CancellationToken.None);
+            if (catalogReadiness.IsReady)
+            {
+                Log.Information(
+                    "Cosmetic catalog ready. Revision={Revision} Checksum={Checksum} Items={ItemCount}",
+                    catalogReadiness.RevisionKey,
+                    catalogReadiness.Checksum,
+                    catalogReadiness.InstalledItemCount);
+            }
+            else
+            {
+                Log.Warning(
+                    "Cosmetic catalog is not ready after startup verification. Reason={Reason} Revision={Revision} Checksum={Checksum} MissingDefaults={MissingDefaults} FragmentIssues={FragmentIssues} RewardIssues={RewardIssues}",
+                    catalogReadiness.Reason,
+                    catalogReadiness.RevisionKey,
+                    catalogReadiness.Checksum,
+                    string.Join(',', catalogReadiness.MissingDefaultKeys),
+                    string.Join(',', catalogReadiness.FragmentIssues),
+                    string.Join(',', catalogReadiness.RewardReferenceIssues));
+            }
 
             databaseStartupStopwatch.Stop();
             Log.Information(

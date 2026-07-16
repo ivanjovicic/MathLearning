@@ -66,6 +66,8 @@ When the fragment threshold is reached, the response also includes `unlockedItem
 
 Do **not** use legacy `POST /api/cosmetics/unlock` or `POST /api/cosmetics/fragments/daily-run`.
 
+Readiness truthfulness: `GET /api/health/ready` returns `503` when the cosmetic catalog revision, required defaults, or required fragment labels are missing or invalid.
+
 ### `GET /api/cosmetics/catalog`
 
 Published cosmetic metadata for active, non-hidden items. Payload is identical for every authenticated user and is safe to cache.
@@ -78,7 +80,7 @@ Query params (optional):
 Response:
 ```json
 {
-  "catalogVersion": "catalog-20260520120000",
+  "catalogVersion": "catalog-20260716-019",
   "items": [
     {
       "key": "frame_comet",
@@ -106,6 +108,8 @@ Response headers:
 - `Cache-Control`: `private, max-age=300`
 
 `If-None-Match` matching the current `ETag` returns `304 Not Modified`.
+
+`catalogVersion` is the applied cosmetic catalog revision key. It changes when a new manifest revision is imported and stays stable across no-op restarts or no-op reapplications of the same revision.
 
 ### `GET /api/cosmetics/inventory`
 

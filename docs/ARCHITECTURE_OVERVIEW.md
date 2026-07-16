@@ -1,6 +1,6 @@
 # Backend Architecture Overview
 
-Last aligned: 2026-06-25  
+Last aligned: 2026-07-16
 Repo: `ivanjovicic/MathLearning`
 
 This is the token-saving architecture map for agents. It explains what owns what, where to inspect first, and which invariants must not be broken.
@@ -22,6 +22,7 @@ Startup responsibilities:
 - JWT/security services
 - Swagger/API docs
 - middleware: exception handler, correlation id, request performance logging, physical peer IP capture, forwarded headers (configured proxy trust), CORS, authentication, rate limit (user id or physical IP), authorization
+- explicit cosmetics catalog manifest import support via `--apply-cosmetic-catalog`
 
 Production admin bootstrap (`SeedAdmin`):
 
@@ -146,12 +147,20 @@ src/MathLearning.Infrastructure/Migrations/
 
 Startup schema behavior is environment-sensitive. Development can auto-migrate depending on startup mode; higher environments must be treated carefully. Do not assume production will auto-apply migrations.
 
+Cosmetics catalog behavior is explicit and versioned:
+
+- normal startup verifies catalog readiness and logs revision/checksum state
+- startup does not silently rewrite catalog rows
+- operator-run manifest import is available through `--apply-cosmetic-catalog`
+- `/api/health/ready` must fail when the revision/default/fragment checks are not satisfied
+
 Migration rules:
 
 - inspect existing migrations first
 - preserve existing data unless destructive migration is explicitly requested
 - add unique indexes for idempotency scope
 - update docs when schema becomes part of mobile/backend contract
+- keep cosmetic catalog revision/import/readiness documentation synchronized with `docs/mobile_api_contract.md`
 
 ---
 

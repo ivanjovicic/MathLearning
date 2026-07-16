@@ -15,8 +15,9 @@ public sealed partial class CosmeticPlatformService
     {
         await EnsureDefaultOwnershipAsync(userId, cancellationToken);
 
+        var catalogVersion = await BuildCatalogVersionAsync(cancellationToken);
         var now = DateTime.UtcNow;
-        var items = await GetCachedActiveCatalogItemsAsync(cancellationToken);
+        var items = await GetCachedActiveCatalogItemsAsync(catalogVersion, cancellationToken);
         var filtered = items
             .Where(x =>
                 (string.IsNullOrWhiteSpace(category) || x.Category == category.Trim()) &&
@@ -63,7 +64,6 @@ public sealed partial class CosmeticPlatformService
             })
             .ToList();
 
-        var catalogVersion = await BuildCatalogVersionAsync(cancellationToken);
         return new CosmeticCatalogResponseDto(catalogVersion, responseItems);
     }
 

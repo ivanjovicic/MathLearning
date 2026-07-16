@@ -90,6 +90,7 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
     // 🎨 Cosmetic system
     public DbSet<CosmeticItem> CosmeticItems => Set<CosmeticItem>();
     public DbSet<CosmeticSeason> CosmeticSeasons => Set<CosmeticSeason>();
+    public DbSet<CosmeticCatalogRevision> CosmeticCatalogRevisions => Set<CosmeticCatalogRevision>();
     public DbSet<UserCosmeticInventory> UserCosmeticInventories => Set<UserCosmeticInventory>();
     public DbSet<UserAvatarConfig> UserAvatarConfigs => Set<UserAvatarConfig>();
     public DbSet<CosmeticRewardRule> CosmeticRewardRules => Set<CosmeticRewardRule>();
@@ -1374,6 +1375,23 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
                   .HasDatabaseName("IX_cosmetic_seasons_active");
             entity.HasIndex(e => new { e.StartDate, e.EndDate })
                   .HasDatabaseName("IX_cosmetic_seasons_dates");
+        });
+
+        builder.Entity<CosmeticCatalogRevision>(entity =>
+        {
+            entity.ToTable("cosmetic_catalog_revisions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RevisionKey).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.Checksum).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.AppliedBy).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.Notes).HasMaxLength(500);
+            entity.Property(e => e.AppliedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.RevisionKey)
+                  .IsUnique()
+                  .HasDatabaseName("UX_cosmetic_catalog_revisions_key");
+            entity.HasIndex(e => e.AppliedAtUtc)
+                  .HasDatabaseName("IX_cosmetic_catalog_revisions_applied_at");
         });
 
         builder.Entity<CosmeticItem>(entity =>

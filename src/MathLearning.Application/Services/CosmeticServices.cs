@@ -11,6 +11,10 @@ public interface ICosmeticCatalogService
         int? seasonId,
         CancellationToken cancellationToken);
 
+    Task<CosmeticCatalogReadinessDto> GetCatalogReadinessAsync(CancellationToken cancellationToken);
+
+    Task<CosmeticCatalogImportResultDto> ApplyCatalogManifestAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CosmeticSeasonDto>> GetSeasonsAsync(
         bool activeOnly,
         CancellationToken cancellationToken);

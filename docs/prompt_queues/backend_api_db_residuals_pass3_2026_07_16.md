@@ -27,7 +27,7 @@ Scope: MathLearning backend/API only; exclude `src/MathLearning.Admin/**`
 | `BACKEND-API-DB-016` | P0/P1 privacy/storage | Prompt-ready | [Open](backend_api_db_pass3/BACKEND-API-DB-016.md) | Make bug-report screenshots private, reporter/admin-authorized, durable and lifecycle-safe. |
 | `BACKEND-API-DB-017` | P0/P1 account security | Prompt-ready | [Open](backend_api_db_pass3/BACKEND-API-DB-017.md) | Add lockout-aware credential validation, auth-specific abuse controls, enumeration-safe responses and explicit account verification. |
 | `BACKEND-API-DB-018` | P1 session security | Ready after `BACKEND-API-DB-017` | [Open](backend_api_db_pass3/BACKEND-API-DB-018.md) | Make logout-all, account-state and privilege changes invalidate existing access tokens within a documented bound. |
-| `BACKEND-API-DB-019` | P1 catalog/readiness | Prompt-ready | [Open](backend_api_db_pass3/BACKEND-API-DB-019.md) | Replace silent startup catalog mutation with versioned, auditable and readiness-enforced cosmetics catalog ownership. |
+| `BACKEND-API-DB-019` | P1 catalog/readiness | Done | [Open](backend_api_db_pass3/BACKEND-API-DB-019.md) | Replace silent startup catalog mutation with versioned, auditable and readiness-enforced cosmetics catalog ownership. Run log: `.ai/runs/2026-07-16-BACKEND-API-DB-019-evidence.md`. |
 
 ## Canonical ownership and deduplication
 

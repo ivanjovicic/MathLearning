@@ -27,8 +27,9 @@ public sealed partial class CosmeticPlatformService
         int? seasonId,
         CancellationToken cancellationToken)
     {
+        var catalogVersion = await BuildCatalogVersionAsync(cancellationToken);
         var now = DateTime.UtcNow;
-        var items = await GetCachedActiveCatalogItemsAsync(cancellationToken);
+        var items = await GetCachedActiveCatalogItemsAsync(catalogVersion, cancellationToken);
         var filtered = items
             .Where(x =>
                 (string.IsNullOrWhiteSpace(category) || x.Category == category.Trim()) &&
@@ -54,7 +55,6 @@ public sealed partial class CosmeticPlatformService
                 x.AssetVersion))
             .ToList();
 
-        var catalogVersion = await BuildCatalogVersionAsync(cancellationToken);
         return new MobileCosmeticCatalogResponseDto(catalogVersion, filtered);
     }
 
@@ -126,9 +126,6 @@ public sealed partial class CosmeticPlatformService
                 .AsNoTracking()
                 .Where(x => ids.Contains(x.Id))
                 .ToDictionaryAsync(x => x.Id, x => x.Key, cancellationToken);
-
-        string? ResolveKey(int? itemId)
-            => itemId.HasValue && keyById.TryGetValue(itemId.Value, out var key) ? key : null;
 
         return new MobileCosmeticAvatarResponseDto(
             MobileAvatarSlots.BuildSlotMap(config, keyById),

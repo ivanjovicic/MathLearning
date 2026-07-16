@@ -1,6 +1,6 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-07-03  
+Last aligned: 2026-07-16
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
@@ -38,7 +38,7 @@ Auth legend:
 | GET | `/metrics` | Public/internal | `Program.cs` | Process metrics; public-detail minimization remains BACKEND-TEST-026. |
 | GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
 | GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary; detail minimization pending. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus data counts; detail minimization pending. |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema and cosmetic catalog revision checks; returns 503 when required catalog state is missing or invalid. |
 | GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Migration/schema detail; minimization pending. |
 | GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema-health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. |
@@ -171,7 +171,7 @@ Owners: `CosmeticsEndpoints.cs`, `AvatarEndpoints.cs`, `DailyRunEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| GET | `/api/cosmetics/catalog` | Auth | Canonical mobile | Published catalog, ETag support. |
+| GET | `/api/cosmetics/catalog` | Auth | Canonical mobile | Published catalog, ETag support; `catalogVersion` now mirrors the applied catalog revision key. |
 | GET | `/api/cosmetics/inventory` | Auth | Canonical mobile | Current-user inventory/fragments. |
 | GET | `/api/cosmetics/avatar` | Auth | Canonical mobile | Current equipped slots. |
 | PUT | `/api/cosmetics/avatar` | Auth | Canonical mobile | Ownership-validated equip. |

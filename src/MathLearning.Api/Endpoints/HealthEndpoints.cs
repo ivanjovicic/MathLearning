@@ -1,4 +1,5 @@
 ﻿using MathLearning.Api.Services;
+using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 
@@ -66,7 +67,7 @@ public static class HealthEndpoints
         .WithDescription("Check PostgreSQL database connectivity");
 
         // 📊 Detailed readiness check (DB + data counts)
-        group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState) =>
+        group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState, ICosmeticCatalogService catalogService) =>
         {
             try
             {
@@ -92,6 +93,18 @@ public static class HealthEndpoints
                     }, statusCode: 503);
                 }
 
+                var catalogReadiness = await catalogService.GetCatalogReadinessAsync(CancellationToken.None);
+                if (!catalogReadiness.IsReady)
+                {
+                    return Results.Json(new
+                    {
+                        status = catalogReadiness.Status,
+                        reason = catalogReadiness.Reason,
+                        catalog = catalogReadiness,
+                        schema = BuildSchemaSummary(schemaStatus)
+                    }, statusCode: 503);
+                }
+
                 var questionCount = await db.Questions.CountAsync();
                 var categoryCount = await db.Categories.CountAsync();
                 var userCount = await db.UserProfiles.CountAsync();
@@ -100,6 +113,13 @@ public static class HealthEndpoints
                 {
                     status = "Ready",
                     db = "Connected",
+                    catalog = new
+                    {
+                        catalogReadiness.Status,
+                        catalogReadiness.RevisionKey,
+                        catalogReadiness.Checksum,
+                        catalogReadiness.CatalogVersion
+                    },
                     data = new
                     {
                         questions = questionCount,

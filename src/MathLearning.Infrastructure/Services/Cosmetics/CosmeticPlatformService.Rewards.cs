@@ -12,6 +12,8 @@ public sealed partial class CosmeticPlatformService
         string userId,
         CancellationToken cancellationToken)
     {
+        await EnsureCatalogReadyForSettlementAsync(cancellationToken);
+
         var profile = await db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (profile is null)
         {
@@ -55,6 +57,8 @@ public sealed partial class CosmeticPlatformService
         bool saveChanges,
         CancellationToken cancellationToken)
     {
+        await EnsureCatalogReadyForSettlementAsync(cancellationToken);
+
         var rules = await GetCachedRewardRulesAsync(request.SourceType, cancellationToken);
         var results = new List<CosmeticUnlockResultDto>();
 
@@ -143,6 +147,8 @@ public sealed partial class CosmeticPlatformService
         ClaimRewardTrackTierRequest request,
         CancellationToken cancellationToken)
     {
+        await EnsureCatalogReadyForSettlementAsync(cancellationToken);
+
         var effectiveTrackType = string.IsNullOrWhiteSpace(request.TrackType)
             ? CosmeticTrackTypes.Free
             : request.TrackType.Trim().ToLowerInvariant();
@@ -214,7 +220,8 @@ public sealed partial class CosmeticPlatformService
 
     private async Task<List<CosmeticUnlockResultDto>> ProcessLegacyItemRewardsAsync(string userId, UserProfile profile, CancellationToken cancellationToken)
     {
-        var items = (await GetCachedActiveCatalogItemsAsync(cancellationToken))
+        var catalogVersion = await BuildCatalogVersionAsync(cancellationToken);
+        var items = (await GetCachedActiveCatalogItemsAsync(catalogVersion, cancellationToken))
             .Where(x => !x.IsDefault)
             .ToList();
 
@@ -266,7 +273,8 @@ public sealed partial class CosmeticPlatformService
         CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
-        return (await GetCachedActiveCatalogItemsAsync(cancellationToken))
+        var catalogVersion = await BuildCatalogVersionAsync(cancellationToken);
+        return (await GetCachedActiveCatalogItemsAsync(catalogVersion, cancellationToken))
             .Where(x =>
                 x.UnlockType == request.SourceType &&
                 (x.ReleaseDate == null || x.ReleaseDate <= now) &&

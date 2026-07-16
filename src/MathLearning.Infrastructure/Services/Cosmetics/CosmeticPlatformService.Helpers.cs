@@ -3,16 +3,14 @@ using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace MathLearning.Infrastructure.Services.Cosmetics;
 
 public sealed partial class CosmeticPlatformService
 {
-    private static string GetCatalogCacheKey()
-        => "cosmetics:catalog:active";
-
-    private static string GetCatalogVersionCacheKey()
-        => "cosmetics:catalog:version";
+    private static string GetCatalogCacheKey(string catalogVersion)
+        => $"cosmetics:catalog:active:{catalogVersion}";
 
     private static string GetRewardRulesCacheKey(string sourceType)
         => $"cosmetics:reward-rules:{sourceType}";
@@ -20,10 +18,155 @@ public sealed partial class CosmeticPlatformService
     private static string GetAppearanceCacheKey(string userId)
         => $"cosmetics:appearance:{userId}";
 
-    private async Task<List<CosmeticItem>> GetCachedActiveCatalogItemsAsync(CancellationToken cancellationToken)
+    public async Task<CosmeticCatalogImportResultDto> ApplyCatalogManifestAsync(CancellationToken cancellationToken)
+        => await ApplyCatalogManifestAsync(CosmeticCatalogManifestProvider.Current, cancellationToken);
+
+    public async Task<CosmeticCatalogImportResultDto> ApplyCatalogManifestAsync(
+        CosmeticCatalogManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (!string.Equals(provider, "Npgsql.EntityFrameworkCore.PostgreSQL", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Cosmetic catalog import requires PostgreSQL.");
+        }
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("""
+            SELECT pg_advisory_xact_lock(hashtext('cosmetic_catalog_import'));
+            """, cancellationToken);
+
+        var revisionExists = await db.CosmeticCatalogRevisions
+            .AsNoTracking()
+            .AnyAsync(x => x.RevisionKey == manifest.RevisionKey, cancellationToken);
+        if (revisionExists)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new CosmeticCatalogImportResultDto(
+                manifest.RevisionKey,
+                manifest.Checksum,
+                false,
+                true,
+                await db.CosmeticCatalogRevisions.CountAsync(cancellationToken),
+                DateTime.UtcNow);
+        }
+
+        await db.Database.ExecuteSqlRawAsync(manifest.UpsertSql, cancellationToken);
+
+        db.CosmeticCatalogRevisions.Add(new CosmeticCatalogRevision
+        {
+            RevisionKey = manifest.RevisionKey,
+            Checksum = manifest.Checksum,
+            AppliedBy = "operator_job",
+            Notes = "Imported cosmetic catalog manifest",
+            AppliedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        await InvalidateCatalogCacheAsync(cancellationToken);
+
+        return new CosmeticCatalogImportResultDto(
+            manifest.RevisionKey,
+            manifest.Checksum,
+            true,
+            false,
+            await db.CosmeticCatalogRevisions.CountAsync(cancellationToken),
+            DateTime.UtcNow);
+    }
+
+    public async Task<CosmeticCatalogReadinessDto> GetCatalogReadinessAsync(CancellationToken cancellationToken)
+    {
+        var revision = await db.CosmeticCatalogRevisions
+            .AsNoTracking()
+            .OrderByDescending(x => x.AppliedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var missingDefaultKeys = new List<string>();
+        var fragmentIssues = new List<string>();
+        var rewardIssues = new List<string>();
+        var installedItemCount = await db.CosmeticItems.CountAsync(cancellationToken);
+
+        if (revision is null)
+        {
+            return new CosmeticCatalogReadinessDto(
+                false,
+                "NotReady",
+                "CosmeticCatalogRevisionMissing",
+                string.Empty,
+                string.Empty,
+                "catalog-uninitialized",
+                installedItemCount,
+                [],
+                [],
+                []);
+        }
+
+        foreach (var requiredKey in CosmeticCatalogManifestProvider.Current.RequiredDefaultKeys)
+        {
+            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Key == requiredKey, cancellationToken);
+            if (item is null || !item.IsActive || !item.IsDefault)
+            {
+                missingDefaultKeys.Add(requiredKey);
+            }
+        }
+
+        foreach (var requiredFragment in CosmeticCatalogManifestProvider.Current.RequiredFragments)
+        {
+            var matches = await db.CosmeticItems
+                .AsNoTracking()
+                .Where(x => x.FragmentLabel == requiredFragment.FragmentLabel && x.IsActive)
+                .ToListAsync(cancellationToken);
+
+            if (matches.Count != 1)
+            {
+                fragmentIssues.Add($"{requiredFragment.FragmentLabel}:expected=1,actual={matches.Count}");
+                continue;
+            }
+
+            var item = matches[0];
+            if (!string.Equals(item.Key, requiredFragment.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                fragmentIssues.Add($"{requiredFragment.FragmentLabel}:key={item.Key}");
+            }
+
+            if (item.FragmentsRequired is null || item.FragmentsRequired.Value <= 0)
+            {
+                fragmentIssues.Add($"{requiredFragment.FragmentLabel}:invalid_required");
+            }
+        }
+
+        var invalidRewardReferences = await ValidateRewardReferencesAsync(cancellationToken);
+        rewardIssues.AddRange(invalidRewardReferences);
+
+        var issues = missingDefaultKeys.Count + fragmentIssues.Count + rewardIssues.Count;
+        var isReady = issues == 0;
+        var status = isReady ? "Ready" : (missingDefaultKeys.Count > 0 || fragmentIssues.Count > 0 ? "NotReady" : "Degraded");
+        var reason = isReady
+            ? "CatalogReady"
+            : missingDefaultKeys.Count > 0
+                ? "CosmeticCatalogDefaultsMissing"
+                : fragmentIssues.Count > 0
+                    ? "CosmeticCatalogFragmentsInvalid"
+                    : "CosmeticCatalogRewardsInvalid";
+
+        return new CosmeticCatalogReadinessDto(
+            isReady,
+            status,
+            reason,
+            revision.RevisionKey,
+            revision.Checksum,
+            revision.RevisionKey,
+            installedItemCount,
+            missingDefaultKeys,
+            fragmentIssues,
+            rewardIssues);
+    }
+
+    private async Task<List<CosmeticItem>> GetCachedActiveCatalogItemsAsync(string catalogVersion, CancellationToken cancellationToken)
     {
         return await cache.GetOrCreateAsync(
-            GetCatalogCacheKey(),
+            GetCatalogCacheKey(catalogVersion),
             async ct => await db.CosmeticItems
                 .AsNoTracking()
                 .Where(x => x.IsActive && !x.IsHidden)
@@ -53,8 +196,8 @@ public sealed partial class CosmeticPlatformService
 
     private async Task InvalidateCatalogCacheAsync(CancellationToken cancellationToken)
     {
-        await cache.RemoveAsync(GetCatalogCacheKey(), cancellationToken);
-        await cache.RemoveAsync(GetCatalogVersionCacheKey(), cancellationToken);
+        var version = await BuildCatalogVersionAsync(cancellationToken);
+        await cache.RemoveAsync(GetCatalogCacheKey(version), cancellationToken);
     }
 
     private async Task InvalidateRewardRulesCacheAsync(string sourceType, CancellationToken cancellationToken)
@@ -65,6 +208,18 @@ public sealed partial class CosmeticPlatformService
     private async Task InvalidateAppearanceCacheAsync(string userId, CancellationToken cancellationToken)
     {
         await cache.RemoveAsync(GetAppearanceCacheKey(userId), cancellationToken);
+    }
+
+    private async Task EnsureCatalogReadyForSettlementAsync(CancellationToken cancellationToken)
+    {
+        var readiness = await GetCatalogReadinessAsync(cancellationToken);
+        if (readiness.IsReady)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Cosmetic catalog is not ready: {readiness.Reason}. Revision={readiness.RevisionKey} Checksum={readiness.Checksum}");
     }
 
     private async Task<UserAvatarConfig> EnsureAvatarConfigAsync(string userId, CancellationToken cancellationToken)
@@ -292,21 +447,65 @@ public sealed partial class CosmeticPlatformService
 
     private async Task<string> BuildCatalogVersionAsync(CancellationToken cancellationToken)
     {
-        return await cache.GetOrCreateAsync(
-            GetCatalogVersionCacheKey(),
-            async ct =>
-            {
-                var stamp = await db.CosmeticItems
-                    .AsNoTracking()
-                    .OrderByDescending(x => x.UpdatedAt)
-                    .Select(x => (DateTime?)x.UpdatedAt)
-                    .FirstOrDefaultAsync(ct);
+        var revision = await db.CosmeticCatalogRevisions
+            .AsNoTracking()
+            .OrderByDescending(x => x.AppliedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 
-                return $"catalog-{(stamp ?? DateTime.UtcNow):yyyyMMddHHmmss}";
-            },
-            CatalogCacheTtl,
-            CatalogCacheTtl,
-            cancellationToken);
+        if (revision is null)
+        {
+            return "catalog-uninitialized";
+        }
+
+        return revision.RevisionKey;
+    }
+
+    private async Task<IReadOnlyList<string>> ValidateRewardReferencesAsync(CancellationToken cancellationToken)
+    {
+        var issues = new List<string>();
+
+        var rewardRules = await db.CosmeticRewardRules
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .Select(x => x.RewardPayloadJson)
+            .ToListAsync(cancellationToken);
+        foreach (var payloadJson in rewardRules)
+        {
+            if (!TryParseRewardPayload(payloadJson, out var cosmeticItemId))
+            {
+                issues.Add("reward_rule:invalid_payload");
+                continue;
+            }
+
+            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == cosmeticItemId && x.IsActive, cancellationToken);
+            if (item is null)
+            {
+                issues.Add($"reward_rule:item_missing:{cosmeticItemId}");
+            }
+        }
+
+        var seasonRewards = await db.SeasonRewardTrackEntries
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .Select(x => x.RewardPayloadJson)
+            .ToListAsync(cancellationToken);
+        foreach (var payloadJson in seasonRewards)
+        {
+            if (!TryParseRewardPayload(payloadJson, out var cosmeticItemId))
+            {
+                issues.Add("reward_track:invalid_payload");
+                continue;
+            }
+
+            var item = await db.CosmeticItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == cosmeticItemId && x.IsActive, cancellationToken);
+            if (item is null)
+            {
+                issues.Add($"reward_track:item_missing:{cosmeticItemId}");
+            }
+        }
+
+        return issues;
     }
 
     private static string BuildRewardTrackSourceRef(int seasonId, string trackType, string tierToken)
