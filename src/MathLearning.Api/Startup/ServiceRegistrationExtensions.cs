@@ -290,6 +290,7 @@ public static class ServiceRegistrationExtensions
     public static void AddSecurityServices(this WebApplicationBuilder builder)
     {
         builder.Services.AddSingleton<MathLearning.Api.Middleware.IRateLimitCounterStore, MathLearning.Api.Middleware.InMemoryRateLimitCounterStore>();
+        builder.Services.AddScoped<AuthSessionValidationService>();
 
         builder.Services.AddIdentityCore<IdentityUser>(options =>
         {
@@ -325,6 +326,20 @@ public static class ServiceRegistrationExtensions
                     ValidIssuer = issuer,
                     ValidAudience = audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var sessionValidation = context.HttpContext.RequestServices
+                            .GetRequiredService<AuthSessionValidationService>();
+
+                        if (context.Principal is null || !await sessionValidation.IsAccessTokenCurrentAsync(context.Principal))
+                        {
+                            context.Fail("The access token is no longer valid.");
+                        }
+                    }
                 };
             });
 

@@ -21,6 +21,7 @@ public class RefreshTokenService
     /// </summary>
     public static RefreshToken CreateRefreshToken(
         string userId,
+        string securityStamp,
         string? device = null, 
         string? ipAddress = null,
         int expiryDays = 14)
@@ -28,6 +29,7 @@ public class RefreshTokenService
         return new RefreshToken
         {
             UserId = userId,
+            SecurityStamp = securityStamp,
             Token = GenerateRefreshToken(),
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(expiryDays),
@@ -39,7 +41,7 @@ public class RefreshTokenService
     /// <summary>
     /// Validira refresh token
     /// </summary>
-    public static bool ValidateRefreshToken(RefreshToken? token)
+    public static bool ValidateRefreshToken(RefreshToken? token, string? expectedSecurityStamp = null)
     {
         if (token == null)
             return false;
@@ -49,6 +51,12 @@ public class RefreshTokenService
 
         if (token.IsExpired)
             return false;
+
+        if (!string.IsNullOrWhiteSpace(expectedSecurityStamp) &&
+            !string.Equals(token.SecurityStamp, expectedSecurityStamp, StringComparison.Ordinal))
+        {
+            return false;
+        }
 
         return true;
     }

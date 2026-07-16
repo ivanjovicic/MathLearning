@@ -730,12 +730,13 @@ static async Task SeedAdminUser(WebApplication app, SeedAdminStartupPolicy.Evalu
         
         var result = await userManager.CreateAsync(admin, adminPassword);
         
-        if (result.Succeeded)
-        {
-            Log.Information("Admin user '{AdminUsername}' created during startup bootstrap.", adminUsername);
-            await userManager.AddToRoleAsync(admin, DesignTokenSecurity.AdminRole);
-            
-            string adminUserId = admin.Id;
+            if (result.Succeeded)
+            {
+                Log.Information("Admin user '{AdminUsername}' created during startup bootstrap.", adminUsername);
+                await userManager.AddToRoleAsync(admin, DesignTokenSecurity.AdminRole);
+                await userManager.UpdateSecurityStampAsync(admin);
+
+                string adminUserId = admin.Id;
              
             if (!await db.UserProfiles.AnyAsync(p => p.UserId == adminUserId))
             {
@@ -767,6 +768,7 @@ static async Task SeedAdminUser(WebApplication app, SeedAdminStartupPolicy.Evalu
         if (!await userManager.IsInRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole))
         {
             await userManager.AddToRoleAsync(existingAdmin, DesignTokenSecurity.AdminRole);
+            await userManager.UpdateSecurityStampAsync(existingAdmin);
         }
         if (resetAdminPasswordOnStart)
         {

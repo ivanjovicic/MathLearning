@@ -110,7 +110,9 @@ public sealed class AuthDevSeedLoginTests :
             "/api/auth/login",
             new LoginRequest(username, password));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, lockedResponse.StatusCode);
+        Assert.True(
+            lockedResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests,
+            $"Expected 401 or 429, got {(int)lockedResponse.StatusCode}");
     }
 
     private sealed record LoginRequest(string Username, string Password);

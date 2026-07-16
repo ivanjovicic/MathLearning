@@ -17,6 +17,8 @@ namespace MathLearning.Tests.Endpoints;
 
 public sealed class AuthRefreshConcurrencyTests
 {
+    private const string SecurityStamp = "refresh-test-security-stamp";
+
     [Fact]
     public async Task ConcurrentRefreshRotations_OnlyOneSaveSucceeds()
     {
@@ -25,7 +27,7 @@ public sealed class AuthRefreshConcurrencyTests
             .UseInMemoryDatabase(dbName)
             .Options;
 
-        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", "test-device", "127.0.0.1");
+        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", SecurityStamp, "test-device", "127.0.0.1");
 
         await using (var setup = new ApiDbContext(options))
         {
@@ -63,7 +65,7 @@ public sealed class AuthRefreshConcurrencyTests
             .UseSqlite(connectionString)
             .Options;
 
-        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", "test-device", "127.0.0.1");
+        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", SecurityStamp, "test-device", "127.0.0.1");
 
         await using (var setup = new RefreshTokenTestDbContext(options))
         {
@@ -98,7 +100,7 @@ public sealed class AuthRefreshConcurrencyTests
             .UseInMemoryDatabase(dbName)
             .Options;
 
-        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", "test-device", "127.0.0.1");
+        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", SecurityStamp, "test-device", "127.0.0.1");
 
         await using (var setup = new ApiDbContext(options))
         {
@@ -137,6 +139,7 @@ public sealed class AuthRefreshConcurrencyTests
 
         db.RefreshTokens.Add(RefreshTokenService.CreateRefreshToken(
             refreshToken.UserId,
+            SecurityStamp,
             refreshToken.Device,
             refreshToken.IpAddress,
             expiryDays: 14));
@@ -166,6 +169,7 @@ public sealed class AuthRefreshConcurrencyTests
 
         db.RefreshTokens.Add(RefreshTokenService.CreateRefreshToken(
             refreshToken.UserId,
+            SecurityStamp,
             refreshToken.Device,
             refreshToken.IpAddress,
             expiryDays: 14));

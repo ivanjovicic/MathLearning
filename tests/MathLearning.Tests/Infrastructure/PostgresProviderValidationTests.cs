@@ -24,7 +24,7 @@ public sealed class PostgresProviderValidationTests
         await database.SeedApiAsync();
 
         await using var db = new ApiDbContext(database.CreateApiOptions());
-        var refreshToken = RefreshTokenService.CreateRefreshToken("1", device: "postgres-provider", ipAddress: "127.0.0.1");
+        var refreshToken = RefreshTokenService.CreateRefreshToken("1", "postgres-provider-stamp", device: "postgres-provider", ipAddress: "127.0.0.1");
 
         db.RefreshTokens.Add(refreshToken);
         await db.SaveChangesAsync();

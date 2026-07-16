@@ -50,6 +50,7 @@ public sealed class RefreshTokenServiceSecurityTests
 
         var token = RefreshTokenService.CreateRefreshToken(
             "user-1",
+            "security-stamp-1",
             device: "android-device",
             ipAddress: "127.0.0.1",
             expiryDays: 7);
@@ -57,6 +58,7 @@ public sealed class RefreshTokenServiceSecurityTests
         var after = DateTime.UtcNow;
 
         Assert.Equal("user-1", token.UserId);
+        Assert.Equal("security-stamp-1", token.SecurityStamp);
         Assert.Equal("android-device", token.Device);
         Assert.Equal("127.0.0.1", token.IpAddress);
         Assert.False(string.IsNullOrWhiteSpace(token.Token));
@@ -118,6 +120,7 @@ public sealed class RefreshTokenServiceSecurityTests
     {
         var token = RefreshTokenService.CreateRefreshToken(
             "user-1",
+            "security-stamp-1",
             expiryDays: -1);
 
         Assert.True(token.IsExpired);

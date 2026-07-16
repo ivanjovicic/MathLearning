@@ -2,6 +2,26 @@
 
 Backend contract for the MathLearning Flutter runtime. Economy settlement mutations are documented in [mobile_economy_api_contract.md](./mobile_economy_api_contract.md).
 
+## Authentication
+
+Auth tokens are issued by the backend. Access JWTs include the current `userId` and `security_stamp` claims, and the backend validates them against the current Identity user state on each authenticated request.
+
+### `POST /auth/revoke-all`
+
+Auth: Required.
+
+Logout from all devices for the current user. The server revokes all active refresh tokens for that user and rotates the Identity security stamp, which immediately invalidates already-issued access tokens on the next authenticated request.
+
+If a refresh token row is still present but its stored security stamp no longer matches the current user stamp, `POST /auth/refresh` returns `401`.
+
+Response:
+```json
+{
+  "message": "Revoked 2 tokens",
+  "revokedCount": 2
+}
+```
+
 ## Cosmetics
 
 Auth: Required for all endpoints below.

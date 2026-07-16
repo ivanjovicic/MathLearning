@@ -2,6 +2,7 @@ using MathLearning.Application.DTOs.Auth;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Api.Services;
 using MathLearning.Api.Middleware;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -183,11 +184,12 @@ public static class AuthEndpoints
                 await db.SaveChangesAsync();
 
                 // Generate tokens
-                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
+                var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
+                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, securityStamp, expiryMinutes: 30);
 
                 var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
                 var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
-                refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
+                refreshToken = RefreshTokenService.CreateRefreshToken(userId, securityStamp, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
@@ -331,12 +333,13 @@ public static class AuthEndpoints
                 logger.LogInformation("User authenticated successfully: {Username}, UserId: {UserId}", canonicalUsername, userId);
 
                 // Generate Access Token (short-lived: 30 min)
-                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
+                var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
+                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, securityStamp, expiryMinutes: 30);
 
                 // Generate Refresh Token (long-lived: 14 days)
                 var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
                 var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
-                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
+                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, securityStamp, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
@@ -397,6 +400,12 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
                 }
 
+                var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
+                if (!RefreshTokenService.ValidateRefreshToken(refreshToken, securityStamp))
+                {
+                    return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+                }
+
                 var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
                 var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
                 if (!TryApplyAuthRateLimit(
@@ -416,9 +425,9 @@ public static class AuthEndpoints
                 RefreshTokenService.RevokeToken(refreshToken);
 
                 // Generate new tokens
-                var newAccessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
+                var newAccessToken = await GenerateJwtTokenAsync(user, userManager, config, securityStamp, expiryMinutes: 30);
 
-                var newRefreshToken = RefreshTokenService.CreateRefreshToken(refreshToken.UserId, device, ipAddress, expiryDays: 14);
+                var newRefreshToken = RefreshTokenService.CreateRefreshToken(refreshToken.UserId, securityStamp, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(newRefreshToken);
                 await db.SaveChangesAsync();
@@ -472,6 +481,7 @@ public static class AuthEndpoints
 
         // 🔒 REVOKE ALL TOKENS (logout from all devices)
         group.MapPost("/revoke-all", async (
+            UserManager<IdentityUser> userManager,
             ApiDbContext db,
             HttpContext ctx,
             ILogger<Program> logger) =>
@@ -479,23 +489,50 @@ public static class AuthEndpoints
             try
             {
                 string userId = ctx.User.FindFirst("userId")!.Value;
-
-                var userTokens = await db.RefreshTokens
-                    .Where(t => t.UserId == userId && t.RevokedAt == null)
-                    .ToListAsync();
-
-                foreach (var token in userTokens)
+                var user = await userManager.FindByIdAsync(userId);
+                if (user == null)
                 {
-                    RefreshTokenService.RevokeToken(token);
+                    return Results.Json(new { error = "User not found" }, statusCode: 401);
                 }
 
-                await db.SaveChangesAsync();
+                var tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
 
-                return Results.Ok(new
+                try
                 {
-                    message = $"Revoked {userTokens.Count} tokens",
-                    revokedCount = userTokens.Count
-                });
+                    var securityStampResult = await userManager.UpdateSecurityStampAsync(user);
+                    if (!securityStampResult.Succeeded)
+                    {
+                        if (tx != null)
+                            await tx.RollbackAsync(ctx.RequestAborted);
+
+                        return Results.Json(new { error = "Unable to revoke tokens" }, statusCode: 500);
+                    }
+
+                    var userTokens = await db.RefreshTokens
+                        .Where(t => t.UserId == userId && t.RevokedAt == null)
+                        .ToListAsync();
+
+                    foreach (var token in userTokens)
+                    {
+                        RefreshTokenService.RevokeToken(token);
+                    }
+
+                    await db.SaveChangesAsync();
+
+                    if (tx != null)
+                        await tx.CommitAsync(ctx.RequestAborted);
+
+                    return Results.Ok(new
+                    {
+                        message = $"Revoked {userTokens.Count} tokens",
+                        revokedCount = userTokens.Count
+                    });
+                }
+                finally
+                {
+                    if (tx != null)
+                        await tx.DisposeAsync();
+                }
             }
             catch (Exception ex)
             {
@@ -579,11 +616,12 @@ public static class AuthEndpoints
                 string userId = user.Id;
 
                 // Generate tokens
-                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
+                var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
+                var accessToken = await GenerateJwtTokenAsync(user, userManager, config, securityStamp, expiryMinutes: 30);
 
                 var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
                 var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
-                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
+                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, securityStamp, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
@@ -681,10 +719,16 @@ public static class AuthEndpoints
     private static bool IsPasswordLengthAcceptable(string password) =>
         !string.IsNullOrWhiteSpace(password) && password.Length <= 256;
 
+    private static Task<string> GetCurrentSecurityStampAsync(
+        UserManager<IdentityUser> userManager,
+        IdentityUser user) =>
+        userManager.GetSecurityStampAsync(user);
+
     private static async Task<string> GenerateJwtTokenAsync(
         IdentityUser user,
         UserManager<IdentityUser> userManager,
         IConfiguration config,
+        string securityStamp,
         int expiryMinutes = 30)
     {
         var jwtSettings = config.GetSection("JwtSettings");
@@ -702,6 +746,7 @@ public static class AuthEndpoints
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? ""),
             new Claim("userId", userId),
+            new Claim(AuthSessionValidationService.SecurityStampClaimType, securityStamp),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 

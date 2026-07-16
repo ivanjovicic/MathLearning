@@ -60,7 +60,7 @@ Owner: `AuthEndpoints.cs`
 | POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle contract as `/auth/login`. |
 | POST | `/auth/refresh` | Public | Canonical | Single-use token rotation with generic 401/429 contract. Model length drift remains BACKEND-TEST-012. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
-| POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens. |
+| POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens and invalidates existing access tokens by rotating the user security stamp. |
 | POST | `/auth/register` | Public/legacy | Legacy | Generic conflict/failure contract, real email parsing, and confirmed managed/no-email provisioning. |
 
 ---
