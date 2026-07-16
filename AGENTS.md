@@ -1,202 +1,198 @@
 # MathLearning Backend - AI Agent Rulebook
 
-This file defines the working rules for AI-assisted changes in `ivanjovicic/MathLearning`.
+Last aligned: 2026-07-16  
+Owner: `backend-agent-system`
 
-Read this before changing backend code or docs. The goal is to avoid recurring mistakes around auth scope, idempotency, migrations, and mobile contract drift.
+Follow this file for every change in `ivanjovicic/MathLearning`. Current code, focused tests and executable tooling override stale prose. Resolve agent-document disagreements through [`.ai/SOURCE_OF_TRUTH.md`](.ai/SOURCE_OF_TRUTH.md).
 
-Agents fixing backend bugs or changing high-risk backend behavior must also read `docs/BUGFIX_PATTERN_GUARDRAILS.md` before editing.
+## 1. Start narrowly
 
----
+Start with [`.ai/README.md`](.ai/README.md). For most tasks read only:
 
-## 1. Start here
+1. exact assigned prompt/queue row;
+2. relevant section of this file;
+3. target source and nearest focused test;
+4. one mapped owner from [`docs/DOCS_INDEX.md`](docs/DOCS_INDEX.md);
+5. one relevant mistake from [`docs/ai/learning/MISTAKE_LEDGER.md`](docs/ai/learning/MISTAKE_LEDGER.md).
 
-For most backend tasks, read in this order:
+High-risk fixes also read [`docs/BUGFIX_PATTERN_GUARDRAILS.md`](docs/BUGFIX_PATTERN_GUARDRAILS.md). Do not reread the whole repository by default.
 
-1. `AGENTS.md`
-2. `docs/DOCS_INDEX.md`
-3. `docs/AGENT_SHARED_OPERATING_STANDARD.md`
-4. `docs/AGENT_RUN_LOG_ENFORCEMENT.md`
-5. `.ai/RUN_LOG_TEMPLATE.md` and `.ai/runs/README.md` for non-trivial runs
-6. `docs/ai/learning/MISTAKE_LEDGER.md`
-7. `docs/AGENT_QUICKSTART.md`
-8. `docs/ARCHITECTURE_OVERVIEW.md`
-9. `docs/API_ENDPOINT_INVENTORY.md`
-10. `docs/backend_contract_gap_report.md`
-11. `docs/mobile_contract_idempotency_handoff.md`
-12. `docs/BUGFIX_PATTERN_GUARDRAILS.md` when fixing bugs
+Before editing, record:
 
-Do not reread the whole repository unless the task truly requires it.
+```text
+Interpreted outcome:
+Source of truth used:
+Assumptions:
+Material ambiguity:
+Risk/ownership model:
+Failure modes selected:
+Initial reads/search budget:
+Expected changed files/limit:
+Focused completion proof:
+Stop/handoff trigger:
+Documentation impact expectation:
+Working branch/PR:
+Delivery target:
+```
 
----
+Use [`.ai/TOKEN_BUDGETS.md`](.ai/TOKEN_BUDGETS.md). Every search answers one written question.
 
-## 2. Repository role
+## 2. Canonical agent owners
 
-This repo is the ASP.NET Core backend for the MathLearning Flutter mobile app.
+| Area | Owner |
+|---|---|
+| Low-context entry and repository-root proof | [`.ai/README.md`](.ai/README.md) |
+| Agent-document authority | [`.ai/SOURCE_OF_TRUTH.md`](.ai/SOURCE_OF_TRUTH.md) |
+| Time/context/read/edit limits | [`.ai/TOKEN_BUDGETS.md`](.ai/TOKEN_BUDGETS.md) |
+| Validation selection | [`.ai/VALIDATION_SELECTOR.md`](.ai/VALIDATION_SELECTOR.md) |
+| Prompt contract/admission | [`.ai/PROMPT_LINT_CHECKLIST.md`](.ai/PROMPT_LINT_CHECKLIST.md) |
+| Command limits/guarded execution | [`docs/AGENT_COMMAND_PLAYBOOK.md`](docs/AGENT_COMMAND_PLAYBOOK.md) |
+| Queue discovery/order | [`docs/prompt_queues/README.md`](docs/prompt_queues/README.md) |
+| Queue states/closure | [`docs/prompt_queues/PROMPT_LIFECYCLE.md`](docs/prompt_queues/PROMPT_LIFECYCLE.md) |
+| Shared cross-repo minimum | [`docs/AGENT_SHARED_OPERATING_STANDARD.md`](docs/AGENT_SHARED_OPERATING_STANDARD.md) |
+| Evidence fields/score caps | [`docs/AGENT_RUN_LOG_ENFORCEMENT.md`](docs/AGENT_RUN_LOG_ENFORCEMENT.md), [`.ai/RUN_LOG_TEMPLATE.md`](.ai/RUN_LOG_TEMPLATE.md) |
 
-The backend owns:
+Do not copy full mechanics into prompts. Link to the owner and include task-specific values.
 
-- auth, profiles, progress, quiz, SRS, practice, Daily Run, economy, cosmetics, leaderboard, sync, health, logging, and maintenance endpoints
-- EF Core persistence and migrations
-- backend-authoritative reward/economy/cosmetics settlement
-- idempotency ledgers and duplicate/conflict behavior for retryable mobile mutations
-- integration/contract tests proving mobile/backend behavior
+## 3. No-wandering execution
 
-The mobile contract lives in `ivanjovicic/Mathlearning-Mobile-App`. Do not invent mobile payloads; verify against mobile docs and tests.
+```text
+DISCOVER/ASSIGN → INTERPRET → PROVE OWNER → PATCH → VALIDATE → DELIVER → VERIFY → CLOSE/HANDOFF
+```
 
----
+- Do not patch before one owner, one hypothesis, expected changed files and focused proof are known.
+- Do not add paths outside the packet without recording scope drift.
+- One invalidated hypothesis permits one replacement; a second falsification stops implementation.
+- Do not patch product code for environment, harness, docs-tool or CI-infrastructure failure.
+- A second unexpected subsystem, unclear authority or unavailable required proof stops the run.
+- Explicit user assignment/current branch/open PR owns bounded paths; do not create a duplicate queue owner.
 
-## 3. Architecture rules
+```text
+local changes / commit / pushed branch / open PR != Done
+required proof + delivered commit + exact target verification + synchronized evidence/status = Done candidate
+```
 
-- `src/MathLearning.Api/Program.cs` wires startup, middleware, health, Swagger, CORS, auth, and endpoint mapping.
+## 4. Repository role and architecture
+
+This is the ASP.NET Core backend/API for the MathLearning Flutter app. It owns auth, profiles, progress, quiz/SRS/practice, Daily Run, economy, cosmetics, leaderboard, sync, health/logging/maintenance, EF Core persistence/migrations, authoritative settlement/idempotency and backend contract tests.
+
+Boundaries:
+
+- `src/MathLearning.Api/Program.cs` owns startup/middleware/endpoint mapping.
 - Endpoint files live in `src/MathLearning.Api/Endpoints/`.
 - Application/service behavior lives under `src/MathLearning.Application/` and `src/MathLearning.Infrastructure/`.
 - Domain entities live under `src/MathLearning.Domain/`.
-- EF Core context and migrations live under `src/MathLearning.Infrastructure/Persistance/`.
+- EF Core context/migrations live under `src/MathLearning.Infrastructure/Persistance/`.
 - Tests live under `tests/MathLearning.Tests/`.
 
-Do not put business logic directly into endpoints if a service already owns it. Endpoints should resolve auth user, bind/validate request, call the owning service/ledger, and return contract-shaped results.
+Endpoints authenticate, bind/validate, call the owner and project contract-shaped results. Do not make endpoints a second business-logic owner.
 
----
+## 5. Auth and user scope
 
-## 4. Auth and user-scope rules
+- Mobile-facing writes are scoped by authenticated server user id.
+- Never trust request-body `userId` as mutation authority.
+- Route `userId` must equal the authenticated user unless explicitly admin-only.
+- Admin-targeted routes keep actor and target separate.
+- Add/update anonymous, correct-user, wrong-user and wrong-role proof when ownership changes.
+- Authorization metadata alone is not enough; execute endpoint/integration tests.
 
-- Mobile-facing mutations must scope writes by authenticated server user id.
-- Never trust `userId` from request body as mutation authority.
-- Route `userId` is acceptable only when it must equal the authenticated user or the endpoint is explicitly admin-only.
-- Admin-targeted routes must keep actor user and target user separate.
-- Add or update tests when changing cross-user or ownership behavior.
+## 6. Idempotency and settlement
 
-Important test areas:
-
-- `MutationUserScopeIntegrationTests.cs`
-- `UserSettingsEndpointsIntegrationTests.cs`
-- `PracticeSessionServiceIntegrationTests.cs`
-- `SyncServiceTests.cs`
-
----
-
-## 5. Idempotency rules
-
-Retryable mobile mutations must use stable operation keys.
-
-Default handoff scope:
+Retryable mobile mutations use stable operation identity, normally:
 
 ```text
 userId + operationType + operationId/idempotencyKey
 ```
 
-Current backend uses a deliberate mixed storage strategy:
+Current strategies remain authoritative: shared `IdempotencyLedger`, `economy_transactions`, `cosmetics_idempotency_ledger`, and Daily Run chest domain-table policy. Do not add another pattern without proving current owners cannot express the invariant and documenting the decision.
 
-- shared `IdempotencyLedger` for Quiz/SRS-style mutations
-- `economy_transactions` for economy and season settlement
-- `cosmetics_idempotency_ledger` for cosmetics claim/grant flows
-- Daily Run chest domain-table policy via `daily_run_chest_claims`
+Expected behavior:
 
-Do not create a fourth pattern without documenting why.
+- first request mutates once and stores settled result;
+- duplicate same payload replays it;
+- conflicting same key follows owning conflict policy;
+- failure/cancellation does not leave completed ledger without domain mutation;
+- different users remain isolated;
+- ledger/domain writes share a transaction where applicable.
 
-Required behavior for generic idempotent mutations:
+## 7. Endpoint/mobile contract
 
-- first request mutates once and stores result
-- duplicate same payload replays settled result
-- same keys with different payload returns a conflict response
-- domain failure must not leave a completed ledger row
-- different users are isolated
+- Synchronize route changes with [`docs/API_ENDPOINT_INVENTORY.md`](docs/API_ENDPOINT_INVENTORY.md).
+- Align mobile payload/behavior with `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md`.
+- Do not invent mobile payloads from memory.
+- Contract-touching evidence records other repo checked, docs touched/deferred and follow-up owner.
+- Prefer canonical `/api/economy/*`, `/api/cosmetics/*`, `/api/quiz/srs/update`, `/api/daily-run/chest/claim` routes.
+- Do not expand legacy routes without explicit compatibility ownership.
 
-Daily Run chest is a documented exception: it uses domain-table Policy B and replays by transaction/day rather than generic payload conflict.
+## 8. Database and migration safety
 
----
+- Inspect existing migrations and DbContext mappings first.
+- Unique indexes match exact auth/idempotency scope.
+- Do not assume production auto-migrates.
+- Do not weaken/skip schema-from-zero validation to obtain green CI.
+- Provider-sensitive constraints, transactions and concurrency require PostgreSQL proof, not only InMemory.
+- Durable schema/contract changes update their owning docs.
+- Destructive commands require explicit ownership and verified non-production target.
 
-## 6. Endpoint and mobile contract rules
+## 9. Jobs, cache and observability
 
-- Keep endpoint changes synchronized with `docs/API_ENDPOINT_INVENTORY.md`.
-- Keep mobile-facing payload/behavior aligned with `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_contract.md`.
-- Contract-touching work must record the shared-standard cross-repo fields in the run log.
-- Do not expand legacy routes unless the task explicitly targets compatibility.
-- Prefer canonical mobile routes:
-  - `/api/economy/*` over older coin aliases
-  - `/api/cosmetics/*` over older avatar mutation paths
-  - `/api/quiz/srs/update` for SRS update
-  - `/api/daily-run/chest/claim` for Daily Run chest settlement
+- Give claim/lease, retry/backoff, dead-letter and cancellation behavior one canonical owner.
+- Avoid process-local locks for cross-instance invariants unless deployment boundary is explicit.
+- Read endpoints must not hide expensive writes/rebuilds without documentation/tests.
+- Cache invalidation follows authoritative write/settlement owner.
+- Never log bodies, credentials, tokens or sensitive user data.
+- Idempotency logs use safe metadata only.
+- Admin/observability endpoints remain policy-protected.
 
----
+## 10. Validation
 
-## 7. Migration and database safety
+Choose proof through [`.ai/VALIDATION_SELECTOR.md`](.ai/VALIDATION_SELECTOR.md) and commands through [`docs/AGENT_COMMAND_PLAYBOOK.md`](docs/AGENT_COMMAND_PLAYBOOK.md).
 
-- Inspect existing migrations and DbContext mappings before adding a migration.
-- Make unique indexes match idempotency scope exactly.
-- Ledger write and domain mutation should be in the same database transaction where applicable.
-- Do not assume production can auto-migrate.
-- Document new tables/indexes in `docs/backend_contract_gap_report.md` or the relevant architecture doc.
+```text
+contract/reproducer
+→ focused behavior/counterexample test
+→ provider/build/static proof
+→ docs/prompt/evidence checks
+→ wider suite or exact CI only for named wider risk
+```
 
----
+- Bug fixes add the smallest regression test unless evidence explains why executable proof is impractical.
+- Test duplicate/conflict/auth/cross-user/error/cancel/rollback/concurrency/provider cases, not only success.
+- Test existence/compilation is not execution proof.
+- `queued`/`in_progress` CI is not green.
+- Never claim Actions success without exact target SHA, jobs/checks and required artifacts.
+- Connector-only work records local commands as not run.
 
-## 8. Testing and validation
+## 11. Prompt, docs and evidence
 
-Use the narrowest test command that proves the change first. Then run broader tests if the touched area warrants it.
+- New/materially changed non-trivial prompts use `Prompt contract: v2`; new/promoted active owners also use `Prompt admission: v3`.
+- Admission requires current evidence, deduplication, one owner, dependencies/collisions, impact, bounded scope and executable proof.
+- [`docs/DOCS_INDEX.md`](docs/DOCS_INDEX.md) maps canonical vs audit/status docs.
+- Update the durable owner when behavior/contract/validation/workflow changes; do not create a second owner.
+- Dated audits, queues and run logs are evidence/history, not architecture authority.
 
-Bug fixes require the smallest regression test that would have failed before the fix unless the final response clearly explains why no test was practical in scope.
+Use one documentation impact statement:
 
-Common test groups:
+```text
+Documentation impact: updated <paths>
+Documentation impact: none - <specific reason>
+Documentation impact: follow-up <ID> - <specific reason>
+```
 
-- Idempotency: `tests/MathLearning.Tests/Idempotency/*`
-- Mobile HTTP contract: `tests/MathLearning.Tests/Contracts/*`
-- Endpoint route/auth: `tests/MathLearning.Tests/Endpoints/*`
-- Services: `tests/MathLearning.Tests/Services/*`
+Every non-trivial task updates `.ai/runs/<yyyy-mm-dd>-<prompt-id>-evidence.md` from [`.ai/RUN_LOG_TEMPLATE.md`](.ai/RUN_LOG_TEMPLATE.md). Record interpretation, files, commands run/skipped, validation, mistakes/waste/missed work, docs/cross-repo impact, branch/PR, commit/merge SHA, delivery verification and residual risk.
 
-Do not claim CI is green unless a GitHub Actions run was found and checked. If no run is available, write: `No GitHub Actions evidence found via connector`.
+Do not claim Done/100% while target proof, delivery, evidence/status sync or material residual work is missing. Placeholder commit text remains non-Done.
 
----
+## 12. Delivery and final response
 
-## 9. Observability and logs
+Use a bounded task branch/PR for broad docs/tooling, workflow, migration or high-risk runtime changes unless direct main is explicitly permitted.
 
-- Do not log full request bodies or sensitive user fields.
-- Idempotency observability should record safe metadata only: endpoint, operation type, safe operation suffix/hash, status, and category.
-- Admin/observability endpoints must remain protected by the correct policy.
+Final response includes:
 
----
-
-## 10. Run evidence and mistake learning (mandatory)
-
-Agents must follow the same closure gate as the Flutter repo and the shared cross-repo standard:
-
-- [docs/AGENT_SHARED_OPERATING_STANDARD.md](docs/AGENT_SHARED_OPERATING_STANDARD.md) — common prompt, evidence, score-cap, validation, and cross-repo rules
-- [docs/AGENT_RUN_LOG_ENFORCEMENT.md](docs/AGENT_RUN_LOG_ENFORCEMENT.md) — hard gate for non-trivial prompts
-- [.ai/RUN_LOG_TEMPLATE.md](.ai/RUN_LOG_TEMPLATE.md) — copy into `.ai/runs/<date>-<prompt-id>-evidence.md`
-- [.ai/runs/README.md](.ai/runs/README.md) — naming and backend-specific rules
-- [docs/ai/learning/MISTAKE_LEDGER.md](docs/ai/learning/MISTAKE_LEDGER.md) — read before start; update before Done
-
-Rules:
-
-- Every non-trivial prompt creates `.ai/runs/<yyyy-mm-dd>-<prompt-id>-evidence.md` before completion.
-- Every Done queue row references that log (or `Run log: fallback <reason>`) and includes model/client, validation, mistakes, waste, missed, follow-up, residual risk, commit SHA.
-- Read `Relevant prior mistakes read` from the mistake ledger; record `Mistakes observed` at end.
-- Runtime commits without evidence must be backfilled via [docs/ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md](docs/ai/prompts/BACKEND_EVIDENCE_BACKFILL_PROMPT.md) or marked `Needs evidence sync`.
-- Docs-only audits cannot claim runtime fixes; cap completion per enforcement score table.
-- Contract-touching work must record cross-repo sync (`BACKEND-MISTAKE-XREPO-001`).
-
-Repair/lint prompts:
-
-- [docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md](docs/ai/prompts/RUN_LOG_EVIDENCE_LINT_PROMPT.md)
-- [docs/ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md](docs/ai/prompts/AGENT_MISTAKE_ROLLUP_PROMPT.md)
-- [docs/ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md](docs/ai/prompts/CROSS_REPO_AGENT_STANDARD_SYNC_PROMPT.md)
-
----
-
-## 11. Commit and push policy
-
-Default workflow is one completed prompt = committed and pushed work on `main` before the final response.
-
-Exceptions:
-
-- validation fails and the task cannot be fixed in scope
-- user explicitly asks for branch/PR instead of direct main push
-- repository protection blocks direct push
-
-Final response must include:
-
-- run-log path (`.ai/runs/...` or fallback reason)
-- mistake IDs from run log or `none`
-- commit SHA(s)
-- files changed
-- validation run or reason skipped
-- residual risks / next prompt
+- run-log path/fallback reason;
+- mistake IDs or `none`;
+- branch/PR and commit SHA(s);
+- files changed;
+- validation executed/skipped;
+- exact CI/main verification when required;
+- completion state, residual risk and next owner.
