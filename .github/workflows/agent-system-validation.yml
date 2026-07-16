@@ -1,0 +1,79 @@
+name: Backend Agent System Validation
+
+on:
+  pull_request:
+    paths:
+      - "AGENTS.md"
+      - ".ai/**"
+      - "docs/AGENT_*.md"
+      - "docs/DOCS_INDEX.md"
+      - "docs/ai/**"
+      - "docs/prompt_queues/**"
+      - "scripts/run_guarded.py"
+      - "scripts/test_run_guarded.py"
+      - "scripts/validate_agent_*.py"
+      - "scripts/test_validate_agent_*.py"
+      - ".github/workflows/agent-system-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "AGENTS.md"
+      - ".ai/**"
+      - "docs/AGENT_*.md"
+      - "docs/DOCS_INDEX.md"
+      - "docs/ai/**"
+      - "docs/prompt_queues/**"
+      - "scripts/run_guarded.py"
+      - "scripts/test_run_guarded.py"
+      - "scripts/validate_agent_*.py"
+      - "scripts/test_validate_agent_*.py"
+      - ".github/workflows/agent-system-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-agent-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile agent tooling
+        run: |
+          python -m py_compile scripts/run_guarded.py
+          python -m py_compile scripts/validate_agent_prompt.py
+          python -m py_compile scripts/validate_agent_evidence.py
+          python -m py_compile scripts/validate_agent_system.py
+
+      - name: Test guarded command runner
+        run: python -m unittest -v scripts/test_run_guarded.py
+
+      - name: Test prompt contract validator
+        run: python -m unittest -v scripts/test_validate_agent_prompt.py
+
+      - name: Test agent-system wiring validator
+        run: python -m unittest -v scripts/test_validate_agent_system.py
+
+      - name: Validate agent-system wiring
+        run: python scripts/validate_agent_system.py
+
+      - name: Validate changed prompt contracts
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            python scripts/validate_agent_prompt.py --changed-from "${{ github.event.pull_request.base.sha }}"
+          elif [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            python scripts/validate_agent_prompt.py --changed-from "${{ github.event.before }}"
+          else
+            python scripts/validate_agent_prompt.py
+          fi
