@@ -1,107 +1,85 @@
 # Backend Prompt Lifecycle
 
-Last aligned: 2026-07-16  
+Last aligned: 2026-07-17  
 Owner: `backend-agent-system`
 
-This document owns queue state semantics for `ivanjovicic/MathLearning`. GitHub branch/PR ownership and explicit user assignment are the available distributed coordination evidence; do not invent a local-only claim protocol.
+## Two entry paths
 
-## State model
+### User-assigned bounded work
+
+The user request plus the task branch/PR is the owner. Do not search all queues, create a duplicate prompt or run admission ceremony. Use `Queue: user-assigned`, record the bounded packet and proceed.
+
+### Formal queue work
+
+Use the router, deduplicate, admit/claim, implement, validate, deliver and archive.
 
 ```text
-DISCOVER → DEDUPLICATE → ADMIT → ASSIGN/CLAIM → INTERPRET → IMPLEMENT/VALIDATE → DELIVER → VERIFY → ARCHIVE/HANDOFF
+DISCOVER → DEDUPLICATE → ADMIT → CLAIM → PLAN → PATCH/PROVE → DELIVER → VERIFY → ARCHIVE/HANDOFF
 ```
 
 ## Canonical states
 
 | State | Claimable | Meaning |
 |---|---:|---|
-| `Investigation` | no | A finite question must be answered before implementation ownership is safe. |
-| `Blocked` | no | A named dependency, authority decision or unavailable proof prevents work. |
-| `Ready after <ID>` | no | Scope is admitted but prerequisite delivery/evidence is not verified. |
-| `Ready` | yes | Admission checks pass and no visible owner/collision blocks the slice. |
-| `In progress` | no | One explicit worker/branch/PR owns the prompt and paths. |
-| `Needs validation` | no | Implementation/tests exist but required executable proof is missing/failed. |
-| `Needs evidence sync` | no | Runtime/delivery exists but queue/run-log/commit proof is incomplete. |
-| `Needs merge` | no | Validated branch/PR is not delivered to the required target. |
-| `Done` | no | Required proof, commit/delivery and evidence/status synchronization are complete. |
-| `Archived` | no | Completed/superseded history; never selected as active work. |
+| `Investigation` | no | Finite question before safe implementation. |
+| `Blocked` | no | Named dependency/authority/proof unavailable. |
+| `Ready after <ID>` | no | Admitted but prerequisite not delivered. |
+| `Ready` | yes | One bounded owner, no visible collision. |
+| `In progress` | no | Explicit branch/PR owns the row/paths. |
+| `Needs validation` | no | Implementation exists; required proof missing/failed. |
+| `Needs evidence sync` | no | Delivery exists; evidence/status incomplete. |
+| `Needs merge` | no | Validated branch not in target branch. |
+| `Done` | no | Proof, delivery and compact evidence synchronized. |
+| `Archived` | no | Completed/superseded history. |
 
-Do not use `Done` for “code written”, “tests added”, “branch pushed”, “PR open” or “CI queued”.
+Code written, tests added, PR open or CI queued are not Done.
 
-## Discovery and deduplication
+## Fast claim/collision check
 
-Before adding/promoting work:
+For a queue task check only:
 
-1. inspect the canonical queue index in [`README.md`](README.md);
-2. search active IDs and purposes;
-3. inspect current code/tests and completed evidence for an existing owner;
-4. inspect visible open PRs/branches/commits when tooling permits;
-5. classify work as new, residual, extension, supersession or duplicate;
-6. link supporting test/performance/provider work to one canonical runtime owner.
+1. owning row and linked prompt;
+2. current code/test owner;
+3. visible branch/PR for the same ID/paths;
+4. completed evidence for duplicate/residual verdict.
 
-Record exact sources checked and the verdict.
+Do not scan every historical queue. `MISTAKE_INDEX.json` selects relevant process cards.
 
-## Assignment and collision rules
+## Scope and split
 
-- Explicit user assignment owns the requested bounded task.
-- Formal queue work uses a dedicated `agent/<description>` branch or existing non-default task branch.
-- An open PR/current branch names prompt IDs and owned paths in its description/evidence.
-- Two workers must not edit the same runtime owner, migration chain, queue row or evidence log concurrently.
-- Provider/test prompts may run in parallel only when they do not modify the runtime owner and fixture ownership is explicit.
-- Refresh current `main`, queue status and visible PR state before starting/resuming.
-- Never create a duplicate prompt merely because another owner is in progress.
+One task has one lane, one authoritative writer and one bounded proof. Split when:
 
-## Interpretation gate
-
-Before editing, record:
-
-```text
-Interpreted outcome:
-Source of truth used:
-Assumptions:
-Material ambiguity:
-Risk/ownership model:
-Failure modes:
-Initial reads/search budget:
-Expected changed files/limit:
-Focused proof:
-Stop/handoff trigger:
-Documentation impact expectation:
-Working branch/PR:
-Delivery target:
-```
-
-Material auth, authority, persistence, API/schema, privacy/security, idempotency/settlement or destructive-migration ambiguity stops implementation.
-
-## Scope drift
-
-A path outside the execution packet is not silently added. Record why it belongs to the same owner. A second unexpected subsystem or second falsified hypothesis ends implementation and creates a bounded handoff.
+- runtime + migration/bootstrap + broad release/docs review;
+- second subsystem/authoritative owner;
+- more changed files/searches than budget;
+- second hypothesis is falsified;
+- full CI repair becomes separate from the target fix.
 
 ## Validation and delivery
 
-Use [`.ai/VALIDATION_SELECTOR.md`](../../.ai/VALIDATION_SELECTOR.md) and [`docs/AGENT_COMMAND_PLAYBOOK.md`](../AGENT_COMMAND_PLAYBOOK.md).
+Use [`.ai/VALIDATION_SELECTOR.md`](../../.ai/VALIDATION_SELECTOR.md). Changed queue/evidence checks:
 
-```text
-local changes / commit / pushed branch / open PR != Done
-required proof + delivered commit + exact target verification + synchronized evidence/status = Done candidate
+```powershell
+python scripts/validate_agent_prompt.py --changed-from <base-sha>
+python scripts/validate_agent_evidence.py --changed-from <base-sha> --verify-git
+python scripts/analyze_agent_runs.py --changed-from <base-sha> --fail-on-regression
 ```
 
-For direct-to-main, record exact main SHA. For PR delivery, record PR number, head SHA, checks reviewed, merge SHA and main verification. Connector-only work records local commands as not run.
+For direct main, record main SHA. For PR delivery, record PR, head SHA, targeted checks, merge SHA and main verification.
 
-## Closure and archive
+## Compact closure
 
 Before Done:
 
 - target and counterexample proof executed;
-- provider/CI proof executed when required;
-- no unresolved scope collision;
-- run log contains exact files, commands, skipped proof, mistakes, docs impact and commit SHA;
-- queue row matches actual evidence;
-- cross-repo impact is recorded;
-- material residual work has an existing/newly admitted owner.
+- required provider/CI proof executed or honest non-Done state used;
+- no collision/scope breach above 79%;
+- compact v2 log closed;
+- queue row uses the compact tail;
+- material residual work has one owner.
 
-Move completed prompts out of active tables into dated history/archive. Preserve evidence and failed-validation history.
+```text
+Done <n>% — Run log: <path>; Validation: <result>; Residual risk: <sentence>; Commit: self|<sha>
+```
 
-## Global selection rule
-
-One empty queue is not proof that no backend work remains. Follow [`README.md`](README.md), dependencies and priority. When all routes are blocked, report exact blockers instead of creating duplicate speculative work.
+Archive completed rows without copying full evidence into the queue.

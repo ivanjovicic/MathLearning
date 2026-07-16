@@ -1,89 +1,87 @@
 # Backend Agent Time and Context Budgets
 
-Last aligned: 2026-07-16  
+Last aligned: 2026-07-17  
 Owner: `backend-agent-system`
 
-Choose a timebox and a total-context budget before every non-trivial run. Workflow docs, source/tests, searches, diffs, logs, retries and validation output all count.
+The goal is fast correct closure, not maximum reading. Evidence, queue work and CI waiting count as task time.
 
-## Hard time limits
+## Budgets
 
-| Budget | Maximum elapsed time | Intended work |
-|---|---:|---|
-| low | 15 minutes | one known fix, focused investigation, docs repair or review |
-| medium | 30 minutes | one feature slice or cross-file bug |
-| high | 30 minutes per phase | audit/migration split into separate bounded phases |
+| Budget | Hard time | Workflow reads | Source/test reads | Changed files | Searches | Use for |
+|---|---:|---:|---:|---:|---:|---|
+| `micro` | 8 min | 2 | 4 | 2 | 1 | one known docs/tooling fix, status sync, tiny regression |
+| `low` | 15 min | 3 | 8 | 3 | 2 | one known bug, focused investigation, docs/evidence |
+| `medium` | 30 min | 5 | 15 | 6 | 4 | one feature slice or cross-file bug |
+| `high` | 30 min/phase | 8 | 20 | 10 | 6 | finite audit or migration phase; implementation stays separate |
 
-No single implementation phase exceeds 30 minutes. High budget permits more context, not unlimited wall time.
+`Files inspected` in compact evidence includes workflow docs plus source/tests. The validator permits a small combined ceiling (`micro` 6, `low` 11, `medium` 20, `high` 28).
 
 ## Checkpoints
 
-- minute 5: prompt, owner, source and collisions confirmed;
-- minute 10: root cause/falsifier or finite audit owner list proven;
+### Micro
+
+- minute 2: owner/hypothesis/proof known;
+- minute 5: patch and focused check started;
+- minute 7: closure only;
+- minute 8: stop.
+
+### Low/medium/high phase
+
+- minute 5: owner/source/collision confirmed;
+- minute 10: root cause or finite audit findings proven;
 - minute 20: smallest patch/artifact exists and focused validation started;
 - minute 25: no new discovery or scope expansion;
-- minute 30: stop, record evidence and hand off any residual work.
+- minute 30: stop and hand off residual work.
 
-One command gets at most 180 seconds. A timeout is classified before one changed retry; repeated timeout stops the run.
+One command gets at most 180 seconds. One changed retry is allowed after classification; an unchanged retry is waste and ends the run.
 
-## Budget limits
+## Automatic split rules
 
-| Budget | Workflow/docs reads | Source/test files inspected | Files edited | Searches |
-|---|---:|---:|---:|---:|
-| low | 3 | 8 | 3 | 2 |
-| medium | 5 | 15 | 6 | 4 |
-| high | 8 | 20 | 10 | 6 |
+Split before editing when any is true:
 
-A known-fix run spends at most half its budget before first edit. If ownership/root cause is still unknown, convert to investigation and hand off implementation.
+- more than one authoritative writer/subsystem;
+- implementation plus migration/bootstrap plus release review;
+- more changed files than the selected budget;
+- a migration changes runtime, operator workflow and broad docs in one slice;
+- audit plus implementation;
+- full-suite/CI repair is needed in addition to the target fix;
+- owner/root cause is still uncertain at the first checkpoint.
 
-## Required execution reservation
+A task may update its owning docs and one focused test without becoming a second subsystem. Twenty-file implementation packages are never a single medium run.
 
-Before editing, record:
+## Evidence overhead budget
 
-```text
-Run timebox: 15 | 30 minutes
-Initial reads: exact paths; maximum N
-Search budget: maximum N; one question per search
-Expected changed files: exact paths/prefixes; maximum N
-First hypothesis/falsifier:
-Focused proof and <=180-second command:
-Minute-10, minute-20, minute-25 and hard-stop actions:
-```
-
-## Automatic split triggers
-
-Split before execution when expected work includes:
-
-- more than one independent subsystem or authoritative writer;
-- audit plus implementation plus review;
-- runtime change plus generated migration/setup plus broad release validation;
-- auth, settlement or schema behavior combined with unrelated performance work;
-- more files/searches than the selected budget;
-- uncertain owner after the initial packet.
+- start packet/log creation: target under 60 seconds;
+- evidence closure: target under 3 minutes;
+- compact v2 log: target 35–70 lines, hard warning above 90;
+- queue completion row: one compact line linking the run log;
+- do not enumerate every file read when a count and focused inspection summary are sufficient;
+- use `Commit SHA: self`; never create a follow-up commit only to backfill the SHA.
 
 ## Completion consequences
 
-A time/context/search/edit breach:
+A read/search/change/time breach:
 
-- blocks `Done`;
-- caps completion at 79%;
-- requires a bounded existing or new follow-up owner;
-- becomes a learning signal rather than permission to continue.
+- blocks `Done` above 79%;
+- requires an exact handoff/follow-up owner;
+- is recorded as a learning signal;
+- does not authorize more discovery.
 
-## Required run-log metrics
+Failed required validation also caps completion at 79% and requires `Needs validation`, `Blocked` or another honest non-Done state.
+
+## Required compact metrics
 
 ```text
-Token budget: low | medium | high
-Run timebox: 15 | 30 minutes
-Elapsed time: <duration> | unknown-not-recorded
-Timebox result: within | exceeded
-Deadline action: completed | handed off | stopped
-Files inspected: <count>
-Files changed: <count>
-Searches: <count>
-Validation runs: <count>
-Failed retries: <count>
+Run mode: one lane only
+Token budget: micro | low | medium | high
+Started at UTC:
+Completed at UTC:
+Elapsed time:
+Files inspected: <n>
+Files changed: <n>
+Searches: <n>
+Validation runs: <n>
+Failed retries: <n>
 ```
 
-## Stop rules
-
-Stop when the selected timebox expires, a second subsystem appears, two hypotheses are falsified, the same failure repeats after one changed retry, required proof cannot run, another worker owns overlapping paths, or authority remains ambiguous.
+Use `scripts/agent_run.py` to record these automatically. Use `scripts/analyze_agent_runs.py` to measure unknown elapsed time, mixed lanes, oversized logs and repeated waste.

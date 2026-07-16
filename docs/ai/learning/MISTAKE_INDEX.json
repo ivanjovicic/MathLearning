@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "default": {
+    "mistakes": [
+      "BACKEND-MISTAKE-EVIDENCE-001",
+      "BACKEND-MISTAKE-VALIDATION-001"
+    ],
+    "reads": [
+      ".ai/README.md",
+      "AGENTS.md"
+    ],
+    "proof": [
+      "Use the narrowest focused validation selected by .ai/VALIDATION_SELECTOR.md"
+    ]
+  },
+  "areas": {
+    "agent-system": {
+      "mistakes": [
+        "BACKEND-MISTAKE-PROCESS-001",
+        "BACKEND-MISTAKE-PROCESS-002",
+        "BACKEND-MISTAKE-SCOPE-001",
+        "BACKEND-MISTAKE-CI-001"
+      ],
+      "reads": [
+        ".ai/README.md",
+        ".ai/TOKEN_BUDGETS.md",
+        "docs/AGENT_RUN_LOG_ENFORCEMENT.md"
+      ],
+      "proof": [
+        "python scripts/validate_agent_system.py",
+        "python scripts/validate_agent_evidence.py --changed-from <base> --verify-git"
+      ]
+    },
+    "docs-evidence": {
+      "mistakes": [
+        "BACKEND-MISTAKE-EVIDENCE-001",
+        "BACKEND-MISTAKE-AUDIT-001",
+        "BACKEND-MISTAKE-VALIDATION-001",
+        "BACKEND-MISTAKE-PROCESS-002"
+      ],
+      "reads": [
+        ".ai/RUN_LOG_TEMPLATE.md",
+        "docs/AGENT_RUN_LOG_ENFORCEMENT.md"
+      ],
+      "proof": [
+        "python scripts/validate_agent_evidence.py --changed-from <base> --verify-git",
+        "git diff --check"
+      ]
+    },
+    "queue": {
+      "mistakes": [
+        "BACKEND-MISTAKE-QUEUE-001",
+        "BACKEND-MISTAKE-SCOPE-001",
+        "BACKEND-MISTAKE-EVIDENCE-001"
+      ],
+      "reads": [
+        "docs/prompt_queues/README.md",
+        "docs/prompt_queues/PROMPT_LIFECYCLE.md"
+      ],
+      "proof": [
+        "python scripts/validate_agent_prompt.py --changed-from <base>",
+        "python scripts/validate_agent_evidence.py --changed-from <base> --verify-git"
+      ]
+    },
+    "auth": {
+      "mistakes": [
+        "BACKEND-MISTAKE-AUTH-001",
+        "BACKEND-MISTAKE-AUTH-002",
+        "BACKEND-MISTAKE-VALIDATION-002"
+      ],
+      "reads": [
+        "AGENTS.md#5-auth-and-user-scope",
+        "docs/API_ENDPOINT_INVENTORY.md"
+      ],
+      "proof": [
+        "Run anonymous, correct-user, wrong-user and wrong-role focused tests"
+      ]
+    },
+    "idempotency": {
+      "mistakes": [
+        "BACKEND-MISTAKE-IDEM-001",
+        "BACKEND-MISTAKE-IDEM-002",
+        "BACKEND-MISTAKE-XREPO-001"
+      ],
+      "reads": [
+        "AGENTS.md#6-idempotency-and-settlement",
+        "docs/mobile_contract_idempotency_handoff.md"
+      ],
+      "proof": [
+        "Prove first, duplicate, conflict, failure/cancellation and cross-user isolation"
+      ]
+    },
+    "migration": {
+      "mistakes": [
+        "BACKEND-MISTAKE-AUTH-001",
+        "BACKEND-MISTAKE-VALIDATION-001",
+        "BACKEND-MISTAKE-CI-001",
+        "BACKEND-MISTAKE-SCOPE-001"
+      ],
+      "reads": [
+        "AGENTS.md#8-database-and-migration-safety",
+        ".ai/VALIDATION_SELECTOR.md"
+      ],
+      "proof": [
+        "Run model/snapshot alignment, schema-from-zero and provider-backed proof"
+      ]
+    },
+    "api-contract": {
+      "mistakes": [
+        "BACKEND-MISTAKE-XREPO-001",
+        "BACKEND-MISTAKE-AUDIT-001",
+        "BACKEND-MISTAKE-VALIDATION-001"
+      ],
+      "reads": [
+        "docs/API_ENDPOINT_INVENTORY.md",
+        "docs/mobile_contract_idempotency_handoff.md"
+      ],
+      "proof": [
+        "Run focused HTTP contract tests and record Flutter sync/defer decision"
+      ]
+    },
+    "performance": {
+      "mistakes": [
+        "BACKEND-MISTAKE-PERF-001",
+        "BACKEND-MISTAKE-PERF-002",
+        "BACKEND-MISTAKE-PERF-003",
+        "BACKEND-MISTAKE-SCOPE-001"
+      ],
+      "reads": [
+        "docs/BACKEND_REQUEST_PERFORMANCE_BUDGETS.md",
+        "docs/BACKEND_COLD_START_BUDGET.md"
+      ],
+      "proof": [
+        "Name one measurable budget and one counterexample before editing"
+      ]
+    },
+    "content": {
+      "mistakes": [
+        "BACKEND-MISTAKE-CONTENT-001",
+        "BACKEND-MISTAKE-CONTENT-002"
+      ],
+      "reads": [
+        "docs/BUGFIX_PATTERN_GUARDRAILS.md"
+      ],
+      "proof": [
+        "Run preservation and adversarial sanitizer/formatter cases"
+      ]
+    },
+    "ci": {
+      "mistakes": [
+        "BACKEND-MISTAKE-CI-001",
+        "BACKEND-MISTAKE-VALIDATION-001",
+        "BACKEND-MISTAKE-PROCESS-001"
+      ],
+      "reads": [
+        ".github/workflows/database-validation.yml",
+        ".github/workflows/agent-system-validation.yml"
+      ],
+      "proof": [
+        "Bind the exact SHA to job steps/artifacts and classify unrelated failures"
+      ]
+    }
+  }
+}
