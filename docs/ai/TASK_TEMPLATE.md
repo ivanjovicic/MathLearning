@@ -1,109 +1,70 @@
-# Backend Agent Task Template
+# Backend Formal Queue Prompt Template
 
-Use for a new or materially rewritten non-trivial prompt in `ivanjovicic/MathLearning`. Remove placeholders before admission.
+Use only when creating or materially rewriting an active queue prompt. A bounded user-assigned task does not need this ceremony; use `scripts/agent_run.py plan/start` instead.
 
 ```text
 # <PROMPT-ID> — <bounded observable outcome>
 
 Prompt contract: v2
-Prompt admission: v3                         # required for new/promoted active work
+Prompt admission: v3
 Repository: ivanjovicic/MathLearning
 Prompt ID: <PROMPT-ID>
 Queue: docs/prompt_queues/<queue>.md
-Run lane: known-fix | investigation | implementation | tests | validation-only | docs-evidence | audit | review
-Token budget: low | medium | high
-Timebox: 15 minutes | 30 minutes
+Run lane: known-fix | investigation | validation-only | tests | docs-evidence | audit | review
+Token budget: micro | low | medium | high
+Timebox: 8 | 15 | 30 minutes
 
 Problem evidence:
 - <exact path/symbol/test/log and observed behavior>
-- <expected invariant or falsifiable question>
+- <expected invariant/falsifiable question>
 
 Deduplication check:
-- <active queues/router checked and verdict>
-- <current code/completed evidence checked and verdict>
-- <open PR/branch/claim state checked when visible and verdict>
+- <router/active owner verdict>
+- <current code/completed evidence verdict>
+- <visible PR/branch verdict>
 
-Priority rationale: P0 | P1 | P2 because <concrete impact>.
-
+Priority rationale: P0 | P1 | P2 because <impact>.
 Dependencies/collisions:
-- <prerequisite or No dependency - reason>
-- <conflicting paths/prompts/migration and safe-parallel boundary>
-
+- <prerequisite or none - reason>
+- <overlap and safe-parallel boundary>
 Owner boundary:
-- <authoritative implementation/service/ledger/schema owner>
-- <explicit excluded owners/non-goals>
+- <authoritative writer>
+- <excluded owners/non-goals>
+Queue placement: <exact queue/order reason>.
 
-Queue placement: <exact queue and order, with reason>.
+Task: <one outcome>
+Source of truth: current code/tests + exact owning docs.
+Ambiguity rule: stop for unresolved authority/auth/schema/API/idempotency/privacy/destructive-migration ambiguity.
 
-Task:
-<one bounded outcome>
-
-Source of truth:
-- current backend code and nearest tests;
-- AGENTS.md and exact owning docs;
-- mobile contract only when the public API boundary is touched.
-
-Interpretation before work:
-- Interpreted outcome: <observable result>
-- Assumptions: <none or explicit>
-- Expected changed files: <exact paths/prefixes>
-- Focused completion proof: <test/validator>
-
-Ambiguity rule:
-Stop for unresolved authority, API/schema, auth scope, idempotency/settlement, destructive migration, privacy/security or acceptance ambiguity.
-
-Risk/ownership model:
-- <who authoritatively owns writes/identity/schema/contract>
-- <what must remain unchanged>
-
-Failure-mode matrix:
-- <normal/no-op/idempotent case>
-- <auth/cross-user/error/retry/cancel/concurrency/provider case>
-- <additional case for P0/high-risk work>
+Failure modes:
+- <normal/no-op/idempotent>
+- <error/auth/retry/cancel/concurrency/provider>
+- <third case for P0>
 
 Execution packet:
 - Initial reads: <exact paths>; maximum <N>.
-- Search budget: maximum <N>; one written question per search.
-- First hypothesis/falsifier: <confirming and rejecting evidence>.
-- Expected changed files: <exact paths/prefixes>; maximum <N>.
-- Validation target: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test ...`.
-- Time checkpoints: minute 5 owner; minute 10 root cause; minute 20 proof; minute 25 closure; minute 30 stop.
-- Stop/handoff trigger: budget, second subsystem, second falsifier, unavailable proof or deadline.
+- Search budget: maximum <N>.
+- First hypothesis/falsifier: <confirm/reject evidence>.
+- Expected changed paths: <paths>; maximum <N>.
+- Focused proof: <guarded command, <=180 seconds>.
+- Stop: second owner/system, second falsifier, repeated failure, unavailable proof or deadline.
 
 Owned paths:
-- <exact path/prefix>
-
+- <paths>
 Avoid paths:
-- <explicit non-goal/path>
+- <paths>
+Documentation impact: <updated paths | none - reason | follow-up ID>.
 
-Documentation impact:
-- updated <owning docs> | none - <specific reason> | follow-up <ID> - <reason>
-
-Acceptance criteria:
-1. <target observable behavior>
-2. <negative/duplicate/security/retry/provider behavior>
+Acceptance:
+1. <target behavior>
+2. <negative/counterexample/provider behavior>
 3. <scope/contract/safety behavior>
 
-Proof required:
-- <focused executed behavior test>
-- <counterexample/provider proof>
-- <structural/build/docs supporting proof>
-
 Validation:
-- <one command per line, guarded where required>
+- <one command per line>
 
-Completion gate:
-Done only with executed target/counterexample proof, honest skipped checks, run evidence, commit SHA, synchronized queue status and required main/CI verification.
-
-Stop conditions:
-- second unexpected subsystem or authoritative owner;
-- second falsified hypothesis;
-- repeated unchanged failure/timeout;
-- unavailable required proof;
-- time/context/search/edit budget reached.
-
-Evidence:
-.ai/runs/<yyyy-mm-dd>-<PROMPT-ID>-evidence.md
+Completion gate: target/counterexample proof + compact v2 log + delivery + changed evidence validation.
+Evidence: .ai/runs/<yyyy-mm-dd>-<PROMPT-ID>-evidence.md
 ```
 
-See [`.ai/PROMPT_LINT_CHECKLIST.md`](../../.ai/PROMPT_LINT_CHECKLIST.md) and [`docs/AGENT_COMMAND_PLAYBOOK.md`](../AGENT_COMMAND_PLAYBOOK.md) before promoting a row to Ready.
+Do not repeat global mechanics already owned by `.ai/README.md`, `.ai/TOKEN_BUDGETS.md`, `.ai/VALIDATION_SELECTOR.md` or `docs/AGENT_COMMAND_PLAYBOOK.md`.
