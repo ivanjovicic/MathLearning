@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-07-11  
+Last aligned: 2026-07-16  
 Repo: `ivanjovicic/MathLearning`
 
 This index defines which backend docs to read first, which are canonical, and which are evidence/status snapshots. Use it to save tokens and avoid treating stale notes as current architecture.
@@ -63,6 +63,7 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`prompt_queues/backend_latest_commit_followups_2026_07_11.md`](prompt_queues/backend_latest_commit_followups_2026_07_11.md) | Latest-commit closure queue | Validate recent implementation, bind CI artifacts, lint evidence and reconcile prompt ownership | Run before another broad backend audit. |
 | [`prompt_queues/backend_api_db_residuals_2026_07_11.md`](prompt_queues/backend_api_db_residuals_2026_07_11.md) | API/DB residual queue pass 1 | Answer disclosure, quiz authority, progress/sync trust, offline bundles, token storage and user reads | Detailed prompts BACKEND-API-DB-001…008. |
 | [`prompt_queues/backend_api_db_residuals_pass2_2026_07_11.md`](prompt_queues/backend_api_db_residuals_pass2_2026_07_11.md) | API/DB residual queue pass 2 | Cosmetics/economy entitlement, leaderboard identity/parity, registration, photo avatars and pending recovery | Detailed prompts BACKEND-API-DB-009…015. |
+| [`prompt_queues/backend_api_db_residuals_pass3_2026_07_16.md`](prompt_queues/backend_api_db_residuals_pass3_2026_07_16.md) | API/DB residual queue pass 3 | Private bug screenshots, credential abuse protection, revocable access sessions and cosmetics catalog readiness | Detailed prompts BACKEND-API-DB-016…019; Admin project excluded. |
 | [`prompt_queues/backend_failing_test_followups_2026_07_11.md`](prompt_queues/backend_failing_test_followups_2026_07_11.md) | Migration follow-up queue | Remaining clean/upgraded PostgreSQL cosmetics migration blocker | Canonical `BACKEND-MIGRATION-001`; do not duplicate. |
 | [`prompt_queues/BACKEND-TEST-048-index-bloat-validation.md`](prompt_queues/BACKEND-TEST-048-index-bloat-validation.md) | PostgreSQL test prompt | Prove or replace index-bloat metric | Static formula concern requires provider evidence. |
 | [`../tests/MathLearning.Tests/coverage.runsettings`](../tests/MathLearning.Tests/coverage.runsettings) | Coverage settings | Cobertura/JSON collection | Used by database-validation CI. |
@@ -78,6 +79,7 @@ If code/tests and docs disagree, inspect implementation and update docs in the s
 | [`BACKEND_PERFORMANCE_BUG_AUDIT_2026_07_03.md`](BACKEND_PERFORMANCE_BUG_AUDIT_2026_07_03.md) | Static audit | Adaptive, weakness, XP reset, rate-limit, read-side mutation, cache, outbox and observability risks | Not runtime-fix proof. |
 | [`BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11.md`](BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11.md) | Static API/DB audit pass 1 | Mobile response leakage, session/progress/sync authority, offline versioning, token storage and user queries | Admin excluded; not runtime-fix proof. |
 | [`BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11_PASS2.md`](BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_11_PASS2.md) | Static API/DB audit pass 2 | Remaining economy/cosmetics, leaderboard, registration, avatar and pending-operation risks | Admin excluded; not runtime-fix proof. |
+| [`BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_16_PASS3.md`](BACKEND_API_DB_RESIDUAL_AUDIT_2026_07_16_PASS3.md) | Static API/DB audit pass 3 | Private screenshot storage, credential/account protection, access-session revocation and versioned catalog readiness | Admin excluded; creates BACKEND-API-DB-016…019. |
 | [`prompt_queues/backend_performance_optimization.md`](prompt_queues/backend_performance_optimization.md) | Performance queue pass 1 | Quiz, SRS, replay, leaderboard, Redis, startup, budgets and route bloat | BE-PERF-001…008. |
 | [`prompt_queues/backend_performance_followups_2026_07_03.md`](prompt_queues/backend_performance_followups_2026_07_03.md) | Performance/bug queue pass 2 | Atomic mutations, bounded workers/state, pure reads, cache/outbox and observability | BE-PERF-009…017. |
 | [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Cold-start budget | Blocking vs background startup | BE-PERF-006 evidence. |
