@@ -3,11 +3,69 @@ name: Database Validation
 on:
   pull_request:
   push:
-    branches: ["main"]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_full_suite:
+        description: Run the full .NET/PostgreSQL suite even when changed paths are docs/tooling only
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  validate-database:
+  classify-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      database_validation: ${{ steps.classify.outputs.database_validation }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Classify validation scope
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          FORCE_FULL: ${{ inputs.force_full_suite }}
+        run: |
+          base="$PR_BASE"
+          if [[ -z "$base" ]]; then base="$PUSH_BASE"; fi
+          args=(--base "$base" --head "$HEAD_SHA" --github-output "$GITHUB_OUTPUT")
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$FORCE_FULL" == "true" ]]; then
+            args+=(--force)
+          fi
+          python scripts/ci/classify_backend_changes.py "${args[@]}"
+
+      - name: Report scope decision
+        run: |
+          echo "## Database validation scope" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Full suite: ${{ steps.classify.outputs.database_validation }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ steps.classify.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+
+  database-suite:
+    if: needs.classify-changes.outputs.database_validation == 'true'
+    needs: classify-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -78,17 +136,12 @@ jobs:
             echo "No Cobertura coverage file was produced." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-
           reportgenerator \
             "-reports:$COVERAGE_FILES" \
             "-targetdir:artifacts/coverage-report" \
             "-reporttypes:Html;Cobertura;MarkdownSummaryGithub"
-
           if [ -f artifacts/coverage-report/SummaryGithub.md ]; then
             cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## Backend test coverage" >> "$GITHUB_STEP_SUMMARY"
-            echo "Coverage files were found, but the Markdown summary was not generated." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload test and coverage artifacts
@@ -120,9 +173,7 @@ jobs:
           API_PID=$!
           trap "kill $API_PID || true" EXIT
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:5087/api/health/ready; then
-              exit 0
-            fi
+            if curl -fsS http://127.0.0.1:5087/api/health/ready; then exit 0; fi
             sleep 2
           done
           cat api.log
@@ -133,3 +184,25 @@ jobs:
         with:
           name: api-idempotent-migration-script
           path: artifacts/migrations/api-idempotent.sql
+
+  validate-database:
+    if: always()
+    needs: [classify-changes, database-suite]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Preserve stable validation result
+        shell: bash
+        env:
+          REQUIRED: ${{ needs.classify-changes.outputs.database_validation }}
+          REASON: ${{ needs.classify-changes.outputs.reason }}
+          CLASSIFY_RESULT: ${{ needs.classify-changes.result }}
+          SUITE_RESULT: ${{ needs.database-suite.result }}
+        run: |
+          echo "Database validation required: $REQUIRED"
+          echo "Reason: $REASON"
+          echo "Classifier: $CLASSIFY_RESULT"
+          echo "Suite: $SUITE_RESULT"
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then exit 1; fi
+          if [[ "$REQUIRED" == "true" && "$SUITE_RESULT" != "success" ]]; then exit 1; fi
+          if [[ "$REQUIRED" != "true" && "$SUITE_RESULT" != "skipped" ]]; then exit 1; fi
