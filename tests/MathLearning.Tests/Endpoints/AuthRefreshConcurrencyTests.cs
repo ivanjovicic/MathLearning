@@ -4,10 +4,12 @@ using System.Text.Json;
 using MathLearning.Api;
 using MathLearning.Api.Startup;
 using MathLearning.Application.DTOs.Auth;
+using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -40,6 +42,44 @@ public sealed class AuthRefreshConcurrencyTests
         Assert.Equal(1, results.Count(result => !result));
 
         await using var verify = new ApiDbContext(options);
+        var tokens = await verify.RefreshTokens
+            .Where(t => t.UserId == "user-1")
+            .OrderBy(t => t.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(2, tokens.Count);
+        Assert.Single(tokens.Where(t => t.RevokedAt is null));
+        Assert.Contains(tokens, t => t.Token == initialToken.Token && t.RevokedAt is not null);
+    }
+
+    [Fact]
+    public async Task ConcurrentRefreshRotations_WithSqliteRelationalProvider_OnlyOneSaveSucceeds()
+    {
+        var connectionString = $"Data Source=file:refresh-race-{Guid.NewGuid():N}?mode=memory&cache=shared";
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<RefreshTokenTestDbContext>()
+            .UseSqlite(connectionString)
+            .Options;
+
+        var initialToken = RefreshTokenService.CreateRefreshToken("user-1", "test-device", "127.0.0.1");
+
+        await using (var setup = new RefreshTokenTestDbContext(options))
+        {
+            await setup.Database.EnsureCreatedAsync();
+            setup.RefreshTokens.Add(initialToken);
+            await setup.SaveChangesAsync();
+        }
+
+        var results = await Task.WhenAll(
+            RotateRefreshTokenAsync(options, initialToken.Token),
+            RotateRefreshTokenAsync(options, initialToken.Token));
+
+        Assert.Equal(1, results.Count(result => result));
+        Assert.Equal(1, results.Count(result => !result));
+
+        await using var verify = new RefreshTokenTestDbContext(options);
         var tokens = await verify.RefreshTokens
             .Where(t => t.UserId == "user-1")
             .OrderBy(t => t.CreatedAt)
@@ -109,6 +149,57 @@ public sealed class AuthRefreshConcurrencyTests
         catch (DbUpdateConcurrencyException)
         {
             return false;
+        }
+    }
+
+    private static async Task<bool> RotateRefreshTokenAsync(DbContextOptions<RefreshTokenTestDbContext> options, string refreshTokenValue)
+    {
+        await using var db = new RefreshTokenTestDbContext(options);
+        var refreshToken = await db.RefreshTokens.SingleAsync(t => t.Token == refreshTokenValue);
+
+        if (!RefreshTokenService.ValidateRefreshToken(refreshToken))
+        {
+            return false;
+        }
+
+        RefreshTokenService.RevokeToken(refreshToken);
+
+        db.RefreshTokens.Add(RefreshTokenService.CreateRefreshToken(
+            refreshToken.UserId,
+            refreshToken.Device,
+            refreshToken.IpAddress,
+            expiryDays: 14));
+
+        try
+        {
+            await db.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
+    }
+
+    private sealed class RefreshTokenTestDbContext : DbContext
+    {
+        public RefreshTokenTestDbContext(DbContextOptions<RefreshTokenTestDbContext> options)
+            : base(options)
+        {
+        }
+
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<RefreshToken>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Token).IsRequired().HasMaxLength(64);
+                entity.Property(e => e.CreatedAt).IsRequired();
+                entity.Property(e => e.ExpiresAt).IsRequired();
+                entity.Property(e => e.RevokedAt).IsConcurrencyToken();
+            });
         }
     }
 }

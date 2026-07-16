@@ -20,7 +20,7 @@ The runtime fixes are valuable, but the latest evidence logs are too short for t
 | ID | Status | Purpose |
 |---|---|---|
 | BACKEND-LATEST-EVIDENCE-001 | Done (2026-07-16, docs/evidence) | Run/fix backend evidence validator and backfill latest auth run logs to the new standard. Model: unknown-not-exposed; Run log: `.ai/runs/2026-07-16-BACKEND-LATEST-EVIDENCE-001-evidence.md`; Mistakes: none; Waste: evidence backfill; Missed: none; Follow-up: none; Residual risk: referenced validation still fails on older legacy queue/log rows outside this prompt. |
-| BACKEND-LATEST-AUTH-001 | Prompt-ready after BACKEND-LATEST-EVIDENCE-001 | Verify refresh-token and mobile-registration fixes with relational/provider-aware tests or document the remaining provider gap. |
+| BACKEND-LATEST-AUTH-001 | Done (2026-07-16, tests) | Verify refresh-token and mobile-registration fixes with relational/provider-aware tests or document the remaining provider gap. Run log: `.ai/runs/2026-07-16-BACKEND-LATEST-AUTH-001-evidence.md`. |
 | BACKEND-LATEST-WORKFLOW-001 | Prompt-ready after BACKEND-LATEST-EVIDENCE-001 | Run the manual Agent Evidence Validation workflow in referenced mode and record the result. |
 
 ---
