@@ -7,7 +7,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Mail;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +19,10 @@ namespace MathLearning.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    private static readonly TimeSpan LoginRateLimitWindow = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan RegisterRateLimitWindow = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan RefreshRateLimitWindow = TimeSpan.FromMinutes(10);
+
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/auth")
@@ -87,7 +94,6 @@ public static class AuthEndpoints
 
             try
             {
-                // Validate input
                 if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
                 {
                     return Results.Json(new MobileRegisterResponse(
@@ -96,39 +102,39 @@ public static class AuthEndpoints
                     ), statusCode: 400);
                 }
 
-                if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+                if (!IsValidEmailAddress(request.Email, out var canonicalEmail))
                 {
                     return Results.Json(new MobileRegisterResponse(
                         Success: false,
-                        Message: "Valid email address is required"
+                        Message: "Registration could not be completed"
                     ), statusCode: 400);
                 }
 
-                if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+                if (!IsPasswordLengthAcceptable(request.Password))
                 {
                     return Results.Json(new MobileRegisterResponse(
                         Success: false,
-                        Message: "Password must be at least 6 characters long"
+                        Message: "Registration could not be completed"
                     ), statusCode: 400);
                 }
 
-                // Check if username already exists
-                var existingUser = await userManager.FindByNameAsync(request.Username);
+                var canonicalUsername = request.Username.Trim();
+
+                var existingUser = await userManager.FindByNameAsync(canonicalUsername);
                 if (existingUser != null)
                 {
                     return Results.Json(new MobileRegisterResponse(
                         Success: false,
-                        Message: "Username already taken"
+                        Message: "Registration could not be completed"
                     ), statusCode: 409);
                 }
 
-                // Check if email already exists
-                var existingEmail = await userManager.FindByEmailAsync(request.Email);
+                var existingEmail = await userManager.FindByEmailAsync(canonicalEmail);
                 if (existingEmail != null)
                 {
                     return Results.Json(new MobileRegisterResponse(
                         Success: false,
-                        Message: "Email already registered"
+                        Message: "Registration could not be completed"
                     ), statusCode: 409);
                 }
 
@@ -137,9 +143,10 @@ public static class AuthEndpoints
                 // Create Identity user
                 user = new IdentityUser
                 {
-                    UserName = request.Username,
-                    Email = request.Email,
-                    EmailConfirmed = false // TODO: Add email confirmation flow
+                    UserName = canonicalUsername,
+                    Email = canonicalEmail,
+                    EmailConfirmed = true,
+                    LockoutEnabled = true
                 };
 
                 var result = await userManager.CreateAsync(user, request.Password);
@@ -149,11 +156,9 @@ public static class AuthEndpoints
                     if (tx != null)
                         await tx.RollbackAsync(ctx.RequestAborted);
 
-                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                    
                     return Results.Json(new MobileRegisterResponse(
                         Success: false,
-                        Message: errors
+                        Message: "Registration could not be completed"
                     ), statusCode: 400);
                 }
 
@@ -164,8 +169,8 @@ public static class AuthEndpoints
                 profile = new UserProfile
                 {
                     UserId = userId,
-                    Username = request.Username,
-                    DisplayName = request.DisplayName ?? request.Username,
+                    Username = canonicalUsername,
+                    DisplayName = request.DisplayName ?? canonicalUsername,
                     Coins = 100, // Welcome bonus
                     Level = 1,
                     Xp = 0,
@@ -180,8 +185,8 @@ public static class AuthEndpoints
                 // Generate tokens
                 var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
-                var device = ctx.Request.Headers.UserAgent.ToString();
-                var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
+                var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
+                var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
                 refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
@@ -198,7 +203,7 @@ public static class AuthEndpoints
                         RefreshToken: refreshToken.Token,
                         ExpiresIn: 1800,
                         UserId: userId,
-                        Username: request.Username
+                        Username: canonicalUsername
                     ),
                     Profile: new UserProfileDto(
                         UserId: userId,
@@ -257,26 +262,55 @@ public static class AuthEndpoints
         static async Task<IResult> LoginHandler(
             LoginRequest request,
             UserManager<IdentityUser> userManager,
+            SignInManager<IdentityUser> signInManager,
             ApiDbContext db,
             IConfiguration config,
             HttpContext ctx,
-            ILogger<Program> logger)
+            ILogger<Program> logger,
+            IRateLimitCounterStore authThrottleStore,
+            ILookupNormalizer lookupNormalizer)
         {
             try
             {
-                logger.LogInformation($"Login attempt for username: {request.Username}");
-                
-                var user = await userManager.FindByNameAsync(request.Username);
-                if (user == null)
+                var canonicalUsername = request.Username.Trim();
+                var normalizedUsername = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeName(canonicalUsername) ?? canonicalUsername,
+                    128);
+
+                if (!TryApplyAuthRateLimit(
+                        authThrottleStore,
+                        purpose: "login",
+                        principal: normalizedUsername,
+                        ctx,
+                        accountLimit: 5,
+                        networkLimit: 15,
+                        LoginRateLimitWindow,
+                        out var loginRetryAfter))
                 {
-                    logger.LogWarning($"Login failed - user not found: {request.Username}");
+                    return CreateAuthRateLimitedResponse(ctx, loginRetryAfter);
+                }
+
+                if (!IsPasswordLengthAcceptable(request.Password))
+                {
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
-                var isPasswordValid = await userManager.CheckPasswordAsync(user, request.Password);
-                if (!isPasswordValid)
+                logger.LogInformation("Login attempt for username: {Username}", normalizedUsername);
+
+                var user = await userManager.FindByNameAsync(canonicalUsername);
+                if (user == null)
                 {
-                    logger.LogWarning($"Login failed - invalid password for user: {request.Username}");
+                    logger.LogWarning("Login failed - user not found: {Username}", normalizedUsername);
+                    return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
+                }
+
+                var signInResult = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+                if (!signInResult.Succeeded)
+                {
+                    logger.LogWarning(
+                        "Login failed - {Reason} for user: {Username}",
+                        signInResult.IsLockedOut ? "locked out" : "invalid password or not allowed",
+                        normalizedUsername);
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
@@ -294,20 +328,20 @@ public static class AuthEndpoints
                         await db.SaveChangesAsync();
                 }
 
-                logger.LogInformation($"User authenticated successfully: {request.Username}, UserId: {userId}");
+                logger.LogInformation("User authenticated successfully: {Username}, UserId: {UserId}", canonicalUsername, userId);
 
                 // Generate Access Token (short-lived: 30 min)
                 var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
                 // Generate Refresh Token (long-lived: 14 days)
-                var device = ctx.Request.Headers.UserAgent.ToString();
-                var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
+                var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
+                var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
                 var refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
 
-                logger.LogInformation($"Login successful for user: {request.Username}");
+                logger.LogInformation("Login successful for user: {Username}", canonicalUsername);
 
                 return Results.Ok(new TokenResponse(
                     AccessToken: accessToken,
@@ -341,7 +375,8 @@ public static class AuthEndpoints
             ApiDbContext db,
             IConfiguration config,
             HttpContext ctx,
-            ILogger<Program> logger) =>
+            ILogger<Program> logger,
+            IRateLimitCounterStore authThrottleStore) =>
         {
             try
             {
@@ -359,7 +394,22 @@ public static class AuthEndpoints
                 var user = await userManager.FindByIdAsync(refreshToken!.UserId);
                 if (user == null)
                 {
-                    return Results.Json(new { error = "User not found" }, statusCode: 404);
+                    return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+                }
+
+                var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
+                var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
+                if (!TryApplyAuthRateLimit(
+                        authThrottleStore,
+                        purpose: "refresh",
+                        principal: refreshToken.UserId,
+                        ctx,
+                        accountLimit: 10,
+                        networkLimit: 30,
+                        RefreshRateLimitWindow,
+                        out var refreshRetryAfter))
+                {
+                    return CreateAuthRateLimitedResponse(ctx, refreshRetryAfter);
                 }
 
                 // Revoke old refresh token
@@ -368,8 +418,6 @@ public static class AuthEndpoints
                 // Generate new tokens
                 var newAccessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
-                var device = ctx.Request.Headers.UserAgent.ToString();
-                var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
                 var newRefreshToken = RefreshTokenService.CreateRefreshToken(refreshToken.UserId, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(newRefreshToken);
@@ -464,28 +512,68 @@ public static class AuthEndpoints
             ApiDbContext db,
             IConfiguration config,
             HttpContext ctx,
-            ILogger<Program> logger) =>
+            ILogger<Program> logger,
+            IRateLimitCounterStore authThrottleStore,
+            ILookupNormalizer lookupNormalizer) =>
         {
             try
             {
-                var existingUser = await userManager.FindByNameAsync(request.Username);
+                var canonicalUsername = request.Username.Trim();
+                var normalizedUsername = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeName(canonicalUsername) ?? canonicalUsername,
+                    128);
+                var normalizedEmail = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeEmail(request.Email) ?? request.Email,
+                    256);
+
+                if (!TryApplyAuthRateLimit(
+                        authThrottleStore,
+                        purpose: "register",
+                        principal: $"{normalizedUsername}:{normalizedEmail}",
+                        ctx,
+                        accountLimit: 3,
+                        networkLimit: 9,
+                        RegisterRateLimitWindow,
+                        out var registerRetryAfter))
+                {
+                    return CreateAuthRateLimitedResponse(ctx, registerRetryAfter);
+                }
+
+                if (!IsValidEmailAddress(request.Email, out var canonicalEmail))
+                {
+                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                }
+
+                if (!IsPasswordLengthAcceptable(request.Password))
+                {
+                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                }
+
+                var existingUser = await userManager.FindByNameAsync(canonicalUsername);
                 if (existingUser != null)
                 {
-                    return Results.Json(new { error = "Username already exists" }, statusCode: 400);
+                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 409);
+                }
+
+                var existingEmail = await userManager.FindByEmailAsync(canonicalEmail);
+                if (existingEmail != null)
+                {
+                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 409);
                 }
 
                 var user = new IdentityUser
                 {
-                    UserName = request.Username,
-                    Email = request.Email
+                    UserName = canonicalUsername,
+                    Email = canonicalEmail,
+                    EmailConfirmed = true,
+                    LockoutEnabled = true
                 };
 
                 var result = await userManager.CreateAsync(user, request.Password);
 
                 if (!result.Succeeded)
                 {
-                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                    return Results.Json(new { error = errors }, statusCode: 400);
+                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
 
                 string userId = user.Id;
@@ -493,8 +581,8 @@ public static class AuthEndpoints
                 // Generate tokens
                 var accessToken = await GenerateJwtTokenAsync(user, userManager, config, expiryMinutes: 30);
 
-                var device = ctx.Request.Headers.UserAgent.ToString();
-                var ipAddress = ctx.Connection.RemoteIpAddress?.ToString();
+                var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
+                var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
                 var refreshToken = RefreshTokenService.CreateRefreshToken(userId, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
@@ -505,7 +593,7 @@ public static class AuthEndpoints
                     RefreshToken: refreshToken.Token,
                     ExpiresIn: 1800,
                     UserId: userId,
-                    Username: user.UserName ?? ""
+                    Username: canonicalUsername
                 ));
             }
             catch (Exception ex)
@@ -521,6 +609,77 @@ public static class AuthEndpoints
             timestamp = DateTime.UtcNow
         })).WithName("TestAuth");
     }
+
+    private static bool TryApplyAuthRateLimit(
+        IRateLimitCounterStore authThrottleStore,
+        string purpose,
+        string principal,
+        HttpContext ctx,
+        int accountLimit,
+        int networkLimit,
+        TimeSpan window,
+        out int retryAfterSeconds)
+    {
+        var safePrincipal = NormalizeAuthDimension(principal, 128);
+        var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
+        var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
+
+        if (!authThrottleStore.TryAcquire($"{purpose}:account:{safePrincipal}", accountLimit, window, out retryAfterSeconds))
+            return false;
+
+        if (!authThrottleStore.TryAcquire($"{purpose}:network:{ipAddress}:{device}", networkLimit, window, out retryAfterSeconds))
+            return false;
+
+        return true;
+    }
+
+    private static IResult CreateAuthRateLimitedResponse(HttpContext ctx, int retryAfterSeconds)
+    {
+        var boundedRetryAfter = Math.Max(1, retryAfterSeconds);
+        ctx.Response.Headers["Retry-After"] = boundedRetryAfter.ToString(CultureInfo.InvariantCulture);
+        return Results.Json(
+            new { error = "Too many attempts. Try again later." },
+            statusCode: StatusCodes.Status429TooManyRequests);
+    }
+
+    private static string NormalizeAuthDimension(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "unknown";
+
+        var normalized = value.Trim().Normalize(NormalizationForm.FormKC);
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
+    }
+
+    private static string GetPhysicalClientIp(HttpContext ctx)
+    {
+        var physicalIp = ctx.Items[ConnectionRemoteIpMiddleware.ItemKey] as IPAddress
+            ?? ctx.Connection.RemoteIpAddress;
+
+        return physicalIp?.ToString() ?? "unknown";
+    }
+
+    private static bool IsValidEmailAddress(string email, out string canonicalEmail)
+    {
+        canonicalEmail = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        try
+        {
+            var parsed = new MailAddress(email.Trim());
+            canonicalEmail = parsed.Address;
+            return canonicalEmail.Length <= 254;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsPasswordLengthAcceptable(string password) =>
+        !string.IsNullOrWhiteSpace(password) && password.Length <= 256;
 
     private static async Task<string> GenerateJwtTokenAsync(
         IdentityUser user,

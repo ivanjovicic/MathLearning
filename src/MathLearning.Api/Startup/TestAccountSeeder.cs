@@ -15,8 +15,8 @@ public sealed class TestAccountSeeder
 
     private static readonly SeedAccount[] Accounts =
     [
-        new("test", "test@mathlearning.local", "test123"),
-        new("student", "student@mathlearning.local", "student123")
+        new("test", "test@mathlearning.local", "test-passphrase-2026!"),
+        new("student", "student@mathlearning.local", "student-passphrase-2026!")
     ];
 
     public TestAccountSeeder(
@@ -55,7 +55,8 @@ public sealed class TestAccountSeeder
             {
                 UserName = account.Username,
                 Email = account.Email,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                LockoutEnabled = true
             };
 
             var createResult = await userManager.CreateAsync(user, account.Password);

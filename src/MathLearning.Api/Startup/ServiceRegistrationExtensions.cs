@@ -293,14 +293,19 @@ public static class ServiceRegistrationExtensions
 
         builder.Services.AddIdentityCore<IdentityUser>(options =>
         {
+            options.User.RequireUniqueEmail = true;
             options.Password.RequireDigit = false;
             options.Password.RequireLowercase = false;
             options.Password.RequireUppercase = false;
             options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequiredLength = 6;
+            options.Password.RequiredLength = 10;
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
+            options.Lockout.MaxFailedAccessAttempts = 5;
         })
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<ApiDbContext>()
+            .AddSignInManager<SignInManager<IdentityUser>>()
             .AddDefaultTokenProviders();
 
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");

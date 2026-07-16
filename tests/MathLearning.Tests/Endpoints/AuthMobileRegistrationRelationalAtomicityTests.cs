@@ -87,6 +87,7 @@ public sealed class AuthMobileRegistrationRelationalAtomicityTests
             var user = await userManager.FindByNameAsync(request.Username);
 
             Assert.NotNull(user);
+            Assert.True(user!.EmailConfirmed);
             Assert.Equal(1, await db.Users.CountAsync(x => x.UserName == request.Username));
             Assert.Equal(1, await db.UserProfiles.CountAsync(x => x.Username == request.Username));
 
@@ -107,7 +108,7 @@ public sealed class AuthMobileRegistrationRelationalAtomicityTests
         return new MobileRegisterRequest(
             Username: $"rel-register-{suffix}-{unique}",
             Email: $"rel-register-{suffix}-{unique}@mathlearning.local",
-            Password: "Test123!",
+            Password: "MathLearningPassphrase2026!",
             DisplayName: $"Relational Register {suffix}",
             SchoolName: null,
             FacultyName: null);

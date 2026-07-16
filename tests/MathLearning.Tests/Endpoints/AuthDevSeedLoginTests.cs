@@ -4,6 +4,7 @@ using System.Text.Json;
 using MathLearning.Api;
 using MathLearning.Api.Startup;
 using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -32,12 +33,14 @@ public sealed class AuthDevSeedLoginTests :
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    [Fact]
-    public async Task Login_WithSeededTestAccount_ReturnsTokensAndIdentity()
+    [Theory]
+    [InlineData("/auth/login")]
+    [InlineData("/api/auth/login")]
+    public async Task Login_WithSeededTestAccount_ReturnsTokensAndIdentity(string path)
     {
         var response = await client.PostAsJsonAsync(
-            "/api/auth/login",
-            new LoginRequest("test", "test123"));
+            path,
+            new LoginRequest("test", "test-passphrase-2026!"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -52,14 +55,62 @@ public sealed class AuthDevSeedLoginTests :
         Assert.Equal("test", usernameElement.GetString());
     }
 
-    [Fact]
-    public async Task Login_WithInvalidPassword_ReturnsUnauthorized()
+    [Theory]
+    [InlineData("/auth/login")]
+    [InlineData("/api/auth/login")]
+    public async Task Login_WithInvalidPassword_ReturnsUnauthorized(string path)
     {
         var response = await client.PostAsJsonAsync(
-            "/api/auth/login",
+            path,
             new LoginRequest("test", "wrong"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_FiveFailures_LockAccountAndBlockCorrectPassword()
+    {
+        const string password = "lockout-passphrase-2026!";
+        var username = $"lockout-{Guid.NewGuid():N}";
+        var email = $"{username}@mathlearning.local";
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+            var user = new IdentityUser
+            {
+                UserName = username,
+                Email = email,
+                EmailConfirmed = true,
+                LockoutEnabled = true
+            };
+
+            var createResult = await userManager.CreateAsync(user, password);
+            Assert.True(createResult.Succeeded);
+        }
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var failed = await client.PostAsJsonAsync(
+                "/auth/login",
+                new LoginRequest(username, "wrong-password"));
+
+            Assert.Equal(HttpStatusCode.Unauthorized, failed.StatusCode);
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+            var user = await userManager.FindByNameAsync(username);
+            Assert.NotNull(user);
+            Assert.True(await userManager.IsLockedOutAsync(user!));
+        }
+
+        var lockedResponse = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest(username, password));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, lockedResponse.StatusCode);
     }
 
     private sealed record LoginRequest(string Username, string Password);

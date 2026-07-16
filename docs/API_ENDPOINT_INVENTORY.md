@@ -55,13 +55,13 @@ Owner: `AuthEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, profile and tokens. Relational rollback tests exist but need execution. |
-| POST | `/auth/login` | Public | Canonical | Login and refresh-token issuance. |
-| POST | `/api/auth/login` | Public | Compatibility alias | API/mobile alias. |
-| POST | `/auth/refresh` | Public | Canonical | Single-use token rotation. Model length drift remains BACKEND-TEST-012. |
+| POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, profile and tokens with generic registration failures, real email parsing, and confirmed managed/no-email provisioning. |
+| POST | `/auth/login` | Public | Canonical | Lockout-aware login and refresh-token issuance with generic 401/429 contract. |
+| POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle contract as `/auth/login`. |
+| POST | `/auth/refresh` | Public | Canonical | Single-use token rotation with generic 401/429 contract. Model length drift remains BACKEND-TEST-012. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
 | POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens. |
-| POST | `/auth/register` | Public/legacy | Legacy | Inspect before mobile use. |
+| POST | `/auth/register` | Public/legacy | Legacy | Generic conflict/failure contract, real email parsing, and confirmed managed/no-email provisioning. |
 
 ---
 

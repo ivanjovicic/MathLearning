@@ -285,7 +285,7 @@ public sealed class AuthRefreshEndpointRegressionTests :
     {
         var response = await client.PostAsJsonAsync(
             "/api/auth/login",
-            new LoginRequest("test", "test123"));
+            new LoginRequest("test", "test-passphrase-2026!"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 

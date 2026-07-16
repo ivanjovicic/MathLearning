@@ -33,7 +33,7 @@ public sealed class AuthRefreshPostgresConcurrencyTests
 
         var login = await client.PostAsJsonAsync(
             "/api/auth/login",
-            new LoginRequest("test", "test123"));
+            new LoginRequest("test", "test-passphrase-2026!"));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 
         using var loginJson = JsonDocument.Parse(await login.Content.ReadAsStringAsync());

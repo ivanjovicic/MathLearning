@@ -124,11 +124,19 @@ public sealed class AuthMobileRegistrationAtomicityTests :
 
         var user = await userManager.FindByNameAsync(request.Username);
         Assert.NotNull(user);
+        Assert.True(user!.EmailConfirmed);
 
         var profile = await db.UserProfiles.SingleAsync(p => p.Username == request.Username);
         Assert.Equal(100, profile.Coins);
         Assert.Equal(1, await db.UserProfiles.CountAsync(p => p.Username == request.Username));
         Assert.Equal(1, await db.RefreshTokens.CountAsync(t => t.UserId == user!.Id));
+
+        var duplicate = await client.PostAsJsonAsync("/auth/mobile/register", request);
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        var duplicateBody = await duplicate.Content.ReadFromJsonAsync<MobileRegisterResponse>();
+        Assert.NotNull(duplicateBody);
+        Assert.False(duplicateBody!.Success);
+        Assert.Equal("Registration could not be completed", duplicateBody.Message);
     }
 
     private static MobileRegisterRequest CreateRequest(string suffix)
@@ -137,7 +145,7 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         return new MobileRegisterRequest(
             Username: $"register-{suffix}-{unique}",
             Email: $"register-{suffix}-{unique}@mathlearning.local",
-            Password: "Test123!",
+            Password: "MathLearningPassphrase2026!",
             DisplayName: $"Register {suffix}",
             SchoolName: null,
             FacultyName: null);
