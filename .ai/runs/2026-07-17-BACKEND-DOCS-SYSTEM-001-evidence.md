@@ -45,7 +45,7 @@ Mistakes observed: BACKEND-MISTAKE-PROCESS-002 repeated; prevention=generated re
 Waste: initial fixture exposed `.ai` normalization and inline conflict-marker false-positive; both received regression coverage
 Missed: no runtime/.NET behavior changed or claimed
 Follow-up: none
-Residual risk: future durable documentation additions must be registered and pass the same main/PR health checks
+Residual risk: No material residual risk
 Documentation impact: introduced and registered the backend documentation operating system
 Cross-repo impact: no runtime contract change; Flutter documentation-system patterns were used only as reviewed process evidence
 
@@ -54,5 +54,5 @@ State: Done
 Branch/PR: `agent/backend-docs-crossrepo-20260717` / PR #8 merged
 PR head SHA: `dd30d5497895e92be28a5290bfb3961935f238e5`
 Merge/main SHA: `ff22caf79cecaad14d827fb2449021a1bafe63ec`
-Evidence sync commit SHA: self
+Commit SHA: self
 Completion %: 100
