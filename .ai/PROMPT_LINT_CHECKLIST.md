@@ -3,27 +3,23 @@
 Last aligned: 2026-07-17  
 Owner: `backend-agent-system`
 
-Use this file only when creating or materially rewriting a **formal active queue prompt**. A bounded task explicitly assigned by the user does not need queue admission, global deduplication or the long prompt template; start it with `scripts/agent_run.py plan/start` and record its branch/paths.
+Use this only for a new/materially rewritten **formal active queue prompt**. A bounded user-assigned task starts directly through `scripts/agent_run.py` and does not need global queue ceremony.
 
 ## Forward-only contract
 
-- Historical unchanged prompt prose stays historical.
-- New or materially rewritten non-trivial queue prompts use `Prompt contract: v2`.
+- Historical unchanged prose remains historical.
+- New/materially rewritten non-trivial prompts use `Prompt contract: v2`.
 - New/promoted claimable rows also use `Prompt admission: v3`.
 - Status/evidence-only edits do not trigger migration.
-
-Validate only the changed range:
 
 ```powershell
 python scripts/validate_agent_prompt.py --changed-from <base-sha>
 python scripts/validate_agent_evidence.py --changed-from <base-sha> --verify-git
 ```
 
-Use full/referenced historical evidence scans only for an explicit cleanup task.
-
 ## Admission minimum
 
-A prompt becomes `Ready` only when current evidence proves one finite gap, one authoritative owner is named, active owners/visible PRs were checked, dependencies/collisions are explicit, priority has concrete impact, and the work fits one `micro`, `low` or `medium` execution slice. `high` is a finite audit/migration phase, not permission for a multi-owner implementation.
+A prompt becomes `Ready` only when current evidence proves one finite gap, one authoritative owner is named, current queues/evidence/visible PRs were checked, dependencies/collisions are explicit, impact is concrete and the work fits one bounded lane.
 
 Required v3 fields:
 
@@ -49,15 +45,19 @@ Token budget:
 Timebox:
 Task:
 Source of truth:
+Interpretation before work:
 Ambiguity rule:
-Failure modes:
+Risk/ownership model:
+Failure-mode matrix:
 Execution packet:
 Owned paths:
 Avoid paths:
 Documentation impact:
-Acceptance:
+Acceptance criteria:
+Proof required:
 Validation:
 Completion gate:
+Stop conditions:
 Evidence:
 ```
 
@@ -65,12 +65,25 @@ Repository is `ivanjovicic/MathLearning`. One prompt has one lane from `known-fi
 
 ## Bounded packet
 
-The packet names exact initial reads, numeric search/edit limits, one hypothesis/falsifier, focused proof within 180 seconds and a stop trigger. Reject whole-repository scans, “fix everything”, unlimited discovery, mixed implementation/migration/audit/review and a medium task expected to touch more than six files.
+Name exact initial reads, numeric search/edit limits, one hypothesis/falsifier, focused proof within 180 seconds and a stop trigger. Reject whole-repository scans, “fix everything”, unlimited discovery, mixed implementation/migration/audit/review and a medium task expected to touch more than six paths.
 
-Backend authority remains unchanged: authenticated server identity owns learner writes; existing services/ledgers own behavior; EF mappings/migrations own schema; current mobile contract owns public payloads; PostgreSQL proves provider-sensitive behavior.
+## Cross-repository admission
 
-## Completion
+A backend prompt created from Flutter evidence additionally records:
 
-Acceptance covers target behavior, one counterexample/provider/security/retry behavior and scope/contract safety. Done requires executed focused proof, compact v2 evidence, changed-only evidence validation, delivered commit and exact target verification when required. `Commit SHA: self` is allowed and is resolved mechanically with `--verify-git`.
+- exact backend and Flutter main baselines;
+- Flutter prompt/contract dependency without embedding Flutter paths/commands;
+- existing backend runtime owners checked;
+- why the behavior is uncovered rather than a duplicate;
+- request/response/operation identity and duplicate/conflict/timeout semantics;
+- synchronization or named handoff decision.
 
-Automatic rejection applies to duplicate owners, hidden dependencies, request-supplied identity authority, InMemory-only provider claims, Flutter commands, unguarded/chained commands, mixed lanes, open-ended scope or Done without executable proof and honest delivery.
+If an existing backend owner covers the mutation, update/link that owner instead of allocating a new ID. Mobile provider lifecycle and backend settlement are separate owners.
+
+## Authority and proof
+
+Authenticated server identity owns learner writes; existing services/ledgers own behavior; EF mapping/migrations own schema; current mobile contract owns public payloads; PostgreSQL proves provider-sensitive behavior.
+
+Acceptance covers target behavior, one counterexample/provider/security/retry case and scope/contract safety. Done requires focused proof, compact v2 evidence, changed-only validation, delivered commit and exact target verification.
+
+Automatic rejection applies to duplicate owners, hidden dependencies, request-supplied identity authority, InMemory-only provider claims, Flutter commands/paths, unguarded/chained commands, mixed lanes, open-ended scope or Done without proof/delivery.
