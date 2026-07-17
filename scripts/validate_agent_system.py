@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate backend AI-agent documentation wiring, speed gates and CI routing."""
+"""Validate backend AI-agent documentation wiring, docs health, speed gates and CI routing."""
 from __future__ import annotations
 
 import json
@@ -7,9 +7,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import check_documentation_health as docs_health
+
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_PATHS = (
     "AGENTS.md",
+    "docs/DOCUMENTATION_SYSTEM.md",
+    "docs/DOCS_MANIFEST.json",
+    "docs/DOCS_REGISTRY.md",
     "docs/DOCS_INDEX.md",
     ".ai/README.md",
     ".ai/SOURCE_OF_TRUTH.md",
@@ -28,6 +33,8 @@ REQUIRED_PATHS = (
     "scripts/run_guarded.py",
     "scripts/agent_run.py",
     "scripts/analyze_agent_runs.py",
+    "scripts/check_documentation_health.py",
+    "scripts/test_check_documentation_health.py",
     "scripts/validate_agent_prompt.py",
     "scripts/validate_agent_evidence.py",
     "scripts/validate_agent_system.py",
@@ -37,6 +44,7 @@ REQUIRED_PATHS = (
 )
 DOCS_TO_CHECK = (
     "AGENTS.md",
+    "docs/DOCUMENTATION_SYSTEM.md",
     "docs/DOCS_INDEX.md",
     ".ai/README.md",
     ".ai/SOURCE_OF_TRUTH.md",
@@ -52,28 +60,33 @@ DOCS_TO_CHECK = (
 )
 REQUIRED_REFERENCES = {
     "AGENTS.md": (
-        ".ai/README.md", "MISTAKE_INDEX.json", "agent_run.py", "validate_agent_evidence.py --changed-from"
+        "docs/DOCUMENTATION_SYSTEM.md", "DOCS_MANIFEST.json", "MISTAKE_INDEX.json",
+        "agent_run.py", "check_documentation_health.py --full-links",
     ),
     "docs/DOCS_INDEX.md": (
-        "MISTAKE_INDEX.json", "agent_run.py", "analyze_agent_runs.py", "classify_backend_changes.py"
+        "DOCUMENTATION_SYSTEM.md", "DOCS_REGISTRY.md", "check_documentation_health.py --context",
+    ),
+    "docs/DOCUMENTATION_SYSTEM.md": (
+        "DOCS_MANIFEST.json", "DOCS_REGISTRY.md", "check_documentation_health.py --write-registry",
     ),
     ".ai/README.md": (
-        "scripts/agent_run.py", "MISTAKE_INDEX.json", "validate_agent_evidence.py --changed-from"
+        "scripts/agent_run.py", "MISTAKE_INDEX.json", "validate_agent_evidence.py --changed-from",
     ),
     ".ai/SOURCE_OF_TRUTH.md": (
-        "MISTAKE_INDEX.json", "scripts/agent_run.py"
+        "DOCUMENTATION_SYSTEM.md", "DOCS_REGISTRY.md", "MISTAKE_INDEX.json", "scripts/agent_run.py",
     ),
     ".github/workflows/agent-system-validation.yml": (
+        "scripts/test_check_documentation_health.py", "scripts/check_documentation_health.py",
         "scripts/test_agent_run.py", "scripts/test_validate_agent_evidence.py",
-        "scripts/test_analyze_agent_runs.py", "scripts/ci/test_classify_backend_changes.py"
+        "scripts/test_analyze_agent_runs.py", "scripts/ci/test_classify_backend_changes.py",
     ),
     ".github/workflows/database-validation.yml": (
-        "classify_backend_changes.py", "database-suite", "validate-database"
+        "classify_backend_changes.py", "database-suite", "validate-database",
     ),
 }
 FORBIDDEN_RUNTIME_COMMANDS = ("flutter analyze", "flutter test", "dart format", "dart analyze")
 FORBIDDEN_SLOW_RULES = (
-    "read this ledger", "read the whole mistake ledger", "copy the full run log template by hand"
+    "read this ledger", "read the whole mistake ledger", "copy the full run log template by hand",
 )
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
@@ -113,7 +126,7 @@ def validate(root: Path = ROOT) -> list[Finding]:
     for relative in REQUIRED_PATHS:
         path = root / relative
         if not path.exists():
-            findings.append(Finding("FAIL", path, "required agent-speed file is missing"))
+            findings.append(Finding("FAIL", path, "required agent/docs-system file is missing"))
     for relative, references in REQUIRED_REFERENCES.items():
         path = root / relative
         if not path.exists():
@@ -145,13 +158,16 @@ def validate(root: Path = ROOT) -> list[Finding]:
             data = json.loads(read_text(index))
             if data.get("version") != 1 or not data.get("areas"):
                 findings.append(Finding("FAIL", index, "mistake index must have version 1 and areas"))
-            ledger = read_text(root / "docs/ai/learning/MISTAKE_LEDGER.md") if (root / "docs/ai/learning/MISTAKE_LEDGER.md").exists() else ""
+            ledger_path = root / "docs/ai/learning/MISTAKE_LEDGER.md"
+            ledger = read_text(ledger_path) if ledger_path.exists() else ""
             ids = set(re.findall(r"BACKEND-MISTAKE-[A-Z0-9-]+", json.dumps(data)))
             for mistake_id in sorted(ids):
                 if mistake_id not in ledger:
                     findings.append(Finding("FAIL", index, f"mistake index references unknown ID: {mistake_id}"))
         except json.JSONDecodeError as exc:
             findings.append(Finding("FAIL", index, f"invalid JSON: {exc}"))
+    for item in docs_health.validate(root):
+        findings.append(Finding(item.severity, item.path, item.message))
     agents = root / "AGENTS.md"
     if agents.exists() and "MathLearning Backend" not in read_text(agents):
         findings.append(Finding("FAIL", agents, "backend rulebook title/identity is missing"))
