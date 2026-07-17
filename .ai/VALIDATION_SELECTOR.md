@@ -3,81 +3,87 @@
 Last aligned: 2026-07-17  
 Owner: `backend-agent-system`
 
-Start with the smallest executable proof. Do not run the full suite first and do not repeat an unchanged failure.
+Choose the narrowest executable proof that confirms or falsifies the changed behavior. Do not start with the full solution suite unless the task owns release readiness or focused proof exposes wider risk.
 
-## Universal order
+## Evidence order
 
 ```text
 current contract/reproducer
+→ smallest changed-file/static check
 → nearest focused behavior and counterexample
-→ provider/build/static proof required by the risk
+→ provider/build proof required by the risk
 → changed docs/prompt/evidence checks
-→ wider suite/CI only for a named wider risk
+→ wider suite/exact CI only for a named wider risk
 ```
 
-All blocking `dotnet`, Python test, network Git and GitHub CLI commands use `scripts/run_guarded.py` with at most 180 seconds per command.
+Existence, compilation, source searches and queued CI are supporting information, not behavior proof.
 
-## Docs, queues, run logs and agent tooling
+## Documentation and agent tooling
 
 ```powershell
-git diff --check
+python -m unittest -v scripts/test_check_documentation_health.py
+python scripts/check_documentation_health.py --full-links
+python scripts/validate_agent_system.py
 python scripts/validate_agent_prompt.py --changed-from <base-sha>
 python scripts/validate_agent_evidence.py --changed-from <base-sha> --verify-git
 python scripts/analyze_agent_runs.py --changed-from <base-sha> --fail-on-regression
-python scripts/validate_agent_system.py
 ```
 
-Run only the applicable commands. Historical evidence cleanup uses the manual full audit; current work uses changed-range validation.
+Use `python scripts/check_documentation_health.py --context <path>` before broad doc reading. Manifest/registry drift, broken registered links and unresolved conflict markers are blocking failures. Historical prompt prose remains historical until materially changed.
 
-## Python agent/CI scripts
+## Docs-only change
+
+Also verify:
+
+- no runtime/test/schema/build paths changed;
+- generated registry matches the manifest;
+- durable index links are registered;
+- completion claims remain documentation/process-only;
+- skipped .NET/provider checks have a specific reason.
+
+## Endpoint/service behavior
 
 ```powershell
-python -m py_compile <changed-script>
-python -m unittest -v <focused-test-module>
+python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter FullyQualifiedName~<FocusedName>
 ```
 
-Do not compile/test every Python script unless the central workflow is the task owner.
+Select relevant counterexamples: unauthenticated/wrong-role/cross-user, duplicate/conflict, rollback/cancellation, stale/retried operation, safe error projection and provider-sensitive behavior.
 
-## .NET known fix
+## Auth and user scope
+
+Prove anonymous, correct-user, cross-user/wrong-role and actor/target separation. Do not infer authorization from metadata alone. Token/session changes also prove revoke/lockout/role/delete invalidation and refresh behavior.
+
+## Idempotency, rewards and settlement
+
+Prove first request, exact replay, changed-payload conflict, rollback/cancellation, cross-user isolation and concurrent provider race. A generic retry is forbidden until the same operation identity reconstructs the settled result.
+
+For cross-repo retry semantics, record backend and Flutter main SHAs and the existing/new owner. Backend prompts use backend commands only.
+
+## EF Core model or migration
+
+Inspect mapping, migration order and snapshot. Prove clean schema and relevant upgrade path with PostgreSQL, exact constraints/index/delete actions, idempotent SQL generation and readiness/startup behavior. InMemory does not prove locks, transactions or constraints.
+
+## Background jobs/outbox/maintenance
+
+Prove bounded capacity, deterministic claim/lease, cancellation, retry/backoff, duplicate suppression, restart and multi-replica behavior. Prefer barriers/fake clocks/interceptors over sleeps.
+
+## Python agent/documentation tooling
 
 ```powershell
-python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "<focused filter>"
+python -m py_compile scripts/<changed-script>.py
+python scripts/run_guarded.py --timeout-seconds 60 -- python -m unittest -v scripts/<focused-test>.py
 ```
 
-Add the smallest regression test that fails before the fix. Run build only when compilation/shared contracts changed or the focused test requires it.
+Agent/docs system package includes documentation-health, run planning, evidence, speed, prompt, wiring and CI-classifier tests.
 
-## Endpoint/auth/contract
-
-Prove the relevant subset:
-
-- anonymous 401;
-- authenticated wrong role/user 403 or safe not-found policy;
-- correct user/role success;
-- request-body `userId` cannot override authenticated identity;
-- exact response shape/no sensitive leakage;
-- Flutter sync/defer decision when public contract changes.
-
-## Idempotency/economy
-
-Prove first request, duplicate same payload, conflict policy, failure/cancellation rollback, cross-user isolation and provider-backed concurrency where required. Do not add generic retry before exact replay semantics are proven.
-
-## EF Core/migration/PostgreSQL
-
-Use a separate migration phase when runtime+schema+operator changes exceed one owner. Required proof may include:
+## Build and wider suite
 
 ```powershell
-python scripts/run_guarded.py --timeout-seconds 180 -- dotnet ef migrations has-pending-model-changes --project <infra> --startup-project <api> --context ApiDbContext
-python scripts/run_guarded.py --timeout-seconds 180 -- pwsh scripts/db/validate-schema.ps1 <safe args>
+python scripts/run_guarded.py --timeout-seconds 180 -- dotnet build MathLearning.slnx -c Release --no-restore
 ```
 
-Never weaken schema-from-zero or substitute InMemory for provider-sensitive behavior.
+Broaden only for shared startup/persistence/test infrastructure, several approved high-risk owners, focused wider-regression evidence or explicit release validation. Runtime/test/schema/build paths trigger the full `Database Validation` workflow; docs/agent-tooling-only paths use its stable skip gate.
 
-## Full database workflow
+## CI honesty
 
-`Database Validation` first classifies changed paths. It runs the expensive PostgreSQL/full-suite lane only for runtime, tests, migrations, solution/build metadata or DB scripts. Docs/agent-tooling-only changes receive a successful skip gate.
-
-A green focused agent-system workflow is sufficient for a docs/agent-only change; unrelated pre-existing .NET failures are reported, not treated as target regressions.
-
-## Stop/expand rule
-
-Expand validation only when the focused result proves a wider risk. A timeout or failure gets one classified changed retry. If required proof still cannot run, stop in `Needs validation` or `Blocked` and create one bounded owner.
+Do not claim CI green without the exact target SHA, workflow/run, jobs, required artifacts and final conclusion. `queued`/`in_progress` is not passing evidence. When the status endpoint is unavailable, report that limitation and do not fabricate success.
