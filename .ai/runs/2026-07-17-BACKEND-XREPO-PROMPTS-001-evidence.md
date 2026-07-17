@@ -11,6 +11,7 @@ Run mode: docs-evidence
 Token budget: high
 Started at UTC: 2026-07-17T08:16:00Z
 Completed at UTC: 2026-07-17T08:20:00Z
+Evidence synchronized at UTC: 2026-07-17T09:07:47Z
 Elapsed time: 4m 0s
 Relevant prior mistakes read: BACKEND-MISTAKE-XREPO-001, BACKEND-MISTAKE-QUEUE-001, BACKEND-MISTAKE-IDEM-002, BACKEND-MISTAKE-EVIDENCE-001
 How this run avoids prior mistakes: inspect both main baselines, reuse `BE-PERF-011/012/015`, create only uncovered owners and require exact timeout/replay/privacy/provider evidence
@@ -18,7 +19,7 @@ Owner/hypothesis: current-main backend/Flutter contract gaps can be split into o
 Files inspected: 21
 Files changed: 7
 Searches: 6
-Validation runs: 3
+Validation runs: 5
 Failed retries: 0
 
 ## Outcome
@@ -38,7 +39,9 @@ Failed retries: 0
 
 ## Validation
 Validation run: all four prompts passed a local contract-equivalent field/list/lane/budget/command/forbidden-token check; every command is <=180 characters; documentation health passed in fixture
-Validation not run: repository `validate_agent_prompt.py --changed-from` and exact Git/PR checks require the real branch workflow
+Validation run: PR-head `dd30d5497895e92be28a5290bfb3961935f238e5` workflow `Backend Agent System Validation` run `29567903813` completed successfully, including changed prompt admission and evidence validation
+Validation run: PR-head workflow `Database Validation` run `29567903944` completed successfully with docs-only classification and intentional database-suite skip
+Validation not run: no backend or Flutter runtime implementation was part of this prompt-authoring task
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-XREPO-001 repeated; prevention=both-main baselines and existing-owner handoff table
@@ -50,7 +53,9 @@ Documentation impact: added current-main cross-repo queue/prompts and admission 
 Cross-repo impact: Flutter prompts are dependencies/handoffs only; no Flutter repository change was made
 
 ## Delivery
-State: Needs merge
-Branch/PR: agent/backend-docs-crossrepo-20260717 / pending
-Commit SHA: self
-Completion %: 94
+State: Done
+Branch/PR: `agent/backend-docs-crossrepo-20260717` / PR #8 merged
+PR head SHA: `dd30d5497895e92be28a5290bfb3961935f238e5`
+Merge/main SHA: `ff22caf79cecaad14d827fb2449021a1bafe63ec`
+Evidence sync commit SHA: self
+Completion %: 100
