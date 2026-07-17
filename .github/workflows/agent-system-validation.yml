@@ -6,14 +6,19 @@ on:
       - "AGENTS.md"
       - ".ai/**"
       - "docs/AGENT_*.md"
+      - "docs/DOCUMENTATION_SYSTEM.md"
       - "docs/DOCS_INDEX.md"
+      - "docs/DOCS_MANIFEST.json"
+      - "docs/DOCS_REGISTRY.md"
       - "docs/ai/**"
       - "docs/prompt_queues/**"
       - "scripts/agent_run.py"
       - "scripts/analyze_agent_runs.py"
+      - "scripts/check_documentation_health.py"
       - "scripts/run_guarded.py"
       - "scripts/test_agent_*.py"
       - "scripts/test_analyze_agent_runs.py"
+      - "scripts/test_check_documentation_health.py"
       - "scripts/validate_agent_*.py"
       - "scripts/test_validate_agent_*.py"
       - "scripts/ci/classify_backend_changes.py"
@@ -26,14 +31,19 @@ on:
       - "AGENTS.md"
       - ".ai/**"
       - "docs/AGENT_*.md"
+      - "docs/DOCUMENTATION_SYSTEM.md"
       - "docs/DOCS_INDEX.md"
+      - "docs/DOCS_MANIFEST.json"
+      - "docs/DOCS_REGISTRY.md"
       - "docs/ai/**"
       - "docs/prompt_queues/**"
       - "scripts/agent_run.py"
       - "scripts/analyze_agent_runs.py"
+      - "scripts/check_documentation_health.py"
       - "scripts/run_guarded.py"
       - "scripts/test_agent_*.py"
       - "scripts/test_analyze_agent_runs.py"
+      - "scripts/test_check_documentation_health.py"
       - "scripts/validate_agent_*.py"
       - "scripts/test_validate_agent_*.py"
       - "scripts/ci/classify_backend_changes.py"
@@ -69,6 +79,7 @@ jobs:
           python -m py_compile
           scripts/agent_run.py
           scripts/analyze_agent_runs.py
+          scripts/check_documentation_health.py
           scripts/run_guarded.py
           scripts/validate_agent_prompt.py
           scripts/validate_agent_evidence.py
@@ -80,11 +91,15 @@ jobs:
           python -m unittest -v
           scripts/test_agent_run.py
           scripts/test_analyze_agent_runs.py
+          scripts/test_check_documentation_health.py
           scripts/test_run_guarded.py
           scripts/test_validate_agent_prompt.py
           scripts/test_validate_agent_evidence.py
           scripts/test_validate_agent_system.py
           scripts/ci/test_classify_backend_changes.py
+
+      - name: Validate documentation manifest and registry
+        run: python scripts/check_documentation_health.py --full-links
 
       - name: Validate agent-system wiring
         run: python scripts/validate_agent_system.py
@@ -101,6 +116,9 @@ jobs:
           if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then base="$PUSH_BASE"; fi
           if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then base="HEAD^"; fi
           echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Report documentation context for changed paths
+        run: python scripts/check_documentation_health.py --changed-from "${{ steps.base.outputs.sha }}"
 
       - name: Validate changed prompt contracts
         run: python scripts/validate_agent_prompt.py --changed-from "${{ steps.base.outputs.sha }}"
