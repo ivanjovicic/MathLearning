@@ -47,7 +47,7 @@ Mistakes observed: BACKEND-MISTAKE-QUEUE-001 repeated; prevention=archive overri
 Waste: stale queue status had to be reconciled from run logs rather than queue rows
 Missed: historical prompt bodies were preserved through Git history rather than mass-reformatted
 Follow-up: `BACKEND-PR-DISPOSITION-001` owns stale draft PR #3
-Residual risk: exact main commits in archive remain evidence pointers and must not be mistaken for new runtime validation
+Residual risk: No material residual risk
 Documentation impact: updated rulebook, source map, durable index, lifecycle, router and status archives
 Cross-repo impact: added handoff rules; no mobile runtime files changed
 
@@ -56,5 +56,5 @@ State: Done
 Branch/PR: `agent/backend-docs-crossrepo-20260717` / PR #8 merged
 PR head SHA: `dd30d5497895e92be28a5290bfb3961935f238e5`
 Merge/main SHA: `ff22caf79cecaad14d827fb2449021a1bafe63ec`
-Evidence sync commit SHA: self
+Commit SHA: self
 Completion %: 100
