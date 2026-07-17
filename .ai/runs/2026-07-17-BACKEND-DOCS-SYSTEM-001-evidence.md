@@ -11,6 +11,7 @@ Run mode: docs-evidence
 Token budget: high
 Started at UTC: 2026-07-17T08:02:00Z
 Completed at UTC: 2026-07-17T08:11:00Z
+Evidence synchronized at UTC: 2026-07-17T09:07:47Z
 Elapsed time: 9m 0s
 Relevant prior mistakes read: BACKEND-MISTAKE-PROCESS-001, BACKEND-MISTAKE-PROCESS-002, BACKEND-MISTAKE-EVIDENCE-001
 How this run avoids prior mistakes: add one manifest/registry owner, mechanical conflict/link checks and focused tests instead of another duplicated docs checklist
@@ -18,7 +19,7 @@ Owner/hypothesis: backend-docs-system owns durable documentation integrity; a ge
 Files inspected: 19
 Files changed: 10
 Searches: 4
-Validation runs: 5
+Validation runs: 7
 Failed retries: 1
 
 ## Outcome
@@ -35,19 +36,23 @@ Failed retries: 1
 
 ## Validation
 Validation run: Python compile passed; documentation-health tests 7/7 passed; agent-system tests 5/5 passed; synthetic manifest/full-link health passed; workflow YAML parsed successfully
-Validation not run: full target-repository links and Git history checks not run locally because the container cannot resolve GitHub; PR workflow is required
+Validation run: PR-head `dd30d5497895e92be28a5290bfb3961935f238e5` workflow `Backend Agent System Validation` run `29567903813` completed successfully, including manifest/registry, wiring, changed prompt, changed evidence and speed-regression checks
+Validation run: PR-head workflow `Database Validation` run `29567903944` completed successfully; classifier selected docs/agent-tooling-only scope and the expensive database suite was intentionally skipped
+Validation not run: full .NET/PostgreSQL suite was not required because no runtime, test, schema or migration paths changed
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-PROCESS-002 repeated; prevention=generated registry and one mechanical documentation owner
 Waste: initial fixture exposed `.ai` normalization and inline conflict-marker false-positive; both received regression coverage
 Missed: no runtime/.NET behavior changed or claimed
-Follow-up: none unless PR full-tree health exposes a real legacy durable-doc link
-Residual risk: target-repository workflow must verify all registered document paths and links against the actual branch
+Follow-up: none
+Residual risk: future durable documentation additions must be registered and pass the same main/PR health checks
 Documentation impact: introduced and registered the backend documentation operating system
 Cross-repo impact: no runtime contract change; Flutter documentation-system patterns were used only as reviewed process evidence
 
 ## Delivery
-State: Needs merge
-Branch/PR: agent/backend-docs-crossrepo-20260717 / pending
-Commit SHA: self
-Completion %: 93
+State: Done
+Branch/PR: `agent/backend-docs-crossrepo-20260717` / PR #8 merged
+PR head SHA: `dd30d5497895e92be28a5290bfb3961935f238e5`
+Merge/main SHA: `ff22caf79cecaad14d827fb2449021a1bafe63ec`
+Evidence sync commit SHA: self
+Completion %: 100
