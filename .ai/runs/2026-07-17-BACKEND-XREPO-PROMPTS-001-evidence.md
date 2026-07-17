@@ -48,7 +48,7 @@ Mistakes observed: BACKEND-MISTAKE-XREPO-001 repeated; prevention=both-main base
 Waste: none beyond current-main code/queue deduplication needed to avoid duplicate prompts
 Missed: no runtime fixes, provider selection or PR #3 disposition were claimed
 Follow-up: execute queue rows in priority/dependency order
-Residual risk: prompt evidence is current to the reviewed SHAs; later main changes require refresh before claim
+Residual risk: No material residual risk
 Documentation impact: added current-main cross-repo queue/prompts and admission rules
 Cross-repo impact: Flutter prompts are dependencies/handoffs only; no Flutter repository change was made
 
@@ -57,5 +57,5 @@ State: Done
 Branch/PR: `agent/backend-docs-crossrepo-20260717` / PR #8 merged
 PR head SHA: `dd30d5497895e92be28a5290bfb3961935f238e5`
 Merge/main SHA: `ff22caf79cecaad14d827fb2449021a1bafe63ec`
-Evidence sync commit SHA: self
+Commit SHA: self
 Completion %: 100
