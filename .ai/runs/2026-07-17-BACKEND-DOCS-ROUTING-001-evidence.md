@@ -11,6 +11,7 @@ Run mode: docs-evidence
 Token budget: high
 Started at UTC: 2026-07-17T08:11:00Z
 Completed at UTC: 2026-07-17T08:16:00Z
+Evidence synchronized at UTC: 2026-07-17T09:07:47Z
 Elapsed time: 5m 0s
 Relevant prior mistakes read: BACKEND-MISTAKE-QUEUE-001, BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-XREPO-001
 How this run avoids prior mistakes: current main/evidence/archive outrank stale Ready text, delivered IDs are not reopened and residual behavior gets a new narrower owner
@@ -18,7 +19,7 @@ Owner/hypothesis: backend-agent-system owns queue truth; current router is slow 
 Files inspected: 18
 Files changed: 9
 Searches: 5
-Validation runs: 2
+Validation runs: 4
 Failed retries: 0
 
 ## Outcome
@@ -37,19 +38,23 @@ Failed retries: 0
 
 ## Validation
 Validation run: synthetic documentation health and agent-system wiring passed after routing changes; local link targets in changed durable docs resolved in fixture
-Validation not run: exact target-tree Git/PR/archive consistency requires PR workflow and connector verification
+Validation run: PR-head `dd30d5497895e92be28a5290bfb3961935f238e5` workflow `Backend Agent System Validation` run `29567903813` completed successfully, including target-tree links, manifest/registry, changed prompt/evidence and speed-regression checks
+Validation run: PR-head workflow `Database Validation` run `29567903944` completed successfully with docs-only classification and intentional database-suite skip
+Validation not run: no runtime/provider validation was required because this task changed routing, documentation and agent tooling only
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-QUEUE-001 repeated; prevention=archive override, new residual IDs and one current router
 Waste: stale queue status had to be reconciled from run logs rather than queue rows
 Missed: historical prompt bodies were preserved through Git history rather than mass-reformatted
 Follow-up: `BACKEND-PR-DISPOSITION-001` owns stale draft PR #3
-Residual risk: exact main commits in archive remain evidence pointers and must not be mistaken for new runtime validation
+Residual risk: No material residual risk
 Documentation impact: updated rulebook, source map, durable index, lifecycle, router and status archives
 Cross-repo impact: added handoff rules; no mobile runtime files changed
 
 ## Delivery
-State: Needs merge
-Branch/PR: agent/backend-docs-crossrepo-20260717 / pending
+State: Done
+Branch/PR: `agent/backend-docs-crossrepo-20260717` / PR #8 merged
+PR head SHA: `dd30d5497895e92be28a5290bfb3961935f238e5`
+Merge/main SHA: `ff22caf79cecaad14d827fb2449021a1bafe63ec`
 Commit SHA: self
-Completion %: 92
+Completion %: 100
