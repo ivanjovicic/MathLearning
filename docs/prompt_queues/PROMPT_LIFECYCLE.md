@@ -29,10 +29,23 @@ DISCOVER → DEDUPLICATE → ADMIT → CLAIM → PLAN → PATCH/PROVE → DELIVE
 | `Needs validation` | no | Implementation exists; required proof missing/failed. |
 | `Needs evidence sync` | no | Delivery exists; evidence/status incomplete. |
 | `Needs merge` | no | Validated branch not in target branch. |
+| `Needs handoff` | no | Work needs a named different repository/environment/authority owner. |
 | `Done` | no | Proof, delivery and compact evidence synchronized. |
 | `Archived` | no | Completed/superseded history. |
 
 Code written, tests added, PR open or CI queued are not Done.
+
+## Source order and archive override
+
+Use this order:
+
+1. current `main` code/tests/tooling;
+2. current router and owning row;
+3. dated completed archive and main-verified evidence;
+4. visible branch/PR ownership;
+5. old queue prose and audits as history.
+
+A completed archive or exact delivered evidence overrides stale historical `Ready` text. Do not reopen a completed ID; create a new residual ID with narrower evidence and dependencies.
 
 ## Fast claim/collision check
 
@@ -44,6 +57,18 @@ For a queue task check only:
 4. completed evidence for duplicate/residual verdict.
 
 Do not scan every historical queue. `MISTAKE_INDEX.json` selects relevant process cards.
+
+## Cross-repository handoff
+
+Before creating backend work from a Flutter blocker:
+
+1. record backend and Flutter `main` SHAs;
+2. identify the exact Flutter prompt/path and required backend behavior;
+3. search current backend runtime owners and active/done evidence;
+4. link the Flutter owner to the existing backend owner when coverage exists;
+5. create a new backend prompt only for a proven uncovered behavior.
+
+A cross-repo prompt names contract fields, duplicate/conflict/timeout semantics, both repositories' owners and the synchronization decision. It never contains Flutter commands or edits Flutter paths.
 
 ## Scope and split
 
@@ -63,6 +88,7 @@ Use [`.ai/VALIDATION_SELECTOR.md`](../../.ai/VALIDATION_SELECTOR.md). Changed qu
 python scripts/validate_agent_prompt.py --changed-from <base-sha>
 python scripts/validate_agent_evidence.py --changed-from <base-sha> --verify-git
 python scripts/analyze_agent_runs.py --changed-from <base-sha> --fail-on-regression
+python scripts/check_documentation_health.py --full-links
 ```
 
 For direct main, record main SHA. For PR delivery, record PR, head SHA, targeted checks, merge SHA and main verification.
@@ -76,7 +102,8 @@ Before Done:
 - no collision/scope breach above 79%;
 - compact v2 log closed;
 - queue row uses the compact tail;
-- material residual work has one owner.
+- material residual work has one owner;
+- archive/router and durable docs agree.
 
 ```text
 Done <n>% — Run log: <path>; Validation: <result>; Residual risk: <sentence>; Commit: self|<sha>
