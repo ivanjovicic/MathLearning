@@ -1,8 +1,12 @@
 using MathLearning.Api.Extensions;
 using MathLearning.Api.Services;
 using MathLearning.Application.DTOs.Common;
+using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -16,17 +20,30 @@ public static class AdaptiveEndpoints
 
         group.MapPost("/session/start", async (
             AdaptiveApiFacade facade,
+            ApiDbContext db,
+            IIdempotencyLedgerService idempotencyService,
+            HttpRequest request,
             HttpContext ctx) =>
         {
-            // Compatibility: older mobile clients may send topicId/topic in request body.
-            // We intentionally ignore this payload for now.
-            // TODO: Topic-targeted adaptive sessions require backend product/design support.
             var userId = ResolveUserId(ctx);
             if (userId is null)
                 return ApiResult<object>.Fail("Unauthorized", "UNAUTHORIZED").ToHttpResult(ctx);
 
-            var result = await facade.StartAdaptiveSessionAsync(userId, ctx.RequestAborted);
-            return result.ToHttpResult(ctx);
+            var (requestPayload, operationId, idempotencyKey, parseError) = await TryReadAdaptiveSessionStartRequestAsync(
+                request,
+                ctx.RequestAborted);
+
+            if (parseError is not null)
+                return ApiResult<object>.Fail(parseError, "VALIDATION_ERROR").ToHttpResult(ctx);
+
+            return await facade.StartAdaptiveSessionAsync(
+                userId,
+                db,
+                idempotencyService,
+                requestPayload,
+                operationId,
+                idempotencyKey,
+                ctx.RequestAborted);
         })
         .WithName("StartAdaptiveSession");
 
@@ -105,6 +122,40 @@ public static class AdaptiveEndpoints
 
         var result = await facade.GetDueReviewsAsync(userId, ctx.RequestAborted);
         return result.ToHttpResult(ctx);
+    }
+
+    private static async Task<(JsonObject? RequestPayload, string? OperationId, string? IdempotencyKey, string? Error)> TryReadAdaptiveSessionStartRequestAsync(
+        HttpRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.ContentLength is 0)
+            return (null, null, null, null);
+
+        using var reader = new StreamReader(request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        var requestBody = await reader.ReadToEndAsync();
+        if (string.IsNullOrWhiteSpace(requestBody))
+            return (null, null, null, null);
+
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(requestBody);
+        }
+        catch (JsonException)
+        {
+            return (null, null, null, "Request body must be valid JSON.");
+        }
+
+        if (node is not JsonObject payload)
+            return (null, null, null, "Request body must be a JSON object.");
+
+        var operationId = TryReadString(payload, "operationId");
+        var idempotencyKey = TryReadString(payload, "idempotencyKey");
+        var normalizedPayload = (JsonObject)payload.DeepClone();
+        normalizedPayload.Remove("operationId");
+        normalizedPayload.Remove("idempotencyKey");
+
+        return (normalizedPayload, operationId, idempotencyKey, null);
     }
 
     private static bool TryBuildAdaptiveAnswerRequest(
@@ -308,6 +359,17 @@ public static class AdaptiveEndpoints
 
         value = raw;
         return true;
+    }
+
+    private static string? TryReadString(JsonObject props, string key)
+    {
+        if (!props.TryGetPropertyValue(key, out var node) || node is null)
+            return null;
+
+        if (node is not JsonValue valueNode || !valueNode.TryGetValue<string>(out var raw))
+            return null;
+
+        return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
     }
 
     private static bool TryReadDateTime(IReadOnlyDictionary<string, JsonElement> props, string key, out DateTime value)

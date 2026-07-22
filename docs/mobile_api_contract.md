@@ -185,6 +185,47 @@ This route now consumes a server-issued `entitlementId`; arbitrary client-declar
 
 Response includes refreshed `inventory` (string item keys) and `fragmentProgress`.
 
+## Adaptive
+
+Auth: Required.
+
+### `POST /api/adaptive/session/start`
+
+Starts an adaptive practice session for the current authenticated user.
+
+Request body may include:
+- `topicId`
+- `topic`
+- `operationId`
+- `idempotencyKey`
+
+Replay-safe start behavior:
+- When both `operationId` and `idempotencyKey` are present, the backend uses the shared idempotency ledger and returns the same `AdaptiveSessionDto` snapshot on retry.
+- When the same keys are reused with a different normalized payload, the backend returns `409` with `errorCode: "idempotency_conflict"`.
+- Different users never replay each other's sessions.
+- Legacy requests without operation identity are still accepted, but they are explicitly non-retryable.
+
+Response is the raw `AdaptiveSessionDto` JSON:
+```json
+{
+  "adaptiveSessionId": "11111111-1111-1111-1111-111111111111",
+  "createdAtUtc": "2026-07-22T12:00:00Z",
+  "expiresAtUtc": "2026-07-22T12:35:00Z",
+  "profileDifficulty": "Medium",
+  "items": [
+    {
+      "adaptiveSessionItemId": "22222222-2222-2222-2222-222222222222",
+      "questionId": 1,
+      "topicId": 101,
+      "subtopicId": 1001,
+      "sourceType": "adaptive",
+      "difficultyLevel": "Medium",
+      "sequence": 1
+    }
+  ]
+}
+```
+
 ## Leaderboard
 
 Auth: Required.

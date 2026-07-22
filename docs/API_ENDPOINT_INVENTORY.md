@@ -1,6 +1,6 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-07-16
+Last aligned: 2026-07-22
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
@@ -116,6 +116,16 @@ Owner: `PracticeSessionEndpoints.cs`
 | POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned session. |
 | POST | `/api/practice/session/{sessionId:guid}/answer` | Auth | Canonical | Ownership enforced. |
 | POST | `/api/practice/session/{sessionId:guid}/complete` | Auth | Canonical | Ownership enforced. |
+
+---
+
+## Adaptive
+
+Owner: `AdaptiveEndpoints.cs`, `AdaptiveApiFacade.cs`
+
+| Method | Route | Auth | Status | Notes |
+|---|---|---|---|---|
+| POST | `/api/adaptive/session/start` | Auth | Canonical P0 mutation | Uses the shared idempotency ledger when `operationId` and `idempotencyKey` are supplied; replay returns the raw `AdaptiveSessionDto` snapshot. Legacy no-key requests remain accepted but explicitly non-retryable. |
 
 ---
 

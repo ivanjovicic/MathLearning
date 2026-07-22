@@ -58,6 +58,13 @@ Domain-table idempotency (not shared ledger). See `DailyRunChestClaimIdempotency
 - Item claim binds `sourceEvent` for idempotency hash (not metadata-only).
 - Tests: `CosmeticsMutationResponseTests.cs`.
 
+### Adaptive session start (`adaptive_session_start`)
+
+- Keys: `operationId` + `idempotencyKey` are replay-safe when present; legacy no-key requests stay accepted but explicitly non-retryable.
+- Hash: normalized start payload after removing `operationId` and `idempotencyKey` from the JSON body.
+- Response replay source: completed `AdaptiveSessionDto` snapshot stored in `idempotency_ledger.result_json`.
+- Tests: `AdaptiveSessionStartIdempotencyTests.cs`.
+
 ## Next P1
 
 - Mobile storage/guest verification (P1-MOB-01).

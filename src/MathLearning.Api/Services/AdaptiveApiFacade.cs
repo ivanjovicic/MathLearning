@@ -1,7 +1,11 @@
+using MathLearning.Api.Endpoints;
+using MathLearning.Api.Extensions;
 using MathLearning.Application.DTOs.Adaptive;
 using MathLearning.Application.DTOs.Common;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 
 namespace MathLearning.Api.Services;
 
@@ -32,28 +36,80 @@ public sealed class AdaptiveApiFacade
         _logger = logger;
     }
 
-    public async Task<ApiResult<AdaptiveSessionDto>> StartAdaptiveSessionAsync(string userId, CancellationToken ct)
+    public async Task<IResult> StartAdaptiveSessionAsync(
+        string userId,
+        ApiDbContext db,
+        IIdempotencyLedgerService idempotencyService,
+        object? requestPayload,
+        string? operationId,
+        string? idempotencyKey,
+        CancellationToken ct)
     {
         try
         {
-            var session = await RetryPolicy.ExecuteAsync(
-                token => _adaptiveLearningService.GeneratePracticeSessionAsync(userId),
-                _logger,
-                "start_adaptive_session",
+            var effectiveOperationId = NormalizeAdaptiveSessionStartIdentity(operationId)
+                                       ?? NormalizeAdaptiveSessionStartIdentity(idempotencyKey);
+            var effectiveIdempotencyKey = NormalizeAdaptiveSessionStartIdentity(idempotencyKey)
+                                          ?? NormalizeAdaptiveSessionStartIdentity(operationId);
+
+            if (string.IsNullOrWhiteSpace(effectiveOperationId) ||
+                string.IsNullOrWhiteSpace(effectiveIdempotencyKey))
+            {
+                var legacySession = await _adaptiveLearningService.GeneratePracticeSessionAsync(userId);
+                var legacySessionDto = MapSession(legacySession);
+                var legacyJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(legacySessionDto);
+                await InvalidateAdaptiveCachesAsync(userId);
+                _analytics.TrackEvent("adaptive_practice_started", userId, new
+                {
+                    sessionId = legacySession.Id,
+                    itemCount = legacySession.Items.Count,
+                    replayMode = "legacy_no_idempotency"
+                });
+
+                return Results.Content(legacyJson, "application/json", statusCode: StatusCodes.Status200OK);
+            }
+
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var beginTuple = await TryBeginAdaptiveSessionStartAsync(
+                idempotencyService,
+                userId,
+                effectiveOperationId,
+                effectiveIdempotencyKey,
+                requestPayload ?? new { },
                 ct);
 
+            if (beginTuple.Error is not null)
+                return beginTuple.Error;
+
+            var begin = beginTuple.Begin!;
+            if (!begin.ShouldProcess)
+                return ReplayAdaptiveSessionStartResult(begin);
+
+            var session = await _adaptiveLearningService.GeneratePracticeSessionAsync(userId);
+            var sessionDto = MapSession(session);
+            var sessionJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(sessionDto);
+
+            await idempotencyService.CompleteAsync(
+                begin.LedgerId,
+                sessionDto,
+                StatusCodes.Status200OK,
+                ct);
+
+            await transaction.CommitAsync(ct);
             await InvalidateAdaptiveCachesAsync(userId);
             _analytics.TrackEvent("adaptive_practice_started", userId, new
             {
                 sessionId = session.Id,
-                itemCount = session.Items.Count
+                itemCount = session.Items.Count,
+                replayMode = "idempotent"
             });
 
-            return ApiResult<AdaptiveSessionDto>.Ok(MapSession(session));
+            return Results.Content(sessionJson, "application/json", statusCode: StatusCodes.Status200OK);
         }
         catch (Exception ex)
         {
-            return BuildFailureResult<AdaptiveSessionDto>(ex, "Failed to start adaptive session.");
+            return BuildFailureResult<AdaptiveSessionDto>(ex, "Failed to start adaptive session.").ToHttpResult();
         }
     }
 
@@ -357,6 +413,45 @@ public sealed class AdaptiveApiFacade
                 isRateLimited: retryAfterSeconds.HasValue,
                 retryAfterSeconds: retryAfterSeconds)
         };
+    }
+
+    private static string? NormalizeAdaptiveSessionStartIdentity(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static IResult ReplayAdaptiveSessionStartResult(IdempotencyLedgerBeginResult begin)
+    {
+        if (string.IsNullOrWhiteSpace(begin.ResultJson))
+            return Results.StatusCode(begin.Ledger.HttpStatus);
+
+        return Results.Content(begin.ResultJson, "application/json", statusCode: begin.Ledger.HttpStatus);
+    }
+
+    private static async Task<(IdempotencyLedgerBeginResult? Begin, IResult? Error)> TryBeginAdaptiveSessionStartAsync(
+        IIdempotencyLedgerService idempotencyService,
+        string userId,
+        string operationId,
+        string idempotencyKey,
+        object requestPayload,
+        CancellationToken ct)
+    {
+        try
+        {
+            var begin = await idempotencyService.BeginOrGetExistingAsync(
+                userId,
+                "adaptive_session_start",
+                operationId,
+                idempotencyKey,
+                "POST /api/adaptive/session/start",
+                requestPayload,
+                ct);
+            return (begin, null);
+        }
+        catch (IdempotencyLedgerConflictException)
+        {
+            return (null, Results.Conflict(EconomyEndpointHelpers.BusinessError(
+                "idempotency_conflict",
+                "Idempotency keys were reused with a different request payload.")));
+        }
     }
 
     private static int? ResolveRetryAfterSeconds(Exception ex)
