@@ -238,10 +238,11 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 
 | Method | Route | Auth | Owner | Notes |
 |---|---|---|---|---|
-| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Authenticated creation; input/storage hardening remains BACKEND-TEST-025. |
+| POST | `/api/bugs/report` | Auth | `BugEndpoints.cs` | Authenticated creation; screenshot DTOs now point at the authorized bug attachment route, not a storage path. Input/storage hardening remains BACKEND-TEST-025. |
 | GET | `/api/bugs/mine` | Auth | `BugEndpoints.cs` | Current-user rows only; page capped at 1,000. Invalid page size preserves default 50. |
 | GET | `/api/bugs/` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Global list; page capped at 1,000. Invalid page size preserves default 20. |
 | GET | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Read any report. |
+| GET | `/api/bugs/{id:guid}/screenshot` | Auth | `BugEndpoints.cs` | Reporter/admin-only byte stream for private screenshots; anonymous/static `/uploads/screenshots/*` access remains blocked. |
 | PATCH | `/api/bugs/{id:guid}` | Admin (`UiTokensAdminPolicy`) | `BugEndpoints.cs` | Update status/assignee. |
 
 Endpoint and service layers both normalize bug-report paging for defense-in-depth.

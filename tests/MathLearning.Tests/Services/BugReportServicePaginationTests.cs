@@ -34,9 +34,12 @@ public sealed class BugReportServicePaginationTests
 
     private sealed class NoOpScreenshotStorageService : IScreenshotStorageService
     {
-        public Task<string?> UploadScreenshotAsync(string base64Data, string fileName) =>
-            Task.FromResult<string?>(null);
+        public Task<bool> UploadScreenshotAsync(string base64Data, string storageKey) =>
+            Task.FromResult(false);
 
-        public Task<bool> DeleteScreenshotAsync(string url) => Task.FromResult(true);
+        public Task<BugScreenshotFile?> GetScreenshotAsync(string storageKey) =>
+            Task.FromResult<BugScreenshotFile?>(null);
+
+        public Task<bool> DeleteScreenshotAsync(string storageKey) => Task.FromResult(true);
     }
 }

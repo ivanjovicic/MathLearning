@@ -324,6 +324,15 @@ public sealed class RecordingBugReportService : IBugReportService
                 : null);
     }
 
+    public Task<BugReportScreenshotInfo?> GetBugReportScreenshotInfoAsync(Guid id)
+    {
+        Interlocked.Increment(ref adminCalls);
+        return Task.FromResult<BugReportScreenshotInfo?>(
+            id == ExistingBugId
+                ? new BugReportScreenshotInfo(id, "learner-1", "stub-screenshot-key")
+                : null);
+    }
+
     public Task<bool> UpdateBugStatusAsync(Guid id, UpdateBugStatusRequest request)
     {
         Interlocked.Increment(ref adminCalls);

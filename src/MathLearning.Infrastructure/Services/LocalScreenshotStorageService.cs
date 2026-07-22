@@ -1,4 +1,5 @@
-﻿using MathLearning.Application.Services;
+using MathLearning.Application.DTOs.Bugs;
+using MathLearning.Application.Services;
 
 namespace MathLearning.Infrastructure.Services;
 
@@ -13,65 +14,72 @@ public class LocalScreenshotStorageService : IScreenshotStorageService
         Directory.CreateDirectory(_uploadsPath);
     }
 
-    public async Task<string?> UploadScreenshotAsync(string base64Data, string fileName)
+    public async Task<bool> UploadScreenshotAsync(string base64Data, string storageKey)
     {
         try
         {
-            // Validate base64 format
-            if (!base64Data.Contains(","))
+            if (!IsSafeStorageKey(storageKey))
             {
-                throw new ArgumentException("Invalid base64 data format");
+                return false;
             }
 
-            var parts = base64Data.Split(',');
-            if (parts.Length != 2)
+            if (!TryDecodeImage(base64Data, out var bytes))
             {
-                throw new ArgumentException("Invalid base64 data format");
+                return false;
             }
 
-            var base64 = parts[1];
-            var bytes = Convert.FromBase64String(base64);
-
-            // Check file size
-            if (bytes.Length > MaxFileSizeBytes)
-            {
-                throw new ArgumentException($"Screenshot too large. Maximum size is {MaxFileSizeBytes / 1024 / 1024}MB");
-            }
-
-            // Validate image format (basic check)
-            if (!IsValidImage(bytes))
-            {
-                throw new ArgumentException("Invalid image format");
-            }
-
-            var filePath = Path.Combine(_uploadsPath, fileName);
+            var filePath = Path.Combine(_uploadsPath, storageKey);
             await File.WriteAllBytesAsync(filePath, bytes);
-
-            // Return relative URL
-            return $"/uploads/screenshots/{fileName}";
+            return true;
         }
-        catch (Exception ex)
+        catch
         {
-            // Log error and return null
-            Console.WriteLine($"Screenshot upload failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<BugScreenshotFile?> GetScreenshotAsync(string storageKey)
+    {
+        if (!IsSafeStorageKey(storageKey))
+        {
+            return null;
+        }
+
+        var filePath = Path.Combine(_uploadsPath, storageKey);
+        if (!File.Exists(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(filePath);
+            var contentType = TryGetContentType(bytes);
+            return contentType is null ? null : new BugScreenshotFile(bytes, contentType);
+        }
+        catch
+        {
             return null;
         }
     }
 
-    public Task<bool> DeleteScreenshotAsync(string url)
+    public Task<bool> DeleteScreenshotAsync(string storageKey)
     {
         try
         {
-            var fileName = Path.GetFileName(url);
-            var filePath = Path.Combine(_uploadsPath, fileName);
-
-            if (File.Exists(filePath))
+            if (!IsSafeStorageKey(storageKey))
             {
-                File.Delete(filePath);
-                return Task.FromResult(true);
+                return Task.FromResult(false);
             }
 
-            return Task.FromResult(false);
+            var filePath = Path.Combine(_uploadsPath, storageKey);
+            if (!File.Exists(filePath))
+            {
+                return Task.FromResult(false);
+            }
+
+            File.Delete(filePath);
+            return Task.FromResult(true);
         }
         catch
         {
@@ -79,21 +87,67 @@ public class LocalScreenshotStorageService : IScreenshotStorageService
         }
     }
 
-    private bool IsValidImage(byte[] bytes)
+    private static bool TryDecodeImage(string base64Data, out byte[] bytes)
     {
-        // Check PNG signature
+        bytes = [];
+
+        if (string.IsNullOrWhiteSpace(base64Data))
+        {
+            return false;
+        }
+
+        var commaIndex = base64Data.IndexOf(',');
+        if (commaIndex < 0 || commaIndex == base64Data.Length - 1)
+        {
+            return false;
+        }
+
+        try
+        {
+            bytes = Convert.FromBase64String(base64Data[(commaIndex + 1)..]);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (bytes.Length > MaxFileSizeBytes)
+        {
+            return false;
+        }
+
+        return TryGetContentType(bytes) is not null;
+    }
+
+    private static string? TryGetContentType(byte[] bytes)
+    {
         if (bytes.Length >= 8 &&
             bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
         {
-            return true;
+            return "image/png";
         }
 
-        // Check JPEG signature
-        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8)
+        if (bytes.Length >= 2 &&
+            bytes[0] == 0xFF && bytes[1] == 0xD8)
         {
-            return true;
+            return "image/jpeg";
         }
 
-        return false;
+        return null;
+    }
+
+    private static bool IsSafeStorageKey(string storageKey)
+    {
+        if (string.IsNullOrWhiteSpace(storageKey))
+        {
+            return false;
+        }
+
+        if (!string.Equals(storageKey, Path.GetFileName(storageKey), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return storageKey.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
     }
 }

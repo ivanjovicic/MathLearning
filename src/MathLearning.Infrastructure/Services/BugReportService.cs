@@ -30,11 +30,18 @@ public class BugReportService : IBugReportService
             .FirstOrDefaultAsync(p => p.UserId == userId);
         var username = userProfile?.Username ?? $"User{userId}";
 
-        string? screenshotUrl = null;
+        string? screenshotStorageKey = null;
         if (!string.IsNullOrWhiteSpace(request.ScreenshotBase64))
         {
-            var fileName = $"{userId}_{Guid.NewGuid():N}.png";
-            screenshotUrl = await screenshotStorage.UploadScreenshotAsync(request.ScreenshotBase64, fileName);
+            screenshotStorageKey = CreateScreenshotStorageKey();
+            var uploaded = await screenshotStorage.UploadScreenshotAsync(
+                request.ScreenshotBase64,
+                screenshotStorageKey);
+
+            if (!uploaded)
+            {
+                screenshotStorageKey = null;
+            }
         }
 
         var bugReport = new BugReport(
@@ -47,10 +54,23 @@ public class BugReportService : IBugReportService
             platform: request.Platform,
             locale: request.Locale,
             appVersion: request.AppVersion,
-            screenshotUrl: screenshotUrl);
+            screenshotUrl: screenshotStorageKey);
 
         db.BugReports.Add(bugReport);
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(screenshotStorageKey))
+            {
+                await screenshotStorage.DeleteScreenshotAsync(screenshotStorageKey);
+            }
+
+            throw;
+        }
 
         return Map(bugReport);
     }
@@ -80,7 +100,7 @@ public class BugReportService : IBugReportService
             .OrderByDescending(b => b.CreatedAt)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(b => new BugReportDto(
+            .Select(b => new BugReportProjection(
                 b.Id,
                 b.CreatedAt,
                 b.UserId,
@@ -99,7 +119,7 @@ public class BugReportService : IBugReportService
             .ToListAsync();
 
         return new BugReportsResponse(
-            bugs,
+            bugs.Select(Map).ToList(),
             totalCount,
             paging.Page,
             paging.PageSize);
@@ -123,7 +143,7 @@ public class BugReportService : IBugReportService
             .OrderByDescending(b => b.CreatedAt)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(b => new BugReportDto(
+            .Select(b => new BugReportProjection(
                 b.Id,
                 b.CreatedAt,
                 b.UserId,
@@ -142,7 +162,7 @@ public class BugReportService : IBugReportService
             .ToListAsync();
 
         return new BugReportsResponse(
-            bugs,
+            bugs.Select(Map).ToList(),
             totalCount,
             paging.Page,
             paging.PageSize);
@@ -152,6 +172,18 @@ public class BugReportService : IBugReportService
     {
         var bug = await db.BugReports.FirstOrDefaultAsync(b => b.Id == id);
         return bug is null ? null : Map(bug);
+    }
+
+    public Task<BugReportScreenshotInfo?> GetBugReportScreenshotInfoAsync(Guid id)
+    {
+        return db.BugReports
+            .AsNoTracking()
+            .Where(b => b.Id == id)
+            .Select(b => new BugReportScreenshotInfo(
+                b.Id,
+                b.UserId,
+                b.ScreenshotUrl))
+            .FirstOrDefaultAsync();
     }
 
     public async Task<bool> UpdateBugStatusAsync(Guid id, UpdateBugStatusRequest request)
@@ -172,19 +204,60 @@ public class BugReportService : IBugReportService
     }
 
     private static BugReportDto Map(BugReport bug) => new(
-        Id: bug.Id,
-        CreatedAt: bug.CreatedAt,
-        UserId: bug.UserId,
-        UsernameSnapshot: bug.UsernameSnapshot,
-        Screen: bug.Screen,
-        Description: bug.Description,
-        StepsToReproduce: bug.StepsToReproduce,
-        Severity: bug.Severity,
-        Platform: bug.Platform,
-        Locale: bug.Locale,
-        AppVersion: bug.AppVersion,
-        ScreenshotUrl: bug.ScreenshotUrl,
-        Status: bug.Status,
-        ResolvedAt: bug.ResolvedAt,
-        Assignee: bug.Assignee);
+        bug.Id,
+        bug.CreatedAt,
+        bug.UserId,
+        bug.UsernameSnapshot,
+        bug.Screen,
+        bug.Description,
+        bug.StepsToReproduce,
+        bug.Severity,
+        bug.Platform,
+        bug.Locale,
+        bug.AppVersion,
+        BuildScreenshotUrl(bug.Id, bug.ScreenshotUrl),
+        bug.Status,
+        bug.ResolvedAt,
+        bug.Assignee);
+
+    private static BugReportDto Map(BugReportProjection bug) => new(
+        bug.Id,
+        bug.CreatedAt,
+        bug.UserId,
+        bug.UsernameSnapshot,
+        bug.Screen,
+        bug.Description,
+        bug.StepsToReproduce,
+        bug.Severity,
+        bug.Platform,
+        bug.Locale,
+        bug.AppVersion,
+        BuildScreenshotUrl(bug.Id, bug.ScreenshotStorageKey),
+        bug.Status,
+        bug.ResolvedAt,
+        bug.Assignee);
+
+    private static string? BuildScreenshotUrl(Guid id, string? screenshotStorageKey) =>
+        string.IsNullOrWhiteSpace(screenshotStorageKey)
+            ? null
+            : $"/api/bugs/{id}/screenshot";
+
+    private static string CreateScreenshotStorageKey() => $"bugshot_{Guid.NewGuid():N}";
+
+    private sealed record BugReportProjection(
+        Guid Id,
+        DateTime CreatedAt,
+        string UserId,
+        string UsernameSnapshot,
+        string Screen,
+        string Description,
+        string? StepsToReproduce,
+        string Severity,
+        string Platform,
+        string Locale,
+        string AppVersion,
+        string? ScreenshotStorageKey,
+        string Status,
+        DateTime? ResolvedAt,
+        string? Assignee);
 }

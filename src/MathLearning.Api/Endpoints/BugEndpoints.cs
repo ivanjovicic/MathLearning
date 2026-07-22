@@ -56,6 +56,44 @@ public static class BugEndpoints
         .WithName("GetMyBugReports")
         .WithDescription("Get my submitted bug reports");
 
+        userGroup.MapGet("/{id:guid}/screenshot", async (
+            Guid id,
+            IBugReportService bugService,
+            IScreenshotStorageService screenshotStorage,
+            HttpContext ctx) =>
+        {
+            var userId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            var screenshotInfo = await bugService.GetBugReportScreenshotInfoAsync(id);
+            if (screenshotInfo is null)
+            {
+                return Results.NotFound(new { error = "Bug report not found" });
+            }
+
+            var isAdmin = ctx.User.IsInRole(DesignTokenSecurity.AdminRole);
+            if (!isAdmin && !string.Equals(screenshotInfo.UserId, userId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
+
+            if (string.IsNullOrWhiteSpace(screenshotInfo.ScreenshotStorageKey))
+            {
+                return Results.NotFound(new { error = "Screenshot not available" });
+            }
+
+            var screenshot = await screenshotStorage.GetScreenshotAsync(screenshotInfo.ScreenshotStorageKey);
+            if (screenshot is null)
+            {
+                return Results.NotFound(new { error = "Screenshot not available" });
+            }
+
+            return Results.File(screenshot.Bytes, screenshot.ContentType);
+        })
+        .WithName("GetBugScreenshot")
+        .WithDescription("Get a private bug screenshot when you are the reporter or an admin");
+
         adminGroup.MapGet("/", async (
             IBugReportService bugService,
             int page = 1,

@@ -29,6 +29,12 @@ public record BugReportDto(
     string? Assignee
 );
 
+public record BugReportScreenshotInfo(
+    Guid Id,
+    string UserId,
+    string? ScreenshotStorageKey
+);
+
 public record UpdateBugStatusRequest(
     string Status,
     string? Assignee
