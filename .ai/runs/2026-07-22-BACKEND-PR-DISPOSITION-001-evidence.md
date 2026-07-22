@@ -44,7 +44,7 @@ Documentation impact: updated the queue disposition row and review evidence log
 Cross-repo impact: no
 
 ## Delivery
-State: Done
+State: Needs evidence sync
 Branch/PR: direct main
 Commit SHA: self
 Completion %: 79
