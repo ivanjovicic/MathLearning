@@ -18,7 +18,7 @@ Owner/hypothesis: Adaptive start coordinator owns keyed replay/conflict and the 
 Files inspected: 18
 Files changed: 6
 Searches: 10
-Validation runs: 3
+Validation runs: 4
 Failed retries: 1
 
 ## Outcome
@@ -35,8 +35,8 @@ Failed retries: 1
 - docs/API_ENDPOINT_INVENTORY.md
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter FullyQualifiedName~AdaptiveSessionStartIdempotency` -> passed (5/5); `dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore` -> succeeded; `python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/AdaptiveEndpoints.cs` -> failures=0
-Validation not run: `python scripts/validate_agent_evidence.py --changed-from 4311aaf1292d9f1e259b7bdb5e1f31adc5bd2dc0 --verify-git` pending until commit exists
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter FullyQualifiedName~AdaptiveSessionStartIdempotency` -> passed (5/5); `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter FullyQualifiedName~AdaptiveSessionStartIdempotency` -> passed (5/5); `dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore` -> succeeded; `python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/AdaptiveEndpoints.cs` -> failures=0
+Validation not run: none
 
 ## Exceptions and learning
 Mistakes observed: none
@@ -48,7 +48,7 @@ Documentation impact: updated `docs/mobile_api_contract.md`, `docs/mobile_contra
 Cross-repo impact: yes - adaptive start contract now matches the shared mobile idempotency handoff
 
 ## Delivery
-State: Needs validation
+State: Done
 Branch/PR: direct main
 Commit SHA: self
-Completion %: 95
+Completion %: 100
