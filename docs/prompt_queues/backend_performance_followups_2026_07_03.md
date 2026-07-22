@@ -20,7 +20,7 @@ Previous queue: `backend_performance_optimization.md`
 
 | ID | Priority | Status | Purpose |
 |---|---:|---|---|
-| BE-PERF-009 | P1 | Prompt-ready | Bound and deduplicate weakness-analysis scheduling and stop full-history/full-taxonomy work per user. |
+| BE-PERF-009 | P1 | Validated | Weakness-analysis scheduling is now bounded and deduplicated; analysis history is limited to the latest 1,000 attempts per user instead of full-history materialization. Run log: `.ai/runs/2026-07-22-BE-PERF-009-evidence.md`. |
 | BE-PERF-010 | P1 | Prompt-ready | Replace hourly all-profile XP reset work with set-based, cancellable and single-owner processing. |
 | BE-PERF-011 | P1 | Prompt-ready | Bound rate-limit memory/cardinality and define multi-replica semantics. |
 | BE-PERF-012 | P0 | Prompt-ready | Make adaptive answer submission atomic, idempotent and cancellation-correct before generic retry. |
@@ -593,11 +593,10 @@ No completion from adding more logs. The result must reduce ambiguity, have meas
 2. BE-PERF-015
 3. BE-PERF-011
 4. BE-PERF-013
-5. BE-PERF-009
-6. BE-PERF-010
-7. BE-PERF-016 together with BACKEND-TEST-023
-8. BE-PERF-014
-9. BE-PERF-017
+5. BE-PERF-010
+6. BE-PERF-016 together with BACKEND-TEST-023
+7. BE-PERF-014
+8. BE-PERF-017
 
 ## Common validation after each package
 

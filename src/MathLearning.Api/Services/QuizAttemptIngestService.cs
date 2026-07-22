@@ -175,7 +175,13 @@ public sealed class QuizAttemptIngestService : IQuizAttemptIngestService
         if (persistedAttempts == 0)
             return;
 
-        _scheduler.Enqueue(analyticsUserId);
+        if (!_scheduler.Enqueue(analyticsUserId))
+        {
+            _logger.LogWarning(
+                "Weakness analysis queue is full after ingest. UserId={UserId} AnalyticsUserId={AnalyticsUserId}",
+                userId,
+                analyticsUserId);
+        }
 
         _logger.LogInformation(
             "Quiz attempts ingested. UserId={UserId} AnalyticsUserId={AnalyticsUserId} Attempts={AttemptsCount} TopicStatsUpdated={TopicStats} SubtopicStatsUpdated={SubtopicStats}",

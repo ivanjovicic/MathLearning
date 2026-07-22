@@ -116,7 +116,13 @@ public sealed class PracticeAnalyticsUpdater : IPracticeAnalyticsUpdater
     public Task TriggerWeaknessRecomputeAsync(string userId, CancellationToken ct = default)
     {
         var analyticsUserId = UserIdGuidMapper.FromIdentityUserId(userId);
-        _weaknessScheduler.Enqueue(analyticsUserId);
+        if (!_weaknessScheduler.Enqueue(analyticsUserId))
+        {
+            _logger.LogWarning(
+                "Weakness recompute queue is full. UserId={UserId} AnalyticsUserId={AnalyticsUserId}",
+                userId,
+                analyticsUserId);
+        }
 
         _logger.LogInformation(
             "Weakness recompute queued from practice flow. UserId={UserId} AnalyticsUserId={AnalyticsUserId}",

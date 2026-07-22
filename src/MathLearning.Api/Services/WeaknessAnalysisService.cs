@@ -9,6 +9,8 @@ namespace MathLearning.Api.Services;
 
 public sealed class WeaknessAnalysisService : IWeaknessAnalysisService
 {
+    private const int AttemptLookbackLimit = 1_000;
+
     private readonly ApiDbContext _db;
     private readonly ILogger<WeaknessAnalysisService> _logger;
 
@@ -45,6 +47,8 @@ public sealed class WeaknessAnalysisService : IWeaknessAnalysisService
         var attempts = await _db.QuizAttempts
             .AsNoTracking()
             .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(AttemptLookbackLimit)
             .Select(x => new { x.TopicId, x.SubtopicId, x.TimeSpentMs })
             .ToListAsync(ct);
 

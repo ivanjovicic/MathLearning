@@ -193,6 +193,8 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<AdaptiveApiFacade>();
         builder.Services.AddScoped<MathLearning.Infrastructure.Services.CosmeticLoadoutProjectionService>();
         builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();
+        builder.Services.Configure<WeaknessAnalysisSchedulerOptions>(
+            builder.Configuration.GetSection(WeaknessAnalysisSchedulerOptions.SectionName));
         builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
         builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
         builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();

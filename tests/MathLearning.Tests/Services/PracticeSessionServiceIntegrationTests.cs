@@ -272,9 +272,10 @@ public class PracticeSessionServiceIntegrationTests
     {
         public Guid? LastEnqueued { get; private set; }
 
-        public void Enqueue(Guid userId)
+        public bool Enqueue(Guid userId)
         {
             LastEnqueued = userId;
+            return true;
         }
     }
 

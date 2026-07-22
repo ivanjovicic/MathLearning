@@ -296,7 +296,11 @@ public sealed class QuizAttemptIngestServiceRelationalTests
 
         public IReadOnlyList<Guid> EnqueuedUserIds => userIds.ToArray();
 
-        public void Enqueue(Guid userId) => userIds.Enqueue(userId);
+        public bool Enqueue(Guid userId)
+        {
+            userIds.Enqueue(userId);
+            return true;
+        }
     }
 
     private sealed class ThrowAfterIngestSaveInterceptor : SaveChangesInterceptor
