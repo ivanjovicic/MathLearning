@@ -48,7 +48,7 @@ Documentation impact: updated `docs/mobile_api_contract.md`, `docs/mobile_contra
 Cross-repo impact: yes - adaptive start contract now matches the shared mobile idempotency handoff
 
 ## Delivery
-State: Done
+State: Needs evidence sync
 Branch/PR: direct main
 Commit SHA: self
-Completion %: 100
+Completion %: 79
