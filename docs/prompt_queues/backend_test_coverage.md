@@ -94,7 +94,7 @@ Prompt queues:
 | BACKEND-TEST-036 | Validated | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"`: 272 passed, 0 failed, 0 skipped. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
 | BACKEND-LATEST-VALIDATION-002 | Validated | Latest July 3 implementation/test batch verified; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and the focused test package passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
-| BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Prompt-ready | Link exact `main` SHA to Database Validation jobs, logs and artifacts. |
+| BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Validated | Database Validation run `29899827848` succeeded on exact `main` SHA `a5406568df339bb6c562ed4f79f31c72d6ac2939`; classifier returned `docs/agent-tooling-only change; expensive database suite skipped`, so `database-suite` was skipped and no artifacts were produced. Run log: `.ai/runs/2026-07-22-BACKEND-LATEST-WORKFLOW-002-evidence.md`. |
 | BACKEND-LATEST-EVIDENCE-002 | P1 / Done 75% | Linted the latest referenced July 3 evidence logs, added missing `Commit SHA:` fields, and reconciled completion caps; older legacy queue/log debt remains. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-EVIDENCE-002-evidence.md`. |
 | BACKEND-LATEST-QUEUE-002 | P1 / Done | Canonical ownership and dependency map across overlapping test/performance queues. Run log: `.ai/runs/2026-07-14-BACKEND-LATEST-QUEUE-002-evidence.md`. |
 | BACKEND-MIGRATION-001 | P0 / Prompt-ready | Repair historical cosmetics FK-name drift and prove clean plus upgraded PostgreSQL migration paths without weakening the schema gate. |
@@ -201,7 +201,7 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 
 ## Next execution order
 
-1. Run BACKEND-LATEST-WORKFLOW-002 against the current exact `main` SHA and review the standard workflow/artifacts.
+1. BACKEND-LATEST-WORKFLOW-002 completed on exact `main` SHA `a5406568df339bb6c562ed4f79f31c72d6ac2939`; run log `.ai/runs/2026-07-22-BACKEND-LATEST-WORKFLOW-002-evidence.md`.
 2. Run BACKEND-LATEST-EVIDENCE-002 and BACKEND-LATEST-QUEUE-002 to close historical evidence and duplicate-ownership drift.
 3. Run BACKEND-MIGRATION-001 to restore clean and upgraded PostgreSQL migration validation without weakening the schema gate.
 4. Validate BACKEND-API-DB-009/010/011 and run BACKEND-API-DB-015 according to their remaining schema/consumer/pending-state gates.
