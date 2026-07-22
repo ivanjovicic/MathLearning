@@ -9,7 +9,7 @@ Scope: proven uncovered backend behavior and exact disposition work only.
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
 | `BACKEND-XREPO-ADAPTIVE-START-001` | P0 correctness | Ready | [Open](backend_cross_repo/BACKEND-XREPO-ADAPTIVE-START-001.md) | Make adaptive session start replay-safe across timeout/restart using the existing idempotency ledger. |
-| `BACKEND-API-DB-020` | P0/P1 privacy | Ready | [Open](backend_cross_repo/BACKEND-API-DB-020.md) | Replace persisted/public screenshot URL semantics with opaque private storage keys and an authorized streaming route. |
+| `BACKEND-API-DB-020` | P0/P1 privacy | Done | [Open](backend_cross_repo/BACKEND-API-DB-020.md) | Replace persisted/public screenshot URL semantics with opaque private storage keys and an authorized streaming route. Done 100% - Run log: `.ai/runs/2026-07-22-BACKEND-API-DB-020-evidence.md`; Validation: `dotnet build`, `dotnet test` and `dotnet ef migrations has-pending-model-changes` passed; Residual risk: `021` still owns durable provider/deployment migration; Commit: `self|f5f6300`. |
 | `BACKEND-API-DB-021` | P1 durability | Ready after `BACKEND-API-DB-020` | [Open](backend_cross_repo/BACKEND-API-DB-021.md) | Select and prove a durable private screenshot provider/deployment migration after the private contract is stable. |
 | `BACKEND-PR-DISPOSITION-001` | P1 queue integrity | Ready | [Open](backend_cross_repo/BACKEND-PR-DISPOSITION-001.md) | Review stale draft PR #3 against current main and retain only unique still-needed tests. |
 
