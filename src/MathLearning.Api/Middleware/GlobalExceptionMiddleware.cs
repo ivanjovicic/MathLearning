@@ -22,18 +22,30 @@ public sealed class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception occurred");
+            var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+            var correlationId = SafeClientErrorResponse.ResolveCorrelationId(context);
+
+            // CorrelationIdMiddleware is inside this exception boundary. Its
+            // LogContext scope unwinds before this catch executes, so include
+            // the identifiers explicitly on the exception event.
+            _logger.LogError(
+                ex,
+                "Unhandled exception occurred. CorrelationId={CorrelationId} TraceId={TraceId}",
+                correlationId ?? "<missing>",
+                traceId);
 
             if (context.Response.HasStarted)
             {
-                _logger.LogWarning("Response already started; cannot write problem response.");
+                _logger.LogWarning(
+                    "Response already started; cannot write problem response. CorrelationId={CorrelationId} TraceId={TraceId}",
+                    correlationId ?? "<missing>",
+                    traceId);
                 throw;
             }
 
             context.Response.Clear();
             context.Response.ContentType = "application/json";
 
-            var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
             var retryAfter = ResolveRetryAfterSeconds(ex);
             var isRateLimited = ex is MathLearning.Api.Services.RateLimitedOperationException || retryAfter.HasValue;
             context.Response.StatusCode = isRateLimited
