@@ -207,6 +207,7 @@ public static class ServiceRegistrationExtensions
             options.SizeLimit = 1000;
         });
 
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.Services.AddControllers();
         builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
@@ -259,6 +260,8 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
         builder.Services.Configure<XpTrackingOptions>(
             builder.Configuration.GetSection(XpTrackingOptions.SectionName));
+        builder.Services.AddScoped<IXpResetOwnershipLease, PostgresXpResetOwnershipLease>();
+        builder.Services.AddScoped<XpResetProcessor>();
         builder.Services.AddScoped<XpTrackingService>();
         builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
         builder.Services.AddScoped<StudentLeaderboardService>();

@@ -45,6 +45,7 @@ public class PracticeSession
     public string RecommendedDifficulty { get; set; } = PracticeDifficulties.Medium;
     public decimal InitialMastery { get; set; }
     public decimal? FinalMastery { get; set; }
+    public string? CompletionResponseJson { get; set; }
 
     public List<PracticeSessionItem> Items { get; set; } = new();
 }
@@ -64,6 +65,8 @@ public class PracticeSessionItem
     public int AttemptNumber { get; set; } = 1;
     public decimal BktPrior { get; set; }
     public decimal BktPosterior { get; set; }
+    public string? SubmissionFingerprintJson { get; set; }
+    public string? SettledResponseJson { get; set; }
 
     public PracticeSession? Session { get; set; }
 }
