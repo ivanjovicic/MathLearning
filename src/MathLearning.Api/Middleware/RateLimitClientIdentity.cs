@@ -13,6 +13,7 @@ public static class RateLimitClientIdentity
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                 ?? context.User.FindFirst("sub")?.Value
                 ?? context.User.FindFirst("userId")?.Value;
+            userId = userId?.Trim();
 
             if (!string.IsNullOrWhiteSpace(userId))
                 return $"user:{userId}";

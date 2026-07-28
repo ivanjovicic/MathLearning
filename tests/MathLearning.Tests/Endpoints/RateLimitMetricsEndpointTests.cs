@@ -1,0 +1,47 @@
+using System.Net;
+using System.Text.Json;
+using MathLearning.Tests.Middleware;
+
+namespace MathLearning.Tests.Endpoints;
+
+public sealed class RateLimitMetricsEndpointTests : IClassFixture<RateLimitTestWebApplicationFactory>
+{
+    private readonly HttpClient client;
+
+    public RateLimitMetricsEndpointTests(RateLimitTestWebApplicationFactory factory)
+    {
+        client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task MetricsExposeRateLimitSnapshotAfterRequests()
+    {
+        for (var i = 0; i < 2; i++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/auth/test");
+            request.Headers.TryAddWithoutValidation("X-Forwarded-For", $"203.0.113.{i + 1}");
+
+            var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        using var limited = new HttpRequestMessage(HttpMethod.Get, "/auth/test");
+        limited.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.99");
+
+        var limitedResponse = await client.SendAsync(limited);
+        Assert.Equal(HttpStatusCode.TooManyRequests, limitedResponse.StatusCode);
+
+        var metricsResponse = await client.GetAsync("/metrics");
+        Assert.Equal(HttpStatusCode.OK, metricsResponse.StatusCode);
+
+        var body = await metricsResponse.Content.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        var rateLimit = json.RootElement.GetProperty("rateLimit");
+
+        Assert.Equal(1, rateLimit.GetProperty("partitionCount").GetInt32());
+        Assert.Equal(2, rateLimit.GetProperty("allowedRequests").GetInt64());
+        Assert.Equal(1, rateLimit.GetProperty("rejectedRequests").GetInt64());
+        Assert.Equal(0, rateLimit.GetProperty("saturationRejections").GetInt64());
+        Assert.True(rateLimit.GetProperty("cleanupRuns").GetInt64() >= 0);
+    }
+}
