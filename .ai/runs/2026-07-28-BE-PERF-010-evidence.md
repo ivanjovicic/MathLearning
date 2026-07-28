@@ -30,7 +30,7 @@ Failed retries: 2
 - `.ai/runs/2026-07-28-BE-PERF-010-evidence.md`
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~RunOnceAsync_ConcurrentAwardPreservesAuthoritativeTotals` passed.
+Validation run: `python scripts/run_guarded.py --timeout-seconds 120 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --no-build --filter FullyQualifiedName~RunOnceAsync_ConcurrentAwardPreservesAuthoritativeTotals` passed.
 Validation not run: full `XpResetProcessorTests` class sweep hit an idle-timeout in this environment because of long silent build phases, so the final proof stayed focused on the corrected concurrency case.
 
 ## Exceptions and learning
@@ -45,5 +45,5 @@ Cross-repo impact: no
 ## Delivery
 State: Done
 Branch/PR: direct main
-Commit SHA: self
+Commit SHA: 953260a
 Completion %: 100
