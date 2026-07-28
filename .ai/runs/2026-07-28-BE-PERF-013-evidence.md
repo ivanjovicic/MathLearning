@@ -10,8 +10,8 @@ Client/IDE: unknown-not-exposed
 Run mode: known-fix
 Token budget: medium
 Started at UTC: 2026-07-28T17:34:50Z
-Completed at UTC: 2026-07-28T17:52:16.1623566Z
-Elapsed time: 17m 26s
+Completed at UTC: 2026-07-28T17:52:53.9099560Z
+Elapsed time: 18m 4s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-PERF-001, BACKEND-MISTAKE-PERF-002, BACKEND-MISTAKE-PERF-003, BACKEND-MISTAKE-SCOPE-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-PERF-001; apply BACKEND-MISTAKE-PERF-002; apply BACKEND-MISTAKE-PERF-003; apply BACKEND-MISTAKE-SCOPE-001
 Owner/hypothesis: GET/read paths still had hidden writes via streak roll, leaderboard refresh, and snapshot capture; remove them and prove the persisted state stays unchanged after reads.
@@ -35,7 +35,7 @@ Failed retries: 1
 - tests/MathLearning.Tests/Endpoints/ReadPathMutationRegressionTests.cs
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter FullyQualifiedName~ReadPathMutationRegressionTests` (passed); `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet build MathLearning.slnx -c Release --no-restore` (passed)
+Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter FullyQualifiedName~ReadPathMutationRegressionTests` (passed); `dotnet build MathLearning.slnx -c Release` (passed)
 Validation not run: none
 
 ## Exceptions and learning
@@ -48,7 +48,7 @@ Documentation impact: none - runtime-only fix
 Cross-repo impact: no
 
 ## Delivery
-State: Done
+State: Needs evidence sync
 Branch/PR: direct main
 Commit SHA: self
-Completion %: 100
+Completion %: 79
