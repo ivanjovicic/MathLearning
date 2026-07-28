@@ -4,6 +4,8 @@ using Hangfire.Common;
 using Hangfire.States;
 using MathLearning.Api.Services;
 using MathLearning.Application.DTOs.Practice;
+using MathLearning.Application.Helpers;
+using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Idempotency;
@@ -85,14 +87,17 @@ public sealed class PracticeSessionIdempotencyTests
     [Fact]
     public async Task CompleteSessionAsync_ConcurrentDuplicates_SettleOnce_AndEnqueueJobsOnce()
     {
-        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
+
         var scheduler = new FakeWeaknessScheduler();
         var backgroundJobs = new RecordingBackgroundJobClient();
 
         Guid sessionId;
         int questionId;
 
-        await using (var db = database.CreateContext())
+        await using (var db = new ApiDbContext(database.CreateApiOptions()))
         {
             var sut = BuildService(db, scheduler, backgroundJobs);
             var start = await sut.StartSessionAsync(
@@ -121,8 +126,8 @@ public sealed class PracticeSessionIdempotencyTests
             Assert.True(answer.IsCorrect);
         }
 
-        await using var firstDb = database.CreateContext();
-        await using var secondDb = database.CreateContext();
+        await using var firstDb = new ApiDbContext(database.CreateApiOptions());
+        await using var secondDb = new ApiDbContext(database.CreateApiOptions());
         var firstSut = BuildService(firstDb, scheduler, backgroundJobs);
         var secondSut = BuildService(secondDb, scheduler, backgroundJobs);
 
@@ -135,7 +140,7 @@ public sealed class PracticeSessionIdempotencyTests
             IdempotencyPayloadCanonicalizer.CanonicalizeToJson(results[1]));
         Assert.Equal(3, backgroundJobs.EnqueueCount);
 
-        await using var verification = database.CreateContext();
+        await using var verification = new ApiDbContext(database.CreateApiOptions());
         Assert.Equal(1, await verification.UserDailyStats.CountAsync(x => x.UserId == "1"));
 
         var storedSession = await verification.PracticeSessions.SingleAsync(x => x.Id == sessionId);
@@ -199,7 +204,7 @@ public sealed class PracticeSessionIdempotencyTests
         RecordingBackgroundJobClient backgroundJobs)
     {
         var bkt = new BktService(new MemoryCache(new MemoryCacheOptions()));
-        var selector = new EfQuestionSelector(db);
+        var selector = new DeterministicQuestionSelector(db);
         var analyticsUpdater = new PracticeAnalyticsUpdater(
             db,
             scheduler,
@@ -220,6 +225,83 @@ public sealed class PracticeSessionIdempotencyTests
             adaptiveAnalytics,
             new NoOpAnswerPatternAntiCheatService(),
             NullLogger<PracticeSessionService>.Instance);
+    }
+
+    private sealed class DeterministicQuestionSelector : IQuestionSelector
+    {
+        private readonly ApiDbContext _db;
+
+        public DeterministicQuestionSelector(ApiDbContext db)
+        {
+            _db = db;
+        }
+
+        public async Task<SelectedQuestion?> GetNextQuestionAsync(
+            QuestionSelectionCriteria criteria,
+            CancellationToken ct = default)
+        {
+            var excluded = criteria.ExcludedQuestionIds?.Distinct().ToHashSet() ?? [];
+            var normalizedDifficulty = PracticeDifficulties.Normalize(criteria.Difficulty);
+            var targetDifficulty = normalizedDifficulty switch
+            {
+                PracticeDifficulties.Easy => 2,
+                PracticeDifficulties.Medium => 3,
+                PracticeDifficulties.Hard => 4,
+                _ => 3
+            };
+
+            var candidates = await (
+                from question in _db.Questions.AsNoTracking().Include(x => x.Options)
+                join subtopic in _db.Subtopics.AsNoTracking()
+                    on question.SubtopicId equals subtopic.Id
+                where (!criteria.SubtopicId.HasValue || question.SubtopicId == criteria.SubtopicId.Value)
+                    && (!criteria.TopicId.HasValue || subtopic.TopicId == criteria.TopicId.Value)
+                    && !excluded.Contains(question.Id)
+                select new
+                {
+                    Question = question,
+                    TopicId = subtopic.TopicId,
+                    Distance = Math.Abs(question.Difficulty - targetDifficulty)
+                })
+                .ToListAsync(ct);
+
+            var candidate = candidates
+                .OrderBy(x => x.Distance)
+                .ThenBy(x => x.Question.Id)
+                .FirstOrDefault();
+
+            if (candidate is null)
+                return null;
+
+            return new SelectedQuestion(
+                candidate.Question.Id,
+                candidate.Question.Text,
+                candidate.Question.Options
+                    .OrderBy(x => x.Id)
+                    .Select(x => new SelectedQuestionOption(
+                        x.Id,
+                        x.Text,
+                        x.IsCorrect,
+                        x.TextFormat,
+                        x.RenderMode,
+                        TranslationHelper.ResolveSemanticsAltText(x.SemanticsAltText, x.Text, x.TextFormat)))
+                    .ToList(),
+                candidate.TopicId,
+                candidate.Question.SubtopicId,
+                candidate.Question.Difficulty switch
+                {
+                    <= 2 => PracticeDifficulties.Easy,
+                    3 => PracticeDifficulties.Medium,
+                    _ => PracticeDifficulties.Hard
+                },
+                candidate.Question.CorrectAnswer,
+                candidate.Question.TextFormat,
+                candidate.Question.TextRenderMode,
+                TranslationHelper.ResolveSemanticsAltText(
+                    candidate.Question.SemanticsAltText,
+                    candidate.Question.Text,
+                    candidate.Question.TextFormat));
+        }
     }
 
     private static async Task<int> GetCorrectOptionIdAsync(ApiDbContext db, int questionId)

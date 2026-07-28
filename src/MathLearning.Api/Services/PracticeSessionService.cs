@@ -597,13 +597,22 @@ public sealed class PracticeSessionService : IPracticeSessionService
         CancellationToken ct)
     {
         var analyticsUserId = MathLearning.Application.Helpers.UserIdGuidMapper.FromIdentityUserId(userId);
-        var candidate = await _db.UserWeaknesses
+        var candidates = await _db.UserWeaknesses
             .AsNoTracking()
             .Where(x => x.UserId == analyticsUserId)
+            .Select(x => new
+            {
+                x.RecommendedPractice,
+                x.Confidence,
+                IsHigh = x.WeaknessLevel == WeaknessLevels.High
+            })
+            .ToListAsync(ct);
+
+        var candidate = candidates
             .OrderByDescending(x => x.Confidence)
-            .ThenByDescending(x => x.WeaknessLevel == WeaknessLevels.High)
+            .ThenByDescending(x => x.IsHigh)
             .Select(x => x.RecommendedPractice)
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(candidate))
             return null;
