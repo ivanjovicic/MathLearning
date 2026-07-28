@@ -85,6 +85,8 @@ public class UserQuestionHistory
 
     public Guid? AdaptiveSessionId { get; set; }
     public Guid? AdaptiveSessionItemId { get; set; }
+    public string? RequestFingerprintJson { get; set; }
+    public string? SettledResponseJson { get; set; }
 
     public Question? Question { get; set; }
     public Topic? Topic { get; set; }
@@ -193,6 +195,10 @@ public class AdaptiveAnswerResult
 
     public string? Explanation { get; set; }
 }
+
+public sealed record AdaptiveAnswerSubmissionResult(
+    AdaptiveAnswerResult Result,
+    bool WasReplayed);
 
 public class ReviewItem
 {

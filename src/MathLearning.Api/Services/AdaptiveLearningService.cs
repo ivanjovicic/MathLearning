@@ -3,7 +3,11 @@ using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
+using System.Text.Json;
 
 namespace MathLearning.Api.Services;
 
@@ -20,6 +24,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
     private const int HardSequenceLimit = 2;
 
     private static readonly TimeSpan RecommendationCacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly JsonSerializerOptions ReplaySerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly ApiDbContext _db;
     private readonly ISrsService _srsService;
@@ -44,8 +49,11 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
     public Task<AdaptiveSession> GeneratePracticeSessionAsync(string userId) =>
         GeneratePracticeSessionAsync(userId, CancellationToken.None);
 
-    public Task<AdaptiveAnswerResult> SubmitAnswerAsync(string userId, AdaptiveAnswerRequest request) =>
-        SubmitAnswerAsync(userId, request, CancellationToken.None);
+    public Task<AdaptiveAnswerSubmissionResult> SubmitAnswerAsync(
+        string userId,
+        AdaptiveAnswerRequest request,
+        CancellationToken cancellationToken = default) =>
+        SubmitAnswerAsyncCore(userId, request, cancellationToken);
 
     public Task<List<AdaptiveRecommendation>> GetRecommendationsAsync(string userId) =>
         GetRecommendationsAsync(userId, CancellationToken.None);
@@ -167,7 +175,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         return session;
     }
 
-    private async Task<AdaptiveAnswerResult> SubmitAnswerAsync(
+    private async Task<AdaptiveAnswerSubmissionResult> SubmitAnswerAsyncCore(
         string userId,
         AdaptiveAnswerRequest request,
         CancellationToken ct)
@@ -175,10 +183,18 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         ValidateUserId(userId);
         ValidateAnswerRequest(request);
 
+        var replayFingerprint = BuildAdaptiveAnswerReplayFingerprint(userId, request);
+        var existing = await FindSettledAdaptiveAnswerAsync(userId, request.AdaptiveSessionItemId, ct);
+        if (existing is not null)
+            return BuildReplayResult(existing, replayFingerprint);
+
         var nowUtc = DateTime.UtcNow;
         var answeredAt = request.AnsweredAt ?? nowUtc;
         var boundedConfidence = Math.Clamp(request.Confidence, 0d, 1d);
         var boundedResponseTime = Math.Max(0, request.ResponseTimeSeconds);
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var committed = false;
 
         var sessionItem = await _db.AdaptiveSessionItems
             .Include(i => i.AdaptiveSession)
@@ -187,115 +203,147 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
                      i.AdaptiveSessionId == request.AdaptiveSessionId,
                 ct);
 
-        if (sessionItem is null || sessionItem.AdaptiveSession is null || sessionItem.AdaptiveSession.UserId != userId)
-            throw new InvalidOperationException("Adaptive session item not found for the user.");
-
-        if (sessionItem.QuestionId != request.QuestionId)
-            throw new InvalidOperationException("Question mismatch for adaptive session item.");
-
-        var question = await _db.Questions
-            .Include(q => q.Options)
-            .Include(q => q.Subtopic)
-            .FirstOrDefaultAsync(q => q.Id == request.QuestionId, ct);
-
-        if (question is null || question.Subtopic is null)
-            throw new InvalidOperationException("Question or taxonomy metadata not found.");
-
-        var isCorrect = EvaluateAnswer(question, request.Answer);
-
-        sessionItem.IsCorrect = isCorrect;
-        sessionItem.Confidence = boundedConfidence;
-        sessionItem.ResponseTimeSeconds = boundedResponseTime;
-        sessionItem.AnsweredAt = answeredAt;
-
-        var learningProfile = await EnsureLearningProfileAsync(userId, nowUtc, ct);
-        var difficultyDecision = UpdateLearningProfileAndDifficulty(
-            learningProfile,
-            isCorrect,
-            boundedResponseTime,
-            nowUtc);
-
-        var historyEntry = new UserQuestionHistory
+        try
         {
-            UserId = userId,
-            QuestionId = question.Id,
-            TopicId = question.Subtopic.TopicId,
-            SubtopicId = question.SubtopicId,
-            IsCorrect = isCorrect,
-            Confidence = boundedConfidence,
-            ResponseTimeSeconds = boundedResponseTime,
-            DifficultyLevel = AdaptiveDifficultyMapper.FromQuestionDifficulty(question.Difficulty),
-            AnsweredAt = answeredAt,
-            AdaptiveSessionId = request.AdaptiveSessionId,
-            AdaptiveSessionItemId = request.AdaptiveSessionItemId
-        };
+            if (sessionItem is null || sessionItem.AdaptiveSession is null || sessionItem.AdaptiveSession.UserId != userId)
+                throw new InvalidOperationException("Adaptive session item not found for the user.");
 
-        _db.UserQuestionHistories.Add(historyEntry);
+            if (sessionItem.QuestionId != request.QuestionId)
+                throw new InvalidOperationException("Question mismatch for adaptive session item.");
 
-        await _antiCheatService.EvaluateAndTrackAsync(
-            new AntiCheatAnswerObservationInput(
+            var question = await _db.Questions
+                .Include(q => q.Options)
+                .Include(q => q.Subtopic)
+                .FirstOrDefaultAsync(q => q.Id == request.QuestionId, ct);
+
+            if (question is null || question.Subtopic is null)
+                throw new InvalidOperationException("Question or taxonomy metadata not found.");
+
+            var isCorrect = EvaluateAnswer(question, request.Answer);
+
+            sessionItem.IsCorrect = isCorrect;
+            sessionItem.Confidence = boundedConfidence;
+            sessionItem.ResponseTimeSeconds = boundedResponseTime;
+            sessionItem.AnsweredAt = answeredAt;
+
+            var learningProfile = await EnsureLearningProfileAsync(userId, nowUtc, ct);
+            var difficultyDecision = UpdateLearningProfileAndDifficulty(
+                learningProfile,
+                isCorrect,
+                boundedResponseTime,
+                nowUtc);
+
+            var historyEntry = new UserQuestionHistory
+            {
+                UserId = userId,
+                QuestionId = question.Id,
+                TopicId = question.Subtopic.TopicId,
+                SubtopicId = question.SubtopicId,
+                IsCorrect = isCorrect,
+                Confidence = boundedConfidence,
+                ResponseTimeSeconds = boundedResponseTime,
+                DifficultyLevel = AdaptiveDifficultyMapper.FromQuestionDifficulty(question.Difficulty),
+                AnsweredAt = answeredAt,
+                AdaptiveSessionId = request.AdaptiveSessionId,
+                AdaptiveSessionItemId = request.AdaptiveSessionItemId,
+                RequestFingerprintJson = replayFingerprint
+            };
+
+            _db.UserQuestionHistories.Add(historyEntry);
+
+            await _antiCheatService.EvaluateAndTrackAsync(
+                new AntiCheatAnswerObservationInput(
+                    userId,
+                    "adaptive_session_answer",
+                    question.Id,
+                    question.Subtopic.TopicId,
+                    question.SubtopicId,
+                    request.AdaptiveSessionId,
+                    null,
+                    null,
+                    request.Answer,
+                    isCorrect,
+                    boundedResponseTime * 1000,
+                    boundedConfidence,
+                    answeredAt),
+                ct);
+
+            var reviewSchedule = await UpsertReviewScheduleAsync(
                 userId,
-                "adaptive_session_answer",
                 question.Id,
                 question.Subtopic.TopicId,
-                question.SubtopicId,
-                request.AdaptiveSessionId,
-                null,
-                null,
-                request.Answer,
                 isCorrect,
-                boundedResponseTime * 1000,
                 boundedConfidence,
-                answeredAt),
-            ct);
+                nowUtc,
+                ct);
 
-        var reviewSchedule = await UpsertReviewScheduleAsync(
-            userId,
-            question.Id,
-            question.Subtopic.TopicId,
-            isCorrect,
-            boundedConfidence,
-            nowUtc,
-            ct);
+            await _db.SaveChangesAsync(ct);
 
-        await _db.SaveChangesAsync(ct);
+            var hasPendingItems = await _db.AdaptiveSessionItems
+                .AsNoTracking()
+                .AnyAsync(i => i.AdaptiveSessionId == request.AdaptiveSessionId && i.IsCorrect == null, ct);
 
-        var hasPendingItems = await _db.AdaptiveSessionItems
-            .AsNoTracking()
-            .AnyAsync(i => i.AdaptiveSessionId == request.AdaptiveSessionId && i.IsCorrect == null, ct);
+            sessionItem.AdaptiveSession.IsCompleted = !hasPendingItems;
 
-        sessionItem.AdaptiveSession.IsCompleted = !hasPendingItems;
+            var mastery = await RecalculateTopicMasteryAsync(userId, question.Subtopic.TopicId, nowUtc, ct);
+            mastery.DifficultyLevel = learningProfile.PreferredDifficulty;
 
-        var mastery = await RecalculateTopicMasteryAsync(userId, question.Subtopic.TopicId, nowUtc, ct);
-        mastery.DifficultyLevel = learningProfile.PreferredDifficulty;
-        await _db.SaveChangesAsync(ct);
+            var settledResponse = BuildAdaptiveAnswerResult(
+                isCorrect,
+                learningProfile.PreferredDifficulty,
+                difficultyDecision.Changed,
+                mastery,
+                reviewSchedule,
+                question.Explanation);
+            historyEntry.SettledResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(settledResponse);
 
-        await TryUpdateLegacySrsAsync(userId, question.Id, isCorrect, boundedResponseTime);
-        await _cache.RemoveAsync(GetRecommendationCacheKey(userId));
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            committed = true;
 
-        _logger.LogInformation(
-            "Adaptive answer submitted. UserId={UserId} SessionId={SessionId} SessionItemId={SessionItemId} QuestionId={QuestionId} Correct={IsCorrect} Mastery={Mastery} NextReviewAt={NextReviewAt}",
-            userId,
-            request.AdaptiveSessionId,
-            request.AdaptiveSessionItemId,
-            question.Id,
-            isCorrect,
-            mastery.MasteryScore,
-            reviewSchedule.DueAt);
+            await TryUpdateLegacySrsAsync(userId, question.Id, isCorrect, boundedResponseTime, ct);
+            await InvalidateRecommendationCacheBestEffortAsync(userId);
 
-        return new AdaptiveAnswerResult
+            _logger.LogInformation(
+                "Adaptive answer submitted. UserId={UserId} SessionId={SessionId} SessionItemId={SessionItemId} QuestionId={QuestionId} Correct={IsCorrect} Mastery={Mastery} NextReviewAt={NextReviewAt}",
+                userId,
+                request.AdaptiveSessionId,
+                request.AdaptiveSessionItemId,
+                question.Id,
+                isCorrect,
+                mastery.MasteryScore,
+                reviewSchedule.DueAt);
+
+            return new AdaptiveAnswerSubmissionResult(settledResponse, WasReplayed: false);
+        }
+        catch (DbUpdateException ex) when (IsAdaptiveSessionItemUniqueViolation(ex))
         {
-            IsCorrect = isCorrect,
-            DifficultyLevel = learningProfile.PreferredDifficulty,
-            WasDifficultyAdjusted = difficultyDecision.Changed,
-            TopicId = question.Subtopic.TopicId,
-            TopicMasteryScore = mastery.MasteryScore,
-            IsWeakTopic = mastery.IsWeak,
-            NextReviewAt = reviewSchedule.DueAt,
-            ReviewIntervalDays = reviewSchedule.IntervalDays,
-            ReviewEasinessFactor = reviewSchedule.EasinessFactor,
-            Explanation = !isCorrect ? question.Explanation : null
-        };
+            if (!committed)
+            {
+                await RollbackQuietlyAsync(transaction);
+                _db.ChangeTracker.Clear();
+            }
+
+            var replayEntry = await FindSettledAdaptiveAnswerAsync(userId, request.AdaptiveSessionItemId, ct);
+            if (replayEntry is null)
+                throw;
+
+            if (!string.Equals(replayEntry.RequestFingerprintJson, replayFingerprint, StringComparison.Ordinal))
+                throw new AdaptiveAnswerConflictException("Adaptive session item was already answered with a different payload.");
+
+            var replayResult = DeserializeAdaptiveAnswerResult(replayEntry.SettledResponseJson);
+            if (replayResult is null)
+                throw new InvalidOperationException("Adaptive session replay payload is missing.");
+
+            return new AdaptiveAnswerSubmissionResult(replayResult, WasReplayed: true);
+        }
+        catch
+        {
+            if (!committed)
+                await RollbackQuietlyAsync(transaction);
+
+            throw;
+        }
     }
 
     private async Task<List<AdaptiveRecommendation>> GetRecommendationsAsync(string userId, CancellationToken ct)
@@ -765,7 +813,111 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         mastery.UpdatedAt = nowUtc;
     }
 
-    private async Task TryUpdateLegacySrsAsync(string userId, int questionId, bool isCorrect, int responseTimeSeconds)
+    private static AdaptiveAnswerSubmissionResult BuildReplayResult(
+        UserQuestionHistory history,
+        string replayFingerprint)
+    {
+        if (!string.Equals(history.RequestFingerprintJson, replayFingerprint, StringComparison.Ordinal))
+            throw new AdaptiveAnswerConflictException("Adaptive session item was already answered with a different payload.");
+
+        var replayResult = DeserializeAdaptiveAnswerResult(history.SettledResponseJson);
+        if (replayResult is null)
+            throw new InvalidOperationException("Adaptive session replay payload is missing.");
+
+        return new AdaptiveAnswerSubmissionResult(replayResult, WasReplayed: true);
+    }
+
+    private async Task<UserQuestionHistory?> FindSettledAdaptiveAnswerAsync(
+        string userId,
+        Guid adaptiveSessionItemId,
+        CancellationToken ct)
+    {
+        return await _db.UserQuestionHistories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                history => history.UserId == userId &&
+                            history.AdaptiveSessionItemId == adaptiveSessionItemId,
+                ct);
+    }
+
+    private static string BuildAdaptiveAnswerReplayFingerprint(string userId, AdaptiveAnswerRequest request)
+    {
+        DateTime? answeredAt = request.AnsweredAt is null
+            ? null
+            : OfflineAnswerTimestampPolicy.NormalizeToUtcMilliseconds(request.AnsweredAt.Value);
+
+        return IdempotencyPayloadCanonicalizer.CanonicalizeToJson(new
+        {
+            userId,
+            request.AdaptiveSessionId,
+            request.AdaptiveSessionItemId,
+            request.QuestionId,
+            request.Answer,
+            request.ResponseTimeSeconds,
+            request.Confidence,
+            answeredAt
+        });
+    }
+
+    private static AdaptiveAnswerResult BuildAdaptiveAnswerResult(
+        bool isCorrect,
+        string difficultyLevel,
+        bool wasDifficultyAdjusted,
+        UserTopicMastery mastery,
+        ReviewSchedule reviewSchedule,
+        string? explanation)
+    {
+        return new AdaptiveAnswerResult
+        {
+            IsCorrect = isCorrect,
+            DifficultyLevel = difficultyLevel,
+            WasDifficultyAdjusted = wasDifficultyAdjusted,
+            TopicId = mastery.TopicId,
+            TopicMasteryScore = mastery.MasteryScore,
+            IsWeakTopic = mastery.IsWeak,
+            NextReviewAt = reviewSchedule.DueAt,
+            ReviewIntervalDays = reviewSchedule.IntervalDays,
+            ReviewEasinessFactor = reviewSchedule.EasinessFactor,
+            Explanation = explanation
+        };
+    }
+
+    private static AdaptiveAnswerResult? DeserializeAdaptiveAnswerResult(string? settledResponseJson)
+    {
+        if (string.IsNullOrWhiteSpace(settledResponseJson))
+            return null;
+
+        return JsonSerializer.Deserialize<AdaptiveAnswerResult>(settledResponseJson, ReplaySerializerOptions);
+    }
+
+    private static async Task RollbackQuietlyAsync(IDbContextTransaction transaction)
+    {
+        try
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool IsAdaptiveSessionItemUniqueViolation(DbUpdateException ex)
+    {
+        if (ex.InnerException is PostgresException postgres &&
+            postgres.SqlState == PostgresErrorCodes.UniqueViolation &&
+            string.Equals(postgres.ConstraintName, "UX_UserQuestionHistory_AdaptiveSessionItem", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return ex.InnerException is Exception sqliteLike &&
+               string.Equals(sqliteLike.GetType().Name, "SqliteException", StringComparison.Ordinal) &&
+               sqliteLike.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) &&
+               sqliteLike.Message.Contains("user_question_history", StringComparison.OrdinalIgnoreCase) &&
+               sqliteLike.Message.Contains("AdaptiveSessionItemId", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task TryUpdateLegacySrsAsync(string userId, int questionId, bool isCorrect, int responseTimeSeconds, CancellationToken ct)
     {
         try
         {
@@ -774,7 +926,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
                 QuestionId = questionId,
                 IsCorrect = isCorrect,
                 TimeMs = Math.Max(0, responseTimeSeconds) * 1000
-            });
+            }, ct);
         }
         catch (Exception ex)
         {
@@ -783,6 +935,18 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
                 "Legacy SRS sync failed. UserId={UserId} QuestionId={QuestionId}",
                 userId,
                 questionId);
+        }
+    }
+
+    private async Task InvalidateRecommendationCacheBestEffortAsync(string userId)
+    {
+        try
+        {
+            await _cache.RemoveAsync(GetRecommendationCacheKey(userId));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to invalidate adaptive recommendation cache. UserId={UserId}", userId);
         }
     }
 

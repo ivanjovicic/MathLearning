@@ -16,10 +16,10 @@ public class SrsService : ISrsService
         _db = db;
     }
 
-    public async Task<QuestionStat> UpdateAsync(string userId, SrsUpdateDto dto)
+    public async Task<QuestionStat> UpdateAsync(string userId, SrsUpdateDto dto, CancellationToken cancellationToken = default)
     {
         var stat = await _db.QuestionStats
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.QuestionId == dto.QuestionId);
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.QuestionId == dto.QuestionId, cancellationToken);
 
         if (stat == null)
         {
@@ -48,19 +48,19 @@ public class SrsService : ISrsService
         stat.NextReview = DateTime.UtcNow.AddDays(intervalDays);
         stat.LastAnswered = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(cancellationToken);
 
-        await UpdateDailyStreakAsync(userId);
+        await UpdateDailyStreakAsync(userId, cancellationToken);
 
         return stat;
     }
 
-    private async Task UpdateDailyStreakAsync(string userId)
+    private async Task UpdateDailyStreakAsync(string userId, CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var entry = await _db.UserDailyStats
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.Day == today);
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.Day == today, cancellationToken);
 
         if (entry == null)
         {
@@ -75,10 +75,10 @@ public class SrsService : ISrsService
 
         var solvedToday = await _db.QuestionStats
             .Where(x => x.UserId == userId && x.LastAnswered >= DateTime.UtcNow.Date)
-            .CountAsync();
+            .CountAsync(cancellationToken);
 
         var profile = await _db.UserProfiles
-            .FirstOrDefaultAsync(p => p.UserId == userId);
+            .FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
 
         if (profile != null)
         {
@@ -100,6 +100,6 @@ public class SrsService : ISrsService
             }
         }
 
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(cancellationToken);
     }
 }

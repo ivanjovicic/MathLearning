@@ -5,5 +5,5 @@ namespace MathLearning.Application.Services;
 
 public interface ISrsService
 {
-    Task<QuestionStat> UpdateAsync(string userId, SrsUpdateDto dto);
+    Task<QuestionStat> UpdateAsync(string userId, SrsUpdateDto dto, CancellationToken cancellationToken = default);
 }

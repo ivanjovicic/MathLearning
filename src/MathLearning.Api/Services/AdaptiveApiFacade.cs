@@ -120,23 +120,26 @@ public sealed class AdaptiveApiFacade
     {
         try
         {
-            var answerResult = await RetryPolicy.ExecuteAsync(
-                token => _adaptiveLearningService.SubmitAnswerAsync(userId, request),
-                _logger,
-                "submit_adaptive_session_answer",
-                ct);
+            var submission = await _adaptiveLearningService.SubmitAnswerAsync(userId, request, ct);
 
-            await InvalidateAdaptiveCachesAsync(userId);
-            _analytics.TrackEvent("adaptive_answer_submitted", userId, new
+            if (!submission.WasReplayed)
             {
-                request.AdaptiveSessionId,
-                request.AdaptiveSessionItemId,
-                request.QuestionId,
-                answerResult.IsCorrect,
-                answerResult.DifficultyLevel
-            });
+                await InvalidateAdaptiveCachesAsync(userId);
+                _analytics.TrackEvent("adaptive_answer_submitted", userId, new
+                {
+                    request.AdaptiveSessionId,
+                    request.AdaptiveSessionItemId,
+                    request.QuestionId,
+                    submission.Result.IsCorrect,
+                    submission.Result.DifficultyLevel
+                });
+            }
 
-            return ApiResult<AdaptiveAnswerResult>.Ok(answerResult);
+            return ApiResult<AdaptiveAnswerResult>.Ok(submission.Result);
+        }
+        catch (AdaptiveAnswerConflictException ex)
+        {
+            return BuildFailureResult<AdaptiveAnswerResult>(ex, ex.Message, "CONFLICT");
         }
         catch (Exception ex)
         {
@@ -380,7 +383,7 @@ public sealed class AdaptiveApiFacade
         return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow);
     }
 
-    private static ApiResult<T> BuildFailureResult<T>(Exception ex, string defaultMessage)
+    private static ApiResult<T> BuildFailureResult<T>(Exception ex, string defaultMessage, string? errorCode = null)
     {
         var traceId = Guid.NewGuid().ToString("N");
         var retryAfterSeconds = ResolveRetryAfterSeconds(ex);
@@ -390,6 +393,12 @@ public sealed class AdaptiveApiFacade
             ArgumentException => ApiResult<T>.Fail(
                 error: ex.Message,
                 errorCode: "VALIDATION_ERROR",
+                errorDetails: BuildErrorDetails(ex),
+                traceId: traceId),
+
+            AdaptiveAnswerConflictException => ApiResult<T>.Fail(
+                error: ex.Message,
+                errorCode: errorCode ?? "CONFLICT",
                 errorDetails: BuildErrorDetails(ex),
                 traceId: traceId),
 
