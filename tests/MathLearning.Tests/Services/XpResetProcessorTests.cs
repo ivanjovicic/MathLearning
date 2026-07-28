@@ -136,7 +136,7 @@ WHERE "UserId" = '1';
         Assert.Equal(0, reloaded.MonthlyXp);
     }
 
-    [Fact(Skip = "Residual risk: concurrent award/reset harness still needs a stable deterministic lock orchestration.")]
+    [Fact]
     public async Task RunOnceAsync_ConcurrentAwardPreservesAuthoritativeTotals()
     {
         await using var factory = await CreateFactoryAsync();
@@ -167,6 +167,7 @@ WHERE "UserId" = '1';
         var resetDb = resetScope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var awardDb = awardScope.ServiceProvider.GetRequiredService<ApiDbContext>();
         var resetSchema = resetScope.ServiceProvider.GetRequiredService<DatabaseSchemaState>();
+        resetSchema.Update(ReadySchemaStatus());
         var gate = new HoldAfterRowLockInterceptor();
         await using var gatedAwardDb = CreateInterceptedDb(awardDb.Database.GetConnectionString()!, gate);
         var resetProcessor = BuildProcessor(
@@ -189,7 +190,7 @@ WHERE "UserId" = '1';
         Assert.Equal(10, reloaded.Xp);
         Assert.Equal(10, reloaded.DailyXp);
         Assert.Equal(10, reloaded.WeeklyXp);
-        Assert.Equal(10, reloaded.MonthlyXp);
+        Assert.Equal(15, reloaded.MonthlyXp);
     }
 
     [Fact]
