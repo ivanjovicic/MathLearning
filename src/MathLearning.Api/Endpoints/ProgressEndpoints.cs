@@ -20,7 +20,6 @@ public static class ProgressEndpoints
 
         group.MapGet("/overview", async (
             ApiDbContext db,
-            ICosmeticRewardService cosmeticRewardService,
             HttpContext ctx) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
@@ -44,27 +43,8 @@ public static class ProgressEndpoints
                 : Math.Round((double)totalCorrect / totalAttempts * 100, 2);
 
             var profile = await db.UserProfiles
+                .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.UserId == userId);
-
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            StreakRollEventDto? streakEvent = null;
-
-            if (profile != null)
-            {
-                var roll = StreakRoller.Apply(profile, today);
-                if (roll != null)
-                {
-                    streakEvent = new StreakRollEventDto(
-                        roll.Type,
-                        roll.MissedDays,
-                        roll.FreezesUsed,
-                        roll.StreakBefore,
-                        roll.StreakAfter
-                    );
-                    await db.SaveChangesAsync();
-                    await cosmeticRewardService.ProcessProgressRewardsAsync(userId, ctx.RequestAborted);
-                }
-            }
 
             int streak = profile?.Streak ?? 0;
 
@@ -75,7 +55,7 @@ public static class ProgressEndpoints
                 StreakFreezeCount: profile?.StreakFreezeCount ?? 0,
                 LastStreakDay: profile?.LastStreakDay,
                 LastActivityDay: profile?.LastActivityDay,
-                StreakEvent: streakEvent
+                StreakEvent: null
             ));
         });
 

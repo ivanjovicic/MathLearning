@@ -1,5 +1,3 @@
-using System.Text.Json;
-using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.DTOs.Leaderboard;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
@@ -15,8 +13,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
     private static readonly TimeSpan AggregateFreshnessWindow = TimeSpan.FromMinutes(5);
     private readonly ApiDbContext _db;
     private readonly ILogger<LeaderboardService> _logger;
-    private readonly ICosmeticRewardService? _cosmeticRewardService;
-
     public LeaderboardService(
         ApiDbContext db,
         ILogger<LeaderboardService> logger,
@@ -24,7 +20,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
     {
         _db = db;
         _logger = logger;
-        _cosmeticRewardService = cosmeticRewardService;
     }
 
 
@@ -56,8 +51,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
                 IsStale = true
             };
         }
-
-        await EnsureCurrentPeriodAsync(period);
 
         var query = CurrentSchoolScoreQuery(periodInfo);
         var schoolCursorId = CursorCodec.DecodeSchoolId(cursor);
@@ -126,17 +119,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             if (mySchoolData is not null)
             {
                 mySchool = MapSchoolItem(mySchoolData);
-
-                if (_cosmeticRewardService is not null)
-                {
-                    await _cosmeticRewardService.ProcessRewardSourceAsync(
-                        new CosmeticRewardSourceRequest(
-                            userId,
-                            CosmeticUnlockTypes.SchoolCompetition,
-                            BuildSchoolCompetitionSourceRef(periodInfo),
-                            JsonSerializer.Serialize(new { period = periodInfo.Period, schoolId = me.SchoolId.Value, placement = mySchoolData.Rank, rank = mySchoolData.Rank })),
-                        CancellationToken.None);
-                }
             }
         }
 
@@ -263,8 +245,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
             return;
         }
 
-        await EnsureCurrentPeriodAsync(periodInfo.Period, ct);
-
         var now = DateTime.UtcNow;
         var recentlyCaptured = await _db.SchoolRankHistories.AsNoTracking()
             .AnyAsync(x =>
@@ -313,8 +293,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
         {
             return null;
         }
-
-        await EnsureCurrentPeriodAsync(period, ct);
 
         var school = await CurrentSchoolScoreQuery(periodInfo)
             .Where(x => x.SchoolId == schoolId)
@@ -402,26 +380,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
                 CompositeScore = x.CompositeScore
             })
             .ToListAsync(ct);
-
-        if (points.Count == 0)
-        {
-            await CaptureSnapshotAsync(periodInfo.Period, ct);
-
-            points = await _db.SchoolRankHistories.AsNoTracking()
-                .Where(x => x.SchoolId == schoolId && x.Period == periodInfo.Period && x.PeriodStartUtc == periodInfo.PeriodStartUtc)
-                .OrderByDescending(x => x.SnapshotTimeUtc)
-                .Take(take)
-                .Select(x => new SchoolLeaderboardHistoryPointDto
-                {
-                    SnapshotTimeUtc = x.SnapshotTimeUtc,
-                    Rank = x.Rank,
-                    Score = x.XpTotal,
-                    ActiveStudents = x.ActiveStudents,
-                    ParticipationRate = x.ParticipationRate,
-                    CompositeScore = x.CompositeScore
-                })
-                .ToListAsync(ct);
-        }
 
         points.Reverse();
 
@@ -531,9 +489,6 @@ public class LeaderboardService : ILeaderboardService, ISchoolLeaderboardService
 
     private static decimal FromCursorScore(int score)
         => score / 10000m;
-
-    private static string BuildSchoolCompetitionSourceRef(SchoolLeaderboardPeriodInfo periodInfo)
-        => $"school-competition:{periodInfo.Period}:{periodInfo.PeriodStartUtc:yyyyMMdd}";
 
     private async Task<bool> HasSchoolLeaderboardSchemaAsync(string period, CancellationToken ct = default)
     {
