@@ -1,8 +1,9 @@
-using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
+using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Persistance.Models;
 using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -27,20 +28,17 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
     private static readonly JsonSerializerOptions ReplaySerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly ApiDbContext _db;
-    private readonly ISrsService _srsService;
     private readonly InMemoryCacheService _cache;
     private readonly IAnswerPatternAntiCheatService _antiCheatService;
     private readonly ILogger<AdaptiveLearningService> _logger;
 
     public AdaptiveLearningService(
         ApiDbContext db,
-        ISrsService srsService,
         InMemoryCacheService cache,
         IAnswerPatternAntiCheatService antiCheatService,
         ILogger<AdaptiveLearningService> logger)
     {
         _db = db;
-        _srsService = srsService;
         _cache = cache;
         _antiCheatService = antiCheatService;
         _logger = logger;
@@ -296,12 +294,17 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
                 reviewSchedule,
                 question.Explanation);
             historyEntry.SettledResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(settledResponse);
+            EnqueueLegacySrsSyncRequested(
+                userId,
+                question.Id,
+                isCorrect,
+                boundedResponseTime,
+                request.AdaptiveSessionId,
+                request.AdaptiveSessionItemId);
 
             await _db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             committed = true;
-
-            await TryUpdateLegacySrsAsync(userId, question.Id, isCorrect, boundedResponseTime, ct);
             await InvalidateRecommendationCacheBestEffortAsync(userId);
 
             _logger.LogInformation(
@@ -917,25 +920,29 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
                sqliteLike.Message.Contains("AdaptiveSessionItemId", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task TryUpdateLegacySrsAsync(string userId, int questionId, bool isCorrect, int responseTimeSeconds, CancellationToken ct)
+    private void EnqueueLegacySrsSyncRequested(
+        string userId,
+        int questionId,
+        bool isCorrect,
+        int responseTimeSeconds,
+        Guid adaptiveSessionId,
+        Guid adaptiveSessionItemId)
     {
-        try
+        var ev = new AdaptiveAnswerLegacySrsSyncRequested(
+            userId,
+            questionId,
+            isCorrect,
+            responseTimeSeconds,
+            adaptiveSessionId,
+            adaptiveSessionItemId);
+
+        _db.Outbox.Add(new OutboxMessage
         {
-            await _srsService.UpdateAsync(userId, new SrsUpdateDto
-            {
-                QuestionId = questionId,
-                IsCorrect = isCorrect,
-                TimeMs = Math.Max(0, responseTimeSeconds) * 1000
-            }, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Legacy SRS sync failed. UserId={UserId} QuestionId={QuestionId}",
-                userId,
-                questionId);
-        }
+            Id = ev.Id,
+            OccurredUtc = ev.OccurredUtc,
+            Type = ev.GetType().AssemblyQualifiedName!,
+            PayloadJson = JsonSerializer.Serialize(ev, ev.GetType())
+        });
     }
 
     private async Task InvalidateRecommendationCacheBestEffortAsync(string userId)
@@ -1159,12 +1166,14 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
             where history.UserId == userId
             group history by history.TopicId
             into g
-            select new TopicAggregate(
-                g.Key,
-                g.Count(),
-                g.Count(x => x.IsCorrect),
-                g.Average(x => x.Confidence),
-                g.Max(x => x.AnsweredAt));
+            select new TopicAggregate
+            {
+                TopicId = g.Key,
+                Attempts = g.Count(),
+                CorrectAttempts = g.Count(x => x.IsCorrect),
+                AverageConfidence = g.Average(x => x.Confidence),
+                LastAnsweredAt = g.Max(x => x.AnsweredAt)
+            };
     }
 
     private IQueryable<RecentTopicAggregate> BuildRecentTopicQuery(string userId)
@@ -1175,10 +1184,12 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
             group history by history.TopicId
             into g
             orderby g.Max(x => x.AnsweredAt) descending
-            select new RecentTopicAggregate(
-                g.Key,
-                g.Max(x => x.AnsweredAt),
-                g.Count());
+            select new RecentTopicAggregate
+            {
+                TopicId = g.Key,
+                LastAnsweredAt = g.Max(x => x.AnsweredAt),
+                Attempts = g.Count()
+            };
     }
 
     private static void ValidateUserId(string userId)
@@ -1204,18 +1215,21 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         string Source,
         double Priority);
 
-    private sealed record TopicAggregate(
-        int TopicId,
-        int Attempts,
-        int CorrectAttempts,
-        double AverageConfidence,
-        DateTime LastAnsweredAt)
+    private sealed class TopicAggregate
     {
+        public int TopicId { get; init; }
+        public int Attempts { get; init; }
+        public int CorrectAttempts { get; init; }
+        public double AverageConfidence { get; init; }
+        public DateTime LastAnsweredAt { get; init; }
+
         public double Accuracy => Attempts <= 0 ? 0d : (double)CorrectAttempts / Attempts;
     }
 
-    private sealed record RecentTopicAggregate(
-        int TopicId,
-        DateTime LastAnsweredAt,
-        int Attempts);
+    private sealed class RecentTopicAggregate
+    {
+        public int TopicId { get; init; }
+        public DateTime LastAnsweredAt { get; init; }
+        public int Attempts { get; init; }
+    }
 }

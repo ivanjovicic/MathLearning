@@ -1,11 +1,9 @@
 using MathLearning.Api.Services;
 using MathLearning.Application.DTOs.AntiCheat;
-using MathLearning.Application.DTOs.Quiz;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
@@ -18,21 +16,25 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
     [Fact]
     public async Task SubmitAnswerAsync_DuplicateReplay_ReturnsSettledSnapshot_AndSkipsDownstreamWrites()
     {
-        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        if (!IsValidationRequired())
+            return;
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
         var scenario = await SeedScenarioAsync(database);
-        var srs = new RecordingSrsService();
 
         AdaptiveAnswerSubmissionResult first;
-        await using (var db = database.CreateContext())
+        await using (var db = CreateContext(database))
         {
-            var sut = CreateSut(db, srs);
+            var sut = CreateSut(db);
             first = await sut.SubmitAnswerAsync("1", BuildRequest(scenario), CancellationToken.None);
         }
 
         AdaptiveAnswerSubmissionResult replay;
-        await using (var db = database.CreateContext())
+        await using (var db = CreateContext(database))
         {
-            var sut = CreateSut(db, srs);
+            var sut = CreateSut(db);
             replay = await sut.SubmitAnswerAsync("1", BuildRequest(scenario), CancellationToken.None);
         }
 
@@ -47,10 +49,11 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
         Assert.Equal(first.Result.ReviewIntervalDays, replay.Result.ReviewIntervalDays);
         Assert.Equal(first.Result.ReviewEasinessFactor, replay.Result.ReviewEasinessFactor);
         Assert.Equal(first.Result.Explanation, replay.Result.Explanation);
-        Assert.Equal(1, srs.CallCount);
 
-        await using var verification = database.CreateContext();
+        await using var verification = CreateContext(database);
         Assert.Equal(1, await verification.UserQuestionHistories.CountAsync(x => x.AdaptiveSessionItemId == scenario.ItemId));
+        Assert.Equal(1, await verification.Outbox.CountAsync(x =>
+            x.Type.Contains("AdaptiveAnswerLegacySrsSyncRequested")));
         var history = await verification.UserQuestionHistories.SingleAsync(x => x.AdaptiveSessionItemId == scenario.ItemId);
         Assert.NotNull(history.RequestFingerprintJson);
         Assert.NotNull(history.SettledResponseJson);
@@ -59,19 +62,23 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
     [Fact]
     public async Task SubmitAnswerAsync_SameItemDifferentPayload_ReturnsConflict()
     {
-        await using var database = await SqliteFileTestDatabase.CreateAsync();
-        var scenario = await SeedScenarioAsync(database);
-        var srs = new RecordingSrsService();
+        if (!IsValidationRequired())
+            return;
 
-        await using (var db = database.CreateContext())
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
+        var scenario = await SeedScenarioAsync(database);
+
+        await using (var db = CreateContext(database))
         {
-            var sut = CreateSut(db, srs);
+            var sut = CreateSut(db);
             var first = await sut.SubmitAnswerAsync("1", BuildRequest(scenario), CancellationToken.None);
             Assert.False(first.WasReplayed);
         }
 
-        await using var replayDb = database.CreateContext();
-        var replaySut = CreateSut(replayDb, srs);
+        await using var replayDb = CreateContext(database);
+        var replaySut = CreateSut(replayDb);
         var conflict = await Assert.ThrowsAsync<AdaptiveAnswerConflictException>(() =>
             replaySut.SubmitAnswerAsync(
                 "1",
@@ -80,18 +87,23 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
 
         Assert.Contains("different payload", conflict.Message, StringComparison.OrdinalIgnoreCase);
 
-        await using var verification = database.CreateContext();
+        await using var verification = CreateContext(database);
         Assert.Equal(1, await verification.UserQuestionHistories.CountAsync());
-        Assert.Equal(1, srs.CallCount);
+        Assert.Equal(1, await verification.Outbox.CountAsync(x =>
+            x.Type.Contains("AdaptiveAnswerLegacySrsSyncRequested")));
     }
 
     [Fact]
     public async Task SubmitAnswerAsync_CancellationAfterFirstSave_RollsBackAllAdaptiveMutations()
     {
-        await using var database = await SqliteFileTestDatabase.CreateAsync();
-        await using var seedDb = database.CreateContext();
-        await seedDb.Database.EnsureCreatedAsync();
-        await TestDbContextFactory.SeedAsync(seedDb);
+        if (!IsValidationRequired())
+            return;
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
+
+        await using var seedDb = CreateContext(database);
 
         var question = await seedDb.Questions
             .Include(x => x.Subtopic)
@@ -103,12 +115,11 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
         seedDb.AdaptiveSessions.Add(session);
         await seedDb.SaveChangesAsync();
 
-        var srs = new RecordingSrsService();
         using var cancellation = new CancellationTokenSource();
         var interceptor = new CancelAfterFirstSaveInterceptor(cancellation);
 
-        await using var db = database.CreateContext(interceptor);
-        var sut = CreateSut(db, srs);
+        await using var db = CreateContext(database, interceptor);
+        var sut = CreateSut(db);
 
         var request = BuildRequest(
             new AdaptiveAnswerScenario(
@@ -122,16 +133,17 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             sut.SubmitAnswerAsync("1", request, cancellation.Token));
 
-        await using var verification = database.CreateContext();
+        await using var verification = CreateContext(database);
         Assert.Equal(0, await verification.UserQuestionHistories.CountAsync());
         Assert.Equal(0, await verification.ReviewSchedules.CountAsync());
         Assert.Equal(0, await verification.UserTopicMasteries.CountAsync());
         Assert.Equal(0, await verification.UserLearningProfiles.CountAsync());
+        Assert.Equal(0, await verification.Outbox.CountAsync(x =>
+            x.Type.Contains("AdaptiveAnswerLegacySrsSyncRequested")));
 
         var storedSessionItem = await verification.AdaptiveSessionItems.SingleAsync(x => x.Id == session.Items[0].Id);
         Assert.Null(storedSessionItem.IsCorrect);
         Assert.Null(storedSessionItem.AnsweredAt);
-        Assert.Equal(0, srs.CallCount);
     }
 
     private static AdaptiveAnswerRequest BuildRequest(AdaptiveAnswerScenario scenario, string? answer = null) =>
@@ -175,22 +187,38 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
         };
     }
 
-    private static AdaptiveLearningService CreateSut(ApiDbContext db, RecordingSrsService srsService)
+    private static AdaptiveLearningService CreateSut(ApiDbContext db)
     {
         var cache = new InMemoryCacheService(new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 }));
         return new AdaptiveLearningService(
             db,
-            srsService,
             cache,
             new NoOpAnswerPatternAntiCheatService(),
             NullLogger<AdaptiveLearningService>.Instance);
     }
 
-    private static async Task<AdaptiveAnswerScenario> SeedScenarioAsync(SqliteFileTestDatabase database)
+    private static bool IsValidationRequired()
     {
-        await using var db = database.CreateContext();
-        await db.Database.EnsureCreatedAsync();
-        await TestDbContextFactory.SeedAsync(db);
+        return string.Equals(
+            Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_TESTS_REQUIRED"),
+            "1",
+            StringComparison.Ordinal);
+    }
+
+    private static ApiDbContext CreateContext(PostgresTestDatabase database, params IInterceptor[] interceptors)
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseNpgsql(database.DatabaseConnectionString);
+
+        if (interceptors.Length > 0)
+            options.AddInterceptors(interceptors);
+
+        return new ApiDbContext(options.Options);
+    }
+
+    private static async Task<AdaptiveAnswerScenario> SeedScenarioAsync(PostgresTestDatabase database)
+    {
+        await using var db = CreateContext(database);
 
         var question = await db.Questions
             .Include(x => x.Subtopic)
@@ -209,21 +237,6 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
             question.Subtopic!.TopicId,
             question.SubtopicId,
             question.Options.Single(o => o.IsCorrect).Text);
-    }
-
-    private sealed class RecordingSrsService : ISrsService
-    {
-        public int CallCount { get; private set; }
-
-        public Task<QuestionStat> UpdateAsync(string userId, SrsUpdateDto dto, CancellationToken cancellationToken = default)
-        {
-            CallCount++;
-            return Task.FromResult(new QuestionStat
-            {
-                UserId = userId,
-                QuestionId = dto.QuestionId
-            });
-        }
     }
 
     private sealed class CancelAfterFirstSaveInterceptor : SaveChangesInterceptor
@@ -256,55 +269,4 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
         int SubtopicId,
         string CorrectAnswer);
 
-    private sealed class SqliteFileTestDatabase : IAsyncDisposable
-    {
-        private readonly string _filePath;
-        private readonly string _connectionString;
-
-        private SqliteFileTestDatabase(string filePath, string connectionString)
-        {
-            _filePath = filePath;
-            _connectionString = connectionString;
-        }
-
-        public static Task<SqliteFileTestDatabase> CreateAsync()
-        {
-            var filePath = Path.Combine(Path.GetTempPath(), $"mathlearning-adaptive-answer-{Guid.NewGuid():N}.db");
-            var connectionString = new SqliteConnectionStringBuilder
-            {
-                DataSource = filePath,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-                Cache = SqliteCacheMode.Shared,
-                Pooling = false,
-                DefaultTimeout = 30
-            }.ToString();
-
-            return Task.FromResult(new SqliteFileTestDatabase(filePath, connectionString));
-        }
-
-        public ApiDbContext CreateContext(params IInterceptor[] interceptors)
-        {
-            var options = new DbContextOptionsBuilder<ApiDbContext>()
-                .UseSqlite(_connectionString);
-
-            if (interceptors.Length > 0)
-                options.AddInterceptors(interceptors);
-
-            return new ApiDbContext(options.Options);
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            try
-            {
-                if (File.Exists(_filePath))
-                    File.Delete(_filePath);
-            }
-            catch
-            {
-            }
-
-            return ValueTask.CompletedTask;
-        }
-    }
 }

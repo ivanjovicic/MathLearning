@@ -167,6 +167,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<OutboxBatchProcessor>();
         builder.Services.AddScoped<IEventHandler<QuizCompleted>, QuizCompletedCoinsHandler>();
         builder.Services.AddScoped<IEventHandler<QuizAttemptIngestRequested>, QuizAttemptIngestRequestedHandler>();
+        builder.Services.AddScoped<IEventHandler<AdaptiveAnswerLegacySrsSyncRequested>, AdaptiveAnswerLegacySrsSyncRequestedHandler>();
         builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
         builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
 
