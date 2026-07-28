@@ -37,8 +37,8 @@ Failed retries: 1
 - .ai/runs/2026-07-28-BE-PERF-011-evidence.md
 
 ## Validation
-Validation run: dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore; dotnet build tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release -p:CompileRemove=Services/XpResetProcessorTests.cs; dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-build -p:CompileRemove=Services/XpResetProcessorTests.cs --filter FullyQualifiedName~MathLearning.Tests.Endpoints.RateLimitMetricsEndpointTests|FullyQualifiedName~MathLearning.Tests.Middleware.InMemoryRateLimitCounterStoreTests|FullyQualifiedName~MathLearning.Tests.Middleware.InMemorySlidingWindowRateLimitMiddlewareTests|FullyQualifiedName~MathLearning.Tests.Middleware.RateLimitClientIdentityTests
-Validation not run: Full solution test not run; unrelated XpResetProcessorTests.cs remains excluded with CompileRemove.
+Validation run: `dotnet build MathLearning.slnx -c Release`; `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-build --filter FullyQualifiedName~InMemoryRateLimitCounterStoreTests|FullyQualifiedName~InMemorySlidingWindowRateLimitMiddlewareTests|FullyQualifiedName~RateLimitClientIdentityTests|FullyQualifiedName~RateLimitMetricsEndpointTests` passed (18 tests).
+Validation not run: explicit 1k/100k/1m allocation-and-lookup microbenchmark was not captured in this run.
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-EVIDENCE-001;BACKEND-MISTAKE-VALIDATION-001;BACKEND-MISTAKE-PERF-001;BACKEND-MISTAKE-PERF-002;BACKEND-MISTAKE-PERF-003;BACKEND-MISTAKE-SCOPE-001
