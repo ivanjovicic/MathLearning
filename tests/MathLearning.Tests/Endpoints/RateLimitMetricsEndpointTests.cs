@@ -37,11 +37,14 @@ public sealed class RateLimitMetricsEndpointTests : IClassFixture<RateLimitTestW
         var body = await metricsResponse.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
         var rateLimit = json.RootElement.GetProperty("rateLimit");
+        var explanationCache = json.RootElement.GetProperty("explanationCache");
 
         Assert.Equal(1, rateLimit.GetProperty("partitionCount").GetInt32());
         Assert.Equal(2, rateLimit.GetProperty("allowedRequests").GetInt64());
         Assert.Equal(1, rateLimit.GetProperty("rejectedRequests").GetInt64());
         Assert.Equal(0, rateLimit.GetProperty("saturationRejections").GetInt64());
         Assert.True(rateLimit.GetProperty("cleanupRuns").GetInt64() >= 0);
+        Assert.Equal(0, explanationCache.GetProperty("hitCount").GetInt64());
+        Assert.Equal(0, explanationCache.GetProperty("missCount").GetInt64());
     }
 }

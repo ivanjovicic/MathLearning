@@ -188,6 +188,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<ICommonMistakeDetector, CommonMistakeDetector>();
         builder.Services.AddScoped<IFormulaReferenceService, FormulaReferenceService>();
         builder.Services.AddScoped<IAiTutorEnhancer, AiTutorEnhancer>();
+        builder.Services.AddSingleton<ExplanationCacheMetrics>();
         builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
         builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
         builder.Services.AddScoped<LegacyStepExplanationAdapter>();
@@ -199,6 +200,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
         builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
         builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
+        builder.Services.AddHostedService<ExplanationCacheCleanupBackgroundService>();
     }
 
     public static void AddCacheAndInfrastructureServices(this WebApplicationBuilder builder)

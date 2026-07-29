@@ -536,7 +536,9 @@ try
     .WithDescription("Reports whether background jobs were enabled at startup");
 
     // Minimal runtime metrics (no Prometheus dependency)
-    app.MapGet("/metrics", (MathLearning.Api.Middleware.IRateLimitCounterStore rateLimitStore) =>
+    app.MapGet("/metrics", (
+        MathLearning.Api.Middleware.IRateLimitCounterStore rateLimitStore,
+        ExplanationCacheMetrics explanationCacheMetrics) =>
     {
         var process = System.Diagnostics.Process.GetCurrentProcess();
         var uptime = DateTime.UtcNow - process.StartTime.ToUniversalTime();
@@ -548,6 +550,7 @@ try
             gcTotalMemoryMb = GC.GetTotalMemory(forceFullCollection: false) / 1024 / 1024,
             threadCount = process.Threads.Count,
             rateLimit = rateLimitStore.GetSnapshot(),
+            explanationCache = explanationCacheMetrics.GetSnapshot(),
             timestampUtc = DateTime.UtcNow,
         });
     });
