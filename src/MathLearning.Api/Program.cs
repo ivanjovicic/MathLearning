@@ -495,6 +495,8 @@ try
     // Enable CORS
     app.UseCors();
 
+    app.UseMiddleware<MathLearning.Api.Middleware.SyncRequestBodySizeLimitMiddleware>();
+
     app.UseAuthentication();
 
     // Sliding-window in-memory rate-limiter (single-node); keys authenticated users by user id, anonymous by physical peer IP.

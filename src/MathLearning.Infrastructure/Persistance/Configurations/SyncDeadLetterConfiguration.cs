@@ -33,5 +33,8 @@ public sealed class SyncDeadLetterConfiguration : IEntityTypeConfiguration<SyncD
 
         builder.HasIndex(x => new { x.Status, x.LastFailedAtUtc })
             .HasDatabaseName("IX_SyncDeadLetter_Status_LastFailedAtUtc");
+
+        builder.HasIndex(x => new { x.Status, x.LastFailedAtUtc, x.Id })
+            .HasDatabaseName("IX_SyncDeadLetter_Status_LastFailedAtUtc_Id");
     }
 }

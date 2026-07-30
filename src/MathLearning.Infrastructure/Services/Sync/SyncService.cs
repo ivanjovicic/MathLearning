@@ -46,13 +46,23 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         RegisterSyncDeviceRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        var normalizedRequest = request with
+        {
+            DeviceId = request.DeviceId?.Trim() ?? string.Empty,
+            DeviceName = request.DeviceName?.Trim(),
+            Platform = request.Platform?.Trim() ?? string.Empty,
+            AppVersion = request.AppVersion?.Trim()
+        };
+
+        SyncRequestValidation.ValidateRegisterDeviceRequest(normalizedRequest, options.Value);
+
+        if (string.IsNullOrWhiteSpace(normalizedRequest.DeviceId))
         {
             throw new InvalidOperationException("DeviceId is required.");
         }
 
         var existingOtherUser = await db.SyncDevices
-            .FirstOrDefaultAsync(x => x.DeviceId == request.DeviceId && x.UserId != userId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.DeviceId == normalizedRequest.DeviceId && x.UserId != userId, cancellationToken);
         if (existingOtherUser is not null)
         {
             throw new InvalidOperationException("DeviceId is already bound to another user.");
@@ -60,17 +70,17 @@ public sealed class SyncService : ISyncService, ISyncAdminService
 
         var secret = CreateSecret();
         var device = await db.SyncDevices
-            .FirstOrDefaultAsync(x => x.DeviceId == request.DeviceId && x.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.DeviceId == normalizedRequest.DeviceId && x.UserId == userId, cancellationToken);
 
         if (device is null)
         {
             device = new SyncDevice
             {
-                DeviceId = request.DeviceId.Trim(),
+                DeviceId = normalizedRequest.DeviceId,
                 UserId = userId,
-                DeviceName = request.DeviceName?.Trim(),
-                Platform = NormalizePlatform(request.Platform),
-                AppVersion = request.AppVersion?.Trim(),
+                DeviceName = normalizedRequest.DeviceName,
+                Platform = NormalizePlatform(normalizedRequest.Platform),
+                AppVersion = normalizedRequest.AppVersion,
                 SecretKey = secret,
                 Status = SyncDeviceStatuses.Active,
                 RegisteredAtUtc = DateTime.UtcNow,
@@ -80,21 +90,21 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         }
         else
         {
-            device.DeviceName = request.DeviceName?.Trim();
-            device.Platform = NormalizePlatform(request.Platform);
-            device.AppVersion = request.AppVersion?.Trim();
+            device.DeviceName = normalizedRequest.DeviceName;
+            device.Platform = NormalizePlatform(normalizedRequest.Platform);
+            device.AppVersion = normalizedRequest.AppVersion;
             device.SecretKey = secret;
             device.Status = SyncDeviceStatuses.Active;
             device.LastSeenAtUtc = DateTime.UtcNow;
         }
 
         var state = await db.DeviceSyncStates
-            .FirstOrDefaultAsync(x => x.DeviceId == request.DeviceId && x.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.DeviceId == normalizedRequest.DeviceId && x.UserId == userId, cancellationToken);
         if (state is null)
         {
             db.DeviceSyncStates.Add(new DeviceSyncState
             {
-                DeviceId = request.DeviceId.Trim(),
+                DeviceId = normalizedRequest.DeviceId,
                 UserId = userId,
                 LastAcknowledgedEvent = 0,
                 LastProcessedClientSequence = 0,
@@ -105,7 +115,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         await db.SaveChangesAsync(cancellationToken);
 
         return new RegisterSyncDeviceResponse(
-            request.DeviceId.Trim(),
+            normalizedRequest.DeviceId,
             secret,
             device.RegisteredAtUtc);
     }
@@ -115,12 +125,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         SyncRequestDto request,
         CancellationToken cancellationToken)
     {
+        var normalizedRequest = request with { DeviceId = request.DeviceId?.Trim() ?? string.Empty };
         metrics.IncrementSyncRequests();
-
-        if (request.Operations.Count > options.Value.MaxBatchSize)
-        {
-            throw new InvalidOperationException($"Batch too large. MaxBatchSize={options.Value.MaxBatchSize}.");
-        }
+        var payloadBytes = SyncRequestValidation.ValidateSyncRequestEnvelope(authenticatedUserId, normalizedRequest, options.Value);
+        metrics.RecordPayloadSize(payloadBytes);
 
         const int maxAttempts = 3;
 
@@ -130,7 +138,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
 
             try
             {
-                return await ExecuteSyncAttemptAsync(authenticatedUserId, request, cancellationToken);
+                return await ExecuteSyncAttemptAsync(authenticatedUserId, normalizedRequest, cancellationToken);
             }
             catch (Exception ex) when (attempt < maxAttempts && IsRetryableSyncPersistenceException(ex))
             {
@@ -322,7 +330,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                     log.Status = SyncEventStatuses.Rejected;
                     log.ProcessedAtUtc = DateTime.UtcNow;
                     log.ErrorCode = ex.Code;
-                    log.ErrorMessage = ex.Message;
+                    log.ErrorMessage = SyncRequestValidation.BuildBoundedPublicMessage(ex.Message, options.Value.MaxPublicErrorMessageLength);
                     deviceState.LastProcessedClientSequence = operation.ClientSequence;
                     expectedSequence = deviceState.LastProcessedClientSequence + 1;
                 }
@@ -345,7 +353,9 @@ public sealed class SyncService : ISyncService, ISyncAdminService
 
                 log.RetryCount++;
                 log.ErrorCode = "processing_failed";
-                log.ErrorMessage = ex.Message;
+                log.ErrorMessage = SyncRequestValidation.BuildBoundedPublicMessage(
+                    "Transient processing failure. Retry later.",
+                    options.Value.MaxPublicErrorMessageLength);
 
                 if (log.RetryCount >= options.Value.MaxProcessingRetries)
                 {
@@ -364,7 +374,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                         PayloadJson = log.PayloadJson,
                         RetryCount = log.RetryCount,
                         Status = SyncDeadLetterStatuses.Pending,
-                        FailureReason = ex.ToString(),
+                        FailureReason = SyncRequestValidation.BuildSafeFailureReason(
+                            "processing_failed",
+                            "Operation moved to dead-letter queue.",
+                            options.Value.MaxInternalDiagnosticLength),
                         CreatedAtUtc = DateTime.UtcNow,
                         LastFailedAtUtc = DateTime.UtcNow
                     });
@@ -705,13 +718,13 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             log.Status = SyncEventStatuses.Rejected;
             log.ProcessedAtUtc = DateTime.UtcNow;
             log.ErrorCode = ex.Code;
-            log.ErrorMessage = ex.Message;
+            log.ErrorMessage = SyncRequestValidation.BuildBoundedPublicMessage(ex.Message, options.Value.MaxPublicErrorMessageLength);
             deviceState.LastProcessedClientSequence = log.ClientSequence;
             metrics.IncrementRejected(ex.Code);
 
             return new SyncOperationAckDto(log.OperationId, log.ClientSequence, "Rejected", ex.Code, ex.Message);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             log.RetryCount++;
             log.Status = log.RetryCount >= options.Value.MaxProcessingRetries
@@ -719,7 +732,9 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 : SyncEventStatuses.Failed;
             log.ProcessedAtUtc = log.Status == SyncEventStatuses.DeadLettered ? DateTime.UtcNow : null;
             log.ErrorCode = "processing_failed";
-            log.ErrorMessage = ex.Message;
+            log.ErrorMessage = SyncRequestValidation.BuildBoundedPublicMessage(
+                "Transient processing failure. Retry later.",
+                options.Value.MaxPublicErrorMessageLength);
 
             if (log.Status == SyncEventStatuses.DeadLettered)
             {
@@ -736,7 +751,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                     PayloadJson = log.PayloadJson,
                     RetryCount = log.RetryCount,
                     Status = SyncDeadLetterStatuses.Pending,
-                    FailureReason = ex.ToString(),
+                    FailureReason = SyncRequestValidation.BuildSafeFailureReason(
+                        "processing_failed",
+                        "Operation moved to dead-letter queue.",
+                        options.Value.MaxInternalDiagnosticLength),
                     CreatedAtUtc = DateTime.UtcNow,
                     LastFailedAtUtc = DateTime.UtcNow
                 });
@@ -1199,7 +1217,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             deadLetter.RetryCount++;
             deadLetter.Status = SyncDeadLetterStatuses.Exhausted;
             deadLetter.LastFailedAtUtc = now;
-            deadLetter.FailureReason = "Active sync device was not found.";
+            deadLetter.FailureReason = SyncRequestValidation.BuildSafeFailureReason(
+                "device_missing",
+                "Active sync device was not found.",
+                options.Value.MaxInternalDiagnosticLength);
             deadLetter.ResolutionNote = BuildResolutionNote(actorUserId, "Device missing or revoked.");
 
             log.Status = SyncEventStatuses.Rejected;
@@ -1258,13 +1279,16 @@ public sealed class SyncService : ISyncService, ISyncAdminService
             deadLetter.RetryCount++;
             deadLetter.Status = SyncDeadLetterStatuses.Exhausted;
             deadLetter.LastFailedAtUtc = now;
-            deadLetter.FailureReason = ex.Message;
+            deadLetter.FailureReason = SyncRequestValidation.BuildSafeFailureReason(
+                ex.Code,
+                ex.Message,
+                options.Value.MaxInternalDiagnosticLength);
             deadLetter.ResolutionNote = BuildResolutionNote(actorUserId, $"Rejected: {ex.Code}");
 
             log.Status = SyncEventStatuses.Rejected;
             log.ProcessedAtUtc = now;
             log.ErrorCode = ex.Code;
-            log.ErrorMessage = ex.Message;
+            log.ErrorMessage = SyncRequestValidation.BuildBoundedPublicMessage(ex.Message, options.Value.MaxPublicErrorMessageLength);
 
             metrics.IncrementRejected(ex.Code);
             await db.SaveChangesAsync(cancellationToken);
@@ -1281,7 +1305,10 @@ public sealed class SyncService : ISyncService, ISyncAdminService
         {
             deadLetter.RetryCount++;
             deadLetter.LastFailedAtUtc = now;
-            deadLetter.FailureReason = ex.ToString();
+            deadLetter.FailureReason = SyncRequestValidation.BuildSafeFailureReason(
+                "redrive_failed",
+                "Redrive failed.",
+                options.Value.MaxInternalDiagnosticLength);
             deadLetter.Status = deadLetter.RetryCount >= options.Value.MaxDeadLetterRedriveAttempts
                 ? SyncDeadLetterStatuses.Exhausted
                 : SyncDeadLetterStatuses.Pending;
@@ -1292,7 +1319,9 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 ? SyncEventStatuses.DeadLettered
                 : SyncEventStatuses.Failed;
             log.ErrorCode = "redrive_failed";
-            log.ErrorMessage = ex.Message;
+            log.ErrorMessage = SyncRequestValidation.BuildBoundedPublicMessage(
+                "Redrive failed. Retry later.",
+                options.Value.MaxPublicErrorMessageLength);
 
             if (deadLetter.Status == SyncDeadLetterStatuses.Exhausted)
             {

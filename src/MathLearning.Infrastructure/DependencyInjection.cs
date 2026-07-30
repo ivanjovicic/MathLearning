@@ -84,8 +84,10 @@ public static class DependencyInjection
         services.AddScoped<SyncService>();
         services.AddScoped<ISyncService>(sp => sp.GetRequiredService<SyncService>());
         services.AddScoped<ISyncAdminService>(sp => sp.GetRequiredService<SyncService>());
+        services.AddScoped<SyncRetentionService>();
         services.AddScoped<IOfflineBundleService, OfflineBundleService>();
         services.AddHostedService<SyncDeadLetterRedriveBackgroundService>();
+        services.AddHostedService<SyncRetentionCleanupBackgroundService>();
         return services;
     }
 

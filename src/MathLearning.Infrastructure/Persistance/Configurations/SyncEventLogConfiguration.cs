@@ -38,5 +38,8 @@ public sealed class SyncEventLogConfiguration : IEntityTypeConfiguration<SyncEve
 
         builder.HasIndex(x => new { x.Status, x.ReceivedAtUtc })
             .HasDatabaseName("IX_SyncEventLog_Status_ReceivedAtUtc");
+
+        builder.HasIndex(x => new { x.Status, x.ReceivedAtUtc, x.Id })
+            .HasDatabaseName("IX_SyncEventLog_Status_ReceivedAtUtc_Id");
     }
 }
