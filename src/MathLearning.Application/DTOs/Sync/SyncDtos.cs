@@ -152,6 +152,7 @@ public sealed record SyncBundleOptionDto(
 
 public sealed record OfflineBundleManifestDto(
     string Version,
+    string SnapshotVersion,
     DateTime GeneratedAtUtc,
     int QuestionCount,
     int TopicCount,

@@ -68,7 +68,7 @@ Prompt queues:
 | BACKEND-TEST-010 | Validated | Bounded reads and enum normalization: 70 passed. |
 | BACKEND-TEST-011 | Implemented / Workflow validation needed | GitHub summary plus HTML/merged Cobertura coverage artifact. |
 | BACKEND-TEST-012 | Validated | Refresh-token generator/model/snapshot drift resolved by aligning EF metadata and snapshot to the existing 128-char migration target, without creating a redundant migration. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~RefreshTokenServiceSecurityTests"`: 8 passed, 0 failed, 0 skipped; `dotnet ef migrations has-pending-model-changes --project src/MathLearning.Infrastructure/MathLearning.Infrastructure.csproj --startup-project src/MathLearning.Api/MathLearning.Api.csproj --context ApiDbContext --no-build`: no pending model changes. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-012-evidence.md`. |
-| BACKEND-TEST-013 | Ready / P0 contract decision | Require, gate or isolate missing operation identity. |
+| BACKEND-TEST-013 | Done | Require, gate or isolate missing operation identity. Done 100% - Run log: `.ai/runs/2026-07-30-BACKEND-TEST-013-evidence.md`; Validation: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~OperationIdentityContractIntegrationTests|FullyQualifiedName~OperationIdentityResolutionTests|FullyQualifiedName~QuizAnswerIdempotencyTests|FullyQualifiedName~SrsUpdateIdempotencyTests"` passed; Residual risk: legacy no-key path remains intentionally supported per `docs/mobile_contract_idempotency_handoff.md`; Commit: self. |
 | BACKEND-TEST-014 | Implemented / Needs validation | Shared/cosmetics idempotency state machines and canonical payload semantics. |
 | BACKEND-TEST-015 | Implemented / Needs validation | Real HTTP refresh-token rotation race against relational SQLite. |
 | BACKEND-TEST-016 | Implemented / Needs validation | Transaction helper commit, rollback-after-SQL, retry, exhaustion and cancellation. |
@@ -219,7 +219,7 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 16. Run BACKEND-API-DB-014 to retire or repair the photo-avatar contract/storage.
 17. Re-run BACKEND-TEST-023 with working PostgreSQL credentials or CI evidence, then close linked BE-PERF-016.
 18. Re-run BACKEND-TEST-022 schema validation on reachable local/CI PostgreSQL, then close the durable ingest lane.
-19. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+19. BACKEND-TEST-013 completed on exact `main` SHA `953260a`; run log `.ai/runs/2026-07-30-BACKEND-TEST-013-evidence.md`.
 20. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
 21. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection; coordinate with 018 without merging owners.
 22. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.

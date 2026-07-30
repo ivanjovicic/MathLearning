@@ -77,7 +77,8 @@ public static class SyncEndpoints
                 return Results.Unauthorized();
             }
 
-            return Results.Ok(await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, cancellationToken));
+            var acceptLanguage = ctx.Request.Headers.AcceptLanguage.ToString();
+            return Results.Ok(await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, acceptLanguage, cancellationToken));
         });
 
         syncGroup.MapGet("/offline/bundle/manifest", async (
@@ -93,7 +94,8 @@ public static class SyncEndpoints
                 return Results.Unauthorized();
             }
 
-            var bundle = await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, cancellationToken);
+            var acceptLanguage = ctx.Request.Headers.AcceptLanguage.ToString();
+            var bundle = await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, acceptLanguage, cancellationToken);
             return Results.Ok(bundle.Manifest);
         });
 

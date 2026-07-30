@@ -1,6 +1,6 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-07-22
+Last aligned: 2026-07-30
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
@@ -228,6 +228,8 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 | POST `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Revalidation. |
 | GET `/api/admin/sync/dead-letters` | Admin | `AdminSyncController.cs` | Sync dead-letter list now includes the dead-letter ID. |
 | POST `/api/admin/sync/dead-letters/{deadLetterId}/redrive` | Admin | `AdminSyncController.cs` | Redrive by dead-letter ID; sync identity is scoped per user/device. |
+| GET | `/api/offline/bundle` | Auth | `SyncEndpoints.cs` | Canonical offline bundle. Locale resolves from user settings first, then `Accept-Language`. Only published, non-deleted questions are eligible. `Manifest.Version` is the content revision; `Manifest.SnapshotVersion` is the user snapshot revision. |
+| GET | `/api/offline/bundle/manifest` | Auth | `SyncEndpoints.cs` | Manifest-only offline bundle response with the same content/snapshot version semantics and published-question filtering. |
 | `/api/sync/*` | Auth | `SyncEndpoints.cs` | Reject payload/auth user mismatch. |
 
 `QuestionEndpoints.MapQuestionEndpoints` remains defined but unwired; decision remains BACKEND-TEST-027.
