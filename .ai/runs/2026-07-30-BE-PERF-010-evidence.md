@@ -49,7 +49,7 @@ Documentation impact: updated this run log and the owning queue row
 Cross-repo impact: no
 
 ## Delivery
-State: Done
+State: Needs validation
 Branch/PR: direct main
 Commit SHA: self
-Completion %: 100
+Completion %: 79
