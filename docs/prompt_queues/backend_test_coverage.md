@@ -25,6 +25,14 @@ Prompt queues:
 - [`backend_api_db_residuals_pass3_2026_07_16.md`](backend_api_db_residuals_pass3_2026_07_16.md) — BACKEND-API-DB-016…019 for private bug screenshots, credential abuse protection, revocable access sessions and cosmetics catalog readiness
 - [`backend_failing_test_followups_2026_07_11.md`](backend_failing_test_followups_2026_07_11.md) — BACKEND-MIGRATION-001 for the remaining clean/upgraded PostgreSQL cosmetics migration blocker
 
+## Highest remaining bugs
+
+These are the biggest unresolved queue items on current `main`:
+
+- `BACKEND-API-DB-015` â€” stale pending economy/cosmetics idempotency recovery and dual-settlement prevention.
+- `BACKEND-API-DB-013` â€” single account-provisioning owner and Identity/profile/token orphan reconciliation.
+- `BACKEND-TEST-033` â€” cancellation/rollback matrix for canonical P0 mutations, especially the adaptive and practice settlement lanes.
+
 ## Read first
 
 - `../../AGENTS.md`
