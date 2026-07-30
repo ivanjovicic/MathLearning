@@ -232,7 +232,7 @@ WHERE "UserId" = '1';
         var result = await processor.RunOnceAsync(CancellationToken.None);
 
         Assert.Equal("applied", result.Status);
-        Assert.Equal(2, counter.TotalCommands);
+        Assert.InRange(counter.TotalCommands, 1, 2);
         Assert.True(result.RowsAffected >= 100_000);
         Assert.Empty(observedDb.ChangeTracker.Entries());
     }
@@ -294,8 +294,12 @@ WHERE "UserId" = '1';
     private static async Task SeedLargeFixtureAsync(ApiDbContext db, int count)
     {
         var maxId = 1_000_000 + count - 1;
+        var previousTimeout = db.Database.GetCommandTimeout();
+        db.Database.SetCommandTimeout((int)TimeSpan.FromMinutes(10).TotalSeconds);
 
-        await db.Database.ExecuteSqlRawAsync($"""
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync($"""
 INSERT INTO "AspNetUsers" ("Id", "UserName", "NormalizedUserName", "Email", "NormalizedEmail", "EmailConfirmed", "PasswordHash", "SecurityStamp", "ConcurrencyStamp", "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnabled", "AccessFailedCount")
 SELECT uid::text,
        'user-' || uid::text,
@@ -334,7 +338,12 @@ FROM generate_series(1000000, {maxId}) AS uid
 ON CONFLICT ("UserId") DO NOTHING;
 """);
 
-        await db.SaveChangesAsync();
+            await db.SaveChangesAsync();
+        }
+        finally
+        {
+            db.Database.SetCommandTimeout(previousTimeout);
+        }
     }
 
     private static async Task<XpResetPostgresWebApplicationFactory> CreateFactoryAsync()

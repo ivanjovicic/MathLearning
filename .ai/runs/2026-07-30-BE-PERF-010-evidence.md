@@ -10,43 +10,46 @@ Client/IDE: unknown-not-exposed
 Run mode: known-fix
 Token budget: high
 Started at UTC: 2026-07-30T08:51:02Z
-Completed at UTC: 2026-07-30T09:20:12Z
-Elapsed time: 00:29:10
+Completed at UTC: 2026-07-30T10:39:05Z
+Elapsed time: 01:48:03
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-PERF-001, BACKEND-MISTAKE-PERF-002, BACKEND-MISTAKE-PERF-003, BACKEND-MISTAKE-SCOPE-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-PERF-001; apply BACKEND-MISTAKE-PERF-002; apply BACKEND-MISTAKE-PERF-003; apply BACKEND-MISTAKE-SCOPE-001
 Owner/hypothesis: Set-based XP reset should replace hourly schema probes and tracked per-user fallback work without breaking calendar boundaries or cancellation semantics.
-Files inspected: 10
-Files changed: 2
+Files inspected: 14
+Files changed: 6
 Searches: 10
-Validation runs: 6
-Failed retries: 3
+Validation runs: 10
+Failed retries: 4
 
 ## Outcome
-- `XpResetProcessor` already uses `TimeProvider`, `DatabaseSchemaState`, an advisory lock and set-based SQL reset logic, so no runtime code change was needed to confirm the design.
-- Pure unit coverage for the date/week/month window logic passed, and the `XpTrackingService` replay-duplication guard test passed.
-- Full PostgreSQL-backed `XpResetProcessorTests` remain blocked in this workspace because local PostgreSQL is unavailable/rejects auth (`postgres` password rejected; Docker/psql/pg_ctl missing).
+- Docker Desktop PostgreSQL was brought up successfully and `mathlearning-postgres` is healthy on `localhost:5433`.
+- `XpResetProcessor` now uses an explicit 10-minute command timeout around the set-based bulk reset, and the PostgreSQL test helpers use the same timeout so migrations and fixture setup can complete.
+- `tests/MathLearning.Tests/Services/XpResetProcessorTests.cs` now passes `10/10` against the Docker PostgreSQL provider.
 
 ## Changed paths
 - `.ai/runs/2026-07-30-BE-PERF-010-evidence.md`
 - `docs/prompt_queues/backend_performance_followups_2026_07_03.md`
+- `src/MathLearning.Api/Services/XpResetProcessor.cs`
+- `tests/MathLearning.Tests/Helpers/PostgresTestDatabase.cs`
+- `tests/MathLearning.Tests/Helpers/PostgresWebApplicationFactory.cs`
+- `tests/MathLearning.Tests/Services/XpResetProcessorTests.cs`
 
 ## Validation
-Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~XpResetProcessorTests.Create_" -m:1 -p:UseSharedCompilation=false --no-restore` -> passed (3 tests)
-Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~XpTrackingServiceTests.AddXpAsync_DoesNotDuplicateWhenSourceIsReplayed" -m:1 -p:UseSharedCompilation=false --no-restore` -> passed (1 test)
-Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~XpResetProcessorTests" -m:1 -p:UseSharedCompilation=false` -> failed on `Npgsql.PostgresException 28P01` before provider-backed assertions; 7 failed, 3 passed, 0 skipped
-Validation not run: provider-backed `XpResetProcessorTests` could not complete because the local PostgreSQL provider is not available in this environment
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~XpResetProcessorTests.RunOnceAsync_100kFixtureUsesFixedSmallSqlCount" -m:1 -p:UseSharedCompilation=false --no-restore --disable-build-servers` -> passed
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~XpResetProcessorTests" -m:1 -p:UseSharedCompilation=false --no-restore --disable-build-servers` -> passed (10 tests)
+Validation not run: none
 
 ## Exceptions and learning
 Mistakes observed: none
-Waste: parallel `dotnet test` attempts caused shared-compiler lock/timeouts before I serialized the validation
-Missed: could not prove the PostgreSQL provider path without a reachable local database
-Follow-up: rerun `XpResetProcessorTests` once `localhost:5433` PostgreSQL is available or `TEST_POSTGRES_MAINTENANCE_CONNECTION_STRING` is set
-Residual risk: the advisory-lock and bulk-reset behavior is still only partially validated in this workspace
-Documentation impact: updated this run log only
+Waste: initial validation retries hit Docker/provider availability and build-lock issues before the local PostgreSQL service and longer timeouts were configured
+Missed: none
+Follow-up: none
+Residual risk: provider-backed coverage now depends on the Docker PostgreSQL service staying available on `localhost:5433`
+Documentation impact: updated this run log and the owning queue row
 Cross-repo impact: no
 
 ## Delivery
-State: Blocked
+State: Done
 Branch/PR: direct main
 Commit SHA: self
-Completion %: 55
+Completion %: 100

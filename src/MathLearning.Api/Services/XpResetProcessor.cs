@@ -115,6 +115,7 @@ public sealed class XpResetProcessor
     private const string ResetSkippedStatus = "skipped";
     private const string ResetAppliedStatus = "applied";
     private const string ResetSchemaNotReadyStatus = "schema-not-ready";
+    private static readonly TimeSpan ResetCommandTimeout = TimeSpan.FromMinutes(10);
 
     private readonly ApiDbContext db;
     private readonly DatabaseSchemaState schemaState;
@@ -214,7 +215,19 @@ WHERE "LastXpResetDate" IS NULL
    OR "LastXpResetDate" < @monthStart;
 """;
 
-        var rowsAffected = await db.Database.ExecuteSqlRawAsync(updateSql, parameters, cancellationToken);
+        var previousTimeout = db.Database.GetCommandTimeout();
+        db.Database.SetCommandTimeout((int)ResetCommandTimeout.TotalSeconds);
+
+        int rowsAffected;
+        try
+        {
+            rowsAffected = await db.Database.ExecuteSqlRawAsync(updateSql, parameters, cancellationToken);
+        }
+        finally
+        {
+            db.Database.SetCommandTimeout(previousTimeout);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation(

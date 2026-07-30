@@ -16,7 +16,8 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
         var builder = new NpgsqlConnectionStringBuilder(maintenanceConnectionString)
         {
             Database = databaseName,
-            Pooling = true
+            Pooling = true,
+            CommandTimeout = 600
         };
         DatabaseConnectionString = builder.ConnectionString;
     }
@@ -40,7 +41,11 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
         return new DbContextOptionsBuilder<ApiDbContext>()
             .UseNpgsql(
                 DatabaseConnectionString,
-                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+                npgsql =>
+                {
+                    npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                    npgsql.CommandTimeout(600);
+                })
             .Options;
     }
 
@@ -49,7 +54,11 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
         return new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(
                 DatabaseConnectionString,
-                npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
+                npgsql =>
+                {
+                    npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                    npgsql.CommandTimeout(600);
+                })
             .Options;
     }
 

@@ -52,7 +52,11 @@ public class PostgresWebApplicationFactory<TProgram> : WebApplicationFactory<TPr
             {
                 options.UseNpgsql(
                     database.DatabaseConnectionString,
-                    npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+                    npgsql =>
+                    {
+                        npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                        npgsql.CommandTimeout(600);
+                    });
                 ConfigureApiDb(options);
             });
             services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(appDbName));
