@@ -14,7 +14,7 @@ Completed at UTC: 2026-07-30T23:34:35Z
 Elapsed time: 2m 42s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-AUDIT-001, BACKEND-MISTAKE-PROCESS-002
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-AUDIT-001; apply BACKEND-MISTAKE-PROCESS-002
-Owner/hypothesis: open
+Owner/hypothesis: The current main queue should surface the largest unresolved backend bug prompts first, especially BACKEND-API-DB-015, BACKEND-API-DB-013 and BACKEND-TEST-033.
 Files inspected: 6
 Files changed: 3
 Searches: 4
@@ -45,7 +45,7 @@ Documentation impact: updated docs/prompt_queues/backend_test_coverage.md and do
 Cross-repo impact: no
 
 ## Delivery
-State: Done
+State: Needs evidence sync
 Branch/PR: direct main
 Commit SHA: self
-Completion %: 100
+Completion %: 75
