@@ -21,7 +21,7 @@ Previous queue: `backend_performance_optimization.md`
 | ID | Priority | Status | Purpose |
 |---|---:|---|---|
 | BE-PERF-009 | P1 | Validated | Weakness-analysis scheduling is now bounded and deduplicated; analysis history is limited to the latest 1,000 attempts per user instead of full-history materialization. Run log: `.ai/runs/2026-07-22-BE-PERF-009-evidence.md`. |
-| BE-PERF-010 | P1 | Prompt-ready | Replace hourly all-profile XP reset work with set-based, cancellable and single-owner processing. |
+| BE-PERF-010 | P1 | Blocked | Replace hourly all-profile XP reset work with set-based, cancellable and single-owner processing. Run log: `.ai/runs/2026-07-30-BE-PERF-010-evidence.md`. Blocked in this workspace because local PostgreSQL provider auth failed (`postgres` password rejected) and Docker/psql/pg_ctl are unavailable. |
 | BE-PERF-011 | P1 | Prompt-ready | Bound rate-limit memory/cardinality and define multi-replica semantics. |
 | BE-PERF-012 | P0 | Prompt-ready | Make adaptive answer submission atomic, idempotent and cancellation-correct before generic retry. |
 | BE-PERF-013 | P1 | Prompt-ready | Remove refresh, snapshot, streak and reward mutations from GET/read paths. |
