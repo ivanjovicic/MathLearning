@@ -182,6 +182,19 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         ValidateAnswerRequest(request);
 
         var replayFingerprint = BuildAdaptiveAnswerReplayFingerprint(userId, request);
+        if (ct.IsCancellationRequested)
+        {
+            var settledAfterCancellation = await FindSettledAdaptiveAnswerAsync(
+                userId,
+                request.AdaptiveSessionItemId,
+                CancellationToken.None);
+
+            if (settledAfterCancellation is not null)
+                return BuildReplayResult(settledAfterCancellation, replayFingerprint);
+
+            ct.ThrowIfCancellationRequested();
+        }
+
         var existing = await FindSettledAdaptiveAnswerAsync(userId, request.AdaptiveSessionItemId, ct);
         if (existing is not null)
             return BuildReplayResult(existing, replayFingerprint);
@@ -319,7 +332,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
 
             return new AdaptiveAnswerSubmissionResult(settledResponse, WasReplayed: false);
         }
-        catch (DbUpdateException ex) when (IsAdaptiveSessionItemUniqueViolation(ex))
+        catch (DbUpdateException ex) when (IsAdaptiveAnswerUniqueViolation(ex))
         {
             if (!committed)
             {
@@ -327,7 +340,10 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
                 _db.ChangeTracker.Clear();
             }
 
-            var replayEntry = await FindSettledAdaptiveAnswerAsync(userId, request.AdaptiveSessionItemId, ct);
+            var replayEntry = await FindSettledAdaptiveAnswerAsync(
+                userId,
+                request.AdaptiveSessionItemId,
+                CancellationToken.None);
             if (replayEntry is null)
                 throw;
 
@@ -904,20 +920,17 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         }
     }
 
-    private static bool IsAdaptiveSessionItemUniqueViolation(DbUpdateException ex)
+    private static bool IsAdaptiveAnswerUniqueViolation(DbUpdateException ex)
     {
         if (ex.InnerException is PostgresException postgres &&
-            postgres.SqlState == PostgresErrorCodes.UniqueViolation &&
-            string.Equals(postgres.ConstraintName, "UX_UserQuestionHistory_AdaptiveSessionItem", StringComparison.Ordinal))
+            postgres.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             return true;
         }
 
         return ex.InnerException is Exception sqliteLike &&
                string.Equals(sqliteLike.GetType().Name, "SqliteException", StringComparison.Ordinal) &&
-               sqliteLike.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) &&
-               sqliteLike.Message.Contains("user_question_history", StringComparison.OrdinalIgnoreCase) &&
-               sqliteLike.Message.Contains("AdaptiveSessionItemId", StringComparison.OrdinalIgnoreCase);
+               sqliteLike.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase);
     }
 
     private void EnqueueLegacySrsSyncRequested(

@@ -146,6 +146,100 @@ public sealed class AdaptiveSessionAnswerIdempotencyTests
         Assert.Null(storedSessionItem.AnsweredAt);
     }
 
+    [Fact]
+    public async Task SubmitAnswerAsync_CancelledReplay_ReturnsSettledSnapshot()
+    {
+        if (!IsValidationRequired())
+            return;
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
+        var scenario = await SeedScenarioAsync(database);
+
+        AdaptiveAnswerSubmissionResult first;
+        await using (var db = CreateContext(database))
+        {
+            var sut = CreateSut(db);
+            first = await sut.SubmitAnswerAsync("1", BuildRequest(scenario), CancellationToken.None);
+        }
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        AdaptiveAnswerSubmissionResult replay;
+        await using (var db = CreateContext(database))
+        {
+            var sut = CreateSut(db);
+            replay = await sut.SubmitAnswerAsync("1", BuildRequest(scenario), cancelled.Token);
+        }
+
+        Assert.True(replay.WasReplayed);
+        Assert.Equal(first.Result.IsCorrect, replay.Result.IsCorrect);
+        Assert.Equal(first.Result.DifficultyLevel, replay.Result.DifficultyLevel);
+        Assert.Equal(first.Result.TopicId, replay.Result.TopicId);
+        Assert.Equal(first.Result.TopicMasteryScore, replay.Result.TopicMasteryScore);
+        Assert.Equal(first.Result.IsWeakTopic, replay.Result.IsWeakTopic);
+        Assert.Equal(first.Result.NextReviewAt, replay.Result.NextReviewAt);
+        Assert.Equal(first.Result.ReviewIntervalDays, replay.Result.ReviewIntervalDays);
+        Assert.Equal(first.Result.ReviewEasinessFactor, replay.Result.ReviewEasinessFactor);
+        Assert.Equal(first.Result.Explanation, replay.Result.Explanation);
+    }
+
+    [Fact]
+    public async Task SubmitAnswerAsync_ConcurrentIdenticalSubmissions_Postgres_SettleExactlyOnce()
+    {
+        if (!IsValidationRequired())
+            return;
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
+        var scenario = await SeedScenarioAsync(database);
+
+        var startGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tasks = Enumerable.Range(0, 20)
+            .Select(async _ =>
+            {
+                await startGate.Task;
+                await using var db = CreateContext(database);
+                var sut = CreateSut(db);
+                return await sut.SubmitAnswerAsync("1", BuildRequest(scenario), CancellationToken.None);
+            })
+            .ToArray();
+
+        startGate.SetResult();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.Equal(1, results.Count(result => !result.WasReplayed));
+        Assert.Equal(19, results.Count(result => result.WasReplayed));
+
+        var settled = results.First(result => !result.WasReplayed).Result;
+        Assert.All(results, result =>
+        {
+            Assert.Equal(settled.IsCorrect, result.Result.IsCorrect);
+            Assert.Equal(settled.DifficultyLevel, result.Result.DifficultyLevel);
+            Assert.Equal(settled.TopicId, result.Result.TopicId);
+            Assert.Equal(settled.TopicMasteryScore, result.Result.TopicMasteryScore);
+            Assert.Equal(settled.IsWeakTopic, result.Result.IsWeakTopic);
+            Assert.Equal(settled.NextReviewAt, result.Result.NextReviewAt);
+            Assert.Equal(settled.ReviewIntervalDays, result.Result.ReviewIntervalDays);
+            Assert.Equal(settled.ReviewEasinessFactor, result.Result.ReviewEasinessFactor);
+            Assert.Equal(settled.Explanation, result.Result.Explanation);
+        });
+
+        await using var verification = CreateContext(database);
+        Assert.Equal(1, await verification.UserQuestionHistories.CountAsync(x => x.AdaptiveSessionItemId == scenario.ItemId));
+        Assert.Equal(1, await verification.ReviewSchedules.CountAsync(x => x.QuestionId == scenario.QuestionId));
+        Assert.Equal(1, await verification.UserTopicMasteries.CountAsync(x => x.TopicId == scenario.TopicId));
+        Assert.Equal(1, await verification.UserLearningProfiles.CountAsync(x => x.UserId == "1"));
+        Assert.Equal(1, await verification.Outbox.CountAsync(x =>
+            x.Type.Contains("AdaptiveAnswerLegacySrsSyncRequested")));
+        var storedSessionItem = await verification.AdaptiveSessionItems.SingleAsync(x => x.Id == scenario.ItemId);
+        Assert.True(storedSessionItem.IsCorrect.HasValue);
+        Assert.NotNull(storedSessionItem.AnsweredAt);
+    }
+
     private static AdaptiveAnswerRequest BuildRequest(AdaptiveAnswerScenario scenario, string? answer = null) =>
         new()
         {
