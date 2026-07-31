@@ -46,12 +46,12 @@ Mistakes observed: none
 Waste: none
 Missed: none
 Follow-up: none
-Residual risk: push/PR/main verification open
-Documentation impact: no doc files changed in this pass
+Residual risk: none
+Documentation impact: updated .ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md and docs/prompt_queues/backend_season_authority_residuals_2026_07_31.md
 Cross-repo impact: no payload change; only persisted season ownership proof and schema alignment
 
 ## Delivery
-State: Needs merge
+State: Done
 Branch/PR: agent/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001
 Commit SHA: self
-Completion %: 95
+Completion %: 100

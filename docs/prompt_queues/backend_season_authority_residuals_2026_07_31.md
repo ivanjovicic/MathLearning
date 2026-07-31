@@ -38,7 +38,7 @@ These issues are not the stale-pending recovery owned by `BACKEND-API-DB-015`, t
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
 | `BACKEND-SEASON-TRACK-AUTHORITY-001` | P0 | Ready | [Open](backend_season_authority/BACKEND-SEASON-TRACK-AUTHORITY-001.md) | Make reward-track preview and claim use season XP, active/reward-window truth and explicit premium entitlement. |
-| `BACKEND-SEASON-DAILY-RUN-PROVENANCE-001` | P0 | Done | [Open](backend_season_authority/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001.md) | Prevent old/future/out-of-season Daily Run chest transactions from funding the wrong season. Done 95% - Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md`; Validation: SeasonDailyRun 5/5 + API Release build + docs health + Postgres provider 1/1; Residual risk: push/PR/main verification open; Commit: self. |
+| `BACKEND-SEASON-DAILY-RUN-PROVENANCE-001` | P0 | Done | [Open](backend_season_authority/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001.md) | Prevent old/future/out-of-season Daily Run chest transactions from funding the wrong season. Done 100% - Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md`; Validation: SeasonDailyRun 5/5 + API Release build + docs health + Postgres provider 1/1; Residual risk: none; Commit: self. |
 | `BACKEND-SEASON-XP-SETTLEMENT-001` | P1 correctness | Ready | [Open](backend_season_authority/BACKEND-SEASON-XP-SETTLEMENT-001.md) | Route milestone XP through one canonical transaction-aware XP settlement path without bucket/history drift. |
 
 ## Canonical order and collision notes
