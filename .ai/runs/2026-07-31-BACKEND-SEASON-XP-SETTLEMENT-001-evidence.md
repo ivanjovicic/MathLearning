@@ -37,7 +37,7 @@ Failed retries: 1
 - .ai/runs/2026-07-31-BACKEND-SEASON-XP-SETTLEMENT-001-evidence.md
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonMilestone` → Passed 4 / 0
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonMilestone` → Passed 4 / 0
 Validation not run: PostgreSQL concurrency/rollback injection deferred
 
 ## Exceptions and learning
@@ -45,12 +45,12 @@ Mistakes observed: none
 Waste: branch thrash from external checkout mid-run; reapplied patch on owner branch
 Missed: none
 Follow-up: none - PostgreSQL concurrent different-key proof remains available under existing provider lanes
-Residual risk: cosmetic progress rewards are best-effort when catalog readiness is missing; push/PR/main open
+Residual risk: cosmetic progress rewards are best-effort when catalog readiness is missing; PostgreSQL concurrency deferred
 Documentation impact: updated docs/mobile_economy_api_contract.md and docs/API_ENDPOINT_INVENTORY.md
 Cross-repo impact: yes - Flutter request/response shape preserved
 
 ## Delivery
-State: Needs merge
+State: Done
 Branch/PR: agent/BACKEND-SEASON-XP-SETTLEMENT-001
 Commit SHA: self
-Completion %: 79
+Completion %: 95

@@ -51,7 +51,8 @@ public static class EconomySettlementEndpoints
             if (request.Amount <= 0)
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_amount", "Amount must be greater than zero."));
 
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 userId,
                 "economy_coins_spend",
@@ -59,14 +60,10 @@ public static class EconomySettlementEndpoints
                 request,
                 ct,
                 operationId: request.OperationId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
@@ -122,7 +119,8 @@ public static class EconomySettlementEndpoints
             if (!HintCosts.TryGetValue(hintType, out var serverCost))
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_hint_type", "Unsupported hint type."));
 
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 userId,
                 "economy_hint_use",
@@ -130,14 +128,10 @@ public static class EconomySettlementEndpoints
                 request with { HintType = hintType, CostCoins = serverCost },
                 ct,
                 operationId: request.OperationId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
@@ -285,7 +279,8 @@ public static class EconomySettlementEndpoints
 
             var normalizedRewardId = request.RewardId.Trim();
             var normalizedRewardType = Normalize(request.RewardType);
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 userId,
                 "economy_reward_claim",
@@ -293,14 +288,10 @@ public static class EconomySettlementEndpoints
                 request with { RewardId = normalizedRewardId, RewardType = normalizedRewardType },
                 ct,
                 operationId: request.OperationId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             var resolution = await ResolveEconomyRewardAsync(
                 db,
                 rewardCatalogService,
@@ -456,7 +447,8 @@ public static class EconomySettlementEndpoints
                 ? "admin_override"
                 : request.Reason.Trim();
 
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 normalizedTargetUserId,
                 "admin_reward_grant",
@@ -473,14 +465,10 @@ public static class EconomySettlementEndpoints
                 },
                 ct,
                 operationId: request.OperationId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == normalizedTargetUserId, ct);
             if (profile is null)
             {
@@ -564,7 +552,8 @@ public static class EconomySettlementEndpoints
             if (request.Quantity <= 0)
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_quantity", "Quantity must be greater than zero."));
 
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 userId,
                 "shop_streak_freeze_purchase",
@@ -572,14 +561,10 @@ public static class EconomySettlementEndpoints
                 request,
                 ct,
                 operationId: request.OperationId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             var profile = await db.UserProfiles.FirstOrDefaultAsync(x => x.UserId == userId, ct);
             if (profile is null)
             {
@@ -646,7 +631,8 @@ public static class EconomySettlementEndpoints
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_transaction_id", "TransactionId is required."));
 
             var normalizedTxId = request.TransactionId.Trim();
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 userId,
                 "season_daily_run_claim",
@@ -655,12 +641,10 @@ public static class EconomySettlementEndpoints
                 ct,
                 operationId: request.OperationId,
                 transactionId: normalizedTxId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
 
             var existing = await db.UserSeasonDailyRunClaims
                 .AsNoTracking()
@@ -679,6 +663,7 @@ public static class EconomySettlementEndpoints
                     ErrorCode: null,
                     Message: null);
                 await txService.CompleteAsync(begin.TransactionId, replay, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Ok(replay);
             }
 
@@ -691,6 +676,7 @@ public static class EconomySettlementEndpoints
                 {
                     var error = EconomyEndpointHelpers.BusinessError("invalid_season", "Requested season is not available.");
                     await txService.FailAsync(begin.TransactionId, "invalid_season", error, ct);
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
                 }
             }
@@ -702,6 +688,7 @@ public static class EconomySettlementEndpoints
             {
                 var error = EconomyEndpointHelpers.BusinessError("not_eligible", "Daily Run claim transaction was not found.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
@@ -712,6 +699,7 @@ public static class EconomySettlementEndpoints
                     "not_eligible",
                     "Daily Run chest day is not owned by exactly one season window.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
@@ -721,10 +709,10 @@ public static class EconomySettlementEndpoints
                     "not_eligible",
                     "Daily Run chest day does not belong to the selected season.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var season = ownerSeason;
             var awardedXp = dailyRunClaim.Xp;
             var progress = await GetOrCreateSeasonProgressAsync(db, userId, season.Id, ct);
@@ -778,7 +766,8 @@ public static class EconomySettlementEndpoints
             if (milestoneId <= 0)
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_milestone", "MilestoneId must be greater than zero."));
 
-            var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 txService,
                 userId,
                 "season_milestone_claim",
@@ -786,14 +775,10 @@ public static class EconomySettlementEndpoints
                 new { request.SeasonId, milestoneId },
                 ct,
                 operationId: request.OperationId);
-            if (beginTuple.Error is not null)
-                return beginTuple.Error;
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = EconomyEndpointHelpers.HandleIdempotentDecision(begin);
-            if (idempotencyResult is not null)
-                return idempotencyResult;
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+            if (claim.EarlyResult is not null)
+                return claim.EarlyResult;
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             var season = await ResolveActiveSeasonAsync(db, request.SeasonId, ct);
             if (season is null)
             {

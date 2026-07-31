@@ -67,6 +67,59 @@ internal static class EconomyEndpointHelpers
         }
     }
 
+    /// <summary>
+    /// Pattern A: open the ambient DB transaction before claiming the economy ledger so an abandoned
+    /// request cannot leave a durable pending tombstone outside the domain transaction.
+    /// </summary>
+    public static async Task<(IDbContextTransaction? DbTx, EconomyTransactionBeginResult? Begin, IResult? EarlyResult)> BeginClaimInTransactionAsync(
+        ApiDbContext db,
+        IEconomyTransactionService txService,
+        string userId,
+        string transactionType,
+        string idempotencyKey,
+        object requestPayload,
+        CancellationToken ct,
+        string? operationId = null,
+        string? transactionId = null)
+    {
+        var dbTx = await BeginDbTransactionIfSupportedAsync(db, ct);
+        try
+        {
+            var beginTuple = await TryBeginAsync(
+                txService,
+                userId,
+                transactionType,
+                idempotencyKey,
+                requestPayload,
+                ct,
+                operationId,
+                transactionId);
+            if (beginTuple.Error is not null)
+            {
+                if (dbTx is not null)
+                    await dbTx.RollbackAsync(ct);
+                return (null, null, beginTuple.Error);
+            }
+
+            var begin = beginTuple.Begin!;
+            var early = HandleIdempotentDecision(begin);
+            if (early is not null)
+            {
+                if (dbTx is not null)
+                    await dbTx.RollbackAsync(ct);
+                return (null, begin, early);
+            }
+
+            return (dbTx, begin, null);
+        }
+        catch
+        {
+            if (dbTx is not null)
+                await dbTx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
     public static IResult ReplayStoredJson(string? resultJson, int successStatusCode)
     {
         if (string.IsNullOrWhiteSpace(resultJson))
