@@ -185,6 +185,8 @@ Owners: `CosmeticsEndpoints.cs`, `AvatarEndpoints.cs`, `DailyRunEndpoints.cs`
 | GET | `/api/cosmetics/inventory` | Auth | Canonical mobile | Current-user inventory/fragments. |
 | GET | `/api/cosmetics/avatar` | Auth | Canonical mobile | Current equipped slots. |
 | PUT | `/api/cosmetics/avatar` | Auth | Canonical mobile | Ownership-validated equip. |
+| GET | `/api/cosmetics/reward-track` | Auth | Platform/legacy | Unlock/claimability uses `UserSeasonProgress.EarnedXp` for the selected season (not lifetime `UserProfile.Xp`). Explicit `seasonId` must pass the shared active/`reward_lock` claim-window policy; draft/scheduled/completed/archived/future seasons return not found. `trackType=free` is usable without premium state; `trackType=premium` is deny-by-default until a persisted premium entitlement owner exists (no schema in this change). Current Flutter has no runtime caller. |
+| POST | `/api/cosmetics/reward-track/claim` | Auth | Platform/legacy | Same season XP, claim-window and premium fail-closed policy as GET. Duplicate same-tier claims are deterministic already-claimed with one inventory/claim mutation. Rejected claims write nothing. Stable transport errors remain `{ error }` BadRequest / NotFound. |
 | POST | `/api/cosmetics/items/{itemKey}/claim` | Auth | Canonical P0 | Consume server-issued cosmetic item entitlement via cosmetics ledger. |
 | POST | `/api/cosmetics/fragments/grant` | Auth | Canonical P0 | Daily Run server-derived grant or consume server-issued fragment entitlement via cosmetics ledger. |
 | POST | `/api/daily-run/chest/claim` | Auth | Canonical P0 | Server-authoritative Policy B idempotency. |
