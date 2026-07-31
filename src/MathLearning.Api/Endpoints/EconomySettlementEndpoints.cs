@@ -645,6 +645,7 @@ public static class EconomySettlementEndpoints
             if (string.IsNullOrWhiteSpace(request.TransactionId))
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_transaction_id", "TransactionId is required."));
 
+            var normalizedTxId = request.TransactionId.Trim();
             var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
@@ -653,7 +654,7 @@ public static class EconomySettlementEndpoints
                 request,
                 ct,
                 operationId: request.OperationId,
-                transactionId: request.TransactionId);
+                transactionId: normalizedTxId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -662,22 +663,12 @@ public static class EconomySettlementEndpoints
                 return idempotencyResult;
 
             await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
-            var season = await ResolveActiveSeasonAsync(db, request.SeasonId, ct);
-            if (season is null)
-            {
-                var error = EconomyEndpointHelpers.BusinessError("invalid_season", "Season is missing or inactive.");
-                await txService.FailAsync(begin.TransactionId, "invalid_season", error, ct);
-                if (dbTx is not null) await dbTx.CommitAsync(ct);
-                return Results.Conflict(error);
-            }
-
-            var normalizedTxId = request.TransactionId.Trim();
             var existing = await db.UserSeasonDailyRunClaims
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.UserId == userId && x.DailyRunTransactionId == normalizedTxId, ct);
             if (existing is not null)
             {
-                var seasonStateExisting = await BuildSeasonStateAsync(db, userId, season.Id, ct);
+                var seasonStateExisting = await BuildSeasonStateAsync(db, userId, existing.SeasonId, ct);
                 var fragmentGrantHint = await DailyRunCosmeticsSettlement.BuildFragmentGrantHintAsync(
                     db, userId, normalizedTxId, ct);
                 var replay = new SeasonDailyRunClaimResponse(
@@ -693,6 +684,20 @@ public static class EconomySettlementEndpoints
                 return Results.Ok(replay);
             }
 
+            if (request.SeasonId.HasValue)
+            {
+                var requestedSeasonExists = await db.CosmeticSeasons
+                    .AsNoTracking()
+                    .AnyAsync(x => x.Id == request.SeasonId.Value, ct);
+                if (!requestedSeasonExists)
+                {
+                    var error = EconomyEndpointHelpers.BusinessError("invalid_season", "Requested season is not available.");
+                    await txService.FailAsync(begin.TransactionId, "invalid_season", error, ct);
+                    if (dbTx is not null) await dbTx.CommitAsync(ct);
+                    return Results.Conflict(error);
+                }
+            }
+
             var dailyRunClaim = await db.DailyRunChestClaims
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.UserId == userId && x.TransactionId == normalizedTxId, ct);
@@ -704,6 +709,28 @@ public static class EconomySettlementEndpoints
                 return Results.Conflict(error);
             }
 
+            var ownerSeason = await ResolveSeasonOwningChestDayAsync(db, dailyRunClaim.Day, ct);
+            if (ownerSeason is null)
+            {
+                var error = EconomyEndpointHelpers.BusinessError(
+                    "not_eligible",
+                    "Daily Run chest day is not owned by exactly one season window.");
+                await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Conflict(error);
+            }
+
+            if (request.SeasonId.HasValue && request.SeasonId.Value != ownerSeason.Id)
+            {
+                var error = EconomyEndpointHelpers.BusinessError(
+                    "not_eligible",
+                    "Daily Run chest day does not belong to the selected season.");
+                await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Conflict(error);
+            }
+
+            var season = ownerSeason;
             var awardedXp = dailyRunClaim.Xp;
             var progress = await GetOrCreateSeasonProgressAsync(db, userId, season.Id, ct);
             progress.EarnedXp += awardedXp;
@@ -1014,6 +1041,41 @@ public static class EconomySettlementEndpoints
             .OrderByDescending(x => x.StartDate)
             .FirstOrDefaultAsync(ct);
     }
+
+    /// <summary>
+    /// Season Daily Run ownership uses the persisted chest day against the season calendar window
+    /// [StartDate date, EndDate date] inclusive (UTC date). Overlapping windows fail closed.
+    /// </summary>
+    private static async Task<CosmeticSeason?> ResolveSeasonOwningChestDayAsync(
+        ApiDbContext db,
+        DateOnly chestDay,
+        CancellationToken ct)
+    {
+        var candidates = await db.CosmeticSeasons
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        var matches = candidates
+            .Where(season => SeasonCalendarWindowContainsDay(season, chestDay))
+            .ToList();
+
+        return matches.Count == 1 ? matches[0] : null;
+    }
+
+    private static bool SeasonCalendarWindowContainsDay(CosmeticSeason season, DateOnly chestDay)
+    {
+        var startDay = DateOnly.FromDateTime(AsUtc(season.StartDate));
+        var endDay = DateOnly.FromDateTime(AsUtc(season.EndDate));
+        return chestDay >= startDay && chestDay <= endDay;
+    }
+
+    private static DateTime AsUtc(DateTime value)
+        => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
 
     private static async Task<UserSeasonProgress> GetOrCreateSeasonProgressAsync(ApiDbContext db, string userId, int seasonId, CancellationToken ct)
     {

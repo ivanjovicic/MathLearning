@@ -166,6 +166,15 @@ Server validates season and daily-run claim provenance, then returns authoritati
   }
 }
 ```
+Chest-day ownership:
+- Authority is the persisted `DailyRunChestClaim` row (`transactionId` + authenticated user). Client `xp` is ignored.
+- The chest is eligible for exactly one season whose calendar window contains `DailyRunChestClaim.Day`.
+- Season window comparison is inclusive on both bounds using UTC calendar dates derived from `CosmeticSeason.StartDate` / `EndDate`.
+- Explicit `seasonId` cannot override chest-day ownership. Omitted `seasonId` resolves to the same owning season.
+- Overlapping season windows for the same day fail closed (`409 not_eligible`).
+- Wrong-season / out-of-window / missing owner attempts return `409` with `errorCode = "not_eligible"` and write no season progress, season daily-run claim, or fragment-eligibility side effects.
+- Duplicate settlement of the same chest (any idempotency key / requested season) replays the originally settled season state with `alreadyClaimed: true` and does not rebind the chest to another season.
+
 Mobile should follow with `POST /api/cosmetics/fragments/grant` using `source`/`sourceType: "dailyRun"` and `operationId` = `idempotencyKey` = `transactionId`.
 
 ### 7) `POST /api/seasons/milestones/{milestoneId}/claim`
@@ -255,7 +264,7 @@ Cross-device correctness depends on backend idempotency + authoritative refresh:
 - `POST /api/economy/rewards/claim` is server-authoritative for authenticated callers. Client-supplied `coins` and `xp` are not trusted as settlement authority.
 - Admin-only reward overrides are exposed through a separate authenticated admin endpoint: `POST /api/admin/economy/rewards/grant`. They are not supported by the mobile runtime endpoint.
 - Admin overrides are audited in a dedicated `admin_economy_reward_grants` table and duplicate `grantId` values for the same user do not mint twice.
-- `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` provenance as authority and returns `fragmentGrant { transactionId, fragmentName, copies }` for the follow-up cosmetics grant.
+- `POST /api/seasons/daily-run-claim` uses server-side `DailyRunChestClaim` provenance as authority, binds settlement to the unique season calendar window that contains the chest day, and returns `fragmentGrant { transactionId, fragmentName, copies }` for the follow-up cosmetics grant.
 - `POST /api/cosmetics/fragments/grant` with `source`/`sourceType = dailyRun` requires a matching `DailyRunChestClaim` and completed season daily-run settlement for the same `transactionId`. Server uses chest-authoritative `fragmentName` and `copies` (1-3); mobile should send `operationId` = `idempotencyKey` = chest `transactionId`.
 - All new economy settlement endpoints require auth and `idempotencyKey`.
 - Same `idempotencyKey` with a different request payload returns `409` with `errorCode = "idempotency_conflict"`.

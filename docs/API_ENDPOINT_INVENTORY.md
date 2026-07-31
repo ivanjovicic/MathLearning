@@ -169,7 +169,7 @@ Owner: `EconomySettlementEndpoints.cs`
 | GET | `/api/economy/rewards/preview` | Auth | Canonical read | Must not mutate. |
 | POST | `/api/economy/rewards/claim` | Auth | Canonical P0 | Idempotent reward claim. |
 | POST | `/api/shop/streak-freeze/purchase` | Auth | Canonical P0 | Idempotent purchase. |
-| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP. |
+| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP; chest day must fall in the selected/owning season calendar window. |
 | POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 | Season milestone claim. |
 | POST | `/api/admin/economy/rewards/grant` | Admin | Admin | Actor from auth, target from body. |
 
