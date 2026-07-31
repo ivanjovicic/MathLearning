@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # Backend Season Authority Residual Queue - 2026-07-31
-=======
-# Backend Season Authority Residual Queue â€” 2026-07-31
->>>>>>> 88ec0b1 (Fix Daily Run provider schema and provenance)
 
 Target repo: `ivanjovicic/MathLearning`  
 Reviewed head: `c33ce1b9b5bae3bce579594c297924ee486d12ee`  
@@ -37,9 +33,9 @@ These issues are not the stale-pending recovery owned by `BACKEND-API-DB-015`, t
 
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
-| `BACKEND-SEASON-TRACK-AUTHORITY-001` | P0 | Ready | [Open](backend_season_authority/BACKEND-SEASON-TRACK-AUTHORITY-001.md) | Make reward-track preview and claim use season XP, active/reward-window truth and explicit premium entitlement. |
-| `BACKEND-SEASON-DAILY-RUN-PROVENANCE-001` | P0 | Done | [Open](backend_season_authority/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001.md) | Prevent old/future/out-of-season Daily Run chest transactions from funding the wrong season. Done 100% - Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md`; Validation: SeasonDailyRun 5/5 + API Release build + docs health + Postgres provider 1/1; Residual risk: none; Commit: self. |
-| `BACKEND-SEASON-XP-SETTLEMENT-001` | P1 correctness | Ready | [Open](backend_season_authority/BACKEND-SEASON-XP-SETTLEMENT-001.md) | Route milestone XP through one canonical transaction-aware XP settlement path without bucket/history drift. |
+| `BACKEND-SEASON-TRACK-AUTHORITY-001` | P0 | Done | [Open](backend_season_authority/BACKEND-SEASON-TRACK-AUTHORITY-001.md) | Make reward-track preview and claim use season XP, active/reward-window truth and explicit premium entitlement. Done 79% — Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-TRACK-AUTHORITY-001-evidence.md`; Validation: RewardTrack 7/7 on main merge `c2f1515`; Residual risk: premium deny-by-default until persisted entitlement owner; Commit: self\|42f5a90. |
+| `BACKEND-SEASON-DAILY-RUN-PROVENANCE-001` | P0 | Done | [Open](backend_season_authority/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001.md) | Prevent old/future/out-of-season Daily Run chest transactions from funding the wrong season. Done 100% — Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md`; Validation: SeasonDailyRun 5/5 + Postgres provider proof; Residual risk: none; Commit: self. |
+| `BACKEND-SEASON-XP-SETTLEMENT-001` | P1 correctness | Done | [Open](backend_season_authority/BACKEND-SEASON-XP-SETTLEMENT-001.md) | Route milestone XP through one canonical transaction-aware XP settlement path without bucket/history drift. Done 79% — Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-XP-SETTLEMENT-001-evidence.md`; Validation: SeasonMilestone 4/4 on main merge `a6ec2f0`; Residual risk: PostgreSQL concurrency deferred; Commit: self. |
 
 ## Canonical order and collision notes
 

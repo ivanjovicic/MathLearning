@@ -1,3 +1,4 @@
+using MathLearning.Api.Endpoints;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
@@ -98,6 +99,114 @@ public sealed class RelationalIdempotencyTransactionTests
             .Where(x => x.UserId == userId)
             .Select(x => x.Coins)
             .SingleAsync());
+    }
+
+    [Fact]
+    public async Task EconomyTransaction_BeginOutsideTransaction_LeavesPermanentPendingTombstone()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        const string userId = "economy-tombstone-user";
+        await database.SeedUserAsync(userId, coins: 100);
+
+        await using (var db = database.CreateContext())
+        {
+            var service = CreateEconomyService(db);
+            var begin = await service.BeginOrGetExistingAsync(
+                userId,
+                "coins_spend",
+                "economy-tombstone-key",
+                new { amount = 25 },
+                operationId: "economy-tombstone-operation");
+
+            Assert.True(begin.ShouldProcess);
+            // Abandoned after begin SaveChanges, before domain mutation — legacy production order.
+        }
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(1, await verification.EconomyTransactions.CountAsync());
+        Assert.Equal(
+            EconomyTransactionStatus.Pending,
+            (await verification.EconomyTransactions.SingleAsync()).Status);
+
+        var retry = await CreateEconomyService(verification).BeginOrGetExistingAsync(
+            userId,
+            "coins_spend",
+            "economy-tombstone-key",
+            new { amount = 25 },
+            operationId: "economy-tombstone-operation");
+
+        Assert.True(retry.IsPending);
+        Assert.False(retry.ShouldProcess);
+    }
+
+    [Fact]
+    public async Task EconomyTransaction_BeginInsideTransaction_AbandonedClaimRollsBack_AndRetrySettlesOnce()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        const string userId = "economy-recover-user";
+        await database.SeedUserAsync(userId, coins: 100);
+
+        await using (var abandonedDb = database.CreateContext())
+        {
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                abandonedDb,
+                CreateEconomyService(abandonedDb),
+                userId,
+                "coins_spend",
+                "economy-recover-key",
+                new { amount = 25 },
+                CancellationToken.None,
+                operationId: "economy-recover-operation");
+
+            Assert.Null(claim.EarlyResult);
+            Assert.True(claim.Begin!.ShouldProcess);
+            // Dispose without commit simulates crash/cancel after claim SQL.
+        }
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(0, await verification.EconomyTransactions.CountAsync());
+
+        await using (var settleDb = database.CreateContext())
+        {
+            var claim = await EconomyEndpointHelpers.BeginClaimInTransactionAsync(
+                settleDb,
+                CreateEconomyService(settleDb),
+                userId,
+                "coins_spend",
+                "economy-recover-key",
+                new { amount = 25 },
+                CancellationToken.None,
+                operationId: "economy-recover-operation");
+
+            Assert.Null(claim.EarlyResult);
+            Assert.True(claim.Begin!.ShouldProcess);
+            await using var dbTx = claim.DbTx;
+
+            var profile = await settleDb.UserProfiles.SingleAsync(x => x.UserId == userId);
+            profile.Coins -= 25;
+            await settleDb.SaveChangesAsync();
+            await CreateEconomyService(settleDb).CompleteAsync(
+                claim.Begin.TransactionId,
+                new { success = true, coins = profile.Coins });
+            if (dbTx is not null)
+                await dbTx.CommitAsync();
+        }
+
+        await using var finalDb = database.CreateContext();
+        Assert.Equal(1, await finalDb.EconomyTransactions.CountAsync());
+        Assert.Equal(
+            EconomyTransactionStatus.Completed,
+            (await finalDb.EconomyTransactions.SingleAsync()).Status);
+        Assert.Equal(75, await finalDb.UserProfiles.Where(x => x.UserId == userId).Select(x => x.Coins).SingleAsync());
+
+        var replay = await CreateEconomyService(finalDb).BeginOrGetExistingAsync(
+            userId,
+            "coins_spend",
+            "economy-recover-key",
+            new { amount = 25 },
+            operationId: "economy-recover-operation");
+        Assert.True(replay.IsCompleted);
+        Assert.False(replay.ShouldProcess);
     }
 
     [Fact]

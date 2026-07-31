@@ -17,7 +17,7 @@ How this run avoids prior mistakes: red provenance tests before patch; preserve 
 Owner/hypothesis: old unsettled DailyRunChestClaim.Day can fund a later active season
 Files inspected: 10
 Files changed: 5
-Searches: 6
+Searches: 4
 Validation runs: 4
 Failed retries: 2
 
@@ -36,10 +36,10 @@ Failed retries: 2
 - .ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRun` -> Passed 5 / 0
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore` -> exit 0
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRun` -> Passed 5 / 0
+Validation run: `dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore` -> exit 0
 Validation run: `python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/EconomySettlementEndpoints.cs` -> documents healthy
-Validation run: `python scripts/run_guarded.py --timeout-seconds 300 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRunPostgresTests` -> Passed 1 / 0
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRunPostgresTests` -> Passed 1 / 0
 
 ## Exceptions and learning
 Mistakes observed: none
