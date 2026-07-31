@@ -18,9 +18,11 @@ public sealed class ExplanationCacheService : IExplanationCacheService
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> LocalSingleFlights = new(StringComparer.Ordinal);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan TimeToLive = TimeSpan.FromHours(12);
+    private static readonly TimeSpan ForceRefreshCooldown = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DistributedLeaseTimeToLive = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DistributedLeaseWaitBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DistributedLeasePollInterval = TimeSpan.FromMilliseconds(150);
+    private static readonly TimeSpan RedisOperationTimeout = TimeSpan.FromMilliseconds(500);
     private const int MaxPayloadBytes = 256 * 1024;
 
     private readonly IMemoryCache memoryCache;
@@ -223,7 +225,8 @@ public sealed class ExplanationCacheService : IExplanationCacheService
     {
         var scopedHash = BuildScopedHash(cacheKind, problemHash, language);
         var memoryKey = BuildMemoryKey(scopedHash, grade, difficulty);
-        if (!forceRefresh)
+        var forceRefreshAllowed = forceRefresh && IsForceRefreshAllowed(memoryKey);
+        if (!forceRefreshAllowed)
         {
             var cached = await TryReadCachedValueAsync<T>(scopedHash, grade, difficulty, memoryKey, ct);
             if (cached is not null)
@@ -236,9 +239,13 @@ public sealed class ExplanationCacheService : IExplanationCacheService
         }
 
         var gate = LocalSingleFlights.GetOrAdd(memoryKey, _ => new SemaphoreSlim(1, 1));
-        var waitedForLocalGate = !await gate.WaitAsync(0, ct);
+        var acquiredGate = await gate.WaitAsync(0, ct);
+        var waitedForLocalGate = !acquiredGate;
         if (waitedForLocalGate)
+        {
             await gate.WaitAsync(ct);
+            acquiredGate = true;
+        }
 
         string? leaseToken = null;
         try
@@ -246,7 +253,10 @@ public sealed class ExplanationCacheService : IExplanationCacheService
             if (waitedForLocalGate)
                 metrics.RecordStampedeSuppressed();
 
-            var cachedAfterGate = await TryReadCachedValueAsync<T>(scopedHash, grade, difficulty, memoryKey, ct);
+            var shouldSkipCachedAfterGate = forceRefreshAllowed && !waitedForLocalGate;
+            var cachedAfterGate = shouldSkipCachedAfterGate
+                ? null
+                : await TryReadCachedValueAsync<T>(scopedHash, grade, difficulty, memoryKey, ct);
             if (cachedAfterGate is not null)
             {
                 metrics.RecordHit();
@@ -256,17 +266,27 @@ public sealed class ExplanationCacheService : IExplanationCacheService
             leaseToken = await TryAcquireDistributedLeaseAsync(memoryKey);
             if (leaseToken is null)
             {
-                metrics.RecordStampedeSuppressed();
-                var observed = await WaitForCachedValueAsync<T>(scopedHash, grade, difficulty, memoryKey, ct);
-                if (observed is not null)
+                var shouldWaitForExistingGeneration = !forceRefreshAllowed || waitedForLocalGate;
+                if (shouldWaitForExistingGeneration)
                 {
-                    metrics.RecordHit();
-                    return markServedFromCache(observed);
-                }
+                    metrics.RecordStampedeSuppressed();
+                    var observed = await WaitForCachedValueAsync<T>(scopedHash, grade, difficulty, memoryKey, ct);
+                    if (observed is not null)
+                    {
+                        metrics.RecordHit();
+                        return markServedFromCache(observed);
+                    }
 
-                logger.LogWarning(
-                    "Distributed explanation cache lease could not be acquired for {CacheKey}; generating without a lease.",
-                    memoryKey);
+                    logger.LogWarning(
+                        "Distributed explanation cache lease could not be acquired for {CacheKey}; generating without a lease.",
+                        memoryKey);
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Distributed explanation cache lease could not be acquired for force-refresh owner {CacheKey}; generating without a lease.",
+                        memoryKey);
+                }
             }
 
             var generationWatch = Stopwatch.StartNew();
@@ -275,14 +295,19 @@ public sealed class ExplanationCacheService : IExplanationCacheService
             metrics.RecordGeneration(generationWatch.Elapsed);
 
             await StoreAsync(scopedHash, grade, difficulty, response, ct);
+            if (forceRefresh)
+                RememberForceRefresh(memoryKey);
             return response;
         }
         finally
         {
-            if (leaseToken is not null)
-                await ReleaseDistributedLeaseAsync(memoryKey, leaseToken);
+            if (acquiredGate)
+            {
+                if (leaseToken is not null)
+                    await ReleaseDistributedLeaseAsync(memoryKey, leaseToken);
 
-            gate.Release();
+                gate.Release();
+            }
         }
     }
 
@@ -314,7 +339,11 @@ public sealed class ExplanationCacheService : IExplanationCacheService
 
         var leaseKey = BuildLeaseKey(memoryKey);
         var leaseToken = Guid.NewGuid().ToString("N");
-        var acquired = await redisDb.LockTakeAsync(leaseKey, leaseToken, DistributedLeaseTimeToLive);
+        var acquired = await TryRedisWithTimeoutAsync(
+            leaseKey,
+            "distributed lease acquire",
+            db => db.LockTakeAsync(leaseKey, leaseToken, DistributedLeaseTimeToLive),
+            false);
         return acquired ? leaseToken : null;
     }
 
@@ -325,7 +354,11 @@ public sealed class ExplanationCacheService : IExplanationCacheService
 
         try
         {
-            await redisDb.LockReleaseAsync(BuildLeaseKey(memoryKey), leaseToken);
+            await TryRedisWithTimeoutAsync(
+                memoryKey,
+                "distributed lease release",
+                db => db.LockReleaseAsync(BuildLeaseKey(memoryKey), leaseToken),
+                false);
         }
         catch (Exception ex)
         {
@@ -348,7 +381,11 @@ public sealed class ExplanationCacheService : IExplanationCacheService
         {
             try
             {
-                var redisValue = await redisDb.StringGetAsync(memoryKey);
+                var redisValue = await TryRedisWithTimeoutAsync(
+                    memoryKey,
+                    "lookup",
+                    db => db.StringGetAsync(memoryKey),
+                    default(RedisValue));
                 if (redisValue.HasValue)
                 {
                     var redisDto = Deserialize<T>(redisValue!);
@@ -465,7 +502,11 @@ DO UPDATE SET
         {
             try
             {
-                await redisDb.StringSetAsync(memoryKey, payload, TimeToLive);
+                await TryRedisWithTimeoutAsync(
+                    memoryKey,
+                    "write",
+                    db => db.StringSetAsync(memoryKey, payload, TimeToLive),
+                    false);
             }
             catch (Exception ex)
             {
@@ -490,6 +531,56 @@ DO UPDATE SET
             });
     }
 
+    private bool IsForceRefreshAllowed(string memoryKey)
+    {
+        var markerKey = BuildForceRefreshMarkerKey(memoryKey);
+        return !memoryCache.TryGetValue(markerKey, out _);
+    }
+
+    private void RememberForceRefresh(string memoryKey)
+    {
+        memoryCache.Set(
+            BuildForceRefreshMarkerKey(memoryKey),
+            true,
+            new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = ForceRefreshCooldown,
+                Size = 1
+            });
+    }
+
+    private async Task<TResult> TryRedisWithTimeoutAsync<TResult>(
+        string cacheKey,
+        string operation,
+        Func<IDatabase, Task<TResult>> redisOperation,
+        TResult fallback)
+    {
+        if (redisDb is null)
+            return fallback;
+
+        try
+        {
+            var task = redisOperation(redisDb);
+            var completed = await Task.WhenAny(task, Task.Delay(RedisOperationTimeout));
+            if (completed != task)
+            {
+                logger.LogWarning(
+                    "Redis explanation cache {Operation} timed out for {CacheKey} after {TimeoutMs}ms.",
+                    operation,
+                    cacheKey,
+                    RedisOperationTimeout.TotalMilliseconds);
+                return fallback;
+            }
+
+            return await task;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Redis explanation cache {Operation} failed for {CacheKey}.", operation, cacheKey);
+            return fallback;
+        }
+    }
+
     private static T? Deserialize<T>(string payload)
         where T : class =>
         JsonSerializer.Deserialize<T>(payload, JsonOptions);
@@ -502,6 +593,9 @@ DO UPDATE SET
 
     private static string BuildLeaseKey(string memoryKey) =>
         $"explanation-cache:lease:{memoryKey}";
+
+    private static string BuildForceRefreshMarkerKey(string memoryKey) =>
+        $"explanation-cache:force-refresh:{memoryKey}";
 
     private static string NormalizeKeyPart(string value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
