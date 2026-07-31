@@ -1,6 +1,6 @@
 # MathLearning Backend - AI Agent Rulebook
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Owner: `backend-agent-system`
 
 Current code, focused tests and executable tooling override stale prose. Resolve workflow-document conflicts through [`.ai/SOURCE_OF_TRUTH.md`](.ai/SOURCE_OF_TRUTH.md). Durable documentation ownership is defined by [`docs/DOCUMENTATION_SYSTEM.md`](docs/DOCUMENTATION_SYSTEM.md).
@@ -59,6 +59,7 @@ focused proof + delivered commit + exact target verification + synchronized evid
 | Queue selection/states | [`docs/prompt_queues/README.md`](docs/prompt_queues/README.md), [`PROMPT_LIFECYCLE.md`](docs/prompt_queues/PROMPT_LIFECYCLE.md) |
 | Compact evidence | [`.ai/RUN_LOG_TEMPLATE.md`](.ai/RUN_LOG_TEMPLATE.md), [`docs/AGENT_RUN_LOG_ENFORCEMENT.md`](docs/AGENT_RUN_LOG_ENFORCEMENT.md) |
 | Mistake routing/details | [`MISTAKE_INDEX.json`](docs/ai/learning/MISTAKE_INDEX.json), [`MISTAKE_LEDGER.md`](docs/ai/learning/MISTAKE_LEDGER.md) |
+| Periodic code analysis | [`docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md), [`docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md`](docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md) |
 
 Do not copy full mechanics into prompts. Formal v2/v3 construction applies only when creating or materially changing an active queue owner, not every ad-hoc task.
 
@@ -154,6 +155,8 @@ python scripts/validate_agent_system.py
 ```
 
 Do not let historical evidence debt block the current change. `Database Validation` skips docs/agent-tooling-only diffs and runs the full PostgreSQL suite for runtime/test/schema/build changes.
+
+For recurring backend code analysis, use [`docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md). It combines Roslyn analyzers, `dotnet format`, NuGet advisory checks, targeted `rg` review and the existing PostgreSQL coverage workflow. Run `BACKEND-ANALYSIS-001` every two weeks with one rotation focus; static findings must be routed as bounded prompts and never reported as runtime fixes without executable proof.
 
 ## 12. Compact evidence and learning
 

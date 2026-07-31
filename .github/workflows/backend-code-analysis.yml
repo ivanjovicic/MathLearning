@@ -1,0 +1,60 @@
+name: Backend Code Analysis
+
+on:
+  schedule:
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-code-analysis
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore MathLearning.slnx
+
+      - name: Build with analyzers and style enforcement
+        run: >-
+          dotnet build MathLearning.slnx -c Release --no-restore
+          -p:RunAnalyzers=true
+          -p:EnforceCodeStyleInBuild=true
+          -warnaserror
+
+      - name: Verify formatting
+        run: dotnet format MathLearning.slnx --verify-no-changes --severity warn --no-restore
+
+      - name: Scan NuGet advisories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/code-analysis | Out-Null
+          $output = dotnet list MathLearning.slnx package --vulnerable --include-transitive 2>&1
+          $output | Tee-Object -FilePath artifacts/code-analysis/nuget-vulnerabilities.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($output -match "has the following vulnerable packages") {
+            Write-Error "NuGet advisory output contains vulnerable packages. Triage via BACKEND-ANALYSIS-001."
+            exit 1
+          }
+
+      - name: Publish analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-code-analysis
+          path: artifacts/code-analysis
+          if-no-files-found: warn
+          retention-days: 14

@@ -25,6 +25,7 @@ on:
       - "scripts/ci/test_classify_backend_changes.py"
       - ".github/workflows/agent-system-validation.yml"
       - ".github/workflows/database-validation.yml"
+      - ".github/workflows/backend-code-analysis.yml"
   push:
     branches: [main]
     paths:
@@ -50,6 +51,7 @@ on:
       - "scripts/ci/test_classify_backend_changes.py"
       - ".github/workflows/agent-system-validation.yml"
       - ".github/workflows/database-validation.yml"
+      - ".github/workflows/backend-code-analysis.yml"
   workflow_dispatch:
 
 permissions:

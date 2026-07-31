@@ -1,6 +1,6 @@
 # Backend Documentation Index
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Owner: `backend-docs-system`
 
 Use the shortest path that answers the next decision. Registered durable owners are listed in generated [`DOCS_REGISTRY.md`](DOCS_REGISTRY.md); transient queues, prompts, audits and run logs are not current architecture authority.
@@ -46,6 +46,7 @@ python scripts/check_documentation_health.py --context <path>
 | [`BACKEND_TEST_COVERAGE_STRATEGY.md`](BACKEND_TEST_COVERAGE_STRATEGY.md) | Risk-first validation layers |
 | [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | Startup/readiness budget |
 | [`BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | Request/query budgets |
+| [`BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](BACKEND_CODE_ANALYSIS_PLAYBOOK.md) | Free analyzer, dependency, coverage and risk-review cadence |
 
 ## Current transient route
 

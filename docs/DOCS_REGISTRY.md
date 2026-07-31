@@ -15,6 +15,7 @@ Generated from [`DOCS_MANIFEST.json`](DOCS_MANIFEST.json). Do not edit by hand.
 | [`docs/AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | evidence-policy | `backend-agent-system` | required | 2026-07-17 | Evidence validation, completion caps and self-SHA rules. |
 | [`docs/API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | api-contract | `backend-api-contract` | required | 2026-07-16 | Route, authorization and compatibility ownership. |
 | [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | architecture | `backend-architecture` | advisory | 2026-07-16 | Current startup, projects, persistence and jobs. |
+| [`docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](BACKEND_CODE_ANALYSIS_PLAYBOOK.md) | validation-strategy | `backend-quality` | required | 2026-07-31 | Free analyzer, dependency, coverage and risk-review cadence. |
 | [`docs/BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | performance-contract | `backend-performance` | advisory | 2026-07-16 | Blocking startup and readiness budget. |
 | [`docs/BACKEND_REGRESSION_GUARDRAILS.md`](BACKEND_REGRESSION_GUARDRAILS.md) | engineering-guardrail | `backend-quality` | advisory | 2026-07-16 | High-risk auth, settlement, persistence and provider invariants. |
 | [`docs/BACKEND_REQUEST_PERFORMANCE_BUDGETS.md`](BACKEND_REQUEST_PERFORMANCE_BUDGETS.md) | performance-contract | `backend-performance` | advisory | 2026-07-03 | Request, query and allocation budgets. |

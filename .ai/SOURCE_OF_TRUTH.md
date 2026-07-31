@@ -1,6 +1,6 @@
 # Backend AI Workflow Source-of-Truth Map
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Owner: `backend-agent-system`
 
 Short entrypoints may summarize a rule but may not redefine it. Current code, focused tests and executable tooling override prose.
@@ -31,6 +31,7 @@ Short entrypoints may summarize a rule but may not redefine it. Current code, fo
 | Throughput measurement | `scripts/analyze_agent_runs.py` | speed audit/CI summary |
 | Expensive DB CI scope | `scripts/ci/classify_backend_changes.py` | `Database Validation` workflow |
 | Architecture/contracts | owning registered backend docs and current tests | [`../docs/DOCS_REGISTRY.md`](../docs/DOCS_REGISTRY.md) |
+| Periodic backend code analysis and finding triage | [`../docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](../docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md), [`../docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md`](../docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md) | [`../docs/prompt_queues/backend_code_analysis.md`](../docs/prompt_queues/backend_code_analysis.md) |
 
 ## Update rule
 
