@@ -32,7 +32,7 @@ Failed retries: 0
 - tests/MathLearning.Tests/Endpoints/EconomySettlementEndpointsIntegrationTests.cs
 
 ## Validation
-Validation run: python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests\\MathLearning.Tests\\MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRunClaim => Passed 5/5
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRunClaim` => Passed 5/5
 Validation not run: none
 
 ## Exceptions and learning

@@ -3,52 +3,53 @@
 Evidence format: v2
 Prompt ID: BE-PERF-013
 Queue: docs/prompt_queues/backend_performance_followups_2026_07_03.md
-Agent/tool: unknown-not-exposed
+Agent/tool: cursor-composer
 Model provider: unknown-not-exposed
 Model name/id: unknown-not-exposed
-Client/IDE: unknown-not-exposed
+Client/IDE: cursor
 Run mode: known-fix
 Token budget: medium
-Started at UTC: 2026-07-31T08:24:10Z
-Completed at UTC: 2026-07-31T08:41:03Z
-Elapsed time: 16m 53s
+Started at UTC: 2026-07-31T16:24:00Z
+Completed at UTC: 2026-07-31T16:35:00Z
+Elapsed time: 11m
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-PERF-001, BACKEND-MISTAKE-PERF-002, BACKEND-MISTAKE-PERF-003, BACKEND-MISTAKE-SCOPE-001
-How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-PERF-001; apply BACKEND-MISTAKE-PERF-002; apply BACKEND-MISTAKE-PERF-003; apply BACKEND-MISTAKE-SCOPE-001
-Owner/hypothesis: open
-Files inspected: 12
+How this run avoids prior mistakes: one subsystem (settings GET); leaderboard/progress already pure on main; cosmetics default-grant deferred as second owner
+Owner/hypothesis: GET /users/{userId}/settings inserts default UserSettings via SaveChanges on missing row
+Files inspected: 10
 Files changed: 6
-Searches: 6
-Validation runs: 3
-Failed retries: 1
+Searches: 3
+Validation runs: 1
+Failed retries: 0
 
 ## Outcome
-- Removed request-time school leaderboard schema probes from LeaderboardService.
-- Retired SchoolLeaderboardAggregationService registration so the scheduled Hangfire full-refresh owner is the only active school aggregation writer.
-- Added read-only regression coverage for school leaderboard routes, stale metadata, and owner registration inventory.
+- Settings GET returns documented defaults without insert/`SaveChanges`; persist remains on PATCH.
+- Stale season Daily Run queue row closed as Done (already on main `6f4c523`).
+- Prior leaderboard/progress pure-read work remains the active school aggregation owner (Hangfire).
 
 ## Changed paths
-- src/MathLearning.Infrastructure/Services/LeaderboardService.cs
-- src/MathLearning.Api/Startup/ServiceRegistrationExtensions.cs
-- tests/MathLearning.Tests/Endpoints/ReadPathMutationRegressionTests.cs
-- tests/MathLearning.Tests/Endpoints/SchoolLeaderboardReadMutationHttpTests.cs
-- tests/MathLearning.Tests/Services/LeaderboardServiceRegistrationTests.cs
+- src/MathLearning.Api/Endpoints/UserEndpoints.cs
+- tests/MathLearning.Tests/Endpoints/UserSettingsEndpointsIntegrationTests.cs
+- docs/API_ENDPOINT_INVENTORY.md
+- docs/prompt_queues/backend_performance_followups_2026_07_03.md
+- docs/prompt_queues/backend_season_authority_residuals_2026_07_31.md
 - .ai/runs/2026-07-31-BE-PERF-013-evidence.md
+- .ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md
 
 ## Validation
-Validation run: dotnet build MathLearning.slnx -c Release (passed) | dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~ReadPathMutationRegressionTests|FullyQualifiedName~SchoolLeaderboardReadMutationHttpTests|FullyQualifiedName~LeaderboardServiceRegistrationTests (passed 7/7)
-Validation not run: none
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~UserSettingsEndpointsIntegrationTests|FullyQualifiedName~ReadPathMutationRegressionTests` → Passed 17 / 0
+Validation not run: cosmetics inventory/avatar GET EnsureDefaultOwnership (deferred second subsystem)
 
 ## Exceptions and learning
-Mistakes observed: none new
-Waste: One HTTP assertion initially expected preseeded school items; I relaxed it after confirming the route, stale metadata, and no-write contract.
-Missed: No additional queue-owned gaps found.
-Follow-up: none
-Residual risk: The direct read-path tests cover actual aggregate content, and the HTTP regression now proves route-level no-write behavior with explicit stale metadata.
-Documentation impact: No durable docs changed; queue evidence only.
-Cross-repo impact: none
+Mistakes observed: none
+Waste: none
+Missed: none
+Follow-up: cosmetics GET default-grant writes remain under BE-PERF-013/BACKEND-API-DB-008 residual
+Residual risk: Flutter may assume persisted settings after first GET; PATCH still creates the row; push/PR/main open
+Documentation impact: updated docs/API_ENDPOINT_INVENTORY.md for settings GET zero-write defaults; queue sync
+Cross-repo impact: no - documented defaults still returned
 
 ## Delivery
-State: Complete
-Branch/PR: main
+State: Needs merge
+Branch/PR: cursor/be-perf-013-pure-reads-fa87
 Commit SHA: self
-Completion %: 100
+Completion %: 79

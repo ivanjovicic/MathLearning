@@ -243,7 +243,7 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetSettings_CreatesDefaultSettingsIfNotExist()
+    public async Task GetSettings_ReturnsDocumentedDefaultsWithoutPersistingRow()
     {
         var userId = "auth0|new-user-789";
         using (var scope = _factory.Services.CreateScope())
@@ -277,6 +277,25 @@ public class UserSettingsEndpointsIntegrationTests : IAsyncLifetime
         Assert.Equal("sr", json.GetProperty("language").GetString());
         Assert.Equal("light", json.GetProperty("theme").GetString());
         Assert.True(json.GetProperty("hintsEnabled").GetBoolean());
+        Assert.True(json.GetProperty("soundEnabled").GetBoolean());
+        Assert.True(json.GetProperty("vibrationEnabled").GetBoolean());
+        Assert.False(json.GetProperty("dailyNotificationEnabled").GetBoolean());
+        Assert.Equal("18:00", json.GetProperty("dailyNotificationTime").GetString());
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            Assert.Equal(0, await db.UserSettings.CountAsync(s => s.UserId == userId));
+        }
+
+        // Concurrent GETs must also remain write-free.
+        var second = await client.GetAsync($"/users/{userId}/settings");
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            Assert.Equal(0, await db.UserSettings.CountAsync(s => s.UserId == userId));
+        }
     }
 
     private sealed class AnonymousWebApplicationFactory : CustomWebApplicationFactory<Program>

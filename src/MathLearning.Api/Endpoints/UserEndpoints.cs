@@ -277,26 +277,22 @@ public static class UserEndpoints
                 return Results.Forbid();
 
             var settings = await db.UserSettings
+                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.UserId == authenticatedUserId);
 
-            if (settings == null)
+            if (settings is null)
             {
-                settings = new UserSettings
-                {
-                    UserId = authenticatedUserId,
-                    Language = "sr",
-                    Theme = "light",
-                    HintsEnabled = true,
-                    SoundEnabled = true,
-                    VibrationEnabled = true,
-                    DailyNotificationEnabled = false,
-                    DailyNotificationTime = "18:00",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-
-                db.UserSettings.Add(settings);
-                await db.SaveChangesAsync();
+                // Documented defaults only — persist on PATCH, never on GET.
+                return Results.Ok(new UserSettingsDto(
+                    authenticatedUserId,
+                    Language: "sr",
+                    LanguageCode: null,
+                    Theme: "light",
+                    HintsEnabled: true,
+                    SoundEnabled: true,
+                    VibrationEnabled: true,
+                    DailyNotificationEnabled: false,
+                    DailyNotificationTime: "18:00"));
             }
 
             return Results.Ok(new UserSettingsDto(
