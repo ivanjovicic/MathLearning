@@ -122,6 +122,7 @@ public sealed class ReadPathMutationRegressionTests : IClassFixture<CustomWebApp
 
         Assert.NotNull(result.MySchool);
         Assert.Single(result.Items);
+        Assert.True(result.IsStale);
         Assert.Equal(0, rewardSpy.ProcessRewardSourceCalls);
 
         var stored = await db.SchoolScoreAggregates

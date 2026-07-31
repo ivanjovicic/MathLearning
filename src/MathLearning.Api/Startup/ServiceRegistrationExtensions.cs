@@ -260,7 +260,6 @@ public static class ServiceRegistrationExtensions
             builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
         }
 
-        builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
         builder.Services.Configure<XpTrackingOptions>(
             builder.Configuration.GetSection(XpTrackingOptions.SectionName));
         builder.Services.AddScoped<IXpResetOwnershipLease, PostgresXpResetOwnershipLease>();
