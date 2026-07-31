@@ -54,4 +54,4 @@ Cross-repo impact: no - response contract unchanged
 State: Needs merge
 Branch/PR: cursor/be-perf-015-practice-outbox-fa87
 Commit SHA: self
-Completion %: 85
+Completion %: 79
