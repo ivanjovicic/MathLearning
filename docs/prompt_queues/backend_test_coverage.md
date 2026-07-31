@@ -35,6 +35,7 @@ These are the biggest unresolved queue items on current `main`:
 
 - `BACKEND-TEST-049` â€” question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety.
 - `BACKEND-TEST-050` â€” design-token draft version identity and same-second collision safety.
+- `BACKEND-TEST-051` - design-token bootstrap race and startup ownership.
 ## Read first
 
 - `../../AGENTS.md`
@@ -105,6 +106,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
 | BACKEND-TEST-049 | P1 / Prompt-ready | Question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety. |
 | BACKEND-TEST-050 | P1 / Prompt-ready | Design-token draft version identity and same-second collision safety. |
+| BACKEND-TEST-051 | P1 / Prompt-ready | Design-token bootstrap race and startup ownership. |
 | BACKEND-LATEST-VALIDATION-002 | Validated | Latest July 3 implementation/test batch verified; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and the focused test package passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Validated | Database Validation run `29899827848` succeeded on exact `main` SHA `a5406568df339bb6c562ed4f79f31c72d6ac2939`; classifier returned `docs/agent-tooling-only change; expensive database suite skipped`, so `database-suite` was skipped and no artifacts were produced. Run log: `.ai/runs/2026-07-22-BACKEND-LATEST-WORKFLOW-002-evidence.md`. |
 | BACKEND-LATEST-EVIDENCE-002 | P1 / Done 75% | Linted the latest referenced July 3 evidence logs, added missing `Commit SHA:` fields, and reconciled completion caps; older legacy queue/log debt remains. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-EVIDENCE-002-evidence.md`. |
