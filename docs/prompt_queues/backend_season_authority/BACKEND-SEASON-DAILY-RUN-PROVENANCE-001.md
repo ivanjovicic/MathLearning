@@ -26,8 +26,8 @@ Dependencies/collisions:
 - Preserve `DailyRunChestClaim` as the chest authority and existing domain-table idempotency policy.
 - Preserve economy ledger replay/conflict semantics; use the chest's stored day rather than request-provided XP/date.
 - Coordinate the season-window definition with `BACKEND-SEASON-TRACK-AUTHORITY-001` so reward access and Daily Run earning agree on season boundaries.
-- Flutter baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616` currently calls this route from `lib/services/season_service.dart::claimDailyRunSeasonXp`, sending `seasonId`, `transactionId`, `xp` and an idempotency key.
-- Preserve the accepted request/response shape; the backend may ignore client `xp` as non-authoritative. If status/error or response fields change, create and link `XREPO-SEASON-SETTLEMENT-CONTRACT-001` and update `docs/mobile_backend_contract_status.md` before delivery.
+- Flutter baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616` currently calls this route from `SeasonService.claimDailyRunSeasonXp`, sending `seasonId`, `transactionId`, `xp` and an idempotency key.
+- Preserve the accepted request/response shape; the backend may ignore client `xp` as non-authoritative. If status/error or response fields change, create and link `XREPO-SEASON-SETTLEMENT-CONTRACT-001` and update the mobile backend contract status before delivery.
 - Do not run concurrently with `BACKEND-SEASON-XP-SETTLEMENT-001`; both may edit `EconomySettlementEndpoints.cs`.
 
 Owner boundary:
@@ -48,7 +48,7 @@ Source of truth:
 - `src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs`
 - nearest Daily Run, season settlement, idempotency and fragment trust-boundary tests
 - `docs/mobile_economy_api_contract.md`, `docs/backend_contract_gap_report.md`
-- Flutter `lib/services/season_service.dart`, `test/services/season_service_test.dart` and `docs/mobile_backend_contract_status.md` at baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616`
+- verified Flutter SeasonService, its focused service test and mobile backend contract status at baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616`; exact mobile paths are recorded in the owning audit evidence
 
 Interpretation before work: Build the matrix `chest day before/start/inside/end/after season × explicit/implicit season × first/replay/different key × overlapping/missing season data` before editing.
 
