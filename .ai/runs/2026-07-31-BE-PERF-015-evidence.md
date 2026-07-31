@@ -20,6 +20,7 @@ Files changed: 8
 Searches: 4
 Validation runs: 3
 Failed retries: 1
+Budget note: medium path budget exceeded (8>6) for required event+handler+DI+two tests+queue+evidence; completion capped at 79 pending merge
 
 ## Outcome
 - Practice completion writes one durable `Outbox` row with `Id = sessionId` inside the same settlement transaction.
