@@ -26,6 +26,8 @@ Dependencies/collisions:
 - Coordinate premium policy with the season milestone route, but keep this prompt as the canonical policy owner.
 - Reuse existing season progress and any existing persisted premium entitlement. If none exists, deny premium access and create a separate storage/bootstrap prompt rather than adding schema here.
 - Preserve cosmetics item provenance, reward claim uniqueness and stale-pending ownership from `BACKEND-API-DB-009/015`.
+- Flutter baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616` has no runtime `/api/cosmetics/reward-track*` caller; active-season identity disposition is owned by `XREPO44-SEASON-ACTIVE-ENDPOINT-DISPOSITION-001` and `lib/services/season_service.dart`.
+- Do not expose a changed reward-track contract to mobile without updating `docs/mobile_backend_contract_status.md` and linking a named mobile implementation owner.
 - Do not redesign billing or introduce a payment provider.
 
 Owner boundary:
@@ -46,6 +48,7 @@ Source of truth:
 - `src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs`
 - nearest cosmetics reward-track and season integration tests
 - `docs/mobile_economy_api_contract.md`, `docs/API_ENDPOINT_INVENTORY.md`
+- Flutter `lib/services/season_service.dart`, `docs/mobile_backend_contract_status.md` and `XREPO44-SEASON-ACTIVE-ENDPOINT-DISPOSITION-001` at baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616`
 
 Interpretation before work: Build the matrix `season status/window × explicit/implicit season ID × free/premium track × season XP × lifetime XP × entitlement × first/duplicate claim` before editing.
 
@@ -87,7 +90,7 @@ Avoid paths:
 - Generic economy/cosmetics pending recovery (`BACKEND-API-DB-015`).
 - Payment processing, subscriptions UI and Flutter state management.
 
-Documentation impact: update one canonical mobile economy/API contract with season XP authority, allowed season statuses/reward window, premium denial/entitlement semantics and stable error codes.
+Documentation impact: update one canonical mobile economy/API contract with season XP authority, allowed season statuses/reward window, premium denial/entitlement semantics and stable error codes. Record that current Flutter has no runtime reward-track caller; if a mobile adapter becomes necessary, update `docs/mobile_backend_contract_status.md` under `XREPO44-SEASON-ACTIVE-ENDPOINT-DISPOSITION-001` or promote one named implementation residual.
 
 Acceptance criteria:
 1. High lifetime XP with insufficient `UserSeasonProgress.EarnedXp` cannot unlock or claim a tier.
@@ -108,7 +111,7 @@ Proof required:
 
 Validation:
 ```powershell
-python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~RewardTrack
+python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~RewardTrack
 python scripts/run_guarded.py --timeout-seconds 180 -- dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore
 python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/AvatarEndpoints.cs
 python scripts/validate_agent_evidence.py --changed-from <base-sha> --verify-git
