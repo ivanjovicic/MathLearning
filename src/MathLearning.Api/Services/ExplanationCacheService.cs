@@ -264,8 +264,9 @@ public sealed class ExplanationCacheService : IExplanationCacheService
             }
 
             leaseToken = await TryAcquireDistributedLeaseAsync(memoryKey);
-            if (leaseToken is null)
+            if (leaseToken is null && redisDb is not null)
             {
+                // Redis is available but another replica holds the lease — wait briefly for its write.
                 var shouldWaitForExistingGeneration = !forceRefreshAllowed || waitedForLocalGate;
                 if (shouldWaitForExistingGeneration)
                 {
