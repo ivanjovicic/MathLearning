@@ -770,6 +770,7 @@ public static class EconomySettlementEndpoints
             ApiDbContext db,
             IEconomyTransactionService txService,
             ICosmeticsFragmentService fragmentService,
+            IXpTrackingService xpTrackingService,
             HttpContext ctx,
             CancellationToken ct) =>
         {
@@ -890,8 +891,18 @@ public static class EconomySettlementEndpoints
                     return Results.Conflict(error);
                 }
 
-                profile.Xp += xp;
-                profile.Level = 1 + (profile.Xp / 100);
+                var sourceId = $"season:{season.Id}:milestone:{milestoneId}";
+                await xpTrackingService.AddXpAsync(
+                    userId,
+                    xp,
+                    sourceType: "season_milestone",
+                    sourceId: sourceId,
+                    metadataJson: JsonSerializer.Serialize(new
+                    {
+                        seasonId = season.Id,
+                        milestoneId
+                    }),
+                    ct: ct);
                 reward = reward with { Xp = xp };
             }
             else if (rewardType is "cosmetic_item" or "cosmetic")
