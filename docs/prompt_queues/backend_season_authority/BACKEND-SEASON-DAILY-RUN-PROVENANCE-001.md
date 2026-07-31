@@ -26,6 +26,8 @@ Dependencies/collisions:
 - Preserve `DailyRunChestClaim` as the chest authority and existing domain-table idempotency policy.
 - Preserve economy ledger replay/conflict semantics; use the chest's stored day rather than request-provided XP/date.
 - Coordinate the season-window definition with `BACKEND-SEASON-TRACK-AUTHORITY-001` so reward access and Daily Run earning agree on season boundaries.
+- Flutter baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616` currently calls this route from `lib/services/season_service.dart::claimDailyRunSeasonXp`, sending `seasonId`, `transactionId`, `xp` and an idempotency key.
+- Preserve the accepted request/response shape; the backend may ignore client `xp` as non-authoritative. If status/error or response fields change, create and link `XREPO-SEASON-SETTLEMENT-CONTRACT-001` and update `docs/mobile_backend_contract_status.md` before delivery.
 - Do not run concurrently with `BACKEND-SEASON-XP-SETTLEMENT-001`; both may edit `EconomySettlementEndpoints.cs`.
 
 Owner boundary:
@@ -46,6 +48,7 @@ Source of truth:
 - `src/MathLearning.Infrastructure/Persistance/ApiDbContext.cs`
 - nearest Daily Run, season settlement, idempotency and fragment trust-boundary tests
 - `docs/mobile_economy_api_contract.md`, `docs/backend_contract_gap_report.md`
+- Flutter `lib/services/season_service.dart`, `test/services/season_service_test.dart` and `docs/mobile_backend_contract_status.md` at baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616`
 
 Interpretation before work: Build the matrix `chest day before/start/inside/end/after season × explicit/implicit season × first/replay/different key × overlapping/missing season data` before editing.
 
@@ -88,7 +91,7 @@ Avoid paths:
 - Daily Run chest reward amounts/idempotency Policy B.
 - Generic stale pending recovery (`BACKEND-API-DB-015`).
 
-Documentation impact: update one canonical backend/mobile economy contract with chest-day ownership, boundaries, wrong-season error, overlap policy and replay behavior.
+Documentation impact: update one canonical backend/mobile economy contract with chest-day ownership, boundaries, wrong-season error, overlap policy and replay behavior. Preserve current Flutter shape or hand off any incompatible change through `XREPO-SEASON-SETTLEMENT-CONTRACT-001`.
 
 Acceptance criteria:
 1. A chest whose day is outside the selected season cannot increase that season's XP or create fragment eligibility/season claim rows.
@@ -109,7 +112,7 @@ Proof required:
 
 Validation:
 ```powershell
-python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRun
+python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonDailyRun
 python scripts/run_guarded.py --timeout-seconds 180 -- dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore
 python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/EconomySettlementEndpoints.cs
 python scripts/validate_agent_evidence.py --changed-from <base-sha> --verify-git
