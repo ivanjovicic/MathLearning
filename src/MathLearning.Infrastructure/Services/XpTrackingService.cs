@@ -38,6 +38,7 @@ public class XpTrackingService : IXpTrackingService
         string sourceType = "manual_adjustment",
         string? sourceId = null,
         string? metadataJson = null,
+        bool evaluateProgressRewards = true,
         CancellationToken ct = default)
     {
         var startedAt = DateTime.UtcNow;
@@ -137,7 +138,7 @@ public class XpTrackingService : IXpTrackingService
         });
 
         await _db.SaveChangesAsync(ct);
-        if (_cosmeticRewardService is not null)
+        if (evaluateProgressRewards && _cosmeticRewardService is not null)
             await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
 
         _logger.LogInformation(

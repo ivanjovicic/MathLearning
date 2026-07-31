@@ -946,7 +946,7 @@ public sealed class SyncService : ISyncService, ISyncAdminService
                 "sync_submit_answer",
                 log.OperationId.ToString(),
                 null,
-                cancellationToken);
+                ct: cancellationToken);
         }
 
         db.ServerSyncEvents.Add(new ServerSyncEvent

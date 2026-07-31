@@ -902,6 +902,7 @@ public static class EconomySettlementEndpoints
                         seasonId = season.Id,
                         milestoneId
                     }),
+                    evaluateProgressRewards: false,
                     ct: ct);
                 reward = reward with { Xp = xp };
             }
