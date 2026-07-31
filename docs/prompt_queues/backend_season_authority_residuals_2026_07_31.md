@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # Backend Season Authority Residual Queue - 2026-07-31
+=======
+# Backend Season Authority Residual Queue â€” 2026-07-31
+>>>>>>> 88ec0b1 (Fix Daily Run provider schema and provenance)
 
 Target repo: `ivanjovicic/MathLearning`  
 Reviewed head: `c33ce1b9b5bae3bce579594c297924ee486d12ee`  
