@@ -85,6 +85,60 @@ public sealed class PracticeSessionIdempotencyTests
     }
 
     [Fact]
+    public async Task SubmitAnswerAsync_SameItemDifferentPayload_ReturnsConflict()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        var scheduler = new FakeWeaknessScheduler();
+        var backgroundJobs = new RecordingBackgroundJobClient();
+
+        Guid sessionId;
+        int questionId;
+
+        await using (var db = database.CreateContext())
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            var start = await sut.StartSessionAsync(
+                "1",
+                new StartPracticeSessionRequest(
+                    UserId: null,
+                    SkillNodeId: "fractions_basics",
+                    TopicId: 1,
+                    SubtopicId: 1,
+                    TargetQuestions: 2,
+                    PreferredDifficulty: "medium"),
+                CancellationToken.None);
+
+            Assert.NotNull(start.Question);
+            sessionId = start.SessionId;
+            questionId = start.Question!.Id;
+
+            var correctOption = await GetCorrectOptionIdAsync(db, questionId);
+            await sut.SubmitAnswerAsync(
+                "1",
+                sessionId,
+                new SubmitPracticeAnswerRequest(questionId, correctOption.ToString(), 12000),
+                CancellationToken.None);
+        }
+
+        await using var replayDb = database.CreateContext();
+        var replaySut = BuildService(replayDb, scheduler, backgroundJobs);
+        var wrongOption = await GetWrongOptionIdAsync(replayDb, questionId);
+
+        var conflict = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            replaySut.SubmitAnswerAsync(
+                "1",
+                sessionId,
+                new SubmitPracticeAnswerRequest(questionId, wrongOption.ToString(), 12000),
+                CancellationToken.None));
+
+        Assert.Contains("different payload", conflict.Message, StringComparison.OrdinalIgnoreCase);
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(1, await verification.QuizAttempts.CountAsync());
+        Assert.Equal(2, await verification.PracticeSessionItems.CountAsync(x => x.SessionId == sessionId));
+    }
+
+    [Fact]
     public async Task CompleteSessionAsync_ConcurrentDuplicates_SettleOnce_AndEnqueueJobsOnce()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -146,6 +200,75 @@ public sealed class PracticeSessionIdempotencyTests
         var storedSession = await verification.PracticeSessions.SingleAsync(x => x.Id == sessionId);
         Assert.Equal("Completed", storedSession.Status);
         Assert.False(string.IsNullOrWhiteSpace(storedSession.CompletionResponseJson));
+    }
+
+    [Fact]
+    public async Task SubmitAnswerAsync_ConcurrentIdenticalSubmissions_SettleOnce()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await database.SeedApiAsync();
+
+        var scheduler = new FakeWeaknessScheduler();
+        var backgroundJobs = new RecordingBackgroundJobClient();
+
+        Guid sessionId;
+        int questionId;
+        string correctOption;
+
+        await using (var db = new ApiDbContext(database.CreateApiOptions()))
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            var start = await sut.StartSessionAsync(
+                "1",
+                new StartPracticeSessionRequest(
+                    UserId: null,
+                    SkillNodeId: "fractions_basics",
+                    TopicId: 1,
+                    SubtopicId: 1,
+                    TargetQuestions: 2,
+                    PreferredDifficulty: "medium"),
+                CancellationToken.None);
+
+            Assert.NotNull(start.Question);
+
+            sessionId = start.SessionId;
+            questionId = start.Question!.Id;
+            correctOption = (await GetCorrectOptionIdAsync(db, questionId)).ToString();
+        }
+
+        var startGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tasks = Enumerable.Range(0, 20)
+            .Select(async _ =>
+            {
+                await startGate.Task;
+                await using var db = new ApiDbContext(database.CreateApiOptions());
+                var sut = BuildService(db, scheduler, backgroundJobs);
+                return await sut.SubmitAnswerAsync(
+                    "1",
+                    sessionId,
+                    new SubmitPracticeAnswerRequest(questionId, correctOption, 12000),
+                    CancellationToken.None);
+            })
+            .ToArray();
+
+        startGate.SetResult();
+        var results = await Task.WhenAll(tasks);
+
+        var settledResponse = JsonSerializer.Serialize(results.First(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.All(results, result =>
+        {
+            Assert.Equal(settledResponse, JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        });
+
+        await using var verification = new ApiDbContext(database.CreateApiOptions());
+        Assert.Equal(1, await verification.QuizAttempts.CountAsync(x => x.QuizId == sessionId));
+        Assert.Equal(2, await verification.PracticeSessionItems.CountAsync(x => x.SessionId == sessionId));
+
+        var settledItem = await verification.PracticeSessionItems.SingleAsync(x =>
+            x.SessionId == sessionId && x.QuestionId == questionId);
+        Assert.False(string.IsNullOrWhiteSpace(settledItem.SubmissionFingerprintJson));
+        Assert.False(string.IsNullOrWhiteSpace(settledItem.SettledResponseJson));
     }
 
     [Fact]
@@ -310,6 +433,14 @@ public sealed class PracticeSessionIdempotencyTests
             .Include(x => x.Options)
             .FirstAsync(x => x.Id == questionId);
         return question.Options.First(x => x.IsCorrect).Id;
+    }
+
+    private static async Task<int> GetWrongOptionIdAsync(ApiDbContext db, int questionId)
+    {
+        var question = await db.Questions
+            .Include(x => x.Options)
+            .FirstAsync(x => x.Id == questionId);
+        return question.Options.First(x => !x.IsCorrect).Id;
     }
 
     private sealed class FakeWeaknessScheduler : IWeaknessAnalysisScheduler

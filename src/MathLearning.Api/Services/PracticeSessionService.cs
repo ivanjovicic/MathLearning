@@ -7,6 +7,7 @@ using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MathLearning.Api.Services;
 
@@ -202,23 +203,47 @@ public sealed class PracticeSessionService : IPracticeSessionService
         var masteryAfter = _bktService.UpdateMastery(masteryBefore, isCorrect, parameters);
         var nowUtc = DateTime.UtcNow;
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var useTransaction = _db.Database.IsRelational();
+        IDbContextTransaction? tx = null;
+        if (useTransaction)
+            tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var claimed = await _db.PracticeSessionItems
-            .Where(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(x => x.AnsweredAt, nowUtc)
-                    .SetProperty(x => x.Correct, isCorrect)
-                    .SetProperty(x => x.TimeSpentMs, normalizedTimeSpentMs)
-                    .SetProperty(x => x.BktPrior, masteryBefore)
-                    .SetProperty(x => x.BktPosterior, masteryAfter)
-                    .SetProperty(x => x.SubmissionFingerprintJson, replayFingerprint),
-                ct);
+        var claimed = 0;
+        if (_db.Database.IsRelational())
+        {
+            claimed = await _db.PracticeSessionItems
+                .Where(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(x => x.AnsweredAt, nowUtc)
+                        .SetProperty(x => x.Correct, isCorrect)
+                        .SetProperty(x => x.TimeSpentMs, normalizedTimeSpentMs)
+                        .SetProperty(x => x.BktPrior, masteryBefore)
+                        .SetProperty(x => x.BktPosterior, masteryAfter)
+                        .SetProperty(x => x.SubmissionFingerprintJson, replayFingerprint),
+                    ct);
+        }
+        else
+        {
+            var trackedItem = await _db.PracticeSessionItems
+                .FirstOrDefaultAsync(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null, ct);
+
+            if (trackedItem is not null)
+            {
+                trackedItem.AnsweredAt = nowUtc;
+                trackedItem.Correct = isCorrect;
+                trackedItem.TimeSpentMs = normalizedTimeSpentMs;
+                trackedItem.BktPrior = masteryBefore;
+                trackedItem.BktPosterior = masteryAfter;
+                trackedItem.SubmissionFingerprintJson = replayFingerprint;
+                claimed = 1;
+            }
+        }
 
         if (claimed == 0)
         {
-            await tx.RollbackAsync(ct);
+            if (tx is not null)
+                await tx.RollbackAsync(ct);
 
             var replayItem = await _db.PracticeSessionItems
                 .AsNoTracking()
@@ -297,7 +322,8 @@ public sealed class PracticeSessionService : IPracticeSessionService
         try
         {
             await _db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
+            if (tx is not null)
+                await tx.CommitAsync(ct);
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -338,19 +364,39 @@ public sealed class PracticeSessionService : IPracticeSessionService
             return BuildCompletedSessionReplayResult(session);
 
         var nowUtc = DateTime.UtcNow;
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var useTransaction = _db.Database.IsRelational();
+        IDbContextTransaction? tx = null;
+        if (useTransaction)
+            tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var claimed = await _db.PracticeSessions
-            .Where(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(x => x.Status, PracticeSessionStatuses.Completed)
-                    .SetProperty(x => x.CompletedAt, nowUtc),
-                ct);
+        var claimed = 0;
+        if (_db.Database.IsRelational())
+        {
+            claimed = await _db.PracticeSessions
+                .Where(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(x => x.Status, PracticeSessionStatuses.Completed)
+                        .SetProperty(x => x.CompletedAt, nowUtc),
+                    ct);
+        }
+        else
+        {
+            var trackedSessionForClaim = await _db.PracticeSessions
+                .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active, ct);
+
+            if (trackedSessionForClaim is not null)
+            {
+                trackedSessionForClaim.Status = PracticeSessionStatuses.Completed;
+                trackedSessionForClaim.CompletedAt = nowUtc;
+                claimed = 1;
+            }
+        }
 
         if (claimed == 0)
         {
-            await tx.RollbackAsync(ct);
+            if (tx is not null)
+                await tx.RollbackAsync(ct);
             var replaySession = await _db.PracticeSessions
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
@@ -405,7 +451,8 @@ public sealed class PracticeSessionService : IPracticeSessionService
         trackedSession.CompletionResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(response);
 
         await _db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (tx is not null)
+            await tx.CommitAsync(ct);
 
         await _backgroundJobs.EnqueuePostSessionJobsAsync(userId, ct);
 
