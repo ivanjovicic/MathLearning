@@ -17,7 +17,7 @@ How this run avoids prior mistakes: red provenance tests before patch; preserve 
 Owner/hypothesis: old unsettled DailyRunChestClaim.Day can fund a later active season
 Files inspected: 10
 Files changed: 5
-Searches: 6
+Searches: 4
 Validation runs: 4
 Failed retries: 2
 
