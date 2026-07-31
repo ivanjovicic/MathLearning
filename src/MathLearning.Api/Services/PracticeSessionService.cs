@@ -4,7 +4,9 @@ using MathLearning.Application.DTOs.Practice;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
+using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Persistance.Models;
 using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -19,7 +21,6 @@ public sealed class PracticeSessionService : IPracticeSessionService
     private readonly IQuestionSelector _questionSelector;
     private readonly IBktService _bktService;
     private readonly IPracticeAnalyticsUpdater _analyticsUpdater;
-    private readonly IPracticeBackgroundJobs _backgroundJobs;
     private readonly IAdaptiveAnalyticsService _adaptiveAnalytics;
     private readonly IAnswerPatternAntiCheatService _antiCheatService;
     private readonly ILogger<PracticeSessionService> _logger;
@@ -29,7 +30,6 @@ public sealed class PracticeSessionService : IPracticeSessionService
         IQuestionSelector questionSelector,
         IBktService bktService,
         IPracticeAnalyticsUpdater analyticsUpdater,
-        IPracticeBackgroundJobs backgroundJobs,
         IAdaptiveAnalyticsService adaptiveAnalytics,
         IAnswerPatternAntiCheatService antiCheatService,
         ILogger<PracticeSessionService> logger)
@@ -38,7 +38,6 @@ public sealed class PracticeSessionService : IPracticeSessionService
         _questionSelector = questionSelector;
         _bktService = bktService;
         _analyticsUpdater = analyticsUpdater;
-        _backgroundJobs = backgroundJobs;
         _adaptiveAnalytics = adaptiveAnalytics;
         _antiCheatService = antiCheatService;
         _logger = logger;
@@ -450,11 +449,23 @@ public sealed class PracticeSessionService : IPracticeSessionService
 
         trackedSession.CompletionResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(response);
 
+        // Session-keyed outbox identity enforces exactly-one post-session enqueue across crash/retry.
+        var postSessionEvent = new PracticePostSessionJobsRequested(userId, sessionId)
+        {
+            Id = sessionId,
+            OccurredUtc = nowUtc
+        };
+        _db.Outbox.Add(new OutboxMessage
+        {
+            Id = postSessionEvent.Id,
+            OccurredUtc = postSessionEvent.OccurredUtc,
+            Type = postSessionEvent.GetType().AssemblyQualifiedName!,
+            PayloadJson = JsonSerializer.Serialize(postSessionEvent, postSessionEvent.GetType())
+        });
+
         await _db.SaveChangesAsync(ct);
         if (tx is not null)
             await tx.CommitAsync(ct);
-
-        await _backgroundJobs.EnqueuePostSessionJobsAsync(userId, ct);
 
         _adaptiveAnalytics.TrackEvent("adaptive_practice_completed", userId, new
         {

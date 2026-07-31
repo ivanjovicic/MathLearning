@@ -3,6 +3,7 @@ using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
 using MathLearning.Api.Services;
+using MathLearning.Api.Services.EventHandlers;
 using MathLearning.Application.Services;
 using MathLearning.Application.Validators;
 using MathLearning.Core.Services;
@@ -168,6 +169,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<IEventHandler<QuizCompleted>, QuizCompletedCoinsHandler>();
         builder.Services.AddScoped<IEventHandler<QuizAttemptIngestRequested>, QuizAttemptIngestRequestedHandler>();
         builder.Services.AddScoped<IEventHandler<AdaptiveAnswerLegacySrsSyncRequested>, AdaptiveAnswerLegacySrsSyncRequestedHandler>();
+        builder.Services.AddScoped<IEventHandler<PracticePostSessionJobsRequested>, PracticePostSessionJobsRequestedHandler>();
         builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
         builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
 

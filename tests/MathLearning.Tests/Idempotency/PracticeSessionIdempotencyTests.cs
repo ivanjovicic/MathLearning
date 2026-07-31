@@ -3,10 +3,12 @@ using Hangfire;
 using Hangfire.Common;
 using Hangfire.States;
 using MathLearning.Api.Services;
+using MathLearning.Api.Services.EventHandlers;
 using MathLearning.Application.DTOs.Practice;
 using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
+using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Tests.Helpers;
@@ -192,14 +194,35 @@ public sealed class PracticeSessionIdempotencyTests
         Assert.Equal(
             IdempotencyPayloadCanonicalizer.CanonicalizeToJson(results[0]),
             IdempotencyPayloadCanonicalizer.CanonicalizeToJson(results[1]));
-        Assert.Equal(3, backgroundJobs.EnqueueCount);
+        Assert.Equal(0, backgroundJobs.EnqueueCount);
 
         await using var verification = new ApiDbContext(database.CreateApiOptions());
         Assert.Equal(1, await verification.UserDailyStats.CountAsync(x => x.UserId == "1"));
+        Assert.Equal(1, await verification.Outbox.CountAsync(x => x.Id == sessionId));
+
+        var outbox = await verification.Outbox.SingleAsync(x => x.Id == sessionId);
+        Assert.Contains("PracticePostSessionJobsRequested", outbox.Type, StringComparison.Ordinal);
+        Assert.Null(outbox.ProcessedUtc);
 
         var storedSession = await verification.PracticeSessions.SingleAsync(x => x.Id == sessionId);
         Assert.Equal("Completed", storedSession.Status);
         Assert.False(string.IsNullOrWhiteSpace(storedSession.CompletionResponseJson));
+
+        var practiceJobs = new PracticeBackgroundJobs(
+            backgroundJobs,
+            new PracticeAnalyticsUpdater(
+                verification,
+                scheduler,
+                NullLogger<PracticeAnalyticsUpdater>.Instance),
+            new AdaptiveAnalyticsService(NullLogger<AdaptiveAnalyticsService>.Instance),
+            NullLogger<PracticeBackgroundJobs>.Instance);
+        var handler = new PracticePostSessionJobsRequestedHandler(
+            practiceJobs,
+            NullLogger<PracticePostSessionJobsRequestedHandler>.Instance);
+        await handler.Handle(
+            new PracticePostSessionJobsRequested("1", sessionId) { Id = sessionId },
+            CancellationToken.None);
+        Assert.Equal(3, backgroundJobs.EnqueueCount);
     }
 
     [Fact]
@@ -333,18 +356,13 @@ public sealed class PracticeSessionIdempotencyTests
             scheduler,
             NullLogger<PracticeAnalyticsUpdater>.Instance);
         var adaptiveAnalytics = new AdaptiveAnalyticsService(NullLogger<AdaptiveAnalyticsService>.Instance);
-        var practiceJobs = new PracticeBackgroundJobs(
-            backgroundJobs,
-            analyticsUpdater,
-            adaptiveAnalytics,
-            NullLogger<PracticeBackgroundJobs>.Instance);
+        _ = backgroundJobs;
 
         return new PracticeSessionService(
             db,
             selector,
             bkt,
             analyticsUpdater,
-            practiceJobs,
             adaptiveAnalytics,
             new NoOpAnswerPatternAntiCheatService(),
             NullLogger<PracticeSessionService>.Instance);
