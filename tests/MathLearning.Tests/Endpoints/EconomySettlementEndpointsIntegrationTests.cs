@@ -1285,6 +1285,66 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task SeasonMilestone_XpReward_UsesCanonicalXpTrackingBucketsAndSource()
+    {
+        var userId = $"user-season-ms-xp-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 0, xp: 20);
+        var seasonId = await EnsureActiveSeasonAsync();
+        var milestoneId = await EnsureSeasonMilestoneAsync(
+            seasonId,
+            xpRequired: 50,
+            rewardType: "xp",
+            payloadJson: """{"xp":35}""");
+        await SetSeasonXpAsync(userId, seasonId, earnedXp: 60);
+
+        var before = await GetProfileXpSnapshotAsync(userId);
+        Assert.Equal(20, before.Xp);
+        Assert.Equal(0, before.DailyXp);
+        Assert.Equal(0, before.WeeklyXp);
+        Assert.Equal(0, before.MonthlyXp);
+        Assert.Equal(0, await CountXpEventsAsync(userId));
+
+        var success = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-xp-key-{Guid.NewGuid():N}",
+            seasonId
+        });
+        Assert.Equal(HttpStatusCode.OK, success.StatusCode);
+        var payload = await success.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(35, payload.GetProperty("reward").GetProperty("xp").GetInt32());
+        Assert.Equal("xp", payload.GetProperty("reward").GetProperty("type").GetString());
+
+        var after = await GetProfileXpSnapshotAsync(userId);
+        Assert.Equal(55, after.Xp);
+        Assert.Equal(35, after.DailyXp);
+        Assert.Equal(35, after.WeeklyXp);
+        Assert.Equal(35, after.MonthlyXp);
+        Assert.Equal(1 + (55 / 100), after.Level);
+
+        var sourceId = $"season:{seasonId}:milestone:{milestoneId}";
+        Assert.Equal(1, await CountXpEventsAsync(userId));
+        var xpEvent = await GetXpEventAsync(userId, "season_milestone", sourceId);
+        Assert.Equal(35, xpEvent.XpDelta);
+        Assert.Equal("season_milestone", xpEvent.SourceType);
+        Assert.Equal(sourceId, xpEvent.SourceId);
+
+        var replay = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-xp-key-replay-{Guid.NewGuid():N}",
+            seasonId
+        });
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.True((await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("alreadyClaimed").GetBoolean());
+
+        var afterReplay = await GetProfileXpSnapshotAsync(userId);
+        Assert.Equal(55, afterReplay.Xp);
+        Assert.Equal(35, afterReplay.DailyXp);
+        Assert.Equal(35, afterReplay.WeeklyXp);
+        Assert.Equal(35, afterReplay.MonthlyXp);
+        Assert.Equal(1, await CountXpEventsAsync(userId));
+    }
+
+    [Fact]
     public async Task SeasonMilestone_MissingIdempotencyKey_IsRejected()
     {
         var userId = $"user-season-ms-missing-key-{Guid.NewGuid():N}";
@@ -1522,6 +1582,37 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             .Where(x => x.UserId == userId)
             .Select(x => new ValueTuple<int, int>(x.Coins, x.Xp))
             .FirstAsync();
+    }
+
+    private async Task<(int Xp, int DailyXp, int WeeklyXp, int MonthlyXp, int Level)> GetProfileXpSnapshotAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserProfiles
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => new ValueTuple<int, int, int, int, int>(x.Xp, x.DailyXp, x.WeeklyXp, x.MonthlyXp, x.Level))
+            .FirstAsync();
+    }
+
+    private async Task<int> CountXpEventsAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserXpEvents.CountAsync(x => x.UserId == userId);
+    }
+
+    private async Task<(int XpDelta, string SourceType, string? SourceId)> GetXpEventAsync(
+        string userId,
+        string sourceType,
+        string sourceId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var xpEvent = await db.UserXpEvents
+            .AsNoTracking()
+            .SingleAsync(x => x.UserId == userId && x.SourceType == sourceType && x.SourceId == sourceId);
+        return (xpEvent.XpDelta, xpEvent.SourceType, xpEvent.SourceId);
     }
 
     private async Task<int> CountEconomyTransactionsAsync(string userId)
