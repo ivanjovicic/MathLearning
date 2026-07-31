@@ -35,7 +35,7 @@ Failed retries: 1
 - .ai/runs/2026-07-31-BACKEND-SEASON-XP-SETTLEMENT-001-evidence.md
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonMilestone` → pending post-commit verify
+Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~SeasonMilestone` → Passed 3 / 0
 Validation not run: PostgreSQL concurrency/rollback injection deferred
 
 ## Exceptions and learning

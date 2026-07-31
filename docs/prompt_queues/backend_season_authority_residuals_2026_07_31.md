@@ -35,7 +35,7 @@ These issues are not the stale-pending recovery owned by `BACKEND-API-DB-015`, t
 |---|---:|---|---|---|
 | `BACKEND-SEASON-TRACK-AUTHORITY-001` | P0 | Done | [Open](backend_season_authority/BACKEND-SEASON-TRACK-AUTHORITY-001.md) | Make reward-track preview and claim use season XP, active/reward-window truth and explicit premium entitlement. Done 79% â€” Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-TRACK-AUTHORITY-001-evidence.md`; Validation: RewardTrack filter 7/7 + API Release build + docs health context AvatarEndpoints; Residual risk: premium remains fail-closed until persisted entitlement storage owner; push/PR/main verification open; Commit: self. |
 | `BACKEND-SEASON-DAILY-RUN-PROVENANCE-001` | P0 | In progress | [Open](backend_season_authority/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001.md) | Prevent old/future/out-of-season Daily Run chest transactions from funding the wrong season. Branch: `agent/BACKEND-SEASON-DAILY-RUN-PROVENANCE-001`. |
-| `BACKEND-SEASON-XP-SETTLEMENT-001` | P1 correctness | In progress | [Open](backend_season_authority/BACKEND-SEASON-XP-SETTLEMENT-001.md) | Route milestone XP through one canonical transaction-aware XP settlement path without bucket/history drift. Branch: `agent/BACKEND-SEASON-XP-SETTLEMENT-001`. |
+| `BACKEND-SEASON-XP-SETTLEMENT-001` | P1 correctness | Done | [Open](backend_season_authority/BACKEND-SEASON-XP-SETTLEMENT-001.md) | Route milestone XP through one canonical transaction-aware XP settlement path without bucket/history drift. Done 79% — Run log: `.ai/runs/2026-07-31-BACKEND-SEASON-XP-SETTLEMENT-001-evidence.md`; Validation: SeasonMilestone 3/3; Residual risk: PostgreSQL concurrency/rollback and push/PR/main open; Commit: self. |
 
 ## Canonical order and collision notes
 
