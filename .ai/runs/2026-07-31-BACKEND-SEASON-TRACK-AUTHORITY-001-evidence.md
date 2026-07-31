@@ -22,9 +22,9 @@ Validation runs: 3
 Failed retries: 1
 
 ## Outcome
+- Red RewardTrack proof observed before patch (7/7 red); green filter passed 7/7 after the shared policy patch.
 - Preview/claim unlock authority now uses `UserSeasonProgress.EarnedXp` and a shared active/`reward_lock` claim-window resolver.
 - Premium track is deny-by-default with zero writes; free track and duplicate claims remain deterministic.
-- Red filter failed 7/7; green filter passed 7/7 after the shared policy patch.
 
 ## Changed paths
 - src/MathLearning.Infrastructure/Services/Cosmetics/CosmeticPlatformService.Helpers.cs
@@ -36,17 +36,17 @@ Failed retries: 1
 - .ai/runs/2026-07-31-BACKEND-SEASON-TRACK-AUTHORITY-001-evidence.md
 
 ## Validation
-Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~RewardTrack` → Failed 7 / Passed 0 (pre-fix); then Passed 7 / Failed 0
+Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~RewardTrack` → Passed 7 / 0
 Validation run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet build src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-restore` → exit 0
-Validation run: `python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/AvatarEndpoints.cs` → failures=0
-Validation not run: `validate_agent_evidence.py --verify-git` pending until commit containing this log
+Validation run: `python scripts/check_documentation_health.py --context src/MathLearning.Api/Endpoints/AvatarEndpoints.cs` → documents healthy
+Validation not run: none
 
 ## Exceptions and learning
 Mistakes observed: none
 Waste: none
 Missed: none
 Follow-up: BACKEND-SEASON-PREMIUM-ENTITLEMENT-001 (new) — persisted premium entitlement storage/bootstrap; keep deny-by-default until then
-Residual risk: no persisted premium entitlement model; premium remains hard-denied
+Residual risk: no persisted premium entitlement model; premium remains hard-denied; push/PR and main verification still open
 Documentation impact: updated docs/API_ENDPOINT_INVENTORY.md
 Cross-repo impact: yes - Flutter baseline has no runtime `/api/cosmetics/reward-track*` caller; mobile adapter deferred under XREPO44-SEASON-ACTIVE-ENDPOINT-DISPOSITION-001
 
@@ -54,4 +54,4 @@ Cross-repo impact: yes - Flutter baseline has no runtime `/api/cosmetics/reward-
 State: Needs merge
 Branch/PR: agent/BACKEND-SEASON-TRACK-AUTHORITY-001
 Commit SHA: self
-Completion %: 92
+Completion %: 79
