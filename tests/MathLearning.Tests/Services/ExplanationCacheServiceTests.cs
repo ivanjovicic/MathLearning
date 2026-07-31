@@ -163,6 +163,45 @@ public sealed class ExplanationCacheServiceTests
     }
 
     [Fact]
+    public async Task GetOrCreateExplanationAsync_WithoutRedis_DoesNotWaitForPhantomDistributedLease()
+    {
+        await using var db = TestDbContextFactory.Create();
+        var metrics = new ExplanationCacheMetrics();
+        var cache = CreateCacheService(db, metrics);
+        var factoryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        Task<ExplanationResponseDto> Factory(CancellationToken ct)
+        {
+            factoryStarted.TrySetResult();
+            return Task.FromResult(CreateExplanationResponse(problemHash: "no-redis-hash"));
+        }
+
+        var resultTask = cache.GetOrCreateExplanationAsync(
+            "hash-no-redis",
+            5,
+            "easy",
+            "en",
+            forceRefresh: false,
+            Factory);
+
+        // Factory must start well under the old 5s phantom-lease wait budget.
+        var startedInTime = await Task.WhenAny(
+            factoryStarted.Task,
+            Task.Delay(TimeSpan.FromSeconds(1))) == factoryStarted.Task;
+
+        Assert.True(startedInTime, "Cold miss without Redis waited for a phantom distributed lease.");
+
+        var result = await resultTask;
+        watch.Stop();
+
+        Assert.Equal("no-redis-hash", result.ProblemHash);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2));
+        Assert.Equal(0, metrics.GetSnapshot().StampedeSuppressedCount);
+        Assert.Equal(1, metrics.GetSnapshot().GenerationCount);
+    }
+
+    [Fact]
     public async Task GetExplanationAsync_TreatsExpiredRowAsMissBeforeCleanup()
     {
         await using var db = TestDbContextFactory.Create();
@@ -188,7 +227,9 @@ public sealed class ExplanationCacheServiceTests
         Assert.Empty(await db.StepExplanationCacheEntries.ToListAsync());
     }
 
-    private static ExplanationCacheService CreateCacheService(MathLearning.Infrastructure.Persistance.ApiDbContext db)
+    private static ExplanationCacheService CreateCacheService(
+        MathLearning.Infrastructure.Persistance.ApiDbContext db,
+        ExplanationCacheMetrics? metrics = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IMemoryCache>(_ => new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 }));
@@ -200,7 +241,7 @@ public sealed class ExplanationCacheServiceTests
             provider.GetRequiredService<IMemoryCache>(),
             db,
             provider,
-            new ExplanationCacheMetrics(),
+            metrics ?? new ExplanationCacheMetrics(),
             NullLogger<ExplanationCacheService>.Instance);
     }
 

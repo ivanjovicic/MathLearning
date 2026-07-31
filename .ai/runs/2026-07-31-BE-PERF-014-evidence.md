@@ -3,48 +3,51 @@
 Evidence format: v2
 Prompt ID: BE-PERF-014
 Queue: docs/prompt_queues/backend_performance_followups_2026_07_03.md
-Agent/tool: unknown-not-exposed
+Agent/tool: cursor-composer
 Model provider: unknown-not-exposed
 Model name/id: unknown-not-exposed
-Client/IDE: unknown-not-exposed
+Client/IDE: cursor
 Run mode: known-fix
 Token budget: medium
-Started at UTC: 2026-07-31T08:57:20Z
-Completed at UTC: 2026-07-31T08:58:37Z
-Elapsed time: 1m 17s
+Started at UTC: 2026-07-31T16:40:00Z
+Completed at UTC: 2026-07-31T16:50:00Z
+Elapsed time: 10m
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-PERF-001, BACKEND-MISTAKE-PERF-002, BACKEND-MISTAKE-PERF-003, BACKEND-MISTAKE-SCOPE-001
-How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-PERF-001; apply BACKEND-MISTAKE-PERF-002; apply BACKEND-MISTAKE-PERF-003; apply BACKEND-MISTAKE-SCOPE-001
-Owner/hypothesis: explanation cache single-flight, force-refresh cooldown, and bounded cleanup
-Files inspected: 19
-Files changed: 2
-Searches: 9
-Validation runs: 5
-Failed retries: 2
+How this run avoids prior mistakes: one residual (no-Redis lease wait); do not reopen write-on-read/single-flight already on main
+Owner/hypothesis: with Redis absent, leaseToken null was treated as lease-held and waited DistributedLeaseWaitBudget (~5s) before generating
+Files inspected: 8
+Files changed: 6
+Searches: 2
+Validation runs: 1
+Failed retries: 0
 
 ## Outcome
-- Force-refresh now coalesces through the local gate and honors a short cooldown instead of replaying stale cache indefinitely.
-- Cancellation of a waiting caller no longer tears down the shared generation owner.
-- Expired explanation rows are treated as misses and removed in bounded cleanup batches.
+- Cold miss without Redis generates immediately under the local single-flight gate; phantom 5s wait removed.
+- Distributed lease wait/poll runs only when Redis is configured and LockTake fails.
+- Stale season Daily Run queue row closed as Done (already on main).
 
 ## Changed paths
 - src/MathLearning.Api/Services/ExplanationCacheService.cs
 - tests/MathLearning.Tests/Services/ExplanationCacheServiceTests.cs
+- docs/prompt_queues/backend_performance_followups_2026_07_03.md
+- docs/prompt_queues/backend_season_authority_residuals_2026_07_31.md
+- .ai/runs/2026-07-31-BE-PERF-014-evidence.md
 
 ## Validation
-Validation run: dotnet test tests\\MathLearning.Tests\\MathLearning.Tests.csproj --filter ExplanationCacheServiceTests | Passed 6/6 | dotnet test tests\\MathLearning.Tests\\MathLearning.Tests.csproj --filter StepExplanationServiceIntegrationTests | Passed 3/3
-Validation not run: Redis-unavailable fallback path was not exercised against a live Redis instance; bounded timeout behavior is covered by code review only.
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~ExplanationCacheServiceTests` → Passed 7 / 0
+Validation not run: live Redis lease contention and PostgreSQL concurrent upsert (deferred)
 
 ## Exceptions and learning
 Mistakes observed: none
-Waste: one parallel test invocation collided on obj locks before rerunning serially; two initial assertion failures were corrected by tightening cache-owner behavior and the expired-row test setup.
+Waste: none
 Missed: none
-Follow-up: none
-Residual risk: No dedicated live-Redis failure test was added, so the bounded timeout helper still relies on the current code path and existing unit coverage.
-Documentation impact: none - the change stays within runtime/test scope and does not require durable docs updates.
+Follow-up: optional PG upsert concurrency + live Redis lease proofs
+Residual risk: multi-replica stampede still possible without Redis; push/PR/main open
+Documentation impact: queue sync only
 Cross-repo impact: no
 
 ## Delivery
-State: Done
-Branch/PR: direct main
+State: Needs merge
+Branch/PR: cursor/be-perf-014-explanation-cache-fa87
 Commit SHA: self
-Completion %: 100
+Completion %: 79
