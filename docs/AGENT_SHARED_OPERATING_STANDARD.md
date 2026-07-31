@@ -1,6 +1,6 @@
 # Shared Agent Operating Standard — MathLearning Backend
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Scope: `ivanjovicic/MathLearning`
 
 This is the cross-repo minimum. Repository-specific mechanics live in `.ai/README.md`, `AGENTS.md` and their canonical owners. Do not read this document on every task unless cross-repo behavior is involved.
@@ -14,9 +14,10 @@ This is the cross-repo minimum. Repository-specific mechanics live in `.ai/READM
 5. Use the mistake index; open the full ledger only to update a card.
 6. Use compact v2 evidence with numeric metrics and `Commit SHA: self|<sha>`.
 7. Required proof must execute or the state remains non-Done.
-8. Docs/audits/prompts are not runtime fixes.
-9. Contract changes check the other repo and record sync/defer ownership.
-10. Budget breach or failed proof caps completion at 79%.
+8. Runtime bugfix prompts use a failing regression proof before implementation and a passing proof plus counterexample after implementation; docs/audit prompts record an explicit exception.
+9. Docs/audits/prompts are not runtime fixes.
+10. Contract changes check the other repo and record sync/defer ownership.
+11. Budget breach or failed proof caps completion at 79%.
 
 ## Cross-repo impact fields
 

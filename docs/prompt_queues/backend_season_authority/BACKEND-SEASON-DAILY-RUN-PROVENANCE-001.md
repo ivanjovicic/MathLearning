@@ -61,6 +61,11 @@ Risk/ownership model:
 - Same business transaction with a new transport key replays the original result or returns a stable wrong-season conflict; it never projects the old claim onto a new season.
 - Overlapping active seasons follow one deterministic policy or fail closed.
 
+Test-first contract:
+- Pre-change proof: the focused Daily Run season provenance test must fail before chest-day window binding is added.
+- Post-change proof: the same `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter DailyRun` command must pass after implementation.
+- Counterexample cases: before/start/end/after boundary, wrong season and same chest with a different key.
+
 Failure-mode matrix:
 - Chest day predates current season but transaction was never season-settled.
 - Chest day is after the requested season end or before its start.

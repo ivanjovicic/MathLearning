@@ -51,6 +51,11 @@ Risk/ownership model:
 - A broad stale branch is never wholesale-merged to recover one useful test.
 - Review comments and final state preserve why each unique item was retained or superseded.
 
+Test-first contract:
+- Exception: this is a review/disposition prompt and does not implement runtime behavior.
+- Validation proof: each retained test maps to current-main proof; stale checks are not treated as green evidence.
+- Routed runtime prompts must contain their own pre-change failing proof, post-change passing proof and counterexample.
+
 Failure-mode matrix:
 - A test name is absent on main but its invariant is covered under a different fixture.
 - PR test asserts a contract that current main intentionally changed.

@@ -56,6 +56,11 @@ Risk/ownership model:
 - A same key with changed normalized payload is conflict; a different user never replays another user's session.
 - Remove generic mutation retry until the transaction/replay path is proven; any later provider-transient retry preserves the same identity.
 
+Test-first contract:
+- Pre-change proof: the focused adaptive-start replay test must fail before durable operation identity is implemented.
+- Post-change proof: the same `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter Adaptive` command must pass after implementation.
+- Counterexample cases: same-key replay, changed-payload conflict, cancellation and cross-user key reuse.
+
 Failure-mode matrix:
 - Session is committed but HTTP response is lost; same-key retry after restart returns the identical session and creates no rows.
 - Two concurrent same-key starts race and only one session/items graph is committed.

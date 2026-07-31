@@ -61,6 +61,11 @@ Risk/ownership model:
 - Existing database reward-claim uniqueness remains authoritative; this packet adds focused duplicate regression proof without redesigning generic idempotency.
 - Draft/future/archived season metadata and rewards must not be exposed through ordinary mobile routes unless an explicit safe read policy says otherwise.
 
+Test-first contract:
+- Pre-change proof: the focused reward-track authority test must fail before season XP and entitlement checks are corrected.
+- Post-change proof: the same `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter RewardTrack` command must pass after implementation.
+- Counterexample cases: lifetime XP without season XP, premium without entitlement and duplicate claim.
+
 Failure-mode matrix:
 - User has 50,000 lifetime XP but zero XP in the new season.
 - User supplies a future/draft/archived `seasonId` directly.

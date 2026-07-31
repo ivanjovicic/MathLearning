@@ -60,6 +60,7 @@ focused proof + delivered commit + exact target verification + synchronized evid
 | Compact evidence | [`.ai/RUN_LOG_TEMPLATE.md`](.ai/RUN_LOG_TEMPLATE.md), [`docs/AGENT_RUN_LOG_ENFORCEMENT.md`](docs/AGENT_RUN_LOG_ENFORCEMENT.md) |
 | Mistake routing/details | [`MISTAKE_INDEX.json`](docs/ai/learning/MISTAKE_INDEX.json), [`MISTAKE_LEDGER.md`](docs/ai/learning/MISTAKE_LEDGER.md) |
 | Periodic code analysis | [`docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md), [`docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md`](docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md) |
+| Test-first regression proof | [`docs/BUGFIX_PATTERN_GUARDRAILS.md`](docs/BUGFIX_PATTERN_GUARDRAILS.md), [`.ai/PROMPT_LINT_CHECKLIST.md`](.ai/PROMPT_LINT_CHECKLIST.md) |
 
 Do not copy full mechanics into prompts. Formal v2/v3 construction applies only when creating or materially changing an active queue owner, not every ad-hoc task.
 
@@ -121,6 +122,7 @@ Prove first, duplicate, conflict, failure/cancellation, cross-user isolation and
 - Unique indexes match exact auth/idempotency scope.
 - Do not assume production auto-migrates.
 - Provider-sensitive behavior requires PostgreSQL proof.
+- Runtime prompt work starts with a focused failing regression test; preserve the red result, then require the green result and counterexample proof.
 - Never weaken schema-from-zero to obtain green CI.
 - Split runtime behavior, migration/bootstrap and operator/release review when they exceed one bounded owner.
 - Destructive commands require explicit non-production target proof.

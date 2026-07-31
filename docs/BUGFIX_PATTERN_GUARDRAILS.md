@@ -1,6 +1,6 @@
 # Backend Bugfix Pattern Guardrails
 
-Last aligned: 2026-06-27
+Last aligned: 2026-07-31
 
 Guidance for agents fixing bugs in `ivanjovicic/MathLearning`.
 
@@ -8,7 +8,7 @@ This file captures recurring backend bugfix themes: auth-user scope, idempotency
 
 ## Core rule
 
-Every backend bug fix should add or update the smallest regression test that proves the bug cannot return.
+Every backend bug fix should add or update the smallest regression test that proves the bug cannot return. The normal order is red test first, implementation second, green test plus counterexample third.
 
 If a test is not practical in the focused scope, say why and record the risk.
 
@@ -18,7 +18,21 @@ If a test is not practical in the focused scope, say why and record the risk.
 2. Search for an existing integration or contract test in the same area.
 3. Decide whether the bug is auth-scope, idempotency, contract shape, migration/schema, validation, transaction, or logging related.
 4. Keep endpoint code thin; put business behavior in the owning service/ledger when one exists.
-5. Pick the narrowest `dotnet test` command before editing.
+5. Write the pre-change failing test and pick the narrowest `dotnet test` command before editing.
+
+## Test-first execution loop
+
+For runtime bugfix and behavior-change prompts:
+
+1. Add the smallest regression test at the nearest existing test owner.
+2. Run the guarded focused command and retain proof that it fails for the reported reason.
+3. Implement only the owning service/endpoint/entity change needed to falsify the failure.
+4. Run the same command and the relevant counterexample/provider/auth test.
+5. Broaden to PostgreSQL/CI proof only when the risk requires it.
+
+The pre-change run may be skipped only with a written reason such as an unavailable provider, a nondeterministic production-only trigger or a migration/manual verification boundary. That prompt must remain `Needs validation` or `Needs handoff` until the missing proof has an owner.
+
+Audit, docs and queue prompts use an explicit test-first exception. They may validate documentation/tooling with the appropriate checker, but they must route any runtime finding to a separate prompt containing its own red proof, green proof and counterexample.
 
 ## Common backend bug patterns
 

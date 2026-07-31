@@ -61,6 +61,11 @@ Risk/ownership model:
 - Replay reads the stored milestone result and performs zero XP mutation.
 - Concurrent different-key claims for the same milestone create one milestone row and one canonical XP source effect.
 
+Test-first contract:
+- Pre-change proof: the focused season settlement test must fail before the transaction seam is corrected.
+- Post-change proof: the same `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter Season` command must pass after implementation.
+- Counterexample cases: duplicate replay, concurrent different-key claim and rollback after XP staging.
+
 Failure-mode matrix:
 - Failure after XP fields change but before milestone claim/ledger completion.
 - Failure after milestone row is staged but before XP source/history staging.

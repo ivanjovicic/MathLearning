@@ -32,6 +32,12 @@ Risk/ownership model:
 
 One audit owner writes the run log and queue changes. Implementation owners fix runtime behavior later. Authenticated identity, service/ledger settlement, EF mappings/migrations and mobile payload owners remain authoritative.
 
+Test-first contract:
+
+- Exception: this is an audit/docs-only prompt and does not change runtime behavior.
+- Validation proof: documentation health, prompt, evidence and agent-system validators prove the process changes.
+- Routed runtime prompts must contain their own pre-change failing proof, post-change passing proof and counterexample.
+
 Problem evidence:
 
 - The repository has build, test/coverage and agent-system validation, but no single recurring process for combining free .NET analyzers, format checks and dependency advisory output into unique repair prompts.

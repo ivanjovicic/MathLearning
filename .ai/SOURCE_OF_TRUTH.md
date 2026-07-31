@@ -32,6 +32,7 @@ Short entrypoints may summarize a rule but may not redefine it. Current code, fo
 | Expensive DB CI scope | `scripts/ci/classify_backend_changes.py` | `Database Validation` workflow |
 | Architecture/contracts | owning registered backend docs and current tests | [`../docs/DOCS_REGISTRY.md`](../docs/DOCS_REGISTRY.md) |
 | Periodic backend code analysis and finding triage | [`../docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](../docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md), [`../docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md`](../docs/prompt_queues/BACKEND-ANALYSIS-001-periodic-code-analysis.md) | [`../docs/prompt_queues/backend_code_analysis.md`](../docs/prompt_queues/backend_code_analysis.md) |
+| Test-first regression proof and prompt gate | [`../.ai/PROMPT_LINT_CHECKLIST.md`](PROMPT_LINT_CHECKLIST.md), [`../docs/BUGFIX_PATTERN_GUARDRAILS.md`](../docs/BUGFIX_PATTERN_GUARDRAILS.md) | `validate_agent_prompt.py` and [`../docs/prompt_queues/PROMPT_LIFECYCLE.md`](../docs/prompt_queues/PROMPT_LIFECYCLE.md) |
 
 ## Update rule
 

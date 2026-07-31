@@ -1,6 +1,6 @@
 # Backend Formal Prompt Contract and Admission Gate
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Owner: `backend-agent-system`
 
 Use this only for a new/materially rewritten **formal active queue prompt**. A bounded user-assigned task starts directly through `scripts/agent_run.py` and does not need global queue ceremony.
@@ -55,6 +55,10 @@ Avoid paths:
 Documentation impact:
 Acceptance criteria:
 Proof required:
+
+Test-first contract:
+- Runtime lanes (`known-fix`, `implementation`, `tests`) must name the pre-change proof that is expected to fail, the post-change proof that is expected to pass, at least one counterexample and a focused `dotnet test`/guarded test command.
+- Non-runtime lanes (`audit`, `review`, `docs-evidence`, `validation-only`, `investigation`) must state the test-first exception and require every routed runtime prompt to carry its own red/green proof.
 Validation:
 Completion gate:
 Stop conditions:
@@ -85,5 +89,7 @@ If an existing backend owner covers the mutation, update/link that owner instead
 Authenticated server identity owns learner writes; existing services/ledgers own behavior; EF mapping/migrations own schema; current mobile contract owns public payloads; PostgreSQL proves provider-sensitive behavior.
 
 Acceptance covers target behavior, one counterexample/provider/security/retry case and scope/contract safety. Done requires focused proof, compact v2 evidence, changed-only validation, delivered commit and exact target verification.
+
+Test-first is the default implementation loop: add the smallest failing regression test first, run it, implement the smallest owner change, then rerun the same test plus its counterexample. A prompt may not replace this with a claim that compilation or test existence is proof.
 
 Automatic rejection applies to duplicate owners, hidden dependencies, request-supplied identity authority, InMemory-only provider claims, Flutter commands/paths, unguarded/chained commands, mixed lanes, open-ended scope or Done without proof/delivery.

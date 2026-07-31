@@ -85,6 +85,8 @@ Priority guidance:
 
 Every new prompt must have one owner, one lane, one bounded proof and a unique ID. Do not turn a list of analyzer hits into one "fix everything" task. Do not create a prompt when an existing canonical runtime owner already covers the behavior; add a test/evidence handoff instead.
 
+Any routed runtime prompt must contain a test-first contract: the smallest pre-change test expected to fail, the post-change command expected to pass and a counterexample. This audit prompt itself is docs/evidence-only and uses the explicit exception in its own contract.
+
 ## Cadence and ownership
 
 - Pull request/runtime change: Tier 1 and the normal changed-path CI classification.
