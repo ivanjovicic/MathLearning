@@ -19,7 +19,7 @@ Current code and executed tests override old queue prose. Completed archives and
 |---:|---|---|
 | 1 | `backend_cross_repo_current_main_2026_07_17.md` | Adaptive session-start idempotency, durable private bug screenshots and stale PR #3 disposition. |
 | 2 | `backend_performance_followups_2026_07_03.md` | Existing P0 adaptive answer/practice settlement owners `BE-PERF-012` and `BE-PERF-015`, plus bounded limiter owner `BE-PERF-011`. |
-| 3 | `backend_test_coverage.md` | Provider/cancellation/regression proof that supports canonical runtime owners without reimplementing them; top unresolved bugs are `BACKEND-API-DB-015`, `BACKEND-API-DB-013` and `BACKEND-TEST-033`. |
+| 3 | `backend_test_coverage.md` | Provider/cancellation/regression proof that supports canonical runtime owners without reimplementing them; top unresolved bugs are `BACKEND-API-DB-015`, `BACKEND-API-DB-013`, `BACKEND-TEST-033` and the newly surfaced `BACKEND-TEST-049`/`BACKEND-TEST-050`. |
 | 4 | `backend_api_db_residuals_pass3_2026_07_16.md` | Historical pass-3 evidence; `016` is superseded by `020`, `017..019` are delivered/nonclaimable. |
 | 5 | `backend_failing_test_followups_2026_07_11.md` | Historical migration repair; no active row after `BACKEND-MIGRATION-001` delivery. |
 
