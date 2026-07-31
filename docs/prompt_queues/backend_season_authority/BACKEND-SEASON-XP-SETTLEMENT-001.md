@@ -27,8 +27,8 @@ Dependencies/collisions:
 - Run after or coordinate with `BACKEND-SEASON-DAILY-RUN-PROVENANCE-001`; both may touch `EconomySettlementEndpoints.cs`.
 - Reuse one canonical XP mutation service; do not add a second XP table or update counters independently in the endpoint.
 - Preserve the existing economy transaction/milestone uniqueness boundary and exact replay response.
-- Flutter baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616` calls this route from `lib/services/season_service.dart::claimMilestone` with `seasonId`, `milestoneId` and a stable idempotency key.
-- Preserve the accepted request/response shape. If status/error or progress fields change, create and link `XREPO-SEASON-SETTLEMENT-CONTRACT-001` and update `docs/mobile_backend_contract_status.md` before delivery.
+- Flutter baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616` calls this route from `SeasonService.claimMilestone` with `seasonId`, `milestoneId` and a stable idempotency key.
+- Preserve the accepted request/response shape. If status/error or progress fields change, create and link `XREPO-SEASON-SETTLEMENT-CONTRACT-001` and update the mobile backend contract status before delivery.
 - If the current service cannot compose with the existing transaction in five product/test/doc paths, stop and create a separate service-refactor prompt.
 
 Owner boundary:
@@ -48,7 +48,7 @@ Source of truth:
 - leaderboard consumers of daily/weekly/monthly/all-time XP
 - nearest milestone, XP tracking, concurrency and economy idempotency tests
 - `XP_TRACKING_INTEGRATION.md`, `docs/mobile_economy_api_contract.md`, `docs/API_ENDPOINT_INVENTORY.md`
-- Flutter `lib/services/season_service.dart`, `test/services/season_service_test.dart` and `docs/mobile_backend_contract_status.md` at baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616`
+- verified Flutter SeasonService, its focused service test and mobile backend contract status at baseline `0a75340c4c5ee20abd8f9351dc82fb2ad583e616`; exact mobile paths are recorded in the owning audit evidence
 
 Interpretation before work: Inventory every field/row/event the canonical XP service updates, then compare the milestone direct-write branch. Build `first claim -> canonical updates -> exact replay -> concurrent different key -> rollback` before editing.
 
