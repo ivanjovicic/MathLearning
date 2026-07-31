@@ -26,7 +26,7 @@ Previous queue: `backend_performance_optimization.md`
 | BE-PERF-012 | P0 | Done 95% — Run log: `.ai/runs/2026-07-30-BE-PERF-012-evidence.md`; Validation: focused PostgreSQL replay/cancellation/concurrency tests passed; Residual risk: broader full-file invocation still hits MSB4166 idle timeout on this machine; Commit: self | Make adaptive answer submission atomic, idempotent and cancellation-correct before generic retry. |
 | BE-PERF-013 | P1 | Prompt-ready | Remove refresh, snapshot, streak and reward mutations from GET/read paths. |
 | BE-PERF-014 | P1 | Prompt-ready | Prevent explanation-cache stampedes, write-on-read amplification and expired-row growth. |
-| BE-PERF-015 | P0/P1 | Prompt-ready | Make practice answer/completion concurrency settle exactly once and replay deterministically. |
+| BE-PERF-015 | P0/P1 | Done 79% — Run log: `.ai/runs/2026-07-31-BE-PERF-015-evidence.md`; Validation: PracticeSession Idempotency+Integration 10/10 on PostgreSQL; Residual risk: OutboxProcessor deploy dependency and path-budget overshoot; push/PR/main open; Commit: self | Make practice answer/completion concurrency settle exactly once and replay deterministically. |
 | BE-PERF-016 | Runtime-fixed / Workflow validation needed | Outbox runtime now claims rows with `FOR UPDATE SKIP LOCKED`, persists bounded retry/dead-letter state, redacts stored errors and is wired as a hosted service; PostgreSQL proof still needs CI evidence or valid local credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-023-evidence.md` |
 | BE-PERF-017 | P2/P1 | Prompt-ready | Measure and control tracing/logging overhead, cardinality and synchronous DB logging risk. |
 

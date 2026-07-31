@@ -3,9 +3,6 @@ using MathLearning.Application.DTOs.Practice;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
-using Hangfire;
-using Hangfire.Common;
-using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -235,18 +232,12 @@ public class PracticeSessionServiceIntegrationTests
             scheduler,
             NullLogger<PracticeAnalyticsUpdater>.Instance);
         var adaptiveAnalytics = new AdaptiveAnalyticsService(NullLogger<AdaptiveAnalyticsService>.Instance);
-        var backgroundJobs = new PracticeBackgroundJobs(
-            new FakeBackgroundJobClient(),
-            analyticsUpdater,
-            adaptiveAnalytics,
-            NullLogger<PracticeBackgroundJobs>.Instance);
 
         return new PracticeSessionService(
             db,
             selector,
             bkt,
             analyticsUpdater,
-            backgroundJobs,
             adaptiveAnalytics,
             new NoOpAnswerPatternAntiCheatService(),
             NullLogger<PracticeSessionService>.Instance);
@@ -277,12 +268,5 @@ public class PracticeSessionServiceIntegrationTests
             LastEnqueued = userId;
             return true;
         }
-    }
-
-    private sealed class FakeBackgroundJobClient : IBackgroundJobClient
-    {
-        public string Create(Job job, IState state) => Guid.NewGuid().ToString("N");
-
-        public bool ChangeState(string jobId, IState state, string expectedState) => true;
     }
 }
