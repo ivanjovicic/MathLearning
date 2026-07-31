@@ -147,13 +147,11 @@ public sealed partial class CosmeticPlatformService
         ClaimRewardTrackTierRequest request,
         CancellationToken cancellationToken)
     {
-        await EnsureCatalogReadyForSettlementAsync(cancellationToken);
+        var effectiveTrackType = NormalizeRewardTrackType(request.TrackType);
+        EnsureRewardTrackTypeAccess(userId, effectiveTrackType);
 
-        var effectiveTrackType = string.IsNullOrWhiteSpace(request.TrackType)
-            ? CosmeticTrackTypes.Free
-            : request.TrackType.Trim().ToLowerInvariant();
         var season = await ResolveSeasonAsync(request.SeasonId, cancellationToken)
-            ?? throw new InvalidOperationException("Season not found.");
+            ?? throw new InvalidOperationException("Reward track season is not available.");
 
         var entry = await db.SeasonRewardTrackEntries
             .AsNoTracking()
@@ -165,12 +163,13 @@ public sealed partial class CosmeticPlatformService
                 cancellationToken)
             ?? throw new InvalidOperationException("Reward track tier not found.");
 
-        var profile = await db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken)
-            ?? throw new InvalidOperationException("Profile not found.");
-        if (profile.Xp < entry.XpRequired)
+        var seasonXp = await GetSeasonEarnedXpAsync(userId, season.Id, cancellationToken);
+        if (seasonXp < entry.XpRequired)
         {
             throw new InvalidOperationException("Reward track tier is not unlocked yet.");
         }
+
+        await EnsureCatalogReadyForSettlementAsync(cancellationToken);
 
         var sourceRef = BuildRewardTrackSourceRef(season.Id, effectiveTrackType, entry.Tier.ToString());
         if (!TryParseRewardPayload(entry.RewardPayloadJson, out var cosmeticItemId))
