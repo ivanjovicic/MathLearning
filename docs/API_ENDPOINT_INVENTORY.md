@@ -80,7 +80,7 @@ Owner: `UserEndpoints.cs`
 | GET | `/api/user/coins` | Auth | Legacy read | Current coin/progress summary. |
 | GET | `/api/user/daily-hints` | Auth | Legacy read | Daily hints alias. |
 | GET | `/api/user/hints/daily` | Auth | Legacy read | Daily hints alias. |
-| GET | `/users/{userId}/settings` | Auth | Canonical settings | Route user must equal auth user. |
+| GET | `/users/{userId}/settings` | Auth | Canonical settings | Route user must equal auth user. Missing row returns documented defaults with zero writes; persist on PATCH. |
 | PATCH | `/users/{userId}/settings` | Auth | Canonical settings | Route user must equal auth user. |
 | POST | `/users/{id}/avatar` | Auth | Legacy upload | Owner-only, size/type/content validation. |
 | GET | `/users/{id}/avatar/{fileName}` | Auth | Legacy read | Owner-only; static avatar bypass blocked. |

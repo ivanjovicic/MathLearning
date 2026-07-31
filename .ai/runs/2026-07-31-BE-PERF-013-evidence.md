@@ -16,7 +16,7 @@ Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALI
 How this run avoids prior mistakes: one subsystem (settings GET); leaderboard/progress already pure on main; cosmetics default-grant deferred as second owner
 Owner/hypothesis: GET /users/{userId}/settings inserts default UserSettings via SaveChanges on missing row
 Files inspected: 10
-Files changed: 5
+Files changed: 6
 Searches: 3
 Validation runs: 1
 Failed retries: 0
@@ -29,9 +29,11 @@ Failed retries: 0
 ## Changed paths
 - src/MathLearning.Api/Endpoints/UserEndpoints.cs
 - tests/MathLearning.Tests/Endpoints/UserSettingsEndpointsIntegrationTests.cs
+- docs/API_ENDPOINT_INVENTORY.md
 - docs/prompt_queues/backend_performance_followups_2026_07_03.md
 - docs/prompt_queues/backend_season_authority_residuals_2026_07_31.md
 - .ai/runs/2026-07-31-BE-PERF-013-evidence.md
+- .ai/runs/2026-07-31-BACKEND-SEASON-DAILY-RUN-PROVENANCE-001-evidence.md
 
 ## Validation
 Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter FullyQualifiedName~UserSettingsEndpointsIntegrationTests|FullyQualifiedName~ReadPathMutationRegressionTests` → Passed 17 / 0
@@ -43,7 +45,7 @@ Waste: none
 Missed: none
 Follow-up: cosmetics GET default-grant writes remain under BE-PERF-013/BACKEND-API-DB-008 residual
 Residual risk: Flutter may assume persisted settings after first GET; PATCH still creates the row; push/PR/main open
-Documentation impact: queue sync only; settings response shape unchanged
+Documentation impact: updated docs/API_ENDPOINT_INVENTORY.md for settings GET zero-write defaults; queue sync
 Cross-repo impact: no - documented defaults still returned
 
 ## Delivery
