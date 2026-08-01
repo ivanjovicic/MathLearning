@@ -14,6 +14,7 @@ public interface IXpTrackingService
         string sourceType = "manual_adjustment",
         string? sourceId = null,
         string? metadataJson = null,
+        bool evaluateProgressRewards = true,
         CancellationToken ct = default);
 
     Task ResetTimeBasedXpAsync(string userId, CancellationToken ct = default);
