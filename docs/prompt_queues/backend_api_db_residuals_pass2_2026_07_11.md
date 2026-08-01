@@ -30,7 +30,7 @@ Before implementing any prompt:
 | `BACKEND-API-DB-012` | P1 | Prompt-ready | Make Redis and DB leaderboard implementations contract-equivalent for scope, cursor, rank and failover. | Depends on `BACKEND-API-DB-011`; link `BE-PERF-004/005/008` |
 | `BACKEND-API-DB-013` | P1 | Prompt-ready | Unify registration ownership and repair/prevent incomplete Identity-only accounts. | Link registration atomicity tests and mobile contract sync |
 | `BACKEND-API-DB-014` | P1 | Prompt-ready | Retire or correctly rebuild the legacy photo-avatar contract and durable storage path. | Preserve validated file-safety work in `BACKEND-TEST-008` |
-| `BACKEND-API-DB-015` | P0/P1 | Prompt-ready | Prevent permanent pending economy/cosmetics idempotency tombstones and prove safe recovery. | Canonical extension of `BACKEND-TEST-014`, `BACKEND-TEST-032/033` |
+| `BACKEND-API-DB-015` | P0/P1 | Done 79% — Run log: `.ai/runs/2026-08-01-BACKEND-API-DB-015-cosmetics-evidence.md` (+ economy `.ai/runs/2026-07-31-BACKEND-API-DB-015-evidence.md` on PR #16); Validation: RelationalIdempotency+CosmeticsIdempotency 18/18; Residual risk: merge economy+cosmetics PRs and PG matrix; Commit: self | Prevent permanent pending economy/cosmetics idempotency tombstones and prove safe recovery. | Canonical extension of `BACKEND-TEST-014`, `BACKEND-TEST-032/033` |
 
 ---
 
