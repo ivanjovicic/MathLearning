@@ -451,7 +451,10 @@ public sealed partial class MathQuestionAuthoringService :
     {
         var question = await db.Questions
             .Include(x => x.Options)
+            .ThenInclude(x => x.Translations)
             .Include(x => x.Steps)
+            .ThenInclude(x => x.Translations)
+            .Include(x => x.Translations)
             .FirstOrDefaultAsync(x => x.Id == questionId, cancellationToken)
             ?? throw new InvalidOperationException($"Question {questionId} was not found.");
 
@@ -765,8 +768,9 @@ public sealed partial class MathQuestionAuthoringService :
 
         db.QuestionDrafts.Add(draft);
         question.SetCurrentDraft(draft.Id);
-        await db.SaveChangesAsync(cancellationToken);
 
+        // Stage draft pointer, validation and preview cache together so a failure cannot leave
+        // CurrentDraftId ahead of durable validation/cache rows.
         var validation = CreateValidationResultEntity(draft.Id, pipeline);
         draft.LatestValidationResultId = validation.Id;
         db.QuestionValidationResults.Add(validation);

@@ -30,12 +30,10 @@ Prompt queues:
 These are the biggest unresolved queue items on current `main`:
 
 - `BACKEND-API-DB-015` â€” stale pending economy/cosmetics idempotency recovery and dual-settlement prevention.
-- `BACKEND-API-DB-013` â€” single account-provisioning owner and Identity/profile/token orphan reconciliation.
 - `BACKEND-TEST-033` â€” cancellation/rollback matrix for canonical P0 mutations, especially the adaptive and practice settlement lanes.
-
-- `BACKEND-TEST-049` â€” question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety.
 - `BACKEND-TEST-050` â€” design-token draft version identity and same-second collision safety.
 - `BACKEND-TEST-051` - design-token bootstrap race and startup ownership.
+- `BACKEND-TEST-049` delivered (snapshot truth + atomic revalidate draft create; UpdateQuestion split-save residual deferred).
 ## Read first
 
 - `../../AGENTS.md`
@@ -104,7 +102,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-TEST-035 | Implemented / Needs validation | Direct test-auth default/anonymous/role contract tests. |
 | BACKEND-TEST-036 | Validated | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"`: 272 passed, 0 failed, 0 skipped. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
-| BACKEND-TEST-049 | P1 / Prompt-ready | Question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety. |
+| BACKEND-TEST-049 | P1 / Done 75% — Run log: `.ai/runs/2026-08-01-BACKEND-TEST-049-evidence.md`; Validation: QuestionAuthoringSnapshotTruth + authoring smoke filter; Residual risk: UpdateQuestion split SaveChanges and PG concurrency deferred; Commit: self | Question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety. |
 | BACKEND-TEST-050 | P1 / Prompt-ready | Design-token draft version identity and same-second collision safety. |
 | BACKEND-TEST-051 | P1 / Prompt-ready | Design-token bootstrap race and startup ownership. |
 | BACKEND-LATEST-VALIDATION-002 | Validated | Latest July 3 implementation/test batch verified; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and the focused test package passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
