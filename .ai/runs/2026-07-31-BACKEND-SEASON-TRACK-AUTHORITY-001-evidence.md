@@ -51,7 +51,7 @@ Documentation impact: updated docs/API_ENDPOINT_INVENTORY.md
 Cross-repo impact: yes - Flutter baseline has no runtime `/api/cosmetics/reward-track*` caller; mobile adapter deferred under XREPO44-SEASON-ACTIVE-ENDPOINT-DISPOSITION-001
 
 ## Delivery
-State: Done
+State: Needs merge
 Branch/PR: agent/BACKEND-SEASON-TRACK-AUTHORITY-001
 Commit SHA: self
-Completion %: 100
+Completion %: 79
