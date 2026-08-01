@@ -124,7 +124,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-API-DB-010 | P0 / Runtime-fixed | Legacy coin/power-up mutations and paid-hint aliases now return `410 Gone`; canonical hint reads are read-only after `/api/economy/hints/use`. Run log: `.ai/runs/2026-07-14-BACKEND-API-DB-010-evidence.md` |
 | BACKEND-API-DB-011 | P0 / Runtime-fixed | Student leaderboard now uses string-safe ranking and scope/period-bound v2 cursors; invalid or mismatched cursors return `400`. Run log: `.ai/runs/2026-07-14-BACKEND-API-DB-011-evidence.md` |
 | BACKEND-API-DB-012 | P1 / Prompt-ready; depends on BACKEND-API-DB-011 | Make Redis and DB leaderboard scope/rank/cursor/failover behavior contract-equivalent. |
-| BACKEND-API-DB-013 | P1 / Prompt-ready | Use one complete account-provisioning owner and reconcile Identity/profile/token orphan states. |
+| BACKEND-API-DB-013 | P1 / Done 75% | One `IAccountProvisioningService` owner; legacy register + login incomplete deny; scan helper. Residual: historical orphan backfill job + Flutter SHA sync. Run log `.ai/runs/2026-08-01-BACKEND-API-DB-013-evidence.md`. |
 | BACKEND-API-DB-014 | P1 / Prompt-ready | Retire or rebuild legacy photo avatars with string/self routes, durable storage and compensation. |
 | BACKEND-API-DB-015 | P0/P1 / Prompt-ready; extends BACKEND-TEST-014/032/033 | Recover stale pending economy/cosmetics operations without allowing dual settlement. |
 | BACKEND-API-DB-016 | P0/P1 / Prompt-ready; extends BACKEND-TEST-025 | Make bug-report screenshots private, reporter/admin-authorized, durable and lifecycle-safe. |

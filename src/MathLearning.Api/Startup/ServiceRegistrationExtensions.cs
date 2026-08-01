@@ -298,6 +298,7 @@ public static class ServiceRegistrationExtensions
     {
         builder.Services.AddSingleton<MathLearning.Api.Middleware.IRateLimitCounterStore, MathLearning.Api.Middleware.InMemoryRateLimitCounterStore>();
         builder.Services.AddScoped<AuthSessionValidationService>();
+        builder.Services.AddScoped<IAccountProvisioningService, AccountProvisioningService>();
 
         builder.Services.AddIdentityCore<IdentityUser>(options =>
         {
