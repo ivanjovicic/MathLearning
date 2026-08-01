@@ -138,8 +138,8 @@ public class XpTrackingService : IXpTrackingService
         });
 
         await _db.SaveChangesAsync(ct);
-        if (evaluateProgressRewards && _cosmeticRewardService is not null)
-            await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
+        if (evaluateProgressRewards)
+            await TryProcessProgressRewardsAsync(userId, ct);
 
         _logger.LogInformation(
             "XP processed. UserId={UserId} SourceType={SourceType} SourceId={SourceId} XpDelta={XpDelta} EffectiveDelta={EffectiveDelta} ElapsedMs={ElapsedMs}",
@@ -216,6 +216,7 @@ public class XpTrackingService : IXpTrackingService
                     awardDecision.Reason,
                     retries);
 
+                await TryProcessProgressRewardsAsync(userId, cancellationToken);
                 return new XpAwardResult(awardedXp, profile.Xp, awardDecision.Reason, retries);
             }
             catch (DbUpdateConcurrencyException ex) when (retries < MaxConcurrencyRetries - 1)
@@ -261,8 +262,7 @@ public class XpTrackingService : IXpTrackingService
         profile.UpdatedAt = now;
 
         await _db.SaveChangesAsync(ct);
-        if (_cosmeticRewardService is not null)
-            await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
+        await TryProcessProgressRewardsAsync(userId, ct);
 
         _logger.LogInformation(
             "Time-based XP reset processed. UserId={UserId} ElapsedMs={ElapsedMs}",
@@ -310,6 +310,26 @@ public class XpTrackingService : IXpTrackingService
 
         if (lastReset.Year < today.Year || lastReset.Month < today.Month)
             profile.MonthlyXp = 0;
+    }
+
+    private async Task TryProcessProgressRewardsAsync(string userId, CancellationToken ct)
+    {
+        if (_cosmeticRewardService is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _cosmeticRewardService.ProcessProgressRewardsAsync(userId, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("Cosmetic catalog is not ready:", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                ex,
+                "Cosmetic progress rewards skipped because the catalog is not ready. UserId={UserId}",
+                userId);
+        }
     }
 
     private int ApplyHintPenalty(int requestedXp, bool hintUsed)

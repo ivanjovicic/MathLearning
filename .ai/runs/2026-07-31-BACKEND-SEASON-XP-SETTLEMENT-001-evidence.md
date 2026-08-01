@@ -40,10 +40,10 @@ Failed retries: 2
 - .ai/runs/2026-07-31-BACKEND-SEASON-XP-SETTLEMENT-001-evidence.md
 
 ## Validation
-Validation run: `python3 scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter "FullyQualifiedName~SeasonMilestone|FullyQualifiedName~XpTrackingServiceTests"` → Passed 9 / 0
-Validation run: SeasonMilestone filter alone after `evaluateProgressRewards` fix → Passed 4 / 0
-Validation run: API Release build → Passed
-Validation run: `python3 scripts/check_documentation_health.py --context src/MathLearning.Application/Services/IXpTrackingService.cs` → failures=0
+Validation run: `python3 scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter "FullyQualifiedName~SeasonMilestone|FullyQualifiedName~XpTrackingServiceTests"` â†’ Passed 9 / 0
+Validation run: SeasonMilestone filter alone after `evaluateProgressRewards` fix â†’ Passed 4 / 0
+Validation run: API Release build â†’ Passed
+Validation run: `python3 scripts/check_documentation_health.py --context src/MathLearning.Application/Services/IXpTrackingService.cs` â†’ failures=0
 Validation not run: PostgreSQL concurrency/rollback injection deferred
 
 ## Exceptions and learning

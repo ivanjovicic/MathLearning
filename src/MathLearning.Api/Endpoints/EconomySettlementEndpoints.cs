@@ -662,7 +662,6 @@ public static class EconomySettlementEndpoints
             if (idempotencyResult is not null)
                 return idempotencyResult;
 
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var existing = await db.UserSeasonDailyRunClaims
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.UserId == userId && x.DailyRunTransactionId == normalizedTxId, ct);
@@ -680,7 +679,6 @@ public static class EconomySettlementEndpoints
                     ErrorCode: null,
                     Message: null);
                 await txService.CompleteAsync(begin.TransactionId, replay, ct);
-                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Ok(replay);
             }
 
@@ -693,7 +691,6 @@ public static class EconomySettlementEndpoints
                 {
                     var error = EconomyEndpointHelpers.BusinessError("invalid_season", "Requested season is not available.");
                     await txService.FailAsync(begin.TransactionId, "invalid_season", error, ct);
-                    if (dbTx is not null) await dbTx.CommitAsync(ct);
                     return Results.Conflict(error);
                 }
             }
@@ -705,7 +702,6 @@ public static class EconomySettlementEndpoints
             {
                 var error = EconomyEndpointHelpers.BusinessError("not_eligible", "Daily Run claim transaction was not found.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
-                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
@@ -716,7 +712,6 @@ public static class EconomySettlementEndpoints
                     "not_eligible",
                     "Daily Run chest day is not owned by exactly one season window.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
-                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
@@ -726,10 +721,10 @@ public static class EconomySettlementEndpoints
                     "not_eligible",
                     "Daily Run chest day does not belong to the selected season.");
                 await txService.FailAsync(begin.TransactionId, "not_eligible", error, ct);
-                if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Conflict(error);
             }
 
+            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
             var season = ownerSeason;
             var awardedXp = dailyRunClaim.Xp;
             var progress = await GetOrCreateSeasonProgressAsync(db, userId, season.Id, ct);

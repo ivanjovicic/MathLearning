@@ -18,6 +18,7 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
                     IdempotencyKey = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    OperationId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     TransactionType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     RequestHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
@@ -131,6 +132,13 @@ namespace MathLearning.Infrastructure.Migrations.Api
                 table: "economy_transactions",
                 columns: new[] { "UserId", "TransactionType", "IdempotencyKey" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UX_economy_transactions_user_type_operation",
+                table: "economy_transactions",
+                columns: new[] { "UserId", "TransactionType", "OperationId" },
+                unique: true,
+                filter: "\"OperationId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UX_user_cosmetic_fragment_progress_user_fragment",
