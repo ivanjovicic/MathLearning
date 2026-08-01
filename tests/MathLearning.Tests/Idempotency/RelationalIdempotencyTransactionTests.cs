@@ -1,7 +1,9 @@
+using MathLearning.Api.Endpoints;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.Cosmetics;
 using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
@@ -177,6 +179,106 @@ public sealed class RelationalIdempotencyTransactionTests
         Assert.Equal(1, await replayDb.EconomyTransactions.CountAsync());
     }
 
+    [Fact]
+    public async Task CosmeticsLedger_BeginOutsideTransaction_LeavesPermanentPendingTombstone()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        const string userId = "cosmetics-tombstone-user";
+        await database.SeedUserAsync(userId, coins: 100);
+
+        await using (var db = database.CreateContext())
+        {
+            var begin = await CreateCosmeticsService(db).BeginOrGetExistingAsync(
+                userId,
+                "cosmetics_item_claim",
+                "cosmetics-tombstone-operation",
+                "cosmetics-tombstone-key",
+                new { itemKey = "frame_comet" });
+            Assert.True(begin.ShouldProcess);
+        }
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(1, await verification.CosmeticsIdempotencyLedgers.CountAsync());
+        Assert.Equal(
+            CosmeticsIdempotencyStatuses.Pending,
+            (await verification.CosmeticsIdempotencyLedgers.SingleAsync()).Status);
+
+        var retry = await CreateCosmeticsService(verification).BeginOrGetExistingAsync(
+            userId,
+            "cosmetics_item_claim",
+            "cosmetics-tombstone-operation",
+            "cosmetics-tombstone-key",
+            new { itemKey = "frame_comet" });
+        Assert.True(retry.IsPending);
+        Assert.False(retry.ShouldProcess);
+    }
+
+    [Fact]
+    public async Task CosmeticsLedger_BeginInsideTransaction_AbandonedClaimRollsBack_AndRetrySettlesOnce()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        const string userId = "cosmetics-recover-user";
+        await database.SeedUserAsync(userId, coins: 100);
+
+        await using (var abandonedDb = database.CreateContext())
+        {
+            var claim = await CosmeticsEndpointHelpers.BeginClaimInTransactionAsync(
+                abandonedDb,
+                CreateCosmeticsService(abandonedDb),
+                userId,
+                "cosmetics_item_claim",
+                "cosmetics-recover-operation",
+                "cosmetics-recover-key",
+                new { itemKey = "frame_comet" },
+                CancellationToken.None,
+                markAlreadyClaimed: true);
+
+            Assert.Null(claim.EarlyResult);
+            Assert.True(claim.Begin!.ShouldProcess);
+        }
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(0, await verification.CosmeticsIdempotencyLedgers.CountAsync());
+
+        await using (var settleDb = database.CreateContext())
+        {
+            var claim = await CosmeticsEndpointHelpers.BeginClaimInTransactionAsync(
+                settleDb,
+                CreateCosmeticsService(settleDb),
+                userId,
+                "cosmetics_item_claim",
+                "cosmetics-recover-operation",
+                "cosmetics-recover-key",
+                new { itemKey = "frame_comet" },
+                CancellationToken.None,
+                markAlreadyClaimed: true);
+
+            Assert.Null(claim.EarlyResult);
+            Assert.True(claim.Begin!.ShouldProcess);
+            await using var dbTx = claim.DbTx;
+            await CreateCosmeticsService(settleDb).CompleteAsync(
+                claim.Begin.LedgerId,
+                new { success = true, alreadyClaimed = false });
+            if (dbTx is not null)
+                await dbTx.CommitAsync();
+        }
+
+        await using var finalDb = database.CreateContext();
+        Assert.Equal(1, await finalDb.CosmeticsIdempotencyLedgers.CountAsync());
+        Assert.Equal(
+            CosmeticsIdempotencyStatuses.Completed,
+            (await finalDb.CosmeticsIdempotencyLedgers.SingleAsync()).Status);
+
+        var replay = await CreateCosmeticsService(finalDb).BeginOrGetExistingAsync(
+            userId,
+            "cosmetics_item_claim",
+            "cosmetics-recover-operation",
+            "cosmetics-recover-key",
+            new { itemKey = "frame_comet" });
+        Assert.True(replay.IsCompleted);
+        Assert.False(replay.ShouldProcess);
+    }
+
     private static async Task<IdempotencyLedgerBeginResult> BeginSharedAsync(
         SqliteFileTestDatabase database,
         OrderedInsertCoordinator coordinator,
@@ -238,6 +340,12 @@ public sealed class RelationalIdempotencyTransactionTests
         new(
             db,
             NullLogger<EconomyTransactionService>.Instance,
+            new IdempotencyObservabilityService(NullLogger<IdempotencyObservabilityService>.Instance));
+
+    private static CosmeticsIdempotencyService CreateCosmeticsService(ApiDbContext db) =>
+        new(
+            db,
+            NullLogger<CosmeticsIdempotencyService>.Instance,
             new IdempotencyObservabilityService(NullLogger<IdempotencyObservabilityService>.Instance));
 
     private sealed class CoordinatedAddedEntityInterceptor<TEntity> : SaveChangesInterceptor

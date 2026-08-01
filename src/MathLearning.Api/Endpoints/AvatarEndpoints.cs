@@ -124,7 +124,8 @@ public static class AvatarEndpoints
                 return keyError!;
             }
 
-            var beginTuple = await CosmeticsEndpointHelpers.TryBeginCosmeticsMutationAsync(
+            var claim = await CosmeticsEndpointHelpers.BeginClaimInTransactionAsync(
+                db,
                 idempotencyService,
                 userId,
                 "cosmetics_shop_purchase",
@@ -136,20 +137,15 @@ public static class AvatarEndpoints
                     idempotencyKey,
                     request.CosmeticItemId
                 },
-                cancellationToken);
-            if (beginTuple.Error is not null)
+                cancellationToken,
+                markAlreadyClaimed: false);
+            if (claim.EarlyResult is not null)
             {
-                return beginTuple.Error;
+                return claim.EarlyResult;
             }
 
-            var begin = beginTuple.Begin!;
-            var idempotencyResult = CosmeticsEndpointHelpers.HandleCosmeticsIdempotentDecision(begin, markAlreadyClaimed: false);
-            if (idempotencyResult is not null)
-            {
-                return idempotencyResult;
-            }
-
-            await using var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, cancellationToken);
+            var begin = claim.Begin!;
+            await using var dbTx = claim.DbTx;
             try
             {
                 var response = await inventoryService.PurchaseAsync(
