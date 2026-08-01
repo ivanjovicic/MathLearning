@@ -36,6 +36,9 @@ public static class ServiceRegistrationExtensions
         var otelServiceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         var enableEfCoreTracing = builder.Configuration.GetValue<bool?>("OpenTelemetry:EnableEntityFrameworkInstrumentation")
             ?? !builder.Environment.IsDevelopment();
+        var traceSampleRate = builder.Configuration.GetValue<double?>("OpenTelemetry:TraceSampleRate")
+            ?? (builder.Environment.IsDevelopment() ? 1.0 : 0.05);
+        traceSampleRate = Math.Clamp(traceSampleRate, 0.0, 1.0);
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(
@@ -43,6 +46,8 @@ public static class ServiceRegistrationExtensions
                 serviceVersion: otelServiceVersion))
             .WithTracing(tracerProviderBuilder =>
             {
+                tracerProviderBuilder.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(traceSampleRate)));
+
                 tracerProviderBuilder
                     .AddAspNetCoreInstrumentation(options =>
                     {
@@ -189,6 +194,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<IFormulaReferenceService, FormulaReferenceService>();
         builder.Services.AddScoped<IAiTutorEnhancer, AiTutorEnhancer>();
         builder.Services.AddSingleton<ExplanationCacheMetrics>();
+        builder.Services.AddSingleton<RequestPerformanceMetrics>();
         builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
         builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
         builder.Services.AddScoped<LegacyStepExplanationAdapter>();

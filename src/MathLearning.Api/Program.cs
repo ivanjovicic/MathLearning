@@ -224,18 +224,42 @@ try
     // ?? Correlation ID (must be BEFORE request logging so it appears on the request completion log)
     app.UseMiddleware<MathLearning.Api.Middleware.CorrelationIdMiddleware>();
 
-    // ?? Add Serilog request logging
-    app.UseMiddleware<RequestPerformanceLoggingMiddleware>();
+    var requestPerformanceMetrics = app.Services.GetRequiredService<RequestPerformanceMetrics>();
+    var requestPerformanceConfiguration = builder.Configuration.GetSection("Observability:RequestPerformance");
+    var slowRequestThresholdMs = requestPerformanceConfiguration.GetValue<double?>("SlowRequestThresholdMs") ?? 250;
+    var queryBudget = requestPerformanceConfiguration.GetValue<int?>("QueryBudget") ?? 20;
+    var sampleRate = Math.Clamp(requestPerformanceConfiguration.GetValue<double?>("SampleRate") ?? 0.0, 0d, 1d);
+
+    // ?? Request logging now emits only slow / over-budget / sampled events.
     app.UseSerilogRequestLogging(options =>
     {
-        options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+        options.MessageTemplate = "Request performance. Method={RequestMethod} Route={RouteTemplate} StatusCode={StatusCode} ElapsedMs={ElapsedMs:0.00} DbQueryCount={DbQueryCount} Reason={Reason}";
+        options.GetLevel = (httpContext, elapsedMs, exception) =>
+        {
+            var decision = RequestPerformanceTelemetry.Classify(
+                httpContext,
+                elapsedMs,
+                exception,
+                slowRequestThresholdMs,
+                queryBudget,
+                sampleRate);
+
+            RequestPerformanceTelemetry.CacheDecision(httpContext, decision);
+            requestPerformanceMetrics.Record(decision.ShouldEmit, decision.Reason, decision.ElapsedMs, decision.DbQueryCount);
+            return decision.ShouldEmit ? LogEventLevel.Warning : LogEventLevel.Debug;
+        };
         options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
         {
+            var routeTemplate = RequestPerformanceTelemetry.ReadCachedRouteTemplate(httpContext)
+                ?? RequestPerformanceTelemetry.ResolveRouteTemplate(httpContext);
+            var reason = RequestPerformanceTelemetry.ReadCachedReason(httpContext);
+
             diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
             diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
-            diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent);
-            diagnosticContext.Set("ClientIP", httpContext.Connection.RemoteIpAddress?.ToString());
-            diagnosticContext.Set("XForwardedFor", httpContext.Request.Headers["X-Forwarded-For"].ToString());
+            diagnosticContext.Set("RouteTemplate", routeTemplate);
+            diagnosticContext.Set("DbQueryCount", RequestPerformanceTelemetry.ResolveDbQueryCount(httpContext));
+            if (!string.IsNullOrWhiteSpace(reason))
+                diagnosticContext.Set("Reason", reason);
             diagnosticContext.Set("CorrelationId", httpContext.Response.Headers[MathLearning.Api.Middleware.CorrelationIdMiddleware.HeaderName].ToString());
         };
     });
@@ -540,7 +564,8 @@ try
     // Minimal runtime metrics (no Prometheus dependency)
     app.MapGet("/metrics", (
         MathLearning.Api.Middleware.IRateLimitCounterStore rateLimitStore,
-        ExplanationCacheMetrics explanationCacheMetrics) =>
+        ExplanationCacheMetrics explanationCacheMetrics,
+        RequestPerformanceMetrics requestPerformanceMetrics) =>
     {
         var process = System.Diagnostics.Process.GetCurrentProcess();
         var uptime = DateTime.UtcNow - process.StartTime.ToUniversalTime();
@@ -553,6 +578,7 @@ try
             threadCount = process.Threads.Count,
             rateLimit = rateLimitStore.GetSnapshot(),
             explanationCache = explanationCacheMetrics.GetSnapshot(),
+            requestPerformance = requestPerformanceMetrics.Snapshot(),
             timestampUtc = DateTime.UtcNow,
         });
     });
