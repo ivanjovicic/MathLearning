@@ -89,7 +89,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-TEST-020 | Runtime-fixed / Needs validation | Bug report user/admin authorization boundaries. |
 | BACKEND-TEST-021 | Runtime-fixed / Needs validation | Maintenance routes require exact admin policy. |
 | BACKEND-TEST-022 | Runtime-fixed / Needs schema validation | Quiz/offline settlement now enqueues durable outbox ingest commands inside the authoritative transaction, keeps client success independent from async analytics delivery, and deduplicates ingest by stable `AttemptKey`; focused tests passed but `scripts/db/validate-schema.ps1` still needs a reachable local PostgreSQL instance. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-022-evidence.md` |
-| BACKEND-TEST-023 | Runtime-fixed / Workflow validation needed | Canonical runtime owner now uses `FOR UPDATE SKIP LOCKED`, bounded retry/dead-letter state, redacted persisted errors and hosted-service wiring; PostgreSQL proof still needs CI evidence or valid local credentials before linked BE-PERF-016 can be marked validated. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-023-evidence.md` |
+| BACKEND-TEST-023 | Done 100% — Run log: `.ai/runs/2026-08-02-BACKEND-TEST-023-evidence.md`; Validation: `python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~OutboxBatchProcessorTests" --no-restore` passed `5/5`; Residual risk: none observed in the focused claim/lease/backoff coverage; Commit: self. | Canonical runtime owner now uses `FOR UPDATE SKIP LOCKED`, bounded retry/dead-letter state, redacted persisted errors and hosted-service wiring; PostgreSQL proof is now executable locally and linked BE-PERF-016 is validated. |
 | BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
 | BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation; private read/durable storage runtime ownership is BACKEND-API-DB-016. |
 | BACKEND-TEST-026 | P1 / Prompt-ready | Minimize public health/metrics/schema/job information. |
@@ -231,7 +231,7 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 14. Run BACKEND-API-DB-012 for Redis/DB leaderboard parity after the string cursor contract is stable.
 15. Run BACKEND-API-DB-013 for one complete account-provisioning owner and orphan reconciliation.
 16. Run BACKEND-API-DB-014 to retire or repair the photo-avatar contract/storage.
-17. Re-run BACKEND-TEST-023 with working PostgreSQL credentials or CI evidence, then close linked BE-PERF-016.
+17. BACKEND-TEST-023 completed with local PostgreSQL proof on 2026-08-02; linked BE-PERF-016 is validated and the regression row remains the contract gate.
 18. Re-run BACKEND-TEST-022 schema validation on reachable local/CI PostgreSQL, then close the durable ingest lane.
 19. BACKEND-TEST-013 completed on exact `main` SHA `953260a`; run log `.ai/runs/2026-07-30-BACKEND-TEST-013-evidence.md`.
 20. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.

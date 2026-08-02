@@ -27,7 +27,7 @@ Previous queue: `backend_performance_optimization.md`
 | BE-PERF-013 | P1 | Done 79% — Run log: `.ai/runs/2026-08-01-BE-PERF-013-evidence.md`; Validation: `ReadPathMutationRegressionTests` + `LeaderboardEndpointsIntegrationTests` + `LeaderboardServiceRegistrationTests` passed; docs health passed; Residual risk: none; Commit: self. |
 | BE-PERF-014 | P1 | Done 100% â€” Run log: `.ai/runs/2026-08-01-BE-PERF-014-evidence.md`; Validation: `dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~ExplanationCacheServiceTests|FullyQualifiedName~StepExplanationServiceIntegrationTests"` passed `9/9`; Residual risk: none observed in the focused cache-path coverage; Commit: self. | Prevent explanation-cache stampedes, write-on-read amplification and expired-row growth. |
 | BE-PERF-015 | P0/P1 | Done 100% â€” Run log: `.ai/runs/2026-08-01-BE-PERF-015-evidence.md`; Validation: `dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~PracticeSessionIdempotencyTests"` passed `5/5`; Residual risk: none observed in the focused practice-session coverage; Commit: self. | Make practice answer/completion concurrency settle exactly once and replay deterministically. |
-| BE-PERF-016 | Runtime-fixed / Workflow validation needed | Outbox runtime now claims rows with `FOR UPDATE SKIP LOCKED`, persists bounded retry/dead-letter state, redacts stored errors and is wired as a hosted service; PostgreSQL proof still needs CI evidence or valid local credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-023-evidence.md` |
+| BE-PERF-016 | Done 100% — Run log: `.ai/runs/2026-08-02-BE-PERF-016-evidence.md`; Validation: `python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~OutboxBatchProcessorTests" --no-restore` passed `5/5`; Residual risk: none observed in the focused claim/lease/backoff coverage; Commit: self. | Outbox runtime now claims rows with `FOR UPDATE SKIP LOCKED`, persists bounded retry/dead-letter state, redacts stored errors and is wired as a hosted service; PostgreSQL proof is now executable locally. |
 | BE-PERF-017 | P2/P1 | Done 100% â€” Run log: `.ai/runs/2026-08-01-BE-PERF-017-evidence.md`; Validation: `dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~RequestPerformanceTelemetryTests|FullyQualifiedName~RateLimitMetricsEndpointTests"` passed `3/3`; Residual risk: benchmark sampling policy is configured but not measured in this bounded pass; Commit: self. | Measure and control tracing/logging overhead, cardinality and synchronous DB logging risk. |
 
 ## Canonical ownership notes
@@ -479,6 +479,11 @@ Related: BACKEND-TEST-023
 Canonical test partners: BACKEND-TEST-023, BACKEND-TEST-032 and BACKEND-TEST-033; keep the shared outbox contract here and let the test rows prove the regression matrix.
 Linked to: BACKEND-LATEST-QUEUE-002
 Status propagation: BACKEND-TEST-023 satisfies the contract/regression gate, while BACKEND-TEST-032/033 satisfy provider and rollback proof for this same implementation owner.
+
+Status update 2026-08-02:
+
+- Local PostgreSQL maintenance credentials on `localhost:5432` validated the focused `OutboxBatchProcessorTests` package with `5/5` passing.
+- The provider-gated claim/lease/backoff path now has executable proof; keep the linked test row as the regression gate and retain this row as the runtime owner.
 
 ### Inspect
 
