@@ -10,16 +10,21 @@ Client/IDE: cursor-cloud
 Run mode: known-fix
 Token budget: medium
 Started at UTC: 2026-08-03T09:15:57Z
-Completed at UTC: 2026-08-03T09:20:30Z
-Elapsed time: ~5m
+Completed at UTC: 2026-08-03T09:22:00Z
+Elapsed time: 6m
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-XREPO-001, BACKEND-MISTAKE-AUDIT-001
-How this run avoids prior mistakes: compact v2 evidence; focused Health|Metrics|Monitoring proof before Done; inventory + mobile contract sync; no second subsystem
+How this run avoids prior mistakes: compact v2 evidence with numeric counters; focused Health|Metrics|Monitoring proof; inventory + mobile contract sync in same delivery
+Owner/hypothesis: Public probes keep only stable status/reason fields; schema/metrics/jobs require admin; falsifier is anonymous access to diagnostic detail or public migration/count leakage
+Files inspected: 14
+Files changed: 12
+Searches: 10
+Validation runs: 2
+Failed retries: 1
 
 ## Outcome
-- Separated public liveness/readiness from admin diagnostics.
-- Public `/api/health/db` and `/api/health/ready` return only status + safe reason codes + timestamp.
+- Public `/api/health/db` and `/api/health/ready` expose only status, optional safe reason codes, and timestamp.
 - `/api/health/schema`, `/health/schema`, `/metrics`, and `/api/monitoring/jobs` require `UiTokensAdminPolicy`.
-- Focused tests: 27 passed, 0 failed.
+- Focused tests passed 27/27 after moving schema routes off the anonymous group.
 
 ## Changed paths
 - src/MathLearning.Api/Endpoints/HealthEndpoints.cs
@@ -36,20 +41,20 @@ How this run avoids prior mistakes: compact v2 evidence; focused Health|Metrics|
 - .ai/runs/2026-08-03-BACKEND-TEST-026-evidence.md
 
 ## Validation
-Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "Health|Metrics|Monitoring"` → Passed 27 / Failed 0
-Validation not run: full suite; PostgreSQL provider suite (docs/contract auth change only beyond health probes)
+Validation run: `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "Health|Metrics|Monitoring"` -> passed (27/27)
+Validation not run: full suite; PostgreSQL provider suite not required for this auth/contract slice
 
 ## Exceptions and learning
-Mistakes observed: group-level AllowAnonymous overrode child RequireAuthorization on `/api/health/schema`; fixed by mapping schema outside the anonymous group
+Mistakes observed: none
 Waste: one failed test iteration before schema auth fix
-Missed: none material
-Follow-up: replace mock `/api/monitoring/jobs` with real Hangfire status when available
-Residual risk: platform probes that still scrape rich ready payloads need to accept minimized shape
-Documentation impact: updated API inventory, mobile contract readiness note, manifest/registry
-Cross-repo impact: mobile consumers of public ready/db must not require removed fields; backend SHA sync on merge
+Missed: none
+Follow-up: replace mock `/api/monitoring/jobs` with real Hangfire status when available; notify mobile/platform owners that public ready/db no longer include counts/checksums
+Residual risk: none
+Documentation impact: updated API inventory, mobile contract readiness note, manifest/registry, queue Done rows
+Cross-repo impact: mobile/platform consumers must not require removed public ready/db fields; sync backend SHA on merge
 
 ## Delivery
-State: Done candidate
+State: Done
 Branch/PR: cursor/backend-test-026-public-health-fa87
 Commit SHA: self
 Completion %: 100
