@@ -537,7 +537,7 @@ try
     .WithName("BackgroundJobsHealthApi")
     .WithDescription("Reports whether background jobs were enabled at startup");
 
-    // Minimal runtime metrics (no Prometheus dependency)
+    // Minimal runtime metrics (admin/internal diagnostics only)
     app.MapGet("/metrics", (
         MathLearning.Api.Middleware.IRateLimitCounterStore rateLimitStore,
         ExplanationCacheMetrics explanationCacheMetrics) =>
@@ -555,7 +555,10 @@ try
             explanationCache = explanationCacheMetrics.GetSnapshot(),
             timestampUtc = DateTime.UtcNow,
         });
-    });
+    })
+    .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+    .WithName("RuntimeMetrics")
+    .WithDescription("Admin-only process and rate-limit metrics");
 
     // Map Auth endpoints (no auth required)
     app.MapAuthEndpoints();
@@ -613,18 +616,22 @@ try
     app.MapMaintenanceEndpoints();
 
 
-    // Monitoring endpoints (mock, for admin UI)
+    // Monitoring endpoints (mock, admin UI only until real Hangfire status exists)
     app.MapGet("/api/monitoring/jobs", () =>
     {
         // TODO: Replace with real job status from Hangfire or background services
         var now = DateTime.UtcNow;
-            return Results.Json(new[]
+        return Results.Json(new[]
         {
             new { Name = "XP Daily Reset", IsSuccess = true, LastMessage = "Zadnji reset uspešan", Timestamp = now.AddMinutes(-30) },
             new { Name = "Leaderboard Sync", IsSuccess = true, LastMessage = "Leaderboard ažuriran", Timestamp = now.AddMinutes(-10) },
             new { Name = "Hangfire Worker", IsSuccess = true, LastMessage = "Svi jobovi OK", Timestamp = now.AddMinutes(-1) }
         });
-    });
+    })
+    .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+    .WithName("MonitoringJobs")
+    .WithTags("Monitoring")
+    .WithDescription("Admin-only mock background job status");
 
 
     app.MapMonitoringLogEndpoints();

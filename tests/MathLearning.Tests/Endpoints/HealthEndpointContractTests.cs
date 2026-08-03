@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MathLearning.Api;
+using MathLearning.Application.Services;
 using MathLearning.Tests.Helpers;
 
 namespace MathLearning.Tests.Endpoints;
@@ -16,12 +17,96 @@ public sealed class HealthEndpointContractTests : IClassFixture<CustomWebApplica
     }
 
     [Theory]
+    [InlineData("/api/health/")]
+    [InlineData("/health")]
+    public async Task PublicLivenessRoutes_RemainAnonymous_AndExposeStatus(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        if (path.StartsWith("/api/health", StringComparison.Ordinal))
+        {
+            var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Healthy", payload.GetProperty("status").GetString());
+            Assert.True(payload.TryGetProperty("timestamp", out _));
+            Assert.False(payload.TryGetProperty("schema", out _));
+            Assert.False(payload.TryGetProperty("data", out _));
+            Assert.False(payload.TryGetProperty("failureMessage", out _));
+        }
+    }
+
+    [Theory]
+    [InlineData("/api/health/db")]
+    [InlineData("/api/health/ready")]
+    public async Task PublicReadyAndDbRoutes_ExposeOnlySafeStatusFields(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+
+        var response = await _client.SendAsync(request);
+        AssertHealthStatus(response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(payload.TryGetProperty("status", out _));
+        Assert.True(payload.TryGetProperty("timestamp", out _));
+        Assert.False(payload.TryGetProperty("schema", out _));
+        Assert.False(payload.TryGetProperty("data", out _));
+        Assert.False(payload.TryGetProperty("catalog", out _));
+        Assert.False(payload.TryGetProperty("provider", out _));
+        Assert.False(payload.TryGetProperty("latestCodeMigration", out _));
+        Assert.False(payload.TryGetProperty("latestAppliedMigration", out _));
+        Assert.False(payload.TryGetProperty("failureMessage", out _));
+        Assert.False(payload.TryGetProperty("threadCount", out _));
+
+        if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+        {
+            Assert.True(payload.TryGetProperty("reason", out var reasonElement));
+            var reason = reasonElement.GetString();
+            Assert.False(string.IsNullOrWhiteSpace(reason));
+            Assert.DoesNotContain("migration", reason!, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("exception", reason!, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Theory]
     [InlineData("/health/schema")]
     [InlineData("/api/health/schema")]
-    public async Task SchemaHealthRoutes_ReturnHealthStatus_AndExpectedShape(string path)
+    public async Task SchemaHealthRoutes_DenyAnonymous(string path)
     {
-        var response = await _client.GetAsync(path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
 
+        var response = await _client.SendAsync(request);
+        Assert.True(
+            response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            $"Expected 401/403 but got {(int)response.StatusCode}");
+    }
+
+    [Theory]
+    [InlineData("/health/schema")]
+    [InlineData("/api/health/schema")]
+    public async Task SchemaHealthRoutes_DenyNonAdmin(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add("X-Test-UserId", "regular-user");
+
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/health/schema")]
+    [InlineData("/api/health/schema")]
+    public async Task SchemaHealthRoutes_Admin_RetainsDiagnosticDetail(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add("X-Test-UserId", "admin-user");
+        request.Headers.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
+
+        var response = await _client.SendAsync(request);
         AssertHealthStatus(response.StatusCode);
 
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -36,16 +121,6 @@ public sealed class HealthEndpointContractTests : IClassFixture<CustomWebApplica
         Assert.True(payload.TryGetProperty("unknownAppliedMigrationsCount", out _));
         Assert.True(payload.TryGetProperty("failureMessage", out _));
         Assert.True(payload.TryGetProperty("checkedAtUtc", out _));
-    }
-
-    [Theory]
-    [InlineData("/api/health/db")]
-    [InlineData("/api/health/ready")]
-    public async Task ExistingHealthRoutes_ReturnHealthStatus(string path)
-    {
-        var response = await _client.GetAsync(path);
-
-        AssertHealthStatus(response.StatusCode);
     }
 
     private static void AssertHealthStatus(HttpStatusCode statusCode)

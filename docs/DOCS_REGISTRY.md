@@ -13,7 +13,7 @@ Generated from [`DOCS_MANIFEST.json`](DOCS_MANIFEST.json). Do not edit by hand.
 | [`AGENTS.md`](../AGENTS.md) | agent-rulebook | `backend-agent-system` | advisory | 2026-07-31 | Backend engineering invariants and agent completion rules. |
 | [`docs/AGENT_COMMAND_PLAYBOOK.md`](AGENT_COMMAND_PLAYBOOK.md) | command-policy | `backend-agent-system` | required | 2026-07-16 | Guarded command shape, timeouts and shell safety. |
 | [`docs/AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | evidence-policy | `backend-agent-system` | required | 2026-07-31 | Evidence validation, completion caps and self-SHA rules. |
-| [`docs/API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | api-contract | `backend-api-contract` | required | 2026-07-16 | Route, authorization and compatibility ownership. |
+| [`docs/API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | api-contract | `backend-api-contract` | required | 2026-08-03 | Route, authorization and compatibility ownership. |
 | [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | architecture | `backend-architecture` | advisory | 2026-07-16 | Current startup, projects, persistence and jobs. |
 | [`docs/BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](BACKEND_CODE_ANALYSIS_PLAYBOOK.md) | validation-strategy | `backend-quality` | required | 2026-07-31 | Free analyzer, dependency, coverage and risk-review cadence. |
 | [`docs/BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md) | performance-contract | `backend-performance` | advisory | 2026-07-16 | Blocking startup and readiness budget. |
@@ -24,7 +24,7 @@ Generated from [`DOCS_MANIFEST.json`](DOCS_MANIFEST.json). Do not edit by hand.
 | [`docs/DOCS_INDEX.md`](DOCS_INDEX.md) | documentation-index | `backend-docs-system` | required | 2026-07-17 | Shortest route to registered durable owners. |
 | [`docs/DOCS_REGISTRY.md`](DOCS_REGISTRY.md) | generated-registry | `backend-docs-system` | required | 2026-07-17 | Generated durable document inventory. |
 | [`docs/DOCUMENTATION_SYSTEM.md`](DOCUMENTATION_SYSTEM.md) | documentation-policy | `backend-docs-system` | required | 2026-07-17 | Durable/transient ownership, manifest, registry and health rules. |
-| [`docs/mobile_api_contract.md`](mobile_api_contract.md) | cross-repo-contract | `backend-mobile-contract` | required | 2026-07-16 | Mobile request, response, retry and compatibility contract. |
+| [`docs/mobile_api_contract.md`](mobile_api_contract.md) | cross-repo-contract | `backend-mobile-contract` | required | 2026-08-03 | Mobile request, response, retry and compatibility contract. |
 | [`docs/mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) | cross-repo-contract | `backend-mobile-contract` | required | 2026-07-03 | Retryable mobile mutation operation identity and settlement handoff. |
 | [`docs/prompt_queues/PROMPT_LIFECYCLE.md`](prompt_queues/PROMPT_LIFECYCLE.md) | queue-policy | `backend-agent-system` | required | 2026-07-31 | Queue states, ownership, delivery, archive and cross-repo handoff. |
 | [`docs/prompt_queues/README.md`](prompt_queues/README.md) | queue-router | `backend-agent-system` | required | 2026-07-17 | Current active order, archive and collision routing. |
