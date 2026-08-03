@@ -283,9 +283,9 @@ public sealed class PracticeSessionIdempotencyTests
         Guid sessionId;
         int questionId;
 
-        await using (var db = database.CreateContext(interceptor))
+        await using (var setup = database.CreateContext())
         {
-            var sut = BuildService(db, scheduler, backgroundJobs);
+            var sut = BuildService(setup, scheduler, backgroundJobs);
             var start = await sut.StartSessionAsync(
                 "1",
                 new StartPracticeSessionRequest(
@@ -298,10 +298,13 @@ public sealed class PracticeSessionIdempotencyTests
                 CancellationToken.None);
 
             Assert.NotNull(start.Question);
-
             sessionId = start.SessionId;
             questionId = start.Question!.Id;
+        }
 
+        await using (var db = database.CreateContext(interceptor))
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
             var correctOption = await GetCorrectOptionIdAsync(db, questionId);
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 sut.SubmitAnswerAsync(
@@ -319,6 +322,181 @@ public sealed class PracticeSessionIdempotencyTests
         Assert.Null(storedItem.AnsweredAt);
         Assert.Null(storedItem.SubmissionFingerprintJson);
         Assert.Null(storedItem.SettledResponseJson);
+
+        var storedSession = await verification.PracticeSessions.SingleAsync(x => x.Id == sessionId);
+        Assert.Equal(0, storedSession.AnsweredQuestions);
+        Assert.Equal(0, storedSession.XpEarned);
+    }
+
+    [Fact]
+    public async Task SubmitAnswerAsync_CancelledReplay_ReturnsSettledSnapshot()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        var scheduler = new FakeWeaknessScheduler();
+        var backgroundJobs = new RecordingBackgroundJobClient();
+
+        Guid sessionId;
+        int questionId;
+        SubmitPracticeAnswerResponse first;
+
+        await using (var db = database.CreateContext())
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            var start = await sut.StartSessionAsync(
+                "1",
+                new StartPracticeSessionRequest(
+                    UserId: null,
+                    SkillNodeId: "fractions_basics",
+                    TopicId: 1,
+                    SubtopicId: 1,
+                    TargetQuestions: 2,
+                    PreferredDifficulty: "medium"),
+                CancellationToken.None);
+
+            Assert.NotNull(start.Question);
+            sessionId = start.SessionId;
+            questionId = start.Question!.Id;
+
+            var correctOption = await GetCorrectOptionIdAsync(db, questionId);
+            first = await sut.SubmitAnswerAsync(
+                "1",
+                sessionId,
+                new SubmitPracticeAnswerRequest(questionId, correctOption.ToString(), 12000),
+                CancellationToken.None);
+        }
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        SubmitPracticeAnswerResponse replay;
+        await using (var db = database.CreateContext())
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            var correctOption = await GetCorrectOptionIdAsync(db, questionId);
+            replay = await sut.SubmitAnswerAsync(
+                "1",
+                sessionId,
+                new SubmitPracticeAnswerRequest(questionId, correctOption.ToString(), 12000),
+                cancelled.Token);
+        }
+
+        Assert.Equal(
+            IdempotencyPayloadCanonicalizer.CanonicalizeToJson(first),
+            IdempotencyPayloadCanonicalizer.CanonicalizeToJson(replay));
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(1, await verification.QuizAttempts.CountAsync());
+        Assert.Equal(2, await verification.PracticeSessionItems.CountAsync(x => x.SessionId == sessionId));
+    }
+
+    [Fact]
+    public async Task CompleteSessionAsync_CancellationBeforeCommit_RollsBackCompletionAndJobs()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        var scheduler = new FakeWeaknessScheduler();
+        var backgroundJobs = new RecordingBackgroundJobClient();
+        using var cancellation = new CancellationTokenSource();
+        var interceptor = new CancelAfterSaveInterceptor(cancellation);
+
+        Guid sessionId;
+        int questionId;
+
+        await using (var setup = database.CreateContext())
+        {
+            var sut = BuildService(setup, scheduler, backgroundJobs);
+            var start = await sut.StartSessionAsync(
+                "1",
+                new StartPracticeSessionRequest(
+                    UserId: null,
+                    SkillNodeId: "fractions_basics",
+                    TopicId: 1,
+                    SubtopicId: 1,
+                    TargetQuestions: 1,
+                    PreferredDifficulty: "medium"),
+                CancellationToken.None);
+
+            Assert.NotNull(start.Question);
+            sessionId = start.SessionId;
+            questionId = start.Question!.Id;
+
+            var correctOption = await GetCorrectOptionIdAsync(setup, questionId);
+            await sut.SubmitAnswerAsync(
+                "1",
+                sessionId,
+                new SubmitPracticeAnswerRequest(questionId, correctOption.ToString(), 12000),
+                CancellationToken.None);
+        }
+
+        await using (var db = database.CreateContext(interceptor))
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                sut.CompleteSessionAsync("1", sessionId, cancellation.Token));
+        }
+
+        await using var verification = database.CreateContext();
+        var storedSession = await verification.PracticeSessions.SingleAsync(x => x.Id == sessionId);
+        Assert.Equal("Active", storedSession.Status);
+        Assert.Null(storedSession.CompletedAt);
+        Assert.Null(storedSession.CompletionResponseJson);
+        Assert.Equal(0, await verification.UserDailyStats.CountAsync(x => x.UserId == "1"));
+        Assert.Equal(0, backgroundJobs.EnqueueCount);
+    }
+
+    [Fact]
+    public async Task CompleteSessionAsync_CancelledReplay_ReturnsSettledSnapshot_WithoutReenqueue()
+    {
+        await using var database = await SqliteFileTestDatabase.CreateAsync();
+        var scheduler = new FakeWeaknessScheduler();
+        var backgroundJobs = new RecordingBackgroundJobClient();
+
+        Guid sessionId;
+        CompletePracticeSessionResponse first;
+
+        await using (var db = database.CreateContext())
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            var start = await sut.StartSessionAsync(
+                "1",
+                new StartPracticeSessionRequest(
+                    UserId: null,
+                    SkillNodeId: "fractions_basics",
+                    TopicId: 1,
+                    SubtopicId: 1,
+                    TargetQuestions: 1,
+                    PreferredDifficulty: "medium"),
+                CancellationToken.None);
+
+            Assert.NotNull(start.Question);
+            sessionId = start.SessionId;
+            var questionId = start.Question!.Id;
+            var correctOption = await GetCorrectOptionIdAsync(db, questionId);
+            await sut.SubmitAnswerAsync(
+                "1",
+                sessionId,
+                new SubmitPracticeAnswerRequest(questionId, correctOption.ToString(), 12000),
+                CancellationToken.None);
+
+            first = await sut.CompleteSessionAsync("1", sessionId, CancellationToken.None);
+        }
+
+        var enqueueAfterFirst = backgroundJobs.EnqueueCount;
+        Assert.True(enqueueAfterFirst > 0);
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        CompletePracticeSessionResponse replay;
+        await using (var db = database.CreateContext())
+        {
+            var sut = BuildService(db, scheduler, backgroundJobs);
+            replay = await sut.CompleteSessionAsync("1", sessionId, cancelled.Token);
+        }
+
+        Assert.Equal(
+            IdempotencyPayloadCanonicalizer.CanonicalizeToJson(first),
+            IdempotencyPayloadCanonicalizer.CanonicalizeToJson(replay));
+        Assert.Equal(enqueueAfterFirst, backgroundJobs.EnqueueCount);
     }
 
     private static PracticeSessionService BuildService(

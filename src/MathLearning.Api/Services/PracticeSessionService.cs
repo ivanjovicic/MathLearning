@@ -164,6 +164,20 @@ public sealed class PracticeSessionService : IPracticeSessionService
             normalizedSelectedOption,
             normalizedTimeSpentMs);
 
+        if (ct.IsCancellationRequested)
+        {
+            var settledAfterCancellation = await FindSettledPracticeAnswerItemAsync(
+                userId,
+                sessionId,
+                request.QuestionId,
+                CancellationToken.None);
+
+            if (settledAfterCancellation is not null)
+                return BuildAnswerReplayResult(settledAfterCancellation, replayFingerprint);
+
+            ct.ThrowIfCancellationRequested();
+        }
+
         var session = await _db.PracticeSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
@@ -205,146 +219,156 @@ public sealed class PracticeSessionService : IPracticeSessionService
 
         var useTransaction = _db.Database.IsRelational();
         IDbContextTransaction? tx = null;
+        var committed = false;
         if (useTransaction)
             tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var claimed = 0;
-        if (_db.Database.IsRelational())
-        {
-            claimed = await _db.PracticeSessionItems
-                .Where(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null)
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(x => x.AnsweredAt, nowUtc)
-                        .SetProperty(x => x.Correct, isCorrect)
-                        .SetProperty(x => x.TimeSpentMs, normalizedTimeSpentMs)
-                        .SetProperty(x => x.BktPrior, masteryBefore)
-                        .SetProperty(x => x.BktPosterior, masteryAfter)
-                        .SetProperty(x => x.SubmissionFingerprintJson, replayFingerprint),
-                    ct);
-        }
-        else
-        {
-            var trackedItem = await _db.PracticeSessionItems
-                .FirstOrDefaultAsync(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null, ct);
-
-            if (trackedItem is not null)
-            {
-                trackedItem.AnsweredAt = nowUtc;
-                trackedItem.Correct = isCorrect;
-                trackedItem.TimeSpentMs = normalizedTimeSpentMs;
-                trackedItem.BktPrior = masteryBefore;
-                trackedItem.BktPosterior = masteryAfter;
-                trackedItem.SubmissionFingerprintJson = replayFingerprint;
-                claimed = 1;
-            }
-        }
-
-        if (claimed == 0)
-        {
-            if (tx is not null)
-                await tx.RollbackAsync(ct);
-
-            var replayItem = await _db.PracticeSessionItems
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == latestMatchingItem.Id, ct);
-
-            if (replayItem is null)
-                throw new InvalidOperationException("Practice session replay payload could not be reloaded.");
-
-            return BuildAnswerReplayResult(replayItem, replayFingerprint);
-        }
-
-        var trackedSession = await _db.PracticeSessions
-            .Include(x => x.Items)
-            .FirstAsync(x => x.Id == sessionId && x.UserId == userId, ct);
-
-        var settledItem = trackedSession.Items.First(x => x.Id == latestMatchingItem.Id);
-
-        trackedSession.AnsweredQuestions += 1;
-        if (isCorrect)
-            trackedSession.CorrectAnswers += 1;
-
-        var gainedXp = CalculateQuestionXp(isCorrect, settledItem.Difficulty);
-        trackedSession.XpEarned += gainedXp;
-
-        await UpsertMasteryStateAsync(
-            userId,
-            settledItem.TopicId,
-            settledItem.SubtopicId,
-            masteryAfter,
-            nowUtc,
-            ct);
-
-        trackedSession.RecommendedDifficulty = DetermineNextDifficulty(trackedSession.Items, masteryAfter);
-
-        await _analyticsUpdater.UpdateAggregatesAsync(
-            new PracticeAttemptAnalyticsInput(
-                UserId: userId,
-                SessionId: sessionId,
-                QuestionId: request.QuestionId,
-                TopicId: settledItem.TopicId,
-                SubtopicId: settledItem.SubtopicId,
-                IsCorrect: isCorrect,
-                TimeSpentMs: normalizedTimeSpentMs,
-                AttemptedAtUtc: nowUtc),
-            ct);
-
-        await _antiCheatService.EvaluateAndTrackAsync(
-            new AntiCheatAnswerObservationInput(
-                userId,
-                "practice_session_answer",
-                request.QuestionId,
-                settledItem.TopicId,
-                settledItem.SubtopicId,
-                sessionId,
-                null,
-                null,
-                normalizedSelectedOption,
-                isCorrect,
-                normalizedTimeSpentMs,
-                null,
-                nowUtc),
-            ct);
-
-        var nextQuestion = await BuildNextQuestionAsync(trackedSession, ct);
-        var response = new SubmitPracticeAnswerResponse(
-            IsCorrect: isCorrect,
-            Feedback: isCorrect ? "Correct!" : "Incorrect.",
-            MasteryBefore: masteryBefore,
-            MasteryAfter: masteryAfter,
-            XpEarned: gainedXp,
-            NextQuestion: nextQuestion);
-
-        settledItem.SubmissionFingerprintJson = replayFingerprint;
-        settledItem.SettledResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(response);
-
         try
         {
-            await _db.SaveChangesAsync(ct);
-            if (tx is not null)
-                await tx.CommitAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            var entityTypes = string.Join(", ", ex.Entries.Select(x => x.Metadata.ClrType.Name));
-            throw new InvalidOperationException(
-                $"Practice session persistence conflict. Entities: {entityTypes}",
-                ex);
-        }
+            var claimed = 0;
+            if (_db.Database.IsRelational())
+            {
+                claimed = await _db.PracticeSessionItems
+                    .Where(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null)
+                    .ExecuteUpdateAsync(
+                        setters => setters
+                            .SetProperty(x => x.AnsweredAt, nowUtc)
+                            .SetProperty(x => x.Correct, isCorrect)
+                            .SetProperty(x => x.TimeSpentMs, normalizedTimeSpentMs)
+                            .SetProperty(x => x.BktPrior, masteryBefore)
+                            .SetProperty(x => x.BktPosterior, masteryAfter)
+                            .SetProperty(x => x.SubmissionFingerprintJson, replayFingerprint),
+                        ct);
+            }
+            else
+            {
+                var trackedItem = await _db.PracticeSessionItems
+                    .FirstOrDefaultAsync(x => x.Id == latestMatchingItem.Id && x.AnsweredAt == null, ct);
 
-        _adaptiveAnalytics.TrackEvent("adaptive_answer_submitted", userId, new
-        {
-            sessionId,
-            request.QuestionId,
-            isCorrect,
-            masteryBefore,
-            masteryAfter,
-            xpEarned = gainedXp,
-            nextDifficulty = trackedSession.RecommendedDifficulty
-        });
+                if (trackedItem is not null)
+                {
+                    trackedItem.AnsweredAt = nowUtc;
+                    trackedItem.Correct = isCorrect;
+                    trackedItem.TimeSpentMs = normalizedTimeSpentMs;
+                    trackedItem.BktPrior = masteryBefore;
+                    trackedItem.BktPosterior = masteryAfter;
+                    trackedItem.SubmissionFingerprintJson = replayFingerprint;
+                    claimed = 1;
+                }
+            }
 
-        return response;
+            if (claimed == 0)
+            {
+                if (tx is not null)
+                    await RollbackQuietlyAsync(tx);
+
+                var replayItem = await _db.PracticeSessionItems
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == latestMatchingItem.Id, CancellationToken.None);
+
+                if (replayItem is null)
+                    throw new InvalidOperationException("Practice session replay payload could not be reloaded.");
+
+                return BuildAnswerReplayResult(replayItem, replayFingerprint);
+            }
+
+            var trackedSession = await _db.PracticeSessions
+                .Include(x => x.Items)
+                .FirstAsync(x => x.Id == sessionId && x.UserId == userId, ct);
+
+            var settledItem = trackedSession.Items.First(x => x.Id == latestMatchingItem.Id);
+
+            trackedSession.AnsweredQuestions += 1;
+            if (isCorrect)
+                trackedSession.CorrectAnswers += 1;
+
+            var gainedXp = CalculateQuestionXp(isCorrect, settledItem.Difficulty);
+            trackedSession.XpEarned += gainedXp;
+
+            await UpsertMasteryStateAsync(
+                userId,
+                settledItem.TopicId,
+                settledItem.SubtopicId,
+                masteryAfter,
+                nowUtc,
+                ct);
+
+            trackedSession.RecommendedDifficulty = DetermineNextDifficulty(trackedSession.Items, masteryAfter);
+
+            await _analyticsUpdater.UpdateAggregatesAsync(
+                new PracticeAttemptAnalyticsInput(
+                    UserId: userId,
+                    SessionId: sessionId,
+                    QuestionId: request.QuestionId,
+                    TopicId: settledItem.TopicId,
+                    SubtopicId: settledItem.SubtopicId,
+                    IsCorrect: isCorrect,
+                    TimeSpentMs: normalizedTimeSpentMs,
+                    AttemptedAtUtc: nowUtc),
+                ct);
+
+            await _antiCheatService.EvaluateAndTrackAsync(
+                new AntiCheatAnswerObservationInput(
+                    userId,
+                    "practice_session_answer",
+                    request.QuestionId,
+                    settledItem.TopicId,
+                    settledItem.SubtopicId,
+                    sessionId,
+                    null,
+                    null,
+                    normalizedSelectedOption,
+                    isCorrect,
+                    normalizedTimeSpentMs,
+                    null,
+                    nowUtc),
+                ct);
+
+            var nextQuestion = await BuildNextQuestionAsync(trackedSession, ct);
+            var response = new SubmitPracticeAnswerResponse(
+                IsCorrect: isCorrect,
+                Feedback: isCorrect ? "Correct!" : "Incorrect.",
+                MasteryBefore: masteryBefore,
+                MasteryAfter: masteryAfter,
+                XpEarned: gainedXp,
+                NextQuestion: nextQuestion);
+
+            settledItem.SubmissionFingerprintJson = replayFingerprint;
+            settledItem.SettledResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(response);
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                if (tx is not null)
+                    await tx.CommitAsync(ct);
+                committed = true;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                var entityTypes = string.Join(", ", ex.Entries.Select(x => x.Metadata.ClrType.Name));
+                throw new InvalidOperationException(
+                    $"Practice session persistence conflict. Entities: {entityTypes}",
+                    ex);
+            }
+
+            _adaptiveAnalytics.TrackEvent("adaptive_answer_submitted", userId, new
+            {
+                sessionId,
+                request.QuestionId,
+                isCorrect,
+                masteryBefore,
+                masteryAfter,
+                xpEarned = gainedXp,
+                nextDifficulty = trackedSession.RecommendedDifficulty
+            });
+
+            return response;
+        }
+        finally
+        {
+            if (tx is not null && !committed)
+                await RollbackQuietlyAsync(tx);
+        }
     }
 
     public async Task<CompletePracticeSessionResponse> CompleteSessionAsync(
@@ -352,6 +376,19 @@ public sealed class PracticeSessionService : IPracticeSessionService
         Guid sessionId,
         CancellationToken ct = default)
     {
+        if (ct.IsCancellationRequested)
+        {
+            var settledAfterCancellation = await FindCompletedPracticeSessionAsync(
+                userId,
+                sessionId,
+                CancellationToken.None);
+
+            if (settledAfterCancellation is not null)
+                return BuildCompletedSessionReplayResult(settledAfterCancellation);
+
+            ct.ThrowIfCancellationRequested();
+        }
+
         var session = await _db.PracticeSessions
             .AsNoTracking()
             .Include(x => x.Items)
@@ -366,108 +403,119 @@ public sealed class PracticeSessionService : IPracticeSessionService
         var nowUtc = DateTime.UtcNow;
         var useTransaction = _db.Database.IsRelational();
         IDbContextTransaction? tx = null;
+        var committed = false;
         if (useTransaction)
             tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var claimed = 0;
-        if (_db.Database.IsRelational())
+        try
         {
-            claimed = await _db.PracticeSessions
-                .Where(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active)
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(x => x.Status, PracticeSessionStatuses.Completed)
-                        .SetProperty(x => x.CompletedAt, nowUtc),
-                    ct);
-        }
-        else
-        {
-            var trackedSessionForClaim = await _db.PracticeSessions
-                .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active, ct);
-
-            if (trackedSessionForClaim is not null)
+            var claimed = 0;
+            if (_db.Database.IsRelational())
             {
-                trackedSessionForClaim.Status = PracticeSessionStatuses.Completed;
-                trackedSessionForClaim.CompletedAt = nowUtc;
-                claimed = 1;
+                claimed = await _db.PracticeSessions
+                    .Where(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active)
+                    .ExecuteUpdateAsync(
+                        setters => setters
+                            .SetProperty(x => x.Status, PracticeSessionStatuses.Completed)
+                            .SetProperty(x => x.CompletedAt, nowUtc),
+                        ct);
             }
-        }
+            else
+            {
+                var trackedSessionForClaim = await _db.PracticeSessions
+                    .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId && x.Status == PracticeSessionStatuses.Active, ct);
 
-        if (claimed == 0)
-        {
+                if (trackedSessionForClaim is not null)
+                {
+                    trackedSessionForClaim.Status = PracticeSessionStatuses.Completed;
+                    trackedSessionForClaim.CompletedAt = nowUtc;
+                    claimed = 1;
+                }
+            }
+
+            if (claimed == 0)
+            {
+                if (tx is not null)
+                    await RollbackQuietlyAsync(tx);
+
+                var replaySession = await _db.PracticeSessions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, CancellationToken.None);
+
+                if (replaySession is null)
+                    throw new KeyNotFoundException("Practice session was not found.");
+
+                if (!string.Equals(replaySession.Status, PracticeSessionStatuses.Completed, StringComparison.Ordinal) ||
+                    string.IsNullOrWhiteSpace(replaySession.CompletionResponseJson))
+                {
+                    throw new InvalidOperationException("Practice session is not active.");
+                }
+
+                return DeserializeCompletePracticeSessionResponse(replaySession.CompletionResponseJson);
+            }
+
+            var trackedSession = await _db.PracticeSessions
+                .Include(x => x.Items)
+                .FirstAsync(x => x.Id == sessionId && x.UserId == userId, ct);
+
+            trackedSession.Status = PracticeSessionStatuses.Completed;
+            trackedSession.CompletedAt = nowUtc;
+
+            var accuracy = ComputeAccuracy(trackedSession.CorrectAnswers, trackedSession.AnsweredQuestions);
+            if (accuracy >= 0.80m)
+                trackedSession.XpEarned += 10;
+            trackedSession.XpEarned += 15;
+
+            var finalMastery = await ResolveSessionFinalMasteryAsync(userId, trackedSession, ct);
+            trackedSession.FinalMastery = finalMastery;
+
+            await _analyticsUpdater.UpdateDailyActivityAsync(
+                userId,
+                DateOnly.FromDateTime(nowUtc),
+                completed: true,
+                ct);
+
+            var nextSkillNodeId = await ResolveRecommendedNextSkillNodeIdAsync(userId, trackedSession.SkillNodeId, ct);
+            var response = new CompletePracticeSessionResponse(
+                SessionId: trackedSession.Id,
+                Status: trackedSession.Status,
+                AnsweredQuestions: trackedSession.AnsweredQuestions,
+                CorrectAnswers: trackedSession.CorrectAnswers,
+                Accuracy: accuracy,
+                XpEarned: trackedSession.XpEarned,
+                InitialMastery: trackedSession.InitialMastery,
+                FinalMastery: finalMastery,
+                MasteryDelta: decimal.Round(finalMastery - trackedSession.InitialMastery, 4, MidpointRounding.AwayFromZero),
+                WeakTopicsUpdated: true,
+                RecommendedNextSkillNodeId: nextSkillNodeId);
+
+            trackedSession.CompletionResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(response);
+
+            await _db.SaveChangesAsync(ct);
             if (tx is not null)
-                await tx.RollbackAsync(ct);
-            var replaySession = await _db.PracticeSessions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
+                await tx.CommitAsync(ct);
+            committed = true;
 
-            if (replaySession is null)
-                throw new KeyNotFoundException("Practice session was not found.");
+            await _backgroundJobs.EnqueuePostSessionJobsAsync(userId, ct);
 
-            if (!string.Equals(replaySession.Status, PracticeSessionStatuses.Completed, StringComparison.Ordinal) ||
-                string.IsNullOrWhiteSpace(replaySession.CompletionResponseJson))
+            _adaptiveAnalytics.TrackEvent("adaptive_practice_completed", userId, new
             {
-                throw new InvalidOperationException("Practice session is not active.");
-            }
+                sessionId,
+                trackedSession.AnsweredQuestions,
+                trackedSession.CorrectAnswers,
+                accuracy,
+                trackedSession.XpEarned,
+                trackedSession.InitialMastery,
+                trackedSession.FinalMastery
+            });
 
-            return DeserializeCompletePracticeSessionResponse(replaySession.CompletionResponseJson);
+            return response;
         }
-
-        var trackedSession = await _db.PracticeSessions
-            .Include(x => x.Items)
-            .FirstAsync(x => x.Id == sessionId && x.UserId == userId, ct);
-
-        trackedSession.Status = PracticeSessionStatuses.Completed;
-        trackedSession.CompletedAt = nowUtc;
-
-        var accuracy = ComputeAccuracy(trackedSession.CorrectAnswers, trackedSession.AnsweredQuestions);
-        if (accuracy >= 0.80m)
-            trackedSession.XpEarned += 10;
-        trackedSession.XpEarned += 15;
-
-        var finalMastery = await ResolveSessionFinalMasteryAsync(userId, trackedSession, ct);
-        trackedSession.FinalMastery = finalMastery;
-
-        await _analyticsUpdater.UpdateDailyActivityAsync(
-            userId,
-            DateOnly.FromDateTime(nowUtc),
-            completed: true,
-            ct);
-
-        var nextSkillNodeId = await ResolveRecommendedNextSkillNodeIdAsync(userId, trackedSession.SkillNodeId, ct);
-        var response = new CompletePracticeSessionResponse(
-            SessionId: trackedSession.Id,
-            Status: trackedSession.Status,
-            AnsweredQuestions: trackedSession.AnsweredQuestions,
-            CorrectAnswers: trackedSession.CorrectAnswers,
-            Accuracy: accuracy,
-            XpEarned: trackedSession.XpEarned,
-            InitialMastery: trackedSession.InitialMastery,
-            FinalMastery: finalMastery,
-            MasteryDelta: decimal.Round(finalMastery - trackedSession.InitialMastery, 4, MidpointRounding.AwayFromZero),
-            WeakTopicsUpdated: true,
-            RecommendedNextSkillNodeId: nextSkillNodeId);
-
-        trackedSession.CompletionResponseJson = IdempotencyPayloadCanonicalizer.CanonicalizeToJson(response);
-
-        await _db.SaveChangesAsync(ct);
-        if (tx is not null)
-            await tx.CommitAsync(ct);
-
-        await _backgroundJobs.EnqueuePostSessionJobsAsync(userId, ct);
-
-        _adaptiveAnalytics.TrackEvent("adaptive_practice_completed", userId, new
+        finally
         {
-            sessionId,
-            trackedSession.AnsweredQuestions,
-            trackedSession.CorrectAnswers,
-            accuracy,
-            trackedSession.XpEarned,
-            trackedSession.InitialMastery,
-            trackedSession.FinalMastery
-        });
-
-        return response;
+            if (tx is not null && !committed)
+                await RollbackQuietlyAsync(tx);
+        }
     }
 
     private static string BuildPracticeAnswerReplayFingerprint(
@@ -485,6 +533,62 @@ public sealed class PracticeSessionService : IPracticeSessionService
             selectedOption,
             timeSpentMs
         });
+    }
+
+    private async Task<PracticeSessionItem?> FindSettledPracticeAnswerItemAsync(
+        string userId,
+        Guid sessionId,
+        int questionId,
+        CancellationToken ct)
+    {
+        var sessionExists = await _db.PracticeSessions
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == sessionId && x.UserId == userId, ct);
+        if (!sessionExists)
+            return null;
+
+        return await _db.PracticeSessionItems
+            .AsNoTracking()
+            .Where(x =>
+                x.SessionId == sessionId &&
+                x.QuestionId == questionId &&
+                x.AnsweredAt != null &&
+                x.SettledResponseJson != null)
+            .OrderByDescending(x => x.PresentedAt)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private async Task<PracticeSession?> FindCompletedPracticeSessionAsync(
+        string userId,
+        Guid sessionId,
+        CancellationToken ct)
+    {
+        var session = await _db.PracticeSessions
+            .AsNoTracking()
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
+
+        if (session is null)
+            return null;
+
+        if (!string.Equals(session.Status, PracticeSessionStatuses.Completed, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(session.CompletionResponseJson))
+        {
+            return null;
+        }
+
+        return session;
+    }
+
+    private static async Task RollbackQuietlyAsync(IDbContextTransaction transaction)
+    {
+        try
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+        }
+        catch
+        {
+        }
     }
 
     private static SubmitPracticeAnswerResponse BuildAnswerReplayResult(
