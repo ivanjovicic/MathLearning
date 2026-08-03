@@ -63,6 +63,12 @@ public interface IDesignTokenVersionManager
 {
     string EnsureNextVersion(string? requestedVersion, string? currentVersion);
     string CreateRollbackVersion(string? requestedVersion, string currentVersion);
+
+    /// <summary>
+    /// Allocates a human-readable yet collision-safe draft identity.
+    /// Format stays within <c>DesignTokenVersion.Version</c> max length (32).
+    /// </summary>
+    string CreateDraftVersionIdentity(DateTime? utcNow = null);
 }
 
 public interface IDesignTokenAuditService
