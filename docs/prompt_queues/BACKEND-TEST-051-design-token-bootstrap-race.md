@@ -1,7 +1,7 @@
 # BACKEND-TEST-051 - Design-token bootstrap race and startup ownership
 
 Priority: P1
-Status: Prompt-ready
+Status: Done 75% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-051-evidence.md`; Validation: DesignTokenBootstrapRace 4/4; Residual risk: dedicated startup lease table deferred; Commit: self
 Run mode: design-token bootstrap investigation + startup/concurrency tests
 
 ## Problem
