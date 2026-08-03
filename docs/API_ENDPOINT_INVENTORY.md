@@ -35,14 +35,14 @@ Auth legend:
 | GET | `/health` | Public | `Program.cs` | ASP.NET health checks. |
 | GET | `/health/background-jobs` | Public | `Program.cs` | Background-job startup state. |
 | GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias. |
-| GET | `/metrics` | Public/internal | `Program.cs` | Process metrics; public-detail minimization remains BACKEND-TEST-026. |
-| GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
-| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary; detail minimization pending. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema and cosmetic catalog revision checks; returns 503 when required catalog state is missing or invalid. |
-| GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Migration/schema detail; minimization pending. |
-| GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema-health alias. |
+| GET | `/metrics` | Admin (`UiTokensAdminPolicy`) | `Program.cs` | Process/rate-limit/explanation-cache metrics; not public. |
+| GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness (`status`, `timestamp` only). |
+| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB connectivity probe with safe reason codes only (no provider/schema/migration detail). |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness probe with safe reason codes only; returns 503 when DB/schema/catalog is not ready. Omits counts, checksums, and migration names. |
+| GET | `/api/health/schema` | Admin (`UiTokensAdminPolicy`) | `HealthEndpoints.cs` | Migration/schema diagnostic detail. |
+| GET | `/health/schema` | Admin (`UiTokensAdminPolicy`) | `HealthEndpoints.cs` | Canonical schema-health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. |
-| GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock monitoring payload; protect/remove under BACKEND-TEST-026. |
+| GET | `/api/monitoring/jobs` | Admin (`UiTokensAdminPolicy`) | `Program.cs` | Mock monitoring payload; admin-only until real Hangfire status exists. |
 | GET | `/api/monitoring/logs` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted log file read. |
 | GET | `/api/monitoring/logs-advanced` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted bounded filtered log read. |
 | GET | `/api/logs/recent` | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | Redacted DB log read. |

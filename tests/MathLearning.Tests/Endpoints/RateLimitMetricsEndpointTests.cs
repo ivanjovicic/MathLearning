@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using MathLearning.Application.Services;
 using MathLearning.Tests.Middleware;
 
 namespace MathLearning.Tests.Endpoints;
@@ -32,9 +33,18 @@ public sealed class RateLimitMetricsEndpointTests : IClassFixture<RateLimitTestW
         Assert.Equal(HttpStatusCode.TooManyRequests, limitedResponse.StatusCode);
 
         var metricsResponse = await client.GetAsync("/metrics");
-        Assert.Equal(HttpStatusCode.OK, metricsResponse.StatusCode);
+        Assert.True(
+            metricsResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            $"Anonymous /metrics expected 401/403, got {(int)metricsResponse.StatusCode}");
 
-        var body = await metricsResponse.Content.ReadAsStringAsync();
+        using var adminRequest = new HttpRequestMessage(HttpMethod.Get, "/metrics");
+        adminRequest.Headers.Add("X-Test-UserId", "admin-user");
+        adminRequest.Headers.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
+
+        var adminMetricsResponse = await client.SendAsync(adminRequest);
+        Assert.Equal(HttpStatusCode.OK, adminMetricsResponse.StatusCode);
+
+        var body = await adminMetricsResponse.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
         var rateLimit = json.RootElement.GetProperty("rateLimit");
         var explanationCache = json.RootElement.GetProperty("explanationCache");

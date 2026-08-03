@@ -13,7 +13,7 @@ public static class HealthEndpoints
                        .WithTags("Health")
                        .AllowAnonymous();
 
-        // 🏥 Basic liveness check
+        // Basic liveness check — stable public probe fields only.
         group.MapGet("/", () => Results.Ok(new
         {
             status = "Healthy",
@@ -22,7 +22,7 @@ public static class HealthEndpoints
         .WithName("HealthCheck")
         .WithDescription("Basic liveness check");
 
-        // 🗄️ Database connectivity check
+        // Database connectivity — public status + safe reason codes only.
         group.MapGet("/db", async (ApiDbContext db, DatabaseSchemaState schemaState) =>
         {
             try
@@ -33,21 +33,26 @@ public static class HealthEndpoints
                     return Results.Json(new
                     {
                         status = "Unhealthy",
-                        db = "Cannot connect",
-                        schema = BuildSchemaSummary(schemaState.Current),
+                        reason = "DatabaseUnavailable",
                         timestamp = DateTime.UtcNow
                     }, statusCode: 503);
                 }
 
-                // Run a simple query to verify the connection is truly working
                 await db.Database.ExecuteSqlRawAsync("SELECT 1");
+
+                if (!schemaState.Current.IsSchemaReady)
+                {
+                    return Results.Json(new
+                    {
+                        status = "Unhealthy",
+                        reason = "SchemaNotReady",
+                        timestamp = DateTime.UtcNow
+                    }, statusCode: 503);
+                }
 
                 return Results.Ok(new
                 {
                     status = "Healthy",
-                    db = "Connected",
-                    provider = "PostgreSQL",
-                    schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 });
             }
@@ -56,9 +61,7 @@ public static class HealthEndpoints
                 return Results.Json(new
                 {
                     status = "Unhealthy",
-                    db = "Error",
                     reason = "DatabaseHealthCheckFailed",
-                    schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 }, statusCode: 503);
             }
@@ -66,7 +69,7 @@ public static class HealthEndpoints
         .WithName("DatabaseHealthCheck")
         .WithDescription("Check PostgreSQL database connectivity");
 
-        // 📊 Detailed readiness check (DB + data counts)
+        // Readiness — public status + safe reason codes; no counts/checksums/migration names.
         group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState, ICosmeticCatalogService catalogService) =>
         {
             try
@@ -78,7 +81,7 @@ public static class HealthEndpoints
                     {
                         status = "NotReady",
                         reason = "DatabaseUnavailable",
-                        schema = BuildSchemaSummary(schemaState.Current)
+                        timestamp = DateTime.UtcNow
                     }, statusCode: 503);
                 }
 
@@ -89,7 +92,7 @@ public static class HealthEndpoints
                     {
                         status = "NotReady",
                         reason = "SchemaNotReady",
-                        schema = BuildSchemaSummary(schemaStatus)
+                        timestamp = DateTime.UtcNow
                     }, statusCode: 503);
                 }
 
@@ -100,33 +103,13 @@ public static class HealthEndpoints
                     {
                         status = catalogReadiness.Status,
                         reason = catalogReadiness.Reason,
-                        catalog = catalogReadiness,
-                        schema = BuildSchemaSummary(schemaStatus)
+                        timestamp = DateTime.UtcNow
                     }, statusCode: 503);
                 }
-
-                var questionCount = await db.Questions.CountAsync();
-                var categoryCount = await db.Categories.CountAsync();
-                var userCount = await db.UserProfiles.CountAsync();
 
                 return Results.Ok(new
                 {
                     status = "Ready",
-                    db = "Connected",
-                    catalog = new
-                    {
-                        catalogReadiness.Status,
-                        catalogReadiness.RevisionKey,
-                        catalogReadiness.Checksum,
-                        catalogReadiness.CatalogVersion
-                    },
-                    data = new
-                    {
-                        questions = questionCount,
-                        categories = categoryCount,
-                        users = userCount
-                    },
-                    schema = BuildSchemaSummary(schemaStatus),
                     timestamp = DateTime.UtcNow
                 });
             }
@@ -136,22 +119,25 @@ public static class HealthEndpoints
                 {
                     status = "NotReady",
                     reason = "ReadinessCheckFailed",
-                    schema = BuildSchemaSummary(schemaState.Current)
+                    timestamp = DateTime.UtcNow
                 }, statusCode: 503);
             }
         })
         .WithName("ReadinessCheck")
         .WithDescription("Full readiness check including database and seed data");
 
-        group.MapGet("/schema", BuildSchemaHealthResult)
-        .WithName("SchemaHealthCheck")
-        .WithDescription("Expose database schema/migration state");
+        // Schema diagnostics are admin-only and intentionally outside the anonymous /api/health group.
+        app.MapGet("/api/health/schema", BuildSchemaHealthResult)
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+            .WithName("SchemaHealthCheck")
+            .WithTags("Health")
+            .WithDescription("Admin-only database schema/migration state");
 
         app.MapGet("/health/schema", BuildSchemaHealthResult)
-            .AllowAnonymous()
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
             .WithName("CanonicalSchemaHealthCheck")
             .WithTags("Health")
-            .WithDescription("Expose database schema/migration state");
+            .WithDescription("Admin-only database schema/migration state");
     }
 
     private static IResult BuildSchemaHealthResult(DatabaseSchemaState schemaState)
@@ -172,20 +158,5 @@ public static class HealthEndpoints
         return schemaStatus.IsSchemaReady
             ? Results.Ok(payload)
             : Results.Json(payload, statusCode: StatusCodes.Status503ServiceUnavailable);
-    }
-
-    private static object BuildSchemaSummary(DatabaseSchemaStatus status)
-    {
-        return new
-        {
-            state = status.Status,
-            isSchemaReady = status.IsSchemaReady,
-            schemaVersion = status.LatestAppliedMigration,
-            latestRequiredMigration = status.LatestCodeMigration,
-            pendingMigrationsCount = status.PendingMigrationsCount,
-            unknownAppliedMigrationsCount = status.UnknownAppliedMigrationsCount,
-            checkedAtUtc = status.CheckedAtUtc,
-            failure = status.FailureMessage
-        };
     }
 }

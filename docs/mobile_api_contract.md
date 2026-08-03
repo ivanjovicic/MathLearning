@@ -66,7 +66,7 @@ When the fragment threshold is reached, the response also includes `unlockedItem
 
 Do **not** use legacy `POST /api/cosmetics/unlock` or `POST /api/cosmetics/fragments/daily-run`.
 
-Readiness truthfulness: `GET /api/health/ready` returns `503` when the cosmetic catalog revision, required defaults, or required fragment labels are missing or invalid.
+Readiness truthfulness: `GET /api/health/ready` returns `503` with a stable `reason` code when the cosmetic catalog revision, required defaults, or required fragment labels are missing or invalid. Public ready/db probes expose only `status`, optional `reason`, and `timestamp` (no counts, checksums, or migration names). Schema diagnostics and `/metrics` require admin authorization.
 
 ### `GET /api/cosmetics/catalog`
 
