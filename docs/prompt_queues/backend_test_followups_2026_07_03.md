@@ -22,7 +22,7 @@ Target repo: `ivanjovicic/MathLearning`
 | BACKEND-TEST-024 | P1 | Prompt-ready | Make maintenance routes testable/read-only where appropriate and add positive admin tests. |
 | BACKEND-TEST-025 | P1 | Prompt-ready | Bound bug report input/screenshot handling and prevent orphan screenshot storage. |
 | BACKEND-TEST-026 | P1 | Prompt-ready | Minimize public health/metrics/monitoring information while retaining platform probes. |
-| BACKEND-TEST-027 | P1/P2 | Prompt-ready | Decide whether to wire, merge or remove dead `QuestionEndpoints`; prevent route/limit drift. |
+| BACKEND-TEST-027 | P1/P2 | Done 100% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-027-evidence.md`; Validation: QuestionEndpointsAbsence; Residual risk: none; Commit: self | Decide whether to wire, merge or remove dead `QuestionEndpoints`; prevent route/limit drift. |
 | BACKEND-TEST-028 | P1/P2 | Prompt-ready | Prevent pagination arithmetic overflow and extreme-offset abuse. |
 | BACKEND-TEST-029 | P1 | Prompt-ready | Add analytics/recommendation HTTP contract and user-scope coverage. |
 | BACKEND-TEST-030 | P1 | Prompt-ready | Add explanation endpoint validation, safe-error and cancellation coverage. |
@@ -261,12 +261,18 @@ Contract/deployment documentation update required.
 
 ## BACKEND-TEST-027 — QuestionEndpoints wiring/dead-code decision
 
+Status: Done 100% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-027-evidence.md`; Validation: QuestionEndpointsAbsence 4/4 (+ authoring auth regression); Residual risk: none; Commit: self
+
 Run mode: route architecture decision + tests  
 Risk: P1/P2 route collision, unbounded read, dead code drift
 
 ### Problem
 
-`MapQuestionEndpoints` exists but is not registered. It shares `/api/questions` with authoring routes and uses an unbounded `limit` if later wired.
+`MapQuestionEndpoints` existed but was not registered. It shared `/api/questions` with authoring routes and used an unbounded `limit` if later wired.
+
+### Decision
+
+Remove the dead endpoint family. Canonical `/api/questions/*` remains `QuestionAuthoringEndpoints`; learner delivery stays quiz/adaptive/offline.
 
 ### Required work
 
