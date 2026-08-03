@@ -48,6 +48,6 @@ Cross-repo impact: no
 
 ## Delivery
 State: Needs merge
-Branch/PR: cursor/backend-test-033-cancellation-matrix-fa87
+Branch/PR: cursor/backend-test-033-cancellation-matrix-fa87 / https://github.com/ivanjovicic/MathLearning/pull/24
 Commit SHA: self
 Completion %: 79
