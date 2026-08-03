@@ -416,67 +416,86 @@ public sealed class DesignTokenPlatformService : IDesignTokenQueryService, IDesi
 
     private async Task<DesignTokenVersion> EnsureDraftVersionAsync(string? actorUserId, string? notes, CancellationToken cancellationToken)
     {
-        var draft = await dbContext.DesignTokenVersions
-            .Include(x => x.TokenSets)
-            .ThenInclude(x => x.Tokens)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .FirstOrDefaultAsync(x => x.Status == DesignTokenVersionStatuses.Draft, cancellationToken);
+        const int maxAttempts = 5;
 
-        if (draft is not null)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            return draft;
-        }
+            var existing = await dbContext.DesignTokenVersions
+                .Include(x => x.TokenSets)
+                .ThenInclude(x => x.Tokens)
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .FirstOrDefaultAsync(x => x.Status == DesignTokenVersionStatuses.Draft, cancellationToken);
 
-        var current = await dbContext.DesignTokenVersions
-            .Include(x => x.TokenSets)
-            .ThenInclude(x => x.Tokens)
-            .FirstAsync(x => x.IsCurrent, cancellationToken);
-
-        draft = new DesignTokenVersion
-        {
-            Version = $"draft-{DateTime.UtcNow:yyyyMMddHHmmss}",
-            Status = DesignTokenVersionStatuses.Draft,
-            BaseWidth = current.BaseWidth,
-            IsCurrent = false,
-            SourceVersionId = current.Id,
-            Notes = notes,
-            CreatedByUserId = actorUserId,
-            CreatedAtUtc = DateTime.UtcNow,
-            UpdatedAtUtc = DateTime.UtcNow
-        };
-
-        foreach (var sourceSet in current.TokenSets)
-        {
-            var set = new DesignTokenSet
+            if (existing is not null)
             {
-                Theme = sourceSet.Theme,
-                CompiledPayloadJson = sourceSet.CompiledPayloadJson,
-                PayloadHash = sourceSet.PayloadHash,
+                return existing;
+            }
+
+            var current = await dbContext.DesignTokenVersions
+                .Include(x => x.TokenSets)
+                .ThenInclude(x => x.Tokens)
+                .AsNoTracking()
+                .FirstAsync(x => x.IsCurrent, cancellationToken);
+
+            var draft = new DesignTokenVersion
+            {
+                Version = versionManager.CreateDraftVersionIdentity(),
+                Status = DesignTokenVersionStatuses.Draft,
+                BaseWidth = current.BaseWidth,
+                IsCurrent = false,
+                SourceVersionId = current.Id,
+                Notes = notes,
+                CreatedByUserId = actorUserId,
                 CreatedAtUtc = DateTime.UtcNow,
                 UpdatedAtUtc = DateTime.UtcNow
             };
 
-            foreach (var token in sourceSet.Tokens)
+            foreach (var sourceSet in current.TokenSets)
             {
-                set.Tokens.Add(new DesignToken
+                var set = new DesignTokenSet
                 {
-                    Category = token.Category,
-                    TokenKey = token.TokenKey,
-                    ValueJson = token.ValueJson,
-                    ValueType = token.ValueType,
-                    Source = token.Source,
-                    SortOrder = token.SortOrder,
+                    Theme = sourceSet.Theme,
+                    CompiledPayloadJson = sourceSet.CompiledPayloadJson,
+                    PayloadHash = sourceSet.PayloadHash,
                     CreatedAtUtc = DateTime.UtcNow,
                     UpdatedAtUtc = DateTime.UtcNow
-                });
+                };
+
+                foreach (var token in sourceSet.Tokens)
+                {
+                    set.Tokens.Add(new DesignToken
+                    {
+                        Category = token.Category,
+                        TokenKey = token.TokenKey,
+                        ValueJson = token.ValueJson,
+                        ValueType = token.ValueType,
+                        Source = token.Source,
+                        SortOrder = token.SortOrder,
+                        CreatedAtUtc = DateTime.UtcNow,
+                        UpdatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                draft.TokenSets.Add(set);
             }
 
-            draft.TokenSets.Add(set);
+            dbContext.DesignTokenVersions.Add(draft);
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+                return draft;
+            }
+            catch (DbUpdateException) when (attempt < maxAttempts)
+            {
+                foreach (var entry in dbContext.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
         }
 
-        dbContext.DesignTokenVersions.Add(draft);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return draft;
+        throw new InvalidOperationException("Unable to allocate a unique design-token draft version.");
     }
 
     private IEnumerable<string> GetConfiguredThemes()
