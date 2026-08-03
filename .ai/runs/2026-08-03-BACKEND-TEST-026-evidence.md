@@ -54,7 +54,7 @@ Documentation impact: updated API inventory, mobile contract readiness note, man
 Cross-repo impact: mobile/platform consumers must not require removed public ready/db fields; sync backend SHA on merge
 
 ## Delivery
-State: Done
-Branch/PR: cursor/backend-test-026-public-health-fa87
+State: Needs merge
+Branch/PR: cursor/backend-test-026-public-health-fa87 / https://github.com/ivanjovicic/MathLearning/pull/23
 Commit SHA: self
-Completion %: 100
+Completion %: 79

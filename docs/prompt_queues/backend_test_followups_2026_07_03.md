@@ -21,7 +21,7 @@ Target repo: `ivanjovicic/MathLearning`
 | BACKEND-TEST-023 | P0/P1 | Runtime-fixed / Workflow validation needed | Multi-instance-safe outbox claiming now uses `FOR UPDATE SKIP LOCKED` plus retry/dead-letter state; PostgreSQL proof still needs CI or valid local credentials. |
 | BACKEND-TEST-024 | P1 | Prompt-ready | Make maintenance routes testable/read-only where appropriate and add positive admin tests. |
 | BACKEND-TEST-025 | P1 | Prompt-ready | Bound bug report input/screenshot handling and prevent orphan screenshot storage. |
-| BACKEND-TEST-026 | P1 | Done 100% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-026-evidence.md`; Validation: Health\|Metrics\|Monitoring 27/27 passed; Residual risk: none; Commit: self | Minimize public health/metrics/monitoring information while retaining platform probes. |
+| BACKEND-TEST-026 | P1 | Done 79% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-026-evidence.md`; Validation: Health\|Metrics\|Monitoring 27/27 passed; Residual risk: none; Commit: self | Minimize public health/metrics/monitoring information while retaining platform probes. |
 | BACKEND-TEST-027 | P1/P2 | Prompt-ready | Decide whether to wire, merge or remove dead `QuestionEndpoints`; prevent route/limit drift. |
 | BACKEND-TEST-028 | P1/P2 | Prompt-ready | Prevent pagination arithmetic overflow and extreme-offset abuse. |
 | BACKEND-TEST-029 | P1 | Prompt-ready | Add analytics/recommendation HTTP contract and user-scope coverage. |
