@@ -840,6 +840,18 @@ public static class EconomySettlementEndpoints
                 return Results.Ok(replay);
             }
 
+            // Same deny-by-default premium policy as cosmetics reward-track claim
+            // (BACKEND-SEASON-TRACK-AUTHORITY-001). Milestone id must not bypass track entitlement.
+            if (!SeasonRewardTrackAccess.CanAccessTrack(userId, milestone.TrackType))
+            {
+                var error = EconomyEndpointHelpers.BusinessError(
+                    "premium_required",
+                    "Premium reward track entitlement is required.");
+                await txService.FailAsync(begin.TransactionId, "premium_required", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Conflict(error);
+            }
+
             var progress = await GetOrCreateSeasonProgressAsync(db, userId, season.Id, ct);
             if (progress.EarnedXp < milestone.XpRequired)
             {

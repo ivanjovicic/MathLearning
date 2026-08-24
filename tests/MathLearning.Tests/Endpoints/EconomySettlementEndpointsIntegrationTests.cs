@@ -1221,6 +1221,34 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task SeasonMilestone_PremiumTrack_WithoutEntitlement_IsDeniedAndWritesNoClaim()
+    {
+        var userId = $"user-season-ms-premium-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 0);
+        var seasonId = await EnsureActiveSeasonAsync();
+        var milestoneId = await EnsureSeasonMilestoneAsync(
+            seasonId,
+            xpRequired: 50,
+            rewardType: "coins",
+            payloadJson: """{"coins":50}""",
+            trackType: CosmeticTrackTypes.Premium);
+        await SetSeasonXpAsync(userId, seasonId, earnedXp: 80);
+
+        var beforeClaims = await CountSeasonMilestoneClaimsAsync(userId, seasonId);
+        var denied = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-premium-{Guid.NewGuid():N}",
+            seasonId
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, denied.StatusCode);
+        var payload = await denied.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("premium_required", payload.GetProperty("errorCode").GetString());
+        Assert.Equal(beforeClaims, await CountSeasonMilestoneClaimsAsync(userId, seasonId));
+        Assert.Equal(0, await GetCoinsAsync(userId));
+    }
+
+    [Fact]
     public async Task SeasonMilestone_ClaimFlow_WorksAndIsIdempotent()
     {
         var userId = $"user-season-ms-{Guid.NewGuid():N}";
@@ -1908,7 +1936,12 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         return await db.UserSeasonDailyRunClaims.CountAsync(x => x.UserId == userId && x.SeasonId == seasonId);
     }
 
-    private async Task<int> EnsureSeasonMilestoneAsync(int seasonId, int xpRequired, string rewardType, string payloadJson)
+    private async Task<int> EnsureSeasonMilestoneAsync(
+        int seasonId,
+        int xpRequired,
+        string rewardType,
+        string payloadJson,
+        string trackType = CosmeticTrackTypes.Free)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1916,7 +1949,7 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         var entry = new SeasonRewardTrackEntry
         {
             SeasonId = seasonId,
-            TrackType = CosmeticTrackTypes.Free,
+            TrackType = trackType,
             Tier = Random.Shared.Next(1000, 9999),
             XpRequired = xpRequired,
             RewardType = rewardType,

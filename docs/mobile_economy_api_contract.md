@@ -189,6 +189,7 @@ Server validates milestone unlock/claim state and settles reward atomically with
 `cosmetic_fragment` rewards are explicit in contract (`fragmentName`, `fragmentCopies`) and are not silently mapped to item unlocks.
 The request always requires explicit `idempotencyKey`; missing or empty values return `400 invalid_idempotency_key`.
 The backend also enforces uniqueness by `UserId + SeasonId + MilestoneId`, so a different retry key still cannot mint the same milestone twice.
+Premium-track milestones (`SeasonRewardTrackEntry.TrackType = premium`) are deny-by-default with the same policy as `/api/cosmetics/reward-track/claim`: without a persisted premium entitlement the claim returns `409 premium_required` and writes no milestone claim, coins, XP, or cosmetics side effects. Free-track milestones remain claimable when season XP and other rules pass. Request/body text is never proof of premium entitlement.
 When `rewardType` is `xp`, global XP is applied only through `IXpTrackingService` with source identity `season:{seasonId}:milestone:{milestoneId}`. That updates total, daily, weekly and monthly XP plus level together with a `user_xp_events` audit row; the endpoint does not independently mutate `UserProfile.Xp`. Milestone settlement passes `evaluateProgressRewards: false` so catalog readiness / cosmetics progress hooks cannot abort XP settlement. Replay and duplicate keys perform zero additional XP/bucket/history mutation.
 
 ### 7) `POST /api/cosmetics/items/{itemKey}/claim`

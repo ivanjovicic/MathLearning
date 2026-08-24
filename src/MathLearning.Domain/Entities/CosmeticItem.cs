@@ -36,6 +36,51 @@ public static class CosmeticTrackTypes
     public const string Premium = "premium";
 }
 
+/// <summary>
+/// Shared season reward-track / milestone access policy.
+/// Premium is deny-by-default until a persisted premium entitlement owner exists.
+/// Request/body track text is never proof of entitlement.
+/// </summary>
+public static class SeasonRewardTrackAccess
+{
+    public static string NormalizeTrackType(string? trackType)
+    {
+        var normalized = string.IsNullOrWhiteSpace(trackType)
+            ? CosmeticTrackTypes.Free
+            : trackType.Trim().ToLowerInvariant();
+
+        if (normalized is not (CosmeticTrackTypes.Free or CosmeticTrackTypes.Premium))
+        {
+            throw new InvalidOperationException("Unsupported reward track type.");
+        }
+
+        return normalized;
+    }
+
+    public static bool IsPremiumTrack(string? trackType)
+        => string.Equals(
+            string.IsNullOrWhiteSpace(trackType) ? string.Empty : trackType.Trim().ToLowerInvariant(),
+            CosmeticTrackTypes.Premium,
+            StringComparison.Ordinal);
+
+    public static bool HasPremiumEntitlement(string userId)
+    {
+        _ = userId;
+        return false;
+    }
+
+    public static bool CanAccessTrack(string userId, string? trackType)
+        => !IsPremiumTrack(trackType) || HasPremiumEntitlement(userId);
+
+    public static void EnsureTrackAccess(string userId, string trackType)
+    {
+        if (!CanAccessTrack(userId, trackType))
+        {
+            throw new InvalidOperationException("Premium reward track entitlement is required.");
+        }
+    }
+}
+
 public static class CosmeticSeasonStatuses
 {
     public const string Draft = "draft";
