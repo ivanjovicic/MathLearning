@@ -646,6 +646,9 @@ public static class EconomySettlementEndpoints
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_transaction_id", "TransactionId is required."));
 
             var normalizedTxId = request.TransactionId.Trim();
+            // Chest transactionId is domain provenance, not ledger operation identity.
+            // A new idempotency key for an already-settled chest must reach the
+            // alreadyClaimed replay path instead of failing as idempotency_conflict.
             var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
@@ -653,8 +656,7 @@ public static class EconomySettlementEndpoints
                 request.IdempotencyKey!,
                 request,
                 ct,
-                operationId: request.OperationId,
-                transactionId: normalizedTxId);
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
