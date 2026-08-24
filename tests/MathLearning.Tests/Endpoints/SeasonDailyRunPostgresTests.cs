@@ -67,7 +67,7 @@ public sealed class SeasonDailyRunPostgresTests
 
         Assert.True(replay.Success);
         Assert.True(replay.AlreadyClaimed);
-        Assert.Equal(0, replay.AwardedXp);
+        Assert.Equal(40, replay.AwardedXp);
         Assert.Equal(oldSeasonId, replay.Season.SeasonId);
         Assert.Equal(40, replay.Season.EarnedXp);
 
@@ -120,7 +120,7 @@ public sealed class SeasonDailyRunPostgresTests
             var replay = new SeasonDailyRunClaimResponse(
                 Success: true,
                 AlreadyClaimed: true,
-                AwardedXp: 0,
+                AwardedXp: existing.AwardedXp,
                 Season: seasonStateExisting,
                 FragmentGrant: null,
                 ErrorCode: null,

@@ -1218,6 +1218,22 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         Assert.Equal(17, (await GetSeasonProgressAsync(userId, ownerSeasonId)).EarnedXp);
         Assert.Equal(0, await CountSeasonDailyRunClaimsAsync(userId, otherSeasonId));
         Assert.Equal(1, await CountSeasonDailyRunClaimsAsync(userId, ownerSeasonId));
+
+        var differentKeyReplay = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"owner-key-2-{suffix}",
+            transactionId = $"owner-chest-tx-{suffix}",
+            seasonId = otherSeasonId,
+            xp = 99
+        });
+        Assert.Equal(HttpStatusCode.OK, differentKeyReplay.StatusCode);
+        var differentKeyPayload = await differentKeyReplay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(differentKeyPayload.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(17, differentKeyPayload.GetProperty("awardedXp").GetInt32());
+        Assert.Equal(ownerSeasonId, differentKeyPayload.GetProperty("season").GetProperty("seasonId").GetInt32());
+        Assert.Equal(17, differentKeyPayload.GetProperty("season").GetProperty("earnedXp").GetInt32());
+        Assert.Equal(1, await CountSeasonDailyRunClaimsAsync(userId, ownerSeasonId));
+        Assert.Equal(0, await CountSeasonDailyRunClaimsAsync(userId, otherSeasonId));
     }
 
     [Fact]

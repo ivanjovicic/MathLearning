@@ -673,7 +673,7 @@ public static class EconomySettlementEndpoints
                 var replay = new SeasonDailyRunClaimResponse(
                     Success: true,
                     AlreadyClaimed: true,
-                    AwardedXp: 0,
+                    AwardedXp: existing.AwardedXp,
                     Season: seasonStateExisting,
                     FragmentGrant: fragmentGrantHint,
                     ErrorCode: null,
