@@ -1044,21 +1044,22 @@ public static class EconomySettlementEndpoints
         var now = DateTime.UtcNow;
         if (requestedSeasonId.HasValue)
         {
-            return await db.CosmeticSeasons
+            var season = await db.CosmeticSeasons
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.Id == requestedSeasonId.Value &&
-                    x.IsActive &&
-                    x.StartDate <= now &&
-                    x.EndDate >= now,
-                    ct);
+                .FirstOrDefaultAsync(x => x.Id == requestedSeasonId.Value, ct);
+            return season is not null && SeasonClaimWindow.IsAccessible(season, now) ? season : null;
         }
 
-        return await db.CosmeticSeasons
+        var candidates = await db.CosmeticSeasons
             .AsNoTracking()
-            .Where(x => x.IsActive && x.StartDate <= now && x.EndDate >= now)
+            .Where(x =>
+                x.Status == CosmeticSeasonStatuses.Active ||
+                x.Status == CosmeticSeasonStatuses.RewardLock ||
+                x.IsActive)
             .OrderByDescending(x => x.StartDate)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+
+        return candidates.FirstOrDefault(x => SeasonClaimWindow.IsAccessible(x, now));
     }
 
     /// <summary>

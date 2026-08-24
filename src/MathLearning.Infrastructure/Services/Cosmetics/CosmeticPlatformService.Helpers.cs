@@ -454,40 +454,9 @@ public sealed partial class CosmeticPlatformService
 
     /// <summary>
     /// Reward-track mobile routes share one claim-window policy for implicit and explicit season selection.
-    /// Allowed: active within the play/claim window; reward_lock until RewardLockAt (or EndDate).
-    /// Denied: draft, scheduled, completed, archived, future starts, and seasons past their claim deadline.
     /// </summary>
     private static bool IsRewardTrackSeasonAccessible(CosmeticSeason season, DateTime nowUtc)
-    {
-        if (season.Status is CosmeticSeasonStatuses.Draft
-            or CosmeticSeasonStatuses.Scheduled
-            or CosmeticSeasonStatuses.Completed
-            or CosmeticSeasonStatuses.Archived)
-        {
-            return false;
-        }
-
-        if (nowUtc < season.StartDate)
-        {
-            return false;
-        }
-
-        if (season.Status == CosmeticSeasonStatuses.RewardLock)
-        {
-            var claimUntil = season.RewardLockAt ?? season.EndDate;
-            return nowUtc <= claimUntil;
-        }
-
-        if (season.Status != CosmeticSeasonStatuses.Active || !season.IsActive)
-        {
-            return false;
-        }
-
-        var activeClaimUntil = season.RewardLockAt is { } lockAt && lockAt > season.EndDate
-            ? lockAt
-            : season.EndDate;
-        return nowUtc <= activeClaimUntil;
-    }
+        => SeasonClaimWindow.IsAccessible(season, nowUtc);
 
     private static string NormalizeRewardTrackType(string? trackType)
         => SeasonRewardTrackAccess.NormalizeTrackType(trackType);

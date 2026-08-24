@@ -1249,6 +1249,67 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task SeasonMilestone_RewardLockWindow_AllowsClaimUntilRewardLockAt()
+    {
+        var userId = $"user-season-ms-lock-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 0);
+        var seasonId = await EnsureSeasonAsync(
+            key: $"lock-{Guid.NewGuid():N}",
+            start: DateTime.UtcNow.AddDays(-10),
+            end: DateTime.UtcNow.AddDays(-1),
+            isActive: false,
+            status: CosmeticSeasonStatuses.RewardLock,
+            rewardLockAt: DateTime.UtcNow.AddDays(3));
+        var milestoneId = await EnsureSeasonMilestoneAsync(
+            seasonId,
+            xpRequired: 50,
+            rewardType: "coins",
+            payloadJson: """{"coins":15}""");
+        await SetSeasonXpAsync(userId, seasonId, earnedXp: 80);
+
+        var success = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-lock-{Guid.NewGuid():N}",
+            seasonId
+        });
+
+        Assert.Equal(HttpStatusCode.OK, success.StatusCode);
+        Assert.Equal(15, await GetCoinsAsync(userId));
+        Assert.Equal(1, await CountSeasonMilestoneClaimsAsync(userId, seasonId));
+    }
+
+    [Fact]
+    public async Task SeasonMilestone_CompletedSeason_IsRejected()
+    {
+        var userId = $"user-season-ms-done-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 0);
+        var seasonId = await EnsureSeasonAsync(
+            key: $"done-{Guid.NewGuid():N}",
+            start: DateTime.UtcNow.AddDays(-20),
+            end: DateTime.UtcNow.AddDays(-5),
+            isActive: false,
+            status: CosmeticSeasonStatuses.Completed);
+        var milestoneId = await EnsureSeasonMilestoneAsync(
+            seasonId,
+            xpRequired: 50,
+            rewardType: "coins",
+            payloadJson: """{"coins":15}""");
+        await SetSeasonXpAsync(userId, seasonId, earnedXp: 80);
+
+        var denied = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-done-{Guid.NewGuid():N}",
+            seasonId
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, denied.StatusCode);
+        var payload = await denied.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("invalid_season", payload.GetProperty("errorCode").GetString());
+        Assert.Equal(0, await CountSeasonMilestoneClaimsAsync(userId, seasonId));
+        Assert.Equal(0, await GetCoinsAsync(userId));
+    }
+
+    [Fact]
     public async Task SeasonMilestone_ClaimFlow_WorksAndIsIdempotent()
     {
         var userId = $"user-season-ms-{Guid.NewGuid():N}";
@@ -1858,7 +1919,8 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         DateTime start,
         DateTime end,
         bool isActive,
-        string status)
+        string status,
+        DateTime? rewardLockAt = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1870,7 +1932,8 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             Status = status,
             IsActive = isActive,
             StartDate = start,
-            EndDate = end
+            EndDate = end,
+            RewardLockAt = rewardLockAt
         };
         db.CosmeticSeasons.Add(season);
         await db.SaveChangesAsync();

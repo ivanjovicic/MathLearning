@@ -81,6 +81,46 @@ public static class SeasonRewardTrackAccess
     }
 }
 
+/// <summary>
+/// Shared season claim-window policy for cosmetics reward-track and season milestone settlement.
+/// Allowed: active within the play/claim window; reward_lock until RewardLockAt (or EndDate).
+/// Denied: draft, scheduled, completed, archived, future starts, and seasons past their claim deadline.
+/// </summary>
+public static class SeasonClaimWindow
+{
+    public static bool IsAccessible(CosmeticSeason season, DateTime nowUtc)
+    {
+        if (season.Status is CosmeticSeasonStatuses.Draft
+            or CosmeticSeasonStatuses.Scheduled
+            or CosmeticSeasonStatuses.Completed
+            or CosmeticSeasonStatuses.Archived)
+        {
+            return false;
+        }
+
+        if (nowUtc < season.StartDate)
+        {
+            return false;
+        }
+
+        if (season.Status == CosmeticSeasonStatuses.RewardLock)
+        {
+            var claimUntil = season.RewardLockAt ?? season.EndDate;
+            return nowUtc <= claimUntil;
+        }
+
+        if (season.Status != CosmeticSeasonStatuses.Active || !season.IsActive)
+        {
+            return false;
+        }
+
+        var activeClaimUntil = season.RewardLockAt is { } lockAt && lockAt > season.EndDate
+            ? lockAt
+            : season.EndDate;
+        return nowUtc <= activeClaimUntil;
+    }
+}
+
 public static class CosmeticSeasonStatuses
 {
     public const string Draft = "draft";
