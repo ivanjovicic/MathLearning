@@ -1,7 +1,6 @@
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
-using MathLearning.Tests.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +18,9 @@ public class XpTrackingConcurrencyIntegrationTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
 
-        var options = SqliteApiDbContextOptions.Create(connection);
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseSqlite(connection)
+            .Options;
 
         await using (var setup = new ApiDbContext(options))
         {

@@ -10,10 +10,7 @@ public static partial class LogOutputRedactor
     [GeneratedRegex(@"Bearer\s+\S+", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex BearerTokenPattern();
 
-    [GeneratedRegex(@"(?i)\btoken\s*[=:]\s*(?:Bearer\s+)?\S+")]
-    private static partial Regex TokenAssignmentPattern();
-
-    [GeneratedRegex(@"(?i)(password|pwd|secret|api[_-]?key|connectionstring)\s*[=:]\s*\S+")]
+    [GeneratedRegex(@"(?i)(password|pwd|secret|api[_-]?key|token|connectionstring)\s*[=:]\s*\S+")]
     private static partial Regex SecretAssignmentPattern();
 
     public static string Redact(string? value)
@@ -22,7 +19,6 @@ public static partial class LogOutputRedactor
             return value ?? string.Empty;
 
         var redacted = EmailPattern().Replace(value, "[redacted-email]");
-        redacted = TokenAssignmentPattern().Replace(redacted, "token=[redacted-token]");
         redacted = BearerTokenPattern().Replace(redacted, "[redacted-token]");
         redacted = SecretAssignmentPattern().Replace(redacted, "$1=[redacted]");
         return redacted;
