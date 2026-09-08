@@ -31,6 +31,12 @@
 - `/api/health/ready` returns `503` when the database is unreachable or the schema guard says the runtime schema is not ready.
 - If startup fails with `Pending=0` and `UnknownApplied>0`, that is local migration-history drift. For disposable local data, run `./scripts/db/drop-dev-db.ps1`.
 
+### Shared history and the known Admin legacy record
+
+When the API and Admin contexts point to the same database, both use the default `__EFMigrationsHistory` table unless a separate history table is configured. The API guard therefore allows exactly one verified legacy Admin record: `20260118125140_InitIdentityAndDomain`. This does not allow arbitrary unknown records; any other applied migration that is absent from the API migration assembly still blocks startup.
+
+Do not delete the legacy history row as a repair. Before a production rollout, verify the record and the Admin-owned tables on a backup/snapshot, then apply the reviewed API migration script. If the record is not present or the database is not shared with Admin, this allow-list must be revisited rather than copied to another environment.
+
 ## What changed
 
 - Global runtime replacement of the EF migrations SQL generator was removed from the normal API path.

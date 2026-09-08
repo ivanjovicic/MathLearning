@@ -119,6 +119,30 @@ public sealed class DatabaseSchemaVersionGuardTests
     }
 
     [Fact]
+    public void FilterUnknownAppliedMigrations_AllowsOnlyKnownAdminLegacyMigration()
+    {
+        var unknown = DatabaseSchemaVersionGuard.FilterUnknownAppliedMigrations(
+            appliedMigrations: new[]
+            {
+                "20260118125140_InitIdentityAndDomain",
+                "20260908000000_UnexpectedMigration"
+            },
+            codeMigrations: new[] { "20260728112337_AddPracticeSessionReplayState" });
+
+        Assert.Equal(new[] { "20260908000000_UnexpectedMigration" }, unknown);
+    }
+
+    [Fact]
+    public void FilterUnknownAppliedMigrations_DoesNotTreatCodeMigrationAsUnknown()
+    {
+        var unknown = DatabaseSchemaVersionGuard.FilterUnknownAppliedMigrations(
+            appliedMigrations: new[] { "20260728112337_AddPracticeSessionReplayState" },
+            codeMigrations: new[] { "20260728112337_AddPracticeSessionReplayState" });
+
+        Assert.Empty(unknown);
+    }
+
+    [Fact]
     public void CreateMismatchException_ValidateExactIncludesDeploymentGuidanceAndEvidence()
     {
         var guard = CreateGuard();
