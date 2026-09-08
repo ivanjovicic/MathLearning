@@ -12,7 +12,7 @@ Token budget: medium
 Started at UTC: 2026-09-08T12:59:00Z
 Completed at UTC: 2026-09-08T13:04:00Z
 Elapsed time: 5 minutes
-Relevant prior mistakes read: MISTAKE-VALIDATION-001, MISTAKE-CONTEXT-001
+Relevant prior mistakes read: BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-XREPO-001
 How this run avoids prior mistakes: isolated clean worktree, exact migration owner, no production SQL execution, and explicit environment-proof classification.
 Owner/hypothesis: the existing redrive column migration is empty or historical repair SQL was changed after application; a new explicit idempotent migration will repair drift before the worker runs.
 Files inspected: 10
@@ -41,7 +41,7 @@ Validation not run: PostgreSQL integration/schema-from-zero validation -> not ru
 
 ## Exceptions and learning
 
-Mistakes observed: MISTAKE-VALIDATION-001 new; prevention=check free disk before NuGet/build output
+Mistakes observed: BACKEND-MISTAKE-VALIDATION-001 new; prevention=check free disk before NuGet/build output
 Waste: validation environment; one initial `--no-restore` attempt lacked generated assets
 Missed: focused test execution and production migration application remain pending
 Follow-up: operator/release owner must apply the generated migration to production and verify the column before deploying the worker
