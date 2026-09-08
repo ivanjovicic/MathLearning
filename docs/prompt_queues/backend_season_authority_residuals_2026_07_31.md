@@ -1,9 +1,9 @@
 # Backend Season Authority Residual Queue - 2026-07-31
 
-Target repo: `ivanjovicic/MathLearning`  
-Reviewed head: `c33ce1b9b5bae3bce579594c297924ee486d12ee`  
-Source: focused static audit of current season, Daily Run, cosmetics reward-track and XP settlement code  
-Audit evidence: `.ai/runs/2026-07-31-BACKEND-SEASON-AUDIT-001-evidence.md`  
+Target repo: `ivanjovicic/MathLearning`
+Reviewed head: `c33ce1b9b5bae3bce579594c297924ee486d12ee`
+Source: focused static audit of current season, Daily Run, cosmetics reward-track and XP settlement code
+Audit evidence: `.ai/runs/2026-07-31-BACKEND-SEASON-AUDIT-001-evidence.md`
 Scope: newly identified server-authority and consistency defects not owned by the existing account, idempotency-recovery, sync, leaderboard or adaptive/practice prompts
 
 ## Why this queue exists
