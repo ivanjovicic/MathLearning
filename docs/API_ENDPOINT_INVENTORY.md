@@ -37,8 +37,8 @@ Auth legend:
 | GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias. |
 | GET | `/metrics` | Public/internal | `Program.cs` | Process metrics; public-detail minimization remains BACKEND-TEST-026. |
 | GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
-| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary; detail minimization pending. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema and cosmetic catalog revision checks; returns 503 when required catalog state is missing or invalid. |
+| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary plus explicit Redis mode/configuration/connection state; detail minimization pending. |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema, cosmetic catalog and required-Redis checks; returns 503 when required state is missing or invalid. |
 | GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Migration/schema detail; minimization pending. |
 | GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema-health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. |

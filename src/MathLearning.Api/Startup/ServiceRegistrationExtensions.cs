@@ -225,7 +225,11 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<InMemoryLockService>();
         builder.Services.AddScoped<RequestDataCacheService>();
 
-        var redisConnectionString = ResolveRedisConnectionString(builder.Configuration);
+        var redisConfiguration = ResolveRedisConfiguration(builder.Configuration);
+        var redisStatus = new RedisRuntimeStatus(redisConfiguration.Required);
+        builder.Services.AddSingleton(redisStatus);
+
+        var redisConnectionString = redisConfiguration.ConnectionString;
         if (!string.IsNullOrWhiteSpace(redisConnectionString))
         {
             try
@@ -233,10 +237,23 @@ public static class ServiceRegistrationExtensions
                 var redisOptions = BuildRedisConfigurationOptions(builder.Configuration, redisConnectionString);
                 var redisMultiplexer = ConnectionMultiplexer.Connect(redisOptions);
 
+                if (redisConfiguration.Required && !redisMultiplexer.IsConnected)
+                {
+                    redisMultiplexer.Dispose();
+                    throw new InvalidOperationException(
+                        "Redis:Required is enabled but the Redis connection was not established.");
+                }
+
                 builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
                 builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
+                redisStatus.MarkRedis(redisMultiplexer.IsConnected);
+                redisMultiplexer.ConnectionFailed += (_, args) =>
+                    redisStatus.MarkRedisDisconnected(args.FailureType.ToString());
+                redisMultiplexer.ConnectionRestored += (_, _) => redisStatus.MarkRedisConnected();
                 Log.Information(
-                    "Redis connection configured for cache-backed features. ConnectTimeoutMs={ConnectTimeoutMs} SyncTimeoutMs={SyncTimeoutMs} ConnectRetry={ConnectRetry} KeepAliveSeconds={KeepAliveSeconds} AbortOnConnectFail={AbortOnConnectFail}",
+                    "Redis connection configured for cache-backed features. Required={Required} Connected={Connected} ConnectTimeoutMs={ConnectTimeoutMs} SyncTimeoutMs={SyncTimeoutMs} ConnectRetry={ConnectRetry} KeepAliveSeconds={KeepAliveSeconds} AbortOnConnectFail={AbortOnConnectFail}",
+                    redisConfiguration.Required,
+                    redisMultiplexer.IsConnected,
                     redisOptions.ConnectTimeout,
                     redisOptions.SyncTimeout,
                     redisOptions.ConnectRetry,
@@ -245,16 +262,37 @@ public static class ServiceRegistrationExtensions
             }
             catch (Exception ex)
             {
+                redisStatus.MarkDbFallback("StartupInitializationFailed");
+                if (redisConfiguration.Required)
+                {
+                    throw new InvalidOperationException(
+                        "Redis:Required is enabled but the Redis connection could not be established.",
+                        ex);
+                }
+
                 builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
                 Log.Warning(
                     ex,
-                    "Redis startup initialization failed. Falling back to DB-backed leaderboard service.");
+                    "Redis startup initialization failed. Falling back to DB-backed leaderboard service. Required={Required} Mode={Mode}",
+                    redisConfiguration.Required,
+                    redisStatus.Snapshot().Mode);
             }
         }
         else
         {
+            redisStatus.MarkDbFallback("ConnectionStringMissing");
+            if (redisConfiguration.Required)
+            {
+                throw new InvalidOperationException(
+                    "Redis:Required is enabled but no Redis connection string is configured.");
+            }
+
             builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
-            Log.Warning("Redis connection string is not configured. Falling back to DB-backed leaderboard service.");
+            Log.Warning(
+                "Redis connection string is not configured. Falling back to DB-backed leaderboard service. Required={Required} Mode={Mode} FailureReason={FailureReason}",
+                redisConfiguration.Required,
+                redisStatus.Snapshot().Mode,
+                redisStatus.Snapshot().FailureReason);
         }
 
         builder.Services.AddScoped<IBugReportService, BugReportService>();
@@ -297,9 +335,13 @@ public static class ServiceRegistrationExtensions
         return options;
     }
 
-    private static string? ResolveRedisConnectionString(IConfiguration configuration) =>
-        configuration.GetConnectionString("Redis")
-        ?? configuration["Redis:ConnectionString"];
+    public static RedisConfiguration ResolveRedisConfiguration(IConfiguration configuration) =>
+        new(
+            configuration.GetValue<bool>("Redis:Required"),
+            configuration.GetConnectionString("Redis")
+                ?? configuration["Redis:ConnectionString"]);
+
+    public sealed record RedisConfiguration(bool Required, string? ConnectionString);
 
     public static void AddSecurityServices(this WebApplicationBuilder builder)
     {

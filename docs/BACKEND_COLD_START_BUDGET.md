@@ -64,8 +64,13 @@ Config keys in `appsettings.json` -> `Redis:*`:
 - `ConnectRetry` (default 3)
 - `KeepAliveSeconds` (default 60)
 - `AbortOnConnectFail` (default false - allows lazy reconnect)
+- `Required` (default false; set true only when production requires Redis)
 
-Failure -> `DbBackedRedisLeaderboardService` scoped fallback; startup continues.
+When `Required=false`, a missing or failed Redis startup uses the scoped `DbBackedRedisLeaderboardService` fallback. The selected mode, connection state and failure reason are exposed as `redis` in `/api/health/db` and `/api/health/ready`. When `Required=true`, missing or unavailable Redis fails startup/readiness instead of silently degrading.
+
+## DataProtection policy
+
+Production must set `DataProtection__KeysPath` to an absolute path on durable storage and configure a secret-managed PFX certificate through `DataProtection__CertificatePath` or `DataProtection__CertificateBase64`, together with `DataProtection__CertificatePassword`. The API persists and encrypts its key ring; Development/Test retain the framework's local behavior. Fly's `/data` volume is the intended production mount. Missing or invalid production key material fails startup rather than accepting ephemeral keys.
 
 ## Staging smoke checklist
 

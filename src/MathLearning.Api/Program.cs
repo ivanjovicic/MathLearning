@@ -127,6 +127,8 @@ try
         }
     }
 
+    builder.AddDataProtectionServices();
+
     var defaultConnectionString = builder.Configuration.GetConnectionString("Default");
     if (string.IsNullOrWhiteSpace(defaultConnectionString) && builder.Environment.IsEnvironment("Test"))
     {

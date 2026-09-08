@@ -3,6 +3,8 @@ using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 
+using MathLearning.Api.Startup;
+
 namespace MathLearning.Api.Endpoints;
 
 public static class HealthEndpoints
@@ -23,7 +25,7 @@ public static class HealthEndpoints
         .WithDescription("Basic liveness check");
 
         // 🗄️ Database connectivity check
-        group.MapGet("/db", async (ApiDbContext db, DatabaseSchemaState schemaState) =>
+        group.MapGet("/db", async (ApiDbContext db, DatabaseSchemaState schemaState, RedisRuntimeStatus redisStatus) =>
         {
             try
             {
@@ -34,6 +36,7 @@ public static class HealthEndpoints
                     {
                         status = "Unhealthy",
                         db = "Cannot connect",
+                        redis = redisStatus.Snapshot(),
                         schema = BuildSchemaSummary(schemaState.Current),
                         timestamp = DateTime.UtcNow
                     }, statusCode: 503);
@@ -47,6 +50,7 @@ public static class HealthEndpoints
                     status = "Healthy",
                     db = "Connected",
                     provider = "PostgreSQL",
+                    redis = redisStatus.Snapshot(),
                     schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 });
@@ -58,6 +62,7 @@ public static class HealthEndpoints
                     status = "Unhealthy",
                     db = "Error",
                     reason = "DatabaseHealthCheckFailed",
+                    redis = redisStatus.Snapshot(),
                     schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 }, statusCode: 503);
@@ -67,7 +72,7 @@ public static class HealthEndpoints
         .WithDescription("Check PostgreSQL database connectivity");
 
         // 📊 Detailed readiness check (DB + data counts)
-        group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState, ICosmeticCatalogService catalogService) =>
+        group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState, ICosmeticCatalogService catalogService, RedisRuntimeStatus redisStatus) =>
         {
             try
             {
@@ -78,6 +83,7 @@ public static class HealthEndpoints
                     {
                         status = "NotReady",
                         reason = "DatabaseUnavailable",
+                        redis = redisStatus.Snapshot(),
                         schema = BuildSchemaSummary(schemaState.Current)
                     }, statusCode: 503);
                 }
@@ -89,6 +95,7 @@ public static class HealthEndpoints
                     {
                         status = "NotReady",
                         reason = "SchemaNotReady",
+                        redis = redisStatus.Snapshot(),
                         schema = BuildSchemaSummary(schemaStatus)
                     }, statusCode: 503);
                 }
@@ -101,6 +108,19 @@ public static class HealthEndpoints
                         status = catalogReadiness.Status,
                         reason = catalogReadiness.Reason,
                         catalog = catalogReadiness,
+                        redis = redisStatus.Snapshot(),
+                        schema = BuildSchemaSummary(schemaStatus)
+                    }, statusCode: 503);
+                }
+
+                var redisReadiness = redisStatus.Snapshot();
+                if (redisReadiness.Required && !redisReadiness.Connected)
+                {
+                    return Results.Json(new
+                    {
+                        status = "NotReady",
+                        reason = "RedisUnavailable",
+                        redis = redisReadiness,
                         schema = BuildSchemaSummary(schemaStatus)
                     }, statusCode: 503);
                 }
@@ -113,6 +133,7 @@ public static class HealthEndpoints
                 {
                     status = "Ready",
                     db = "Connected",
+                    redis = redisReadiness,
                     catalog = new
                     {
                         catalogReadiness.Status,
@@ -136,6 +157,7 @@ public static class HealthEndpoints
                 {
                     status = "NotReady",
                     reason = "ReadinessCheckFailed",
+                    redis = redisStatus.Snapshot(),
                     schema = BuildSchemaSummary(schemaState.Current)
                 }, statusCode: 503);
             }

@@ -33,6 +33,8 @@ FROM ${SDK_IMAGE} AS diagnostics
 WORKDIR /app
 
 ENV ASPNETCORE_URLS=http://+:8080 \
+    HTTP_PORTS= \
+    HTTPS_PORTS= \
     ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_GCConserveMemory=1 \
     DOTNET_GCHeapHardLimitPercent=70 \
@@ -56,6 +58,8 @@ WORKDIR /app
 # Ultra low-memory defaults (override in environment if needed).
 # Chiseled images often run best with invariant globalization unless ICU is present.
 ENV ASPNETCORE_URLS=http://+:8080 \
+    HTTP_PORTS= \
+    HTTPS_PORTS= \
     ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_GCConserveMemory=1 \
     DOTNET_GCHeapHardLimitPercent=70 \
