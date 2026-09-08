@@ -10,13 +10,28 @@ public sealed class ServiceRegistrationSecurityTests
     private const string FallbackJwtSecret = "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
 
     [Fact]
-    public void AddCorsAndSwagger_NonDevWithoutAllowedOrigins_Throws()
+    public void AddCorsAndSwagger_ProductionWithoutAllowedOrigins_DoesNotThrow()
     {
         var builder = CreateBuilder("Production");
 
-        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddCorsAndSwagger());
+        var exception = Record.Exception(() => builder.AddCorsAndSwagger());
 
-        Assert.Equal("Cors:AllowedOrigins must be configured outside Development/Test.", exception.Message);
+        Assert.Null(exception);
+        Assert.False(ServiceRegistrationExtensions.ShouldUseCors(builder.Environment, builder.Configuration));
+    }
+
+    [Fact]
+    public void AddCorsAndSwagger_ProductionWithAllowedOrigin_EnablesCors()
+    {
+        var builder = CreateBuilder("Production", new Dictionary<string, string?>
+        {
+            ["Cors:AllowedOrigins:0"] = "https://admin.example.com"
+        });
+
+        var exception = Record.Exception(() => builder.AddCorsAndSwagger());
+
+        Assert.Null(exception);
+        Assert.True(ServiceRegistrationExtensions.ShouldUseCors(builder.Environment, builder.Configuration));
     }
 
     [Theory]

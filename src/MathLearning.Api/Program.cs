@@ -516,8 +516,12 @@ try
         app.UseHttpsRedirection();
     }
 
-    // Enable CORS
-    app.UseCors();
+    // Native Flutter clients do not need browser CORS. Enable it only for development/test
+    // or when a browser origin has been explicitly configured.
+    if (ServiceRegistrationExtensions.ShouldUseCors(app.Environment, app.Configuration))
+    {
+        app.UseCors();
+    }
 
     app.UseMiddleware<MathLearning.Api.Middleware.SyncRequestBodySizeLimitMiddleware>();
 

@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -413,40 +414,41 @@ public static class ServiceRegistrationExtensions
     public static void AddCorsAndSwagger(this WebApplicationBuilder builder)
     {
         var isDevelopmentOrTest = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test");
-        var allowedOrigins = Array.Empty<string>();
+        var allowedOrigins = GetConfiguredCorsAllowedOrigins(builder.Configuration);
 
-        if (!isDevelopmentOrTest)
+        if (isDevelopmentOrTest || allowedOrigins.Length > 0)
         {
-            allowedOrigins = GetConfiguredCorsAllowedOrigins(builder.Configuration);
-            if (allowedOrigins.Length == 0)
+            builder.Services.AddCors(options =>
             {
-                Log.Error("Cors:AllowedOrigins must be configured outside Development/Test.");
-                throw new InvalidOperationException("Cors:AllowedOrigins must be configured outside Development/Test.");
-            }
-        }
-
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
-            {
-                if (isDevelopmentOrTest)
+                options.AddDefaultPolicy(policy =>
                 {
-                    policy.AllowAnyOrigin()
+                    if (isDevelopmentOrTest)
+                    {
+                        policy.AllowAnyOrigin()
+                            .AllowAnyMethod()
+                            .AllowAnyHeader()
+                            .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
+                        return;
+                    }
+
+                    policy.WithOrigins(allowedOrigins)
                         .AllowAnyMethod()
                         .AllowAnyHeader()
                         .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
-                    return;
-                }
-
-                policy.WithOrigins(allowedOrigins)
-                    .AllowAnyMethod()
-                    .AllowAnyHeader()
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
+                });
             });
-        });
+        }
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+    }
+
+    public static bool ShouldUseCors(IHostEnvironment environment, IConfiguration configuration)
+    {
+        if (environment.IsDevelopment() || environment.IsEnvironment("Test"))
+            return true;
+
+        return GetConfiguredCorsAllowedOrigins(configuration).Length > 0;
     }
 
     private static string[] GetConfiguredCorsAllowedOrigins(IConfiguration configuration)
