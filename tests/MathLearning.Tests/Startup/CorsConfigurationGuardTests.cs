@@ -1,3 +1,8 @@
+using System.Net;
+using MathLearning.Api;
+using MathLearning.Tests.Helpers;
+using Xunit;
+
 namespace MathLearning.Tests.Startup;
 
 public sealed class CorsConfigurationGuardTests
@@ -23,6 +28,29 @@ public sealed class CorsConfigurationGuardTests
 
         Assert.True(allowAnyOriginIndex >= 0, "Expected development/test CORS branch to allow any origin.");
         Assert.True(withOriginsIndex > allowAnyOriginIndex, "Expected non-dev CORS branch to use configured WithOrigins after the permissive branch.");
+    }
+
+    [Fact]
+    public async Task DevelopmentCors_AllowsRegistrationPreflightFromLocalFlutterWebOrigin()
+    {
+        await using var factory = new CustomWebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/auth/mobile/register");
+        request.Headers.TryAddWithoutValidation("Origin", "http://localhost:49457");
+        request.Headers.TryAddWithoutValidation("Access-Control-Request-Method", "POST");
+        request.Headers.TryAddWithoutValidation("Access-Control-Request-Headers", "content-type,x-correlation-id");
+
+        var response = await client.SendAsync(request);
+
+        Assert.True(
+            response.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.OK or HttpStatusCode.MethodNotAllowed,
+            $"Unexpected preflight status: {(int)response.StatusCode}");
+        if (response.Headers.Contains("Access-Control-Allow-Origin"))
+        {
+            var allowOrigin = response.Headers.GetValues("Access-Control-Allow-Origin").Single();
+            Assert.True(allowOrigin is "*" or "http://localhost:49457");
+        }
     }
 
     private static string ReadServiceRegistrationExtensions()

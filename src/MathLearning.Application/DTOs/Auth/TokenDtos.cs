@@ -30,6 +30,7 @@ public record MobileRegisterRequest(
 public record MobileRegisterResponse(
     bool Success,
     string Message,
+    string? Code = null,
     TokenResponse? Tokens = null,
     UserProfileDto? Profile = null
 );

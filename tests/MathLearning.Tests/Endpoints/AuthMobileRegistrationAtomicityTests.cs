@@ -13,6 +13,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using System.Threading;
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 
 namespace MathLearning.Tests.Endpoints;
 
@@ -40,6 +42,7 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         db.Database.EnsureCreated();
         TestDbContextFactory.SeedAsync(db).GetAwaiter().GetResult();
         failureState.Reset();
+        factory.RegistrationLogs.Messages.Clear();
         return Task.CompletedTask;
     }
 
@@ -63,6 +66,12 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         Assert.NotNull(body);
         Assert.False(body!.Success);
         Assert.Equal("Registration failed. Please try again.", body.Message);
+        Assert.Contains(factory.RegistrationLogs.Messages,
+            entry => entry.Level == LogLevel.Error && entry.Message.Contains("Reason=registration_unexpected"));
+        Assert.DoesNotContain(factory.RegistrationLogs.Messages,
+            entry => entry.Message.Contains(AuthMobileRegistrationAtomicityTestsSecret.SecretMessage)
+                || entry.Message.Contains(request.Password) || entry.Message.Contains(request.Email));
+        Assert.Equal("registration_unexpected", body.Code);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -71,6 +80,65 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         Assert.Null(await userManager.FindByNameAsync(request.Username));
         Assert.False(await db.UserProfiles.AnyAsync(p => p.Username == request.Username));
         Assert.Equal(0, await db.RefreshTokens.CountAsync());
+    }
+
+    [Fact]
+    public async Task ShortPassword_LogsSafeReasonWithoutAccountData()
+    {
+        var request = CreateRequest("validation") with { Password = "short1234" };
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/mobile/register")
+        {
+            Content = JsonContent.Create(request)
+        };
+        httpRequest.Headers.TryAddWithoutValidation("X-Correlation-ID", "ml-test-registration-1");
+
+        var response = await client.SendAsync(httpRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("ml-test-registration-1", response.Headers.GetValues("X-Correlation-ID").Single());
+        var body = await response.Content.ReadFromJsonAsync<MobileRegisterResponse>();
+        Assert.False(body!.Success);
+        Assert.Equal("Registration could not be completed", body.Message);
+        Assert.Equal("invalid_password", body.Code);
+        Assert.Contains(factory.RegistrationLogs.Messages,
+            entry => entry.Level == LogLevel.Warning
+                && entry.Message.Contains("Reason=password_length")
+                && entry.Message.Contains("CorrelationId=ml-test-registration-1"));
+        Assert.DoesNotContain(factory.RegistrationLogs.Messages,
+            entry => entry.Message.Contains(request.Password) || entry.Message.Contains(request.Email)
+                || entry.Message.Contains(request.Username));
+    }
+
+    [Fact]
+    public async Task InvalidEmail_ReturnsSafeInvalidEmailCode()
+    {
+        var request = CreateRequest("email") with { Email = "not-an-email" };
+        var response = await client.PostAsJsonAsync("/auth/mobile/register", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<MobileRegisterResponse>();
+        Assert.False(body!.Success);
+        Assert.Equal("invalid_email", body.Code);
+        Assert.Contains(factory.RegistrationLogs.Messages,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Reason=email_format"));
+    }
+
+    [Fact]
+    public async Task Conflict_ReturnsGenericRegistrationConflictCode()
+    {
+        var request = CreateRequest("conflict");
+        var first = await client.PostAsJsonAsync("/auth/mobile/register", request);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        factory.RegistrationLogs.Messages.Clear();
+        var duplicate = await client.PostAsJsonAsync("/auth/mobile/register", request);
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        var body = await duplicate.Content.ReadFromJsonAsync<MobileRegisterResponse>();
+        Assert.False(body!.Success);
+        Assert.Equal("registration_conflict", body.Code);
+        Assert.Equal("Registration could not be completed", body.Message);
+        Assert.Contains(factory.RegistrationLogs.Messages,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Reason=account_conflict"));
     }
 
     [Fact]
@@ -137,6 +205,7 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         Assert.NotNull(duplicateBody);
         Assert.False(duplicateBody!.Success);
         Assert.Equal("Registration could not be completed", duplicateBody.Message);
+        Assert.Equal("registration_conflict", duplicateBody.Code);
     }
 
     private static MobileRegisterRequest CreateRequest(string suffix)
@@ -155,6 +224,7 @@ public sealed class AuthMobileRegistrationAtomicityTests :
 public sealed class AuthMobileRegistrationWebApplicationFactory : CustomWebApplicationFactory<Program>
 {
     public RegistrationFailureState FailureState { get; } = new();
+    public RecordingRegistrationLogger RegistrationLogs { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -162,6 +232,7 @@ public sealed class AuthMobileRegistrationWebApplicationFactory : CustomWebAppli
 
         builder.ConfigureTestServices(services =>
         {
+            services.AddSingleton<ILogger<Program>>(RegistrationLogs);
             services.RemoveAll<DbContextOptions<ApiDbContext>>();
             services.RemoveAll<ApiDbContext>();
 
@@ -175,6 +246,16 @@ public sealed class AuthMobileRegistrationWebApplicationFactory : CustomWebAppli
             services.AddScoped<ApiDbContext, RegistrationFailureApiDbContext>();
         });
     }
+}
+
+public sealed class RecordingRegistrationLogger : ILogger<Program>
+{
+    public ConcurrentQueue<(LogLevel Level, string Message)> Messages { get; } = new();
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+        Exception? exception, Func<TState, Exception?, string> formatter) =>
+        Messages.Enqueue((logLevel, formatter(state, exception)));
 }
 
 public sealed class RegistrationFailureState

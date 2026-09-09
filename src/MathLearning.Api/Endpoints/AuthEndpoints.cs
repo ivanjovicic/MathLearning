@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
+using System.Data.Common;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -72,9 +73,8 @@ public static class AuthEndpoints
             catch (Exception cleanupEx)
             {
                 logger.LogWarning(
-                    cleanupEx,
-                    "Cleanup after mobile registration failure hit a database error for user {Username}.",
-                    user?.UserName ?? "<unknown>");
+                    "Cleanup after mobile registration failure failed. ExceptionType={ExceptionType}",
+                    cleanupEx.GetType().Name);
             }
         }
 
@@ -86,37 +86,73 @@ public static class AuthEndpoints
             IConfiguration config,
             HttpContext ctx,
             ILogger<Program> logger,
-            IServiceScopeFactory scopeFactory) =>
+            IServiceScopeFactory scopeFactory,
+            IRateLimitCounterStore authThrottleStore,
+            ILookupNormalizer lookupNormalizer) =>
         {
             IDbContextTransaction? tx = null;
             IdentityUser? user = null;
             UserProfile? profile = null;
             RefreshToken? refreshToken = null;
 
+            string ResolveCorrelationId() =>
+                SafeClientErrorResponse.ResolveCorrelationId(ctx)
+                ?? ctx.TraceIdentifier;
+
+            IResult RejectRegistration(int statusCode, string diagnosticReason, string publicCode,
+                string message = "Registration could not be completed")
+            {
+                logger.LogWarning(
+                    "Mobile registration rejected. Reason={Reason} StatusCode={StatusCode} CorrelationId={CorrelationId} TraceId={TraceId}",
+                    diagnosticReason, statusCode, ResolveCorrelationId(), ctx.TraceIdentifier);
+                return Results.Json(
+                    new MobileRegisterResponse(Success: false, Message: message, Code: publicCode),
+                    statusCode: statusCode);
+            }
+
             try
             {
+                var canonicalUsernameForLimit = (request.Username ?? string.Empty).Trim();
+                var normalizedUsername = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeName(canonicalUsernameForLimit) ?? canonicalUsernameForLimit,
+                    128);
+                var normalizedEmail = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeEmail(request.Email ?? string.Empty) ?? (request.Email ?? string.Empty),
+                    256);
+
+                if (!TryApplyAuthRateLimit(
+                        authThrottleStore,
+                        purpose: "mobile-register",
+                        principal: $"{normalizedUsername}:{normalizedEmail}",
+                        ctx,
+                        accountLimit: 3,
+                        networkLimit: 9,
+                        RegisterRateLimitWindow,
+                        out var registerRetryAfter))
+                {
+                    logger.LogWarning(
+                        "Mobile registration rejected. Reason={Reason} StatusCode={StatusCode} CorrelationId={CorrelationId} TraceId={TraceId}",
+                        "registration_rate_limited",
+                        StatusCodes.Status429TooManyRequests,
+                        ResolveCorrelationId(),
+                        ctx.TraceIdentifier);
+                    return CreateAuthRateLimitedResponse(ctx, registerRetryAfter);
+                }
+
                 if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
                 {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Username must be at least 3 characters long"
-                    ), statusCode: 400);
+                    return RejectRegistration(400, "username_format", "invalid_username",
+                        "Username must be at least 3 characters long");
                 }
 
-                if (!IsValidEmailAddress(request.Email, out var canonicalEmail))
+                if (!IsValidEmailAddress(request.Email ?? string.Empty, out var canonicalEmail))
                 {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 400);
+                    return RejectRegistration(400, "email_format", "invalid_email");
                 }
 
-                if (!IsPasswordLengthAcceptable(request.Password))
+                if (!IsRegistrationPasswordLengthAcceptable(request.Password))
                 {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 400);
+                    return RejectRegistration(400, "password_length", "invalid_password");
                 }
 
                 var canonicalUsername = request.Username.Trim();
@@ -124,19 +160,13 @@ public static class AuthEndpoints
                 var existingUser = await userManager.FindByNameAsync(canonicalUsername);
                 if (existingUser != null)
                 {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 409);
+                    return RejectRegistration(409, "account_conflict", "registration_conflict");
                 }
 
                 var existingEmail = await userManager.FindByEmailAsync(canonicalEmail);
                 if (existingEmail != null)
                 {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 409);
+                    return RejectRegistration(409, "account_conflict", "registration_conflict");
                 }
 
                 tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
@@ -157,10 +187,13 @@ public static class AuthEndpoints
                     if (tx != null)
                         await tx.RollbackAsync(ctx.RequestAborted);
 
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 400);
+                    var passwordRejected = result.Errors.Any(error => error.Code is
+                        "PasswordTooShort" or "PasswordRequiresUniqueChars" or "PasswordRequiresDigit" or
+                        "PasswordRequiresLower" or "PasswordRequiresUpper" or "PasswordRequiresNonAlphanumeric");
+                    return RejectRegistration(
+                        400,
+                        passwordRejected ? "password_policy" : "identity_validation",
+                        passwordRejected ? "invalid_password" : "registration_invalid");
                 }
 
                 // Identity key is the stable user id
@@ -219,8 +252,15 @@ public static class AuthEndpoints
                     )
                 ));
             }
-            catch (Exception)
+            catch (DbException ex)
             {
+                logger.LogError(
+                    "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId} StackTrace={StackTrace}",
+                    "registration_db_failure",
+                    ex.GetType().Name,
+                    ResolveCorrelationId(),
+                    ctx.TraceIdentifier,
+                    ex.StackTrace);
                 if (tx != null)
                 {
                     try
@@ -230,9 +270,8 @@ public static class AuthEndpoints
                     catch (Exception rollbackEx)
                     {
                         logger.LogWarning(
-                            rollbackEx,
-                            "Rollback after mobile registration failure failed for user {Username}.",
-                            request.Username);
+                            "Rollback after mobile registration failure failed. ExceptionType={ExceptionType}",
+                            rollbackEx.GetType().Name);
                     }
                 }
                 else
@@ -248,7 +287,48 @@ public static class AuthEndpoints
 
                 return Results.Json(new MobileRegisterResponse(
                     Success: false,
-                    Message: "Registration failed. Please try again."
+                    Message: "Registration failed. Please try again.",
+                    Code: "registration_unavailable"
+                ), statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (Exception ex)
+            {
+                // Exception messages can contain database/account data. Keep only safe diagnostics.
+                logger.LogError(
+                    "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId} StackTrace={StackTrace}",
+                    "registration_unexpected",
+                    ex.GetType().Name,
+                    ResolveCorrelationId(),
+                    ctx.TraceIdentifier,
+                    ex.StackTrace);
+                if (tx != null)
+                {
+                    try
+                    {
+                        await tx.RollbackAsync(ctx.RequestAborted);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        logger.LogWarning(
+                            "Rollback after mobile registration failure failed. ExceptionType={ExceptionType}",
+                            rollbackEx.GetType().Name);
+                    }
+                }
+                else
+                {
+                    await CleanupMobileRegistrationFailureAsync(
+                        scopeFactory,
+                        user,
+                        profile,
+                        refreshToken,
+                        logger,
+                        ctx.RequestAborted);
+                }
+
+                return Results.Json(new MobileRegisterResponse(
+                    Success: false,
+                    Message: "Registration failed. Please try again.",
+                    Code: "registration_unexpected"
                 ), statusCode: 500);
             }
             finally
@@ -581,7 +661,7 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
 
-                if (!IsPasswordLengthAcceptable(request.Password))
+                if (!IsRegistrationPasswordLengthAcceptable(request.Password))
                 {
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
@@ -718,6 +798,15 @@ public static class AuthEndpoints
 
     private static bool IsPasswordLengthAcceptable(string password) =>
         !string.IsNullOrWhiteSpace(password) && password.Length <= 256;
+
+    /// <summary>
+    /// Registration-only password length. Login keeps [IsPasswordLengthAcceptable]
+    /// so existing accounts with shorter historical passwords can still sign in.
+    /// </summary>
+    private static bool IsRegistrationPasswordLengthAcceptable(string password) =>
+        !string.IsNullOrWhiteSpace(password)
+        && password.Length >= 10
+        && password.Length <= 256;
 
     private static Task<string> GetCurrentSecurityStampAsync(
         UserManager<IdentityUser> userManager,
