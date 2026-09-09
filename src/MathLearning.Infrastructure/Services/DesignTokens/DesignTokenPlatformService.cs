@@ -51,10 +51,7 @@ public sealed class DesignTokenPlatformService : IDesignTokenQueryService, IDesi
 
     public async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
-        var exists = await dbContext.DesignTokenVersions.AnyAsync(
-            x => x.IsCurrent,
-            cancellationToken);
-        if (exists)
+        if (await dbContext.DesignTokenVersions.AnyAsync(x => x.IsCurrent, cancellationToken))
         {
             return;
         }
@@ -86,12 +83,61 @@ public sealed class DesignTokenPlatformService : IDesignTokenQueryService, IDesi
         }
 
         dbContext.DesignTokenVersions.Add(version);
-        await dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Another replica may already have created the initial current version
+            // (unique Version "1.0.0" and/or unique IsCurrent filter).
+            DetachAddedEntities();
+            if (!await dbContext.DesignTokenVersions.AsNoTracking().AnyAsync(x => x.IsCurrent, cancellationToken))
+            {
+                throw;
+            }
+
+            logger.LogInformation("Design token bootstrap lost startup race; using existing current version.");
+            await WarmCurrentTokenCacheAsync(cancellationToken);
+            return;
+        }
 
         foreach (var set in version.TokenSets)
         {
             var payload = JsonSerializer.Deserialize<DesignTokensResponse>(set.CompiledPayloadJson, SerializerOptions)!;
             await cacheService.SetAsync(version.Version, set.Theme, payload, cancellationToken);
+        }
+    }
+
+    private async Task WarmCurrentTokenCacheAsync(CancellationToken cancellationToken)
+    {
+        var current = await dbContext.DesignTokenVersions
+            .AsNoTracking()
+            .Include(x => x.TokenSets)
+            .FirstOrDefaultAsync(x => x.IsCurrent, cancellationToken);
+        if (current is null)
+        {
+            return;
+        }
+
+        foreach (var set in current.TokenSets)
+        {
+            var payload = JsonSerializer.Deserialize<DesignTokensResponse>(set.CompiledPayloadJson, SerializerOptions);
+            if (payload is null)
+            {
+                continue;
+            }
+
+            await cacheService.SetAsync(current.Version, set.Theme, payload, cancellationToken);
+        }
+    }
+
+    private void DetachAddedEntities()
+    {
+        foreach (var entry in dbContext.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
+        {
+            entry.State = EntityState.Detached;
         }
     }
 

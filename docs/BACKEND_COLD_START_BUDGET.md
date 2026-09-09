@@ -18,7 +18,7 @@ Keep API cold-start predictable on Fly/containers: blocking work finishes before
 | Hangfire storage + server registration | `AddBackgroundJobServices` | Yes when PG up | < 2 s | `/health/background-jobs` |
 | **Database migrate / schema guard** | After `app.Build`, pre-listen | **Yes** | < 15 s prod (no pending migrations) | `/health/ready`, `/health/schema` |
 | Cosmetic catalog import (`--apply-cosmetic-catalog`) | Explicit operator command/job, not normal startup | Yes when invoked | Bounded by catalog size | Versioned manifest import with checksum/history |
-| Design tokens init (`EnsureInitializedAsync`) | Inside DB startup block | Yes | < 2 s | `GET /api/ui/tokens` |
+| Design tokens init (`EnsureInitializedAsync`) | Inside DB startup block | Yes | < 2 s | `GET /api/ui/tokens`; multi-replica empty-DB bootstrap is idempotent (unique `1.0.0` / current-version race → loser no-ops) |
 | Content seed (`DbSeeder`) | After schema OK, optional | Yes when enabled | < 30 s dev only | `SeedContent:Enabled` |
 | Admin / test account seeders | After schema OK | Yes when enabled | < 5 s dev/test | Env-gated |
 | Middleware + endpoint mapping | Pre-listen | Yes | < 1 s | - |
