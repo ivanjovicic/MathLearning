@@ -30,10 +30,10 @@ How this run avoids prior mistakes: handler-local catch is tied to an exact resp
 Delivery target: main
 Delivery mode: direct-main
 Working branch: codex/backend-error-audit-20260909
-Delivery status: pending-direct-main
+Delivery status: verified-on-main
 Delivery PR: not applicable - explicit direct-main request
-Main commit SHA: pending-direct-main
-Main verification: not run - direct-main write has not occurred
+Main commit SHA: pending evidence-sync commit
+Main verification: initial owner-sharpen commit `5737427` verified on `origin/main`; evidence-sync commit follows
 
 ## Deadline checkpoints
 
@@ -131,11 +131,11 @@ Registration owner now explicitly requires safe error response and structured or
 
 ## Closure verdict
 
-Done allowed: no — direct-main delivery and exact SHA verification remain pending.
+Done allowed: yes after evidence-sync commit is verified on `origin/main`.
 
 ## Completion %
 
-79% — owner sharpen complete; delivery pending.
+100% pending final evidence-sync verification.
 
 ## Residual risk
 
@@ -143,4 +143,4 @@ Runtime registration failure injection and production/provider logging remain un
 
 ## Commit SHA
 
-Pending docs-only commit.
+Initial owner-sharpen commit: `5737427`; evidence-sync commit pending.
