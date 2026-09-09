@@ -264,7 +264,11 @@ public sealed class QuestionAuthoringService : IQuestionAuthoringService
     private static string? ResolveHint(IReadOnlyList<QuestionHintDto> hints, params string[] keys)
         => hints.FirstOrDefault(x => keys.Any(key => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)))?.Text;
 
-    private static string CreateQuestionSnapshot(Question question)
+    /// <summary>
+    /// Canonical authored-history payload for <see cref="Question.PreviousSnapshotJson"/>.
+    /// Must round-trip every field needed to reconstruct prior authoring state.
+    /// </summary>
+    internal static string CreateQuestionSnapshot(Question question)
     {
         var snapshot = new
         {
@@ -274,30 +278,96 @@ public sealed class QuestionAuthoringService : IQuestionAuthoringService
             question.CorrectOptionId,
             question.CorrectAnswer,
             question.Explanation,
+            question.TextFormat,
+            question.ExplanationFormat,
+            question.HintFormat,
+            question.TextRenderMode,
+            question.ExplanationRenderMode,
+            question.HintRenderMode,
+            question.SemanticsAltText,
             question.Difficulty,
             question.CategoryId,
             question.SubtopicId,
+            question.HintFormula,
+            question.HintClue,
+            question.HintFull,
+            question.HintDifficulty,
+            question.PublishState,
+            question.CurrentVersionNumber,
+            question.CurrentDraftId,
+            question.PublishedByUserId,
+            question.PublishedAtUtc,
             question.UpdatedAt,
             question.UpdatedBy,
+            question.CreatedAt,
+            question.IsDeleted,
+            question.DeletedAt,
             Options = question.Options
                 .OrderBy(x => x.Order)
+                .ThenBy(x => x.Id)
                 .Select(x => new
                 {
                     x.Id,
                     x.Text,
                     x.IsCorrect,
-                    x.Order
+                    x.Order,
+                    x.TextFormat,
+                    x.RenderMode,
+                    x.SemanticsAltText,
+                    Translations = x.Translations
+                        .OrderBy(t => t.Lang)
+                        .ThenBy(t => t.Id)
+                        .Select(t => new
+                        {
+                            t.Id,
+                            t.Lang,
+                            t.Text
+                        })
+                        .ToArray()
                 })
                 .ToArray(),
             Steps = question.Steps
                 .OrderBy(x => x.StepIndex)
+                .ThenBy(x => x.Id)
                 .Select(x => new
                 {
                     x.Id,
                     x.StepIndex,
                     x.Text,
                     x.Hint,
-                    x.Highlight
+                    x.Highlight,
+                    x.TextFormat,
+                    x.HintFormat,
+                    x.TextRenderMode,
+                    x.HintRenderMode,
+                    x.SemanticsAltText,
+                    Translations = x.Translations
+                        .OrderBy(t => t.Lang)
+                        .ThenBy(t => t.Id)
+                        .Select(t => new
+                        {
+                            t.Id,
+                            t.Lang,
+                            t.Text,
+                            t.Hint
+                        })
+                        .ToArray()
+                })
+                .ToArray(),
+            Translations = question.Translations
+                .OrderBy(x => x.Lang)
+                .ThenBy(x => x.Id)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Lang,
+                    x.Text,
+                    x.Explanation,
+                    x.HintFormula,
+                    x.HintClue,
+                    x.HintLight,
+                    x.HintMedium,
+                    x.HintFull
                 })
                 .ToArray()
         };

@@ -1,7 +1,7 @@
 # BACKEND-TEST-049 - Question authoring snapshot truth and atomic revalidate repair
 
 Priority: P1
-Status: Prompt-ready
+Status: Done 75% — Run log: `.ai/runs/2026-08-01-BACKEND-TEST-049-evidence.md`; Validation: QuestionAuthoringSnapshotTruth 3/3 + QuestionAuthoring|QuestionVersionConcurrency|QuestionEditorUiSmoke; Residual risk: UpdateQuestion split SaveChanges and PG concurrency matrix deferred; Commit: self
 Run mode: question-authoring integrity investigation + relational failure-injection tests
 
 ## Problem
