@@ -32,8 +32,8 @@ Delivery mode: direct-main
 Working branch: codex/backend-error-audit-20260909
 Delivery status: verified-on-main
 Delivery PR: not applicable - explicit direct-main request
-Main commit SHA: pending evidence-sync commit
-Main verification: initial owner-sharpen commit `5737427` verified on `origin/main`; evidence-sync commit follows
+Main commit SHA: `c995779` (evidence-sync; owner sharpen in `5737427`)
+Main verification: `origin/main` contained `c995779` before this final metadata-only evidence update
 
 ## Deadline checkpoints
 
@@ -135,7 +135,7 @@ Done allowed: yes after evidence-sync commit is verified on `origin/main`.
 
 ## Completion %
 
-100% pending final evidence-sync verification.
+100% — owner sharpen and evidence-sync are delivered on main.
 
 ## Residual risk
 
@@ -143,4 +143,4 @@ Runtime registration failure injection and production/provider logging remain un
 
 ## Commit SHA
 
-Initial owner-sharpen commit: `5737427`; evidence-sync commit pending.
+Owner sharpen: `5737427`; evidence-sync: `c995779`.
