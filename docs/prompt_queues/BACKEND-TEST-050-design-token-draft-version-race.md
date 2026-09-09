@@ -1,7 +1,7 @@
 # BACKEND-TEST-050 - Design-token draft version identity and collision safety
 
 Priority: P1
-Status: Prompt-ready
+Status: Done 75% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-050-evidence.md`; Validation: DesignTokenDraftVersion 4/4 + DesignToken|DesignTokens|AdminTokens; Residual risk: filtered unique Draft status index and full Upsert concurrency matrix deferred; Commit: self
 Run mode: design-token versioning investigation + relational concurrency tests
 
 ## Problem

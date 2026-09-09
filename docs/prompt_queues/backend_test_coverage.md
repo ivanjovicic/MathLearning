@@ -30,12 +30,9 @@ Prompt queues:
 These are the biggest unresolved queue items on current `main`:
 
 - `BACKEND-API-DB-015` â€” stale pending economy/cosmetics idempotency recovery and dual-settlement prevention.
-- `BACKEND-API-DB-013` â€” single account-provisioning owner and Identity/profile/token orphan reconciliation.
 - `BACKEND-TEST-033` â€” cancellation/rollback matrix for canonical P0 mutations, especially the adaptive and practice settlement lanes.
-
-- `BACKEND-TEST-049` â€” question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety.
-- `BACKEND-TEST-050` â€” design-token draft version identity and same-second collision safety.
 - `BACKEND-TEST-051` - design-token bootstrap race and startup ownership.
+- `BACKEND-TEST-050` delivered (collision-safe draft version identity; unique Draft status index residual deferred).
 ## Read first
 
 - `../../AGENTS.md`
@@ -105,7 +102,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-TEST-036 | Validated | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"`: 272 passed, 0 failed, 0 skipped. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
 | BACKEND-TEST-049 | P1 / Prompt-ready | Question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety. |
-| BACKEND-TEST-050 | P1 / Prompt-ready | Design-token draft version identity and same-second collision safety. |
+| BACKEND-TEST-050 | P1 / Done 75% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-050-evidence.md`; Validation: DesignTokenDraftVersion 4/4; Residual risk: unique Draft status index + Upsert concurrency deferred; Commit: self | Design-token draft version identity and same-second collision safety. |
 | BACKEND-TEST-051 | P1 / Prompt-ready | Design-token bootstrap race and startup ownership. |
 | BACKEND-LATEST-VALIDATION-002 | Validated | Latest July 3 implementation/test batch verified; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and the focused test package passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Validated | Database Validation run `29899827848` succeeded on exact `main` SHA `a5406568df339bb6c562ed4f79f31c72d6ac2939`; classifier returned `docs/agent-tooling-only change; expensive database suite skipped`, so `database-suite` was skipped and no artifacts were produced. Run log: `.ai/runs/2026-07-22-BACKEND-LATEST-WORKFLOW-002-evidence.md`. |
