@@ -11,6 +11,8 @@ Run mode: audit
 Token budget: medium
 Run timebox: 30 minutes
 Elapsed minutes: 30
+Elapsed time: 30 minutes
+Phase time breakdown: source tracing 12m; owner sharpening 8m; validation/delivery 10m
 Timebox result: within
 Deadline action: completed
 Actual context: high
