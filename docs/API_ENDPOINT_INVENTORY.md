@@ -55,13 +55,13 @@ Owner: `AuthEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, profile and tokens with generic registration failures, real email parsing, and confirmed managed/no-email provisioning. |
-| POST | `/auth/login` | Public | Canonical | Lockout-aware login and refresh-token issuance with generic 401/429 contract. |
-| POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle contract as `/auth/login`. |
+| POST | `/auth/mobile/register` | Public | Canonical mobile | Uses `IAccountProvisioningService` for Identity + `UserProfile`, then issues tokens only after mandatory state is durable. Generic registration failures, real email parsing, confirmed managed/no-email provisioning. |
+| POST | `/auth/login` | Public | Canonical | Lockout-aware login. Denies Identity-only incomplete accounts with stable `403 Account setup incomplete` and does not mint tokens. Otherwise refresh-token issuance with generic 401/429 contract. |
+| POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle/incomplete-account contract as `/auth/login`. |
 | POST | `/auth/refresh` | Public | Canonical | Single-use token rotation with generic 401/429 contract. Model length drift remains BACKEND-TEST-012. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
 | POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens and invalidates existing access tokens by rotating the user security stamp. |
-| POST | `/auth/register` | Public/legacy | Legacy | Generic conflict/failure contract, real email parsing, and confirmed managed/no-email provisioning. |
+| POST | `/auth/register` | Public/legacy | Legacy alias | Delegates mandatory Identity + profile creation to the same `IAccountProvisioningService` owner as mobile register; tokens only after complete account. Generic conflict/failure contract. |
 
 ---
 

@@ -86,7 +86,8 @@ public static class AuthEndpoints
             IConfiguration config,
             HttpContext ctx,
             ILogger<Program> logger,
-            IServiceScopeFactory scopeFactory) =>
+            IServiceScopeFactory scopeFactory,
+            IAccountProvisioningService accountProvisioning) =>
         {
             IDbContextTransaction? tx = null;
             IdentityUser? user = null;
@@ -121,38 +122,27 @@ public static class AuthEndpoints
 
                 var canonicalUsername = request.Username.Trim();
 
-                var existingUser = await userManager.FindByNameAsync(canonicalUsername);
-                if (existingUser != null)
-                {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 409);
-                }
-
-                var existingEmail = await userManager.FindByEmailAsync(canonicalEmail);
-                if (existingEmail != null)
-                {
-                    return Results.Json(new MobileRegisterResponse(
-                        Success: false,
-                        Message: "Registration could not be completed"
-                    ), statusCode: 409);
-                }
-
                 tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
 
-                // Create Identity user
-                user = new IdentityUser
+                var provisioned = await accountProvisioning.CreateCompleteAccountAsync(
+                    canonicalUsername,
+                    canonicalEmail,
+                    request.Password,
+                    request.DisplayName,
+                    ctx.RequestAborted);
+
+                if (provisioned.Conflict)
                 {
-                    UserName = canonicalUsername,
-                    Email = canonicalEmail,
-                    EmailConfirmed = true,
-                    LockoutEnabled = true
-                };
+                    if (tx != null)
+                        await tx.RollbackAsync(ctx.RequestAborted);
 
-                var result = await userManager.CreateAsync(user, request.Password);
+                    return Results.Json(new MobileRegisterResponse(
+                        Success: false,
+                        Message: "Registration could not be completed"
+                    ), statusCode: 409);
+                }
 
-                if (!result.Succeeded)
+                if (!provisioned.Succeeded || provisioned.User is null || provisioned.Profile is null)
                 {
                     if (tx != null)
                         await tx.RollbackAsync(ctx.RequestAborted);
@@ -163,27 +153,11 @@ public static class AuthEndpoints
                     ), statusCode: 400);
                 }
 
-                // Identity key is the stable user id
+                user = provisioned.User;
+                profile = provisioned.Profile;
                 string userId = user.Id;
 
-                // Create UserProfile
-                profile = new UserProfile
-                {
-                    UserId = userId,
-                    Username = canonicalUsername,
-                    DisplayName = request.DisplayName ?? canonicalUsername,
-                    Coins = 100, // Welcome bonus
-                    Level = 1,
-                    Xp = 0,
-                    Streak = 0,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-
-                db.UserProfiles.Add(profile);
-                await db.SaveChangesAsync();
-
-                // Generate tokens
+                // Generate tokens only after mandatory Identity + profile state is durable.
                 var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
                 var accessToken = await GenerateJwtTokenAsync(user, userManager, config, securityStamp, expiryMinutes: 30);
 
@@ -270,7 +244,8 @@ public static class AuthEndpoints
             HttpContext ctx,
             ILogger<Program> logger,
             IRateLimitCounterStore authThrottleStore,
-            ILookupNormalizer lookupNormalizer)
+            ILookupNormalizer lookupNormalizer,
+            IAccountProvisioningService accountProvisioning)
         {
             try
             {
@@ -318,6 +293,14 @@ public static class AuthEndpoints
 
                 // Identity key is the stable user id
                 string userId = user.Id;
+
+                if (!await accountProvisioning.HasCompleteProfileAsync(userId, ctx.RequestAborted))
+                {
+                    logger.LogWarning(
+                        "Login denied - incomplete account missing UserProfile for user: {Username}",
+                        normalizedUsername);
+                    return Results.Json(new { error = "Account setup incomplete" }, statusCode: 403);
+                }
 
                 var profile = await db.UserProfiles
                     .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -542,7 +525,7 @@ public static class AuthEndpoints
         .RequireAuthorization()
         .WithName("RevokeAllTokens");
 
-        // REGISTER (Admin - existing)
+        // REGISTER (legacy alias — same provisioning owner as mobile; tokens only after complete account)
         group.MapPost("/register", async (
             RegisterRequest request,
             UserManager<IdentityUser> userManager,
@@ -551,8 +534,15 @@ public static class AuthEndpoints
             HttpContext ctx,
             ILogger<Program> logger,
             IRateLimitCounterStore authThrottleStore,
-            ILookupNormalizer lookupNormalizer) =>
+            ILookupNormalizer lookupNormalizer,
+            IAccountProvisioningService accountProvisioning,
+            IServiceScopeFactory scopeFactory) =>
         {
+            IDbContextTransaction? tx = null;
+            IdentityUser? user = null;
+            UserProfile? profile = null;
+            RefreshToken? refreshToken = null;
+
             try
             {
                 var canonicalUsername = request.Username.Trim();
@@ -586,45 +576,47 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
 
-                var existingUser = await userManager.FindByNameAsync(canonicalUsername);
-                if (existingUser != null)
+                tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
+
+                var provisioned = await accountProvisioning.CreateCompleteAccountAsync(
+                    canonicalUsername,
+                    canonicalEmail,
+                    request.Password,
+                    displayName: null,
+                    ctx.RequestAborted);
+
+                if (provisioned.Conflict)
                 {
+                    if (tx != null)
+                        await tx.RollbackAsync(ctx.RequestAborted);
+
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 409);
                 }
 
-                var existingEmail = await userManager.FindByEmailAsync(canonicalEmail);
-                if (existingEmail != null)
+                if (!provisioned.Succeeded || provisioned.User is null || provisioned.Profile is null)
                 {
-                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 409);
-                }
+                    if (tx != null)
+                        await tx.RollbackAsync(ctx.RequestAborted);
 
-                var user = new IdentityUser
-                {
-                    UserName = canonicalUsername,
-                    Email = canonicalEmail,
-                    EmailConfirmed = true,
-                    LockoutEnabled = true
-                };
-
-                var result = await userManager.CreateAsync(user, request.Password);
-
-                if (!result.Succeeded)
-                {
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
 
+                user = provisioned.User;
+                profile = provisioned.Profile;
                 string userId = user.Id;
 
-                // Generate tokens
                 var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
                 var accessToken = await GenerateJwtTokenAsync(user, userManager, config, securityStamp, expiryMinutes: 30);
 
                 var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
                 var ipAddress = NormalizeAuthDimension(GetPhysicalClientIp(ctx), 64);
-                var refreshToken = RefreshTokenService.CreateRefreshToken(userId, securityStamp, device, ipAddress, expiryDays: 14);
+                refreshToken = RefreshTokenService.CreateRefreshToken(userId, securityStamp, device, ipAddress, expiryDays: 14);
 
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
+
+                if (tx != null)
+                    await tx.CommitAsync(ctx.RequestAborted);
 
                 return Results.Ok(new TokenResponse(
                     AccessToken: accessToken,
@@ -636,7 +628,34 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
+                if (tx != null)
+                {
+                    try
+                    {
+                        await tx.RollbackAsync(ctx.RequestAborted);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        logger.LogWarning(rollbackEx, "Rollback after legacy registration failure failed.");
+                    }
+                }
+                else
+                {
+                    await CleanupMobileRegistrationFailureAsync(
+                        scopeFactory,
+                        user,
+                        profile,
+                        refreshToken,
+                        logger,
+                        ctx.RequestAborted);
+                }
+
                 return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Register error");
+            }
+            finally
+            {
+                if (tx != null)
+                    await tx.DisposeAsync();
             }
         });
 
