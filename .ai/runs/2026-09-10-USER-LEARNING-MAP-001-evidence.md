@@ -53,6 +53,6 @@ Cross-repo impact: Flutter sync deferred: backend contract is documented; Flutte
 
 ## Delivery
 State: complete_with_residual
-Branch/PR: codex/fix-cosmetics-default-ownership-race; no commit or PR created
-Commit SHA: self
+Branch/PR: codex/fix-cosmetics-default-ownership-race; pushed, PR not available because GitHub CLI is unauthenticated
+Commit SHA: bddcdca541d42ec3405cf1258064988bea95f9b3
 Completion %: 90
