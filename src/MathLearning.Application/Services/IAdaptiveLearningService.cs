@@ -1,4 +1,5 @@
 using MathLearning.Domain.Entities;
+using MathLearning.Application.DTOs.Adaptive;
 
 namespace MathLearning.Application.Services;
 
@@ -14,6 +15,14 @@ public interface IAdaptiveLearningService
     Task<List<AdaptiveRecommendation>> GetRecommendationsAsync(string userId);
 
     Task<List<ReviewItem>> GetDueReviewsAsync(string userId);
+
+    Task<LearningMapDto> GetLearningMapAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MasteryDto>> GetMasteryAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
 
     Task DetectWeakTopicsAsync(string userId);
 }

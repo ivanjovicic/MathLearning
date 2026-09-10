@@ -246,7 +246,11 @@ public sealed class WeaknessAnalysisService : IWeaknessAnalysisService
                 TopicId: row.TopicId,
                 SubtopicId: row.SubtopicId,
                 Reason: BuildReason(row.Accuracy, row.WeaknessLevel),
-                Priority: CalculatePriority(row.WeaknessScore, row.Confidence)));
+                Priority: CalculatePriority(row.WeaknessScore, row.Confidence))
+            {
+                TopicName = row.TopicName,
+                RecommendedDifficulty = SelectRecommendedDifficulty(row.Accuracy)
+            });
         }
 
         foreach (var row in topics)
@@ -257,7 +261,11 @@ public sealed class WeaknessAnalysisService : IWeaknessAnalysisService
                 TopicId: row.TopicId,
                 SubtopicId: null,
                 Reason: BuildReason(row.Accuracy, row.WeaknessLevel),
-                Priority: CalculatePriority(row.WeaknessScore, row.Confidence)));
+                Priority: CalculatePriority(row.WeaknessScore, row.Confidence))
+            {
+                TopicName = row.TopicName,
+                RecommendedDifficulty = SelectRecommendedDifficulty(row.Accuracy)
+            });
         }
 
         var result = recommendations
@@ -286,6 +294,14 @@ public sealed class WeaknessAnalysisService : IWeaknessAnalysisService
 
         return "retention_maintenance";
     }
+
+    private static string SelectRecommendedDifficulty(decimal accuracy) =>
+        accuracy switch
+        {
+            < 0.4m => AdaptiveDifficultyLevels.Easy,
+            >= 0.8m => AdaptiveDifficultyLevels.Hard,
+            _ => AdaptiveDifficultyLevels.Medium
+        };
 
     private static string BuildPracticeJson(
         string id,

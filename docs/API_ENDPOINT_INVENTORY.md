@@ -141,6 +141,8 @@ Owner: `AdaptiveEndpoints.cs`, `AdaptiveApiFacade.cs`
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
 | POST | `/api/adaptive/session/start` | Auth | Canonical P0 mutation | Uses the shared idempotency ledger when `operationId` and `idempotencyKey` are supplied; replay returns the raw `AdaptiveSessionDto` snapshot. Legacy no-key requests remain accepted but explicitly non-retryable. |
+| GET | `/api/adaptive/path` | Auth | Canonical mobile | Raw Learning Map `{ nodes, edges, recommendedNext, generatedAt }`; empty user data returns `200` with `nodes: []` and `emptyReason`. |
+| GET | `/api/adaptive/recommendations` | Auth | Compatibility alias | Same response as canonical `/api/recommendations/practice`. |
 
 ---
 
@@ -225,7 +227,8 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 | Method/family | Auth | Owner | Notes |
 |---|---|---|---|
 | `/api/analytics/*` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope. Page capped at 100; page size preserves prior clamp semantics. HTTP contracts covered by BACKEND-TEST-029. Database-level paging remains BACKEND-TEST-045. |
-| GET `/api/recommendations/practice` | Auth | `AnalyticsEndpoints.cs` | Claim-derived user scope and bounded paging. |
+| GET `/api/recommendations/practice` | Auth | `AnalyticsEndpoints.cs` | Canonical practice recommendation route. JSON fields: `practiceId`, `topicId`, `topicName`, `reason`, `priorityScore`, `recommendedDifficulty`; bounded paging. |
+| GET `/api/analytics/mastery` | Auth | `AnalyticsEndpoints.cs` + `IAdaptiveLearningService` | Current-user topic mastery list; empty list is `200`; safe `401`/`403`/`500` behavior. |
 | GET `/api/explanations/problem/{problemId}` | Auth | `ExplanationEndpoints.cs` | Blank language defaults to `en`; stable safe not-found response. |
 | POST `/api/explanations/generate` | Auth | `ExplanationEndpoints.cs` | Validator short-circuit and safe not-found/500 tests added. Input/cost hardening remains BACKEND-TEST-043. |
 | POST `/api/explanations/mistake-analysis` | Auth | `ExplanationEndpoints.cs` | Validator and safe-error tests added. Input/cost hardening remains BACKEND-TEST-043. |

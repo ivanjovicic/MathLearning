@@ -75,22 +75,12 @@ public static class AdaptiveEndpoints
                 return ApiResult<object>.Fail("Unauthorized", "UNAUTHORIZED").ToHttpResult(ctx);
 
             var result = await facade.GetAdaptivePathAsync(userId, ctx.RequestAborted);
-            return result.ToHttpResult(ctx);
+            if (!result.Success || result.Data?.Payload.LearningMap is null)
+                return result.ToHttpResult(ctx);
+
+            return Results.Ok(result.Data.Payload.LearningMap);
         })
         .WithName("GetAdaptivePath");
-
-        group.MapGet("/recommendations", async (
-            AdaptiveApiFacade facade,
-            HttpContext ctx) =>
-        {
-            var userId = ResolveUserId(ctx);
-            if (userId is null)
-                return ApiResult<object>.Fail("Unauthorized", "UNAUTHORIZED").ToHttpResult(ctx);
-
-            var result = await facade.GetAdaptiveRecommendationsAsync(userId, ctx.RequestAborted);
-            return result.ToHttpResult(ctx);
-        })
-        .WithName("GetAdaptiveRecommendations");
 
         group.MapGet("/reviews/due", async (
             AdaptiveApiFacade facade,

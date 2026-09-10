@@ -483,6 +483,21 @@ public sealed class AdaptiveSessionStartIdempotencyTests
         public Task<List<ReviewItem>> GetDueReviewsAsync(string userId) =>
             throw new NotSupportedException();
 
+        public Task<LearningMapDto> GetLearningMapAsync(
+            string userId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new LearningMapDto(
+                Array.Empty<LearningMapNodeDto>(),
+                Array.Empty<LearningMapEdgeDto>(),
+                null,
+                DateTime.UtcNow,
+                "not_enough_learning_data"));
+
+        public Task<IReadOnlyList<MasteryDto>> GetMasteryAsync(
+            string userId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<MasteryDto>>(Array.Empty<MasteryDto>());
+
         public Task DetectWeakTopicsAsync(string userId) =>
             Task.CompletedTask;
     }

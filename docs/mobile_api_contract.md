@@ -189,6 +189,44 @@ Response includes refreshed `inventory` (string item keys) and `fragmentProgress
 
 Auth: Required.
 
+### `GET /api/adaptive/path`
+
+Returns the Learning Map for the authenticated user. The successful response is the map object itself (there is no `ApiResult.data` envelope). Nodes are emitted only when the backend has user learning data; the backend never fabricates a catalog-only path for a new user.
+
+Successful response with progress:
+```json
+{
+  "nodes": [
+    {
+      "id": "topic-7-subtopic-9",
+      "title": "Linear equations",
+      "topicName": "Algebra",
+      "topicId": 7,
+      "subtopicId": 9,
+      "mastery": 0.72,
+      "isLocked": false,
+      "recommendedDifficulty": "Medium"
+    }
+  ],
+  "edges": [],
+  "recommendedNext": "topic-7-subtopic-9",
+  "generatedAt": "2026-09-10T10:00:00Z"
+}
+```
+
+Successful response for a new user or a user without enough data:
+```json
+{
+  "nodes": [],
+  "edges": [],
+  "recommendedNext": null,
+  "generatedAt": "2026-09-10T10:00:00Z",
+  "emptyReason": "not_enough_learning_data"
+}
+```
+
+`401` is returned when the request has no authenticated user. Origin/service failures return `500` with the standard safe error object; internal exception messages are not exposed.
+
 ### `POST /api/adaptive/session/start`
 
 Starts an adaptive practice session for the current authenticated user.
@@ -225,6 +263,53 @@ Response is the raw `AdaptiveSessionDto` JSON:
   ]
 }
 ```
+
+### `GET /api/recommendations/practice` (canonical)
+
+Returns the authenticated user's paginated practice recommendations. `GET /api/adaptive/recommendations` remains a compatibility alias with the same response shape.
+
+Query params: `page` (default `1`) and `pageSize` (default `10`, maximum `100`).
+
+Successful response:
+```json
+{
+  "recommendations": [
+    {
+      "practiceId": "subtopic_9_practice",
+      "topicId": 7,
+      "topicName": "Algebra",
+      "reason": "low_accuracy",
+      "priorityScore": 0.86,
+      "recommendedDifficulty": "Easy",
+      "subtopicId": 9,
+      "id": "subtopic_9_practice",
+      "title": "Linear equations - targeted drill",
+      "priority": 0.86
+    }
+  ],
+  "page": 1,
+  "pageSize": 10,
+  "returned": 1
+}
+```
+
+`practiceId`, `topicName`, `priorityScore` and `recommendedDifficulty` are the canonical names. `id`, `title` and `priority` are retained as compatibility aliases for older clients.
+
+### `GET /api/analytics/mastery`
+
+Returns a raw list for the authenticated user. An empty list is a successful `200` response; there is no synthetic mastery row.
+
+```json
+[
+  {
+    "topicId": 7,
+    "topicName": "Algebra",
+    "masteryProbability": 0.82
+  }
+]
+```
+
+Authentication/authorization is standard for the protected route: `401` when no identity is supplied and `403` when the host authorization policy denies an authenticated identity. Service or database failures are handled as a safe `500` response with `errorCode: "INTERNAL_ERROR"` and a trace id.
 
 ## Offline bundle
 

@@ -1,4 +1,5 @@
 using MathLearning.Api.Services;
+using MathLearning.Application.DTOs.Adaptive;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
@@ -202,6 +203,21 @@ public class AdaptiveApiFacadeIntegrationTests
                 }
             });
         }
+
+        public Task<LearningMapDto> GetLearningMapAsync(
+            string userId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new LearningMapDto(
+                Array.Empty<LearningMapNodeDto>(),
+                Array.Empty<LearningMapEdgeDto>(),
+                null,
+                DateTime.UtcNow,
+                "not_enough_learning_data"));
+
+        public Task<IReadOnlyList<MasteryDto>> GetMasteryAsync(
+            string userId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<MasteryDto>>(Array.Empty<MasteryDto>());
 
         public Task DetectWeakTopicsAsync(string userId) => Task.CompletedTask;
     }

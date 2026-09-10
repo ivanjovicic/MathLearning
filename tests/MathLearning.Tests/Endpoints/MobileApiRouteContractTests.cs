@@ -30,6 +30,7 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
     [InlineData("GET", "/api/adaptive/path")]
     [InlineData("GET", "/api/adaptive/reviews/due")]
     [InlineData("GET", "/api/adaptive/recommendations")]
+    [InlineData("GET", "/api/analytics/mastery")]
     [InlineData("GET", "/api/leaderboard/rivals")]
     [InlineData("GET", "/api/users/profile")]
     [InlineData("GET", "/api/user/coins")]
@@ -57,7 +58,6 @@ public sealed class MobileApiRouteContractTests : IClassFixture<CustomWebApplica
     }
 
     [Theory]
-    [InlineData("/api/analytics/mastery")]
     [InlineData("/api/chase/test")]
     [InlineData("/api/cosmetics/unlock")]
     [InlineData("/api/cosmetics/fragments/daily-run")]

@@ -266,10 +266,14 @@ public sealed class AdaptiveApiFacade
 
     private async Task<AdaptivePathPayload> BuildAdaptivePathPayloadAsync(string userId, CancellationToken ct)
     {
+        var learningMap = await _adaptiveLearningService.GetLearningMapAsync(userId, ct);
         var recommendations = await _adaptiveLearningService.GetRecommendationsAsync(userId);
         var dueReviews = await _adaptiveLearningService.GetDueReviewsAsync(userId);
 
-        return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow);
+        return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow)
+        {
+            LearningMap = learningMap
+        };
     }
 
     private static AdaptiveSessionDto MapSession(AdaptiveSession session)
@@ -380,7 +384,11 @@ public sealed class AdaptiveApiFacade
         var recommendations = await adaptiveLearningService.GetRecommendationsAsync(userId);
         var dueReviews = await adaptiveLearningService.GetDueReviewsAsync(userId);
 
-        return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow);
+        var learningMap = await adaptiveLearningService.GetLearningMapAsync(userId);
+        return new AdaptivePathPayload(recommendations, dueReviews, DateTime.UtcNow)
+        {
+            LearningMap = learningMap
+        };
     }
 
     private static ApiResult<T> BuildFailureResult<T>(Exception ex, string defaultMessage, string? errorCode = null)
@@ -480,8 +488,7 @@ public sealed class AdaptiveApiFacade
     private static object BuildErrorDetails(Exception ex) =>
         new
         {
-            exceptionType = ex.GetType().Name,
-            message = ex.Message
+            exceptionType = ex.GetType().Name
         };
 
     private static string GetAdaptivePathCacheKey(string userId) =>

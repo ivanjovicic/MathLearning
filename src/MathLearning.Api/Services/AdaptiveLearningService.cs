@@ -1,5 +1,7 @@
 using MathLearning.Application.DTOs.AntiCheat;
 using MathLearning.Application.Services;
+using MathLearning.Application.DTOs.Adaptive;
+using MathLearning.Application.Helpers;
 using MathLearning.Domain.Entities;
 using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
@@ -58,6 +60,153 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
 
     public Task<List<ReviewItem>> GetDueReviewsAsync(string userId) =>
         GetDueReviewsAsync(userId, CancellationToken.None);
+
+    public async Task<LearningMapDto> GetLearningMapAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateUserId(userId);
+
+        var analyticsUserId = UserIdGuidMapper.FromIdentityUserId(userId);
+        var statRows = await (
+            from stat in _db.UserSubtopicStats.AsNoTracking()
+            join subtopic in _db.Subtopics.AsNoTracking()
+                on stat.SubtopicId equals subtopic.Id
+            join topic in _db.Topics.AsNoTracking()
+                on subtopic.TopicId equals topic.Id
+            where stat.UserId == analyticsUserId && stat.TotalQuestions > 0
+            orderby topic.Id, subtopic.Id
+            select new LearningMapStat(
+                topic.Id,
+                topic.Name,
+                subtopic.Id,
+                subtopic.Name,
+                stat.CorrectAnswers,
+                stat.TotalQuestions))
+            .ToListAsync(cancellationToken);
+
+        // Adaptive answers persist user-scoped history before analytics projection
+        // catches up. Use that authoritative history as a fallback so a user with
+        // real progress never receives a synthetic empty map during that window.
+        var historyRows = await (
+            from history in _db.UserQuestionHistories.AsNoTracking()
+            join subtopic in _db.Subtopics.AsNoTracking()
+                on history.SubtopicId equals subtopic.Id
+            join topic in _db.Topics.AsNoTracking()
+                on subtopic.TopicId equals topic.Id
+            where history.UserId == userId
+            group history by new
+            {
+                TopicId = topic.Id,
+                TopicName = topic.Name,
+                SubtopicId = subtopic.Id,
+                SubtopicName = subtopic.Name
+            } into grouped
+            select new LearningMapStat(
+                grouped.Key.TopicId,
+                grouped.Key.TopicName,
+                grouped.Key.SubtopicId,
+                grouped.Key.SubtopicName,
+                grouped.Count(x => x.IsCorrect),
+                grouped.Count()))
+            .ToListAsync(cancellationToken);
+
+        var rowsBySubtopic = statRows.ToDictionary(x => x.SubtopicId);
+        foreach (var historyRow in historyRows)
+        {
+            if (!rowsBySubtopic.ContainsKey(historyRow.SubtopicId))
+                rowsBySubtopic[historyRow.SubtopicId] = historyRow;
+        }
+
+        var rows = rowsBySubtopic.Values
+            .OrderBy(x => x.TopicId)
+            .ThenBy(x => x.SubtopicId)
+            .ToList();
+
+        var generatedAt = DateTime.UtcNow;
+        if (rows.Count == 0)
+        {
+            return new LearningMapDto(
+                Nodes: Array.Empty<LearningMapNodeDto>(),
+                Edges: Array.Empty<LearningMapEdgeDto>(),
+                RecommendedNext: null,
+                GeneratedAt: generatedAt,
+                EmptyReason: "not_enough_learning_data");
+        }
+
+        var masteries = await _db.UserTopicMasteries
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .ToDictionaryAsync(x => x.TopicId, cancellationToken);
+
+        var nodes = new List<LearningMapNodeDto>(rows.Count);
+        foreach (var row in rows)
+        {
+            var mastery = Math.Clamp(
+                row.TotalQuestions == 0 ? 0d : (double)row.CorrectAnswers / row.TotalQuestions,
+                0d,
+                1d);
+            var recommendedDifficulty = masteries.TryGetValue(row.TopicId, out var topicMastery)
+                ? AdaptiveDifficultyLevels.Normalize(topicMastery.DifficultyLevel)
+                : SelectLearningMapDifficulty(mastery);
+            var nodeId = BuildLearningMapNodeId(row.TopicId, row.SubtopicId);
+
+            nodes.Add(new LearningMapNodeDto(
+                Id: nodeId,
+                Title: row.SubtopicName,
+                TopicName: row.TopicName,
+                TopicId: row.TopicId,
+                SubtopicId: row.SubtopicId,
+                Mastery: Math.Round(mastery, 4),
+                IsLocked: false,
+                RecommendedDifficulty: recommendedDifficulty));
+        }
+
+        for (var index = 1; index < nodes.Count; index++)
+        {
+            var previous = nodes[index - 1];
+            if (previous.Mastery < 0.6d)
+            {
+                nodes[index] = nodes[index] with { IsLocked = true };
+            }
+        }
+
+        var edges = nodes
+            .Zip(nodes.Skip(1), (from, to) => new LearningMapEdgeDto(from.Id, to.Id))
+            .ToList();
+        var recommendedNext = nodes
+            .Where(x => !x.IsLocked)
+            .OrderBy(x => x.Mastery)
+            .ThenBy(x => x.TopicId)
+            .ThenBy(x => x.SubtopicId)
+            .Select(x => x.Id)
+            .FirstOrDefault();
+
+        return new LearningMapDto(
+            Nodes: nodes,
+            Edges: edges,
+            RecommendedNext: recommendedNext,
+            GeneratedAt: generatedAt);
+    }
+
+    public async Task<IReadOnlyList<MasteryDto>> GetMasteryAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateUserId(userId);
+
+        return await (
+            from mastery in _db.UserTopicMasteries.AsNoTracking()
+            join topic in _db.Topics.AsNoTracking()
+                on mastery.TopicId equals topic.Id
+            where mastery.UserId == userId
+            orderby topic.Id
+            select new MasteryDto(
+                mastery.TopicId,
+                topic.Name,
+                Math.Round(Math.Clamp(mastery.MasteryScore / 100d, 0d, 1d), 4)))
+            .ToListAsync(cancellationToken);
+    }
 
     public Task DetectWeakTopicsAsync(string userId) =>
         DetectWeakTopicsAsync(userId, CancellationToken.None);
@@ -1210,6 +1359,25 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("UserId is required.", nameof(userId));
     }
+
+    private static string BuildLearningMapNodeId(int topicId, int subtopicId) =>
+        $"topic-{topicId}-subtopic-{subtopicId}";
+
+    private static string SelectLearningMapDifficulty(double mastery) =>
+        mastery switch
+        {
+            >= 0.8d => AdaptiveDifficultyLevels.Hard,
+            >= 0.5d => AdaptiveDifficultyLevels.Medium,
+            _ => AdaptiveDifficultyLevels.Easy
+        };
+
+    private sealed record LearningMapStat(
+        int TopicId,
+        string TopicName,
+        int SubtopicId,
+        string SubtopicName,
+        int CorrectAnswers,
+        int TotalQuestions);
 
     private static void ValidateAnswerRequest(AdaptiveAnswerRequest request)
     {

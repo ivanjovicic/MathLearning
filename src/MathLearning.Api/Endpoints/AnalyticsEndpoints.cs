@@ -86,6 +86,22 @@ public static class AnalyticsEndpoints
             });
         });
 
+        analytics.MapGet("/mastery", async (
+            IAdaptiveLearningService service,
+            HttpContext ctx,
+            CancellationToken ct = default) =>
+        {
+            var userId = ctx.User.FindFirst("userId")?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            // Empty mastery is a successful, user-scoped response. Exceptions are
+            // intentionally left to the global middleware for a safe 500 payload.
+            var mastery = await service.GetMasteryAsync(userId, ct);
+            return Results.Ok(mastery);
+        })
+        .WithName("GetAnalyticsMastery");
+
         var recommendations = app.MapGroup("/api/recommendations")
             .RequireAuthorization()
             .WithTags("Recommendations");
@@ -96,31 +112,69 @@ public static class AnalyticsEndpoints
             int page = 1,
             int pageSize = 10,
             CancellationToken ct = default) =>
+            await GetPracticeRecommendationsResultAsync(service, ctx, page, pageSize, ct))
+            .WithName("GetPracticeRecommendations");
+
+        // Compatibility alias. The response shape and owner are identical to the canonical route above.
+        app.MapGet("/api/adaptive/recommendations", async (
+            IWeaknessAnalysisService service,
+            HttpContext ctx,
+            int page = 1,
+            int pageSize = 10,
+            CancellationToken ct = default) =>
+            await GetPracticeRecommendationsResultAsync(service, ctx, page, pageSize, ct))
+            .RequireAuthorization()
+            .WithTags("Recommendations")
+            .WithName("GetAdaptiveRecommendationsCompatibilityAlias");
+    }
+
+    private static async Task<IResult> GetPracticeRecommendationsResultAsync(
+        IWeaknessAnalysisService service,
+        HttpContext ctx,
+        int page,
+        int pageSize,
+        CancellationToken ct)
+    {
+        if (!TryGetAnalyticsUserId(ctx, out var userId))
+            return Results.Unauthorized();
+
+        var paging = PaginationBounds.Normalize(
+            page,
+            Math.Clamp(pageSize, 1, 100),
+            defaultPageSize: 10,
+            maxPageSize: 100,
+            maxPage: MaxAnalyticsPage);
+        var recommendationRows = (await service.GeneratePracticeRecommendationsAsync(
+                userId,
+                paging.FetchCount,
+                ct))
+            .Skip(paging.Skip)
+            .Take(paging.PageSize)
+            .ToList();
+
+        return Results.Ok(new
         {
-            if (!TryGetAnalyticsUserId(ctx, out var userId))
-                return Results.Unauthorized();
-
-            var paging = PaginationBounds.Normalize(
-                page,
-                Math.Clamp(pageSize, 1, 100),
-                defaultPageSize: 10,
-                maxPageSize: 100,
-                maxPage: MaxAnalyticsPage);
-            var recommendationRows = (await service.GeneratePracticeRecommendationsAsync(
-                    userId,
-                    paging.FetchCount,
-                    ct))
-                .Skip(paging.Skip)
-                .Take(paging.PageSize)
-                .ToList();
-
-            return Results.Ok(new PracticeRecommendationsResponse(
-                Recommendations: recommendationRows,
-                Page: paging.Page,
-                PageSize: paging.PageSize,
-                Returned: recommendationRows.Count));
+            recommendations = recommendationRows.Select(MapPracticeRecommendation),
+            page = paging.Page,
+            pageSize = paging.PageSize,
+            returned = recommendationRows.Count
         });
     }
+
+    private static object MapPracticeRecommendation(PracticeRecommendationDto dto) => new
+    {
+        practiceId = dto.Id,
+        topicId = dto.TopicId,
+        topicName = string.IsNullOrWhiteSpace(dto.TopicName) ? dto.Title : dto.TopicName,
+        reason = dto.Reason,
+        priorityScore = dto.Priority,
+        recommendedDifficulty = dto.RecommendedDifficulty,
+        subtopicId = dto.SubtopicId,
+        // Kept for already shipped clients while the new names are canonical.
+        id = dto.Id,
+        title = dto.Title,
+        priority = dto.Priority
+    };
 
     private static bool TryGetAnalyticsUserId(HttpContext ctx, out Guid analyticsUserId)
     {
