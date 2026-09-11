@@ -173,7 +173,7 @@ Chest-day ownership:
 - Explicit `seasonId` cannot override chest-day ownership. Omitted `seasonId` resolves to the same owning season.
 - Overlapping season windows for the same day fail closed (`409 not_eligible`).
 - Wrong-season / out-of-window / missing owner attempts return `409` with `errorCode = "not_eligible"` and write no season progress, season daily-run claim, or fragment-eligibility side effects.
-- Duplicate settlement of the same chest (any idempotency key / requested season) replays the originally settled season state with `alreadyClaimed: true` and does not rebind the chest to another season.
+- Duplicate settlement of the same chest (any idempotency key / requested season) replays the originally settled season state with `alreadyClaimed: true`, the original `awardedXp` (not `0`), and does not rebind the chest to another season. Season `earnedXp` is the persisted total and is not incremented again.
 
 Mobile should follow with `POST /api/cosmetics/fragments/grant` using `source`/`sourceType: "dailyRun"` and `operationId` = `idempotencyKey` = `transactionId`.
 
@@ -189,9 +189,11 @@ Server validates milestone unlock/claim state and settles reward atomically with
 `cosmetic_fragment` rewards are explicit in contract (`fragmentName`, `fragmentCopies`) and are not silently mapped to item unlocks.
 The request always requires explicit `idempotencyKey`; missing or empty values return `400 invalid_idempotency_key`.
 The backend also enforces uniqueness by `UserId + SeasonId + MilestoneId`, so a different retry key still cannot mint the same milestone twice.
+Premium-track milestones (`SeasonRewardTrackEntry.TrackType = premium`) are deny-by-default with the same policy as `/api/cosmetics/reward-track/claim`: without a persisted premium entitlement the claim returns `409 premium_required` and writes no milestone claim, coins, XP, or cosmetics side effects. Free-track milestones remain claimable when season XP and other rules pass. Request/body text is never proof of premium entitlement.
+Season selection for this route shares the cosmetics reward-track claim window: `active` seasons remain claimable through `RewardLockAt` (or `EndDate`), and `reward_lock` seasons remain claimable until `RewardLockAt` (or `EndDate`). Draft/scheduled/completed/archived/future seasons return `409 invalid_season`.
 When `rewardType` is `xp`, global XP is applied only through `IXpTrackingService` with source identity `season:{seasonId}:milestone:{milestoneId}`. That updates total, daily, weekly and monthly XP plus level together with a `user_xp_events` audit row; the endpoint does not independently mutate `UserProfile.Xp`. Milestone settlement passes `evaluateProgressRewards: false` so catalog readiness / cosmetics progress hooks cannot abort XP settlement. Replay and duplicate keys perform zero additional XP/bucket/history mutation.
 
-### 7) `POST /api/cosmetics/items/{itemKey}/claim`
+### 8) `POST /api/cosmetics/items/{itemKey}/claim`
 Request:
 ```json
 {
@@ -205,7 +207,7 @@ Server resolves the granted item and provenance from the stored entitlement. Cli
 Idempotency is scoped per authenticated `userId`. `operationId` and `idempotencyKey` are required.
 Missing entitlement returns `409 not_eligible`. Route/key mismatches return `409 entitlement_mismatch`. Duplicate retries with the same keys replay `alreadyClaimed: true`. Same keys with a different `entitlementId` return `409 idempotency_conflict`.
 
-### 8) `POST /api/cosmetics/fragments/grant`
+### 9) `POST /api/cosmetics/fragments/grant`
 Request:
 ```json
 {
@@ -225,7 +227,7 @@ Daily Run clients should send the chest `transactionId` as `idempotencyKey` (and
 Every settled response includes authoritative `progress { itemId, collectedFragments, requiredFragments, updatedAt, unlockedAt }` plus refreshed `inventory` and `fragmentProgress`.
 When the threshold is reached, response also includes `unlockedItemId` and optional `unlockedInventory`.
 
-### 9) `POST /api/cosmetics/purchase`
+### 10) `POST /api/cosmetics/purchase`
 Request:
 ```json
 {
@@ -269,4 +271,5 @@ Cross-device correctness depends on backend idempotency + authoritative refresh:
 - `POST /api/cosmetics/fragments/grant` with `source`/`sourceType = dailyRun` requires a matching `DailyRunChestClaim` and completed season daily-run settlement for the same `transactionId`. Server uses chest-authoritative `fragmentName` and `copies` (1-3); mobile should send `operationId` = `idempotencyKey` = chest `transactionId`.
 - All new economy settlement endpoints require auth and `idempotencyKey`.
 - Same `idempotencyKey` with a different request payload returns `409` with `errorCode = "idempotency_conflict"`.
+- Duplicate Daily Run chest settlement with a new idempotency key still replays `alreadyClaimed: true` and the original `awardedXp`; it does not mint a second season grant.
 - Business failures do not mint rewards or mutate balances/progress.

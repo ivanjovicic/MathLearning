@@ -184,8 +184,8 @@ Owner: `EconomySettlementEndpoints.cs`
 | GET | `/api/economy/rewards/preview` | Auth | Canonical read | Must not mutate. |
 | POST | `/api/economy/rewards/claim` | Auth | Canonical P0 | Idempotent reward claim. |
 | POST | `/api/shop/streak-freeze/purchase` | Auth | Canonical P0 | Idempotent purchase. |
-| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP; chest day must fall in the selected/owning season calendar window. |
-| POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 | Season milestone claim; `xp` rewards go through `IXpTrackingService` (`season:{seasonId}:milestone:{milestoneId}`). |
+| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP; chest day must fall in the selected/owning season calendar window. Duplicate settlement (any idempotency key) replays `alreadyClaimed: true` with the original `awardedXp` and does not rebind the chest. |
+| POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 | Season milestone claim; `xp` rewards go through `IXpTrackingService` (`season:{seasonId}:milestone:{milestoneId}`). Premium-track milestones are deny-by-default (`409 premium_required`) until a persisted premium entitlement owner exists; free-track claims unchanged. Season selection shares cosmetics reward-track `active`/`reward_lock` claim-window policy. |
 | POST | `/api/admin/economy/rewards/grant` | Admin | Admin | Actor from auth, target from body. |
 
 ---
