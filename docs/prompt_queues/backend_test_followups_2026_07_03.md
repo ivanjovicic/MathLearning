@@ -28,7 +28,7 @@ Target repo: `ivanjovicic/MathLearning`
 | BACKEND-TEST-030 | P1 | Prompt-ready | Add explanation endpoint validation, safe-error and cancellation coverage. |
 | BACKEND-TEST-031 | P1 | Prompt-ready | Make weakness scheduling bounded, deduplicated and restart-safe or document accepted loss. |
 | BACKEND-TEST-032 | P0/P1 | Implemented / Workflow validation needed | Shared PostgreSQL provider harness and initial authority tests are wired; exact workflow/local provider execution still needs valid PostgreSQL maintenance credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-032-evidence.md`. |
-| BACKEND-TEST-033 | P1 | Prompt-ready | Add cancellation and rollback matrix for every canonical P0 mutation. |
+| BACKEND-TEST-033 | P1 | Done 79% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-033-evidence.md`; Validation: Practice cancel/replay 5/5 passed; Residual risk: non-practice P0 cancel matrix still open; Commit: self | Add cancellation and rollback matrix for every canonical P0 mutation. |
 | BACKEND-TEST-034 | P1/P2 | Prompt-ready | Prove legacy route parity/deprecation and prevent duplicate settlement surfaces. |
 | BACKEND-TEST-035 | P1 | Prompt-ready | Audit all authorization tests for false “anonymous” coverage and migrate to explicit anonymous mode. |
 
