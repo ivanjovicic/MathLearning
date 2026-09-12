@@ -32,7 +32,7 @@ Delivery mode: pull-request
 Working branch: codex/quiz-content-playability-20260912
 Delivery status: pending-merge
 Delivery PR: pending creation
-Main commit SHA: pending
+Main commit SHA: not on main; branch commit ae7241a
 Main verification: not run - branch is not merged and authenticated content audit is unavailable
 
 ## Deadline checkpoints
@@ -157,4 +157,4 @@ Main verification: not run - branch is not merged and authenticated content audi
 
 ## Commit SHA
 
-- pending commit
+- ae7241a
