@@ -1,6 +1,6 @@
 # Backend Agent Time and Context Budgets
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-09-12  
 Owner: `backend-agent-system`
 
 The goal is fast correct closure, not maximum reading. Evidence, queue work and CI waiting count as task time.
@@ -15,6 +15,44 @@ The goal is fast correct closure, not maximum reading. Evidence, queue work and 
 | `high` | 30 min/phase | 8 | 20 | 10 | 6 | finite audit or migration phase; implementation stays separate |
 
 `Files inspected` in compact evidence includes workflow docs plus source/tests. The validator permits a small combined ceiling (`micro` 6, `low` 11, `medium` 20, `high` 28).
+
+## Execution topology and subagent budget
+
+Default topology is **one main agent and zero subagents**. A subagent is an exception for context isolation or independent verification, not the default implementation engine.
+
+| Budget | Default subagents | Maximum without an explicitly parallel prompt |
+|---|---:|---:|
+| `micro` | 0 | 0 |
+| `low` | 0 | 0 |
+| `medium` | 0 | 1 |
+| `high` finite audit phase | 0 | 1 |
+
+A subagent is justified only when it has an independent bounded question/read set and either isolates genuinely large exploration output, independently verifies completed work, or handles a finite audit slice while the parent can continue separate work.
+
+Rules:
+
+- do not delegate routine repository search, exact file reads, shell commands, queue selection/claim, implementation, formatting, focused tests, git status/diff or docs updates;
+- do not delegate merely because Auto/router mode offers a subagent;
+- never use nested or recursive subagents;
+- more than one concurrent subagent requires an assigned prompt that explicitly authorizes non-overlapping parallel workstreams and records why the extra context/token cost is justified;
+- a subagent does not reset or expand time/read/search/change limits: all of its reads, searches, command output, elapsed time and returned context count against the same run budget;
+- `Waiting for subagent` still consumes elapsed task time and is not a reason for the parent to stop independent work;
+- the parent must not repeat the subagent's exploration unless current code/test evidence conflicts with its result;
+- an unchanged failed delegation is not retried; return to direct work, split or hand off.
+
+Before delegation record:
+
+```text
+Delegated question:
+Exact scope/read set:
+Expected result/artifact:
+Why direct execution is worse:
+Stop condition:
+```
+
+If these cannot be stated compactly, do the work directly.
+
+The repository Cursor-specific always-applied form of this policy lives in `.cursor/rules/agent-execution-efficiency.mdc`.
 
 ## Checkpoints
 
@@ -82,6 +120,8 @@ Files changed: <n>
 Searches: <n>
 Validation runs: <n>
 Failed retries: <n>
+Subagents: <n>
+Delegation reason: none | <one sentence>
 ```
 
-Use `scripts/agent_run.py` to record these automatically. Use `scripts/analyze_agent_runs.py` to measure unknown elapsed time, mixed lanes, oversized logs and repeated waste.
+Use `scripts/agent_run.py` to record these automatically where supported. If the tool does not yet emit the subagent fields, record them in the run log notes without inventing metrics. Use `scripts/analyze_agent_runs.py` to measure unknown elapsed time, mixed lanes, oversized logs and repeated waste.
