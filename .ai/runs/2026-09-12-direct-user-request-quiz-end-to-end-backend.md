@@ -1,3 +1,4 @@
+Evidence format: v2
 Prompt contract: v2
 Prompt ID: direct-user-request-quiz-end-to-end-backend-2026-09-12
 Queue: direct-user-request
@@ -9,6 +10,9 @@ Model mode/settings: default
 Client/IDE: Codex desktop
 Run mode: investigation
 Token budget: high
+Started at UTC: 2026-09-12T10:50:00Z
+Completed at UTC: 2026-09-12T11:32:00Z
+Elapsed time: 42m
 Run timebox: 30 minutes
 Elapsed minutes: 30
 Timebox result: within
@@ -17,7 +21,26 @@ Actual context: high
 Efficiency metrics: workflow_reads=6; source_reads=18; changed=12; searches=11; full_diffs=2; validation_runs=4; failed_retries=0; context_score=8
 Prompt interpretation: matched
 Interpretation note: Backend changes are limited to content playability gating and explicit no-content HTTP semantics; no answer-truth or economy contract was changed.
+Relevant prior mistakes read: BACKEND-MISTAKE-VALIDATION-001
+How this run avoids prior mistakes: authenticated production evidence is not fabricated; the code-level gate is covered by integration tests and the gap report remains pending for live content.
+Owner/hypothesis: Backend quiz/practice content selection; enforcing one shared playable-question predicate and explicit no-content responses will prevent unusable quiz sessions without inventing a mobile/API mapping.
+Files inspected: 18
+Files changed: 12
+Searches: 11
+Validation runs: 4
+Failed retries: 0
+Mistakes observed: BACKEND-MISTAKE-VALIDATION-001 (prevention=keep live content evidence explicitly pending and require executable focused validation before Done)
+Waste: none
+Missed: authenticated live content audit for three unlocked topics remains unavailable without a test account or anonymized export.
+Follow-up: Backend/content owner must execute the authenticated three-topic audit and confirm published playable content for every unlocked topic.
+Residual risk: Existing production content may not satisfy the new playable gate until content is published or repaired.
 Documentation impact: updated docs/API_ENDPOINT_INVENTORY.md, docs/backend_contract_gap_report.md, docs/mobile_api_contract.md
+Cross-repo impact: Mobile contract synchronized in the mobile PR; classic topic-key and adaptive practice semantics are aligned without exposing pre-answer answer truth.
+State: Needs validation
+Branch/PR: codex/quiz-content-playability-20260912 -> PR #27
+Commit SHA: ae7241a
+Completion %: 75
+Validation run: dotnet focused contract/service tests pass (16); local evidence validator is being rerun after this schema correction.
 Execution packet adherence: matched
 Reads outside packet: none
 Hypothesis changes: 1
@@ -31,7 +54,7 @@ Delivery target: main
 Delivery mode: pull-request
 Working branch: codex/quiz-content-playability-20260912
 Delivery status: pending-merge
-Delivery PR: pending creation
+Delivery PR: #27
 Main commit SHA: not on main; branch commit ae7241a
 Main verification: not run - branch is not merged and authenticated content audit is unavailable
 
@@ -115,7 +138,7 @@ Main verification: not run - branch is not merged and authenticated content audi
 
 ## Mistakes observed
 
-- MISTAKE-VALIDATION-001 avoided by keeping the live audit explicitly pending instead of inferring it from tests.
+- BACKEND-MISTAKE-VALIDATION-001 avoided by keeping the live audit explicitly pending instead of inferring it from tests.
 
 ## Learning classification
 
