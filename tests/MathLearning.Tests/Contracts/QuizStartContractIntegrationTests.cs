@@ -47,7 +47,7 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
     }
 
     [Fact]
-    public async Task QuizStart_EmptySubtopic_ReturnsEmptyQuestionList()
+    public async Task QuizStart_EmptySubtopic_ReturnsNoPlayableQuestions()
     {
         var quizData = await SeedQuizPoolAsync("start-empty", 8, createEmptySubtopic: true);
 
@@ -57,11 +57,102 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
             questionCount = 10
         });
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
         var payload = await ReadJsonAsync(response);
-        Assert.True(Guid.TryParse(payload.GetProperty("quizId").GetString(), out _));
-        Assert.Equal(0, payload.GetProperty("questions").GetArrayLength());
+        Assert.Equal("NO_PLAYABLE_QUESTIONS", payload.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task PracticeStart_EmptySubtopic_ReturnsNoPlayableQuestionsAsNotFound()
+    {
+        var quizData = await SeedQuizPoolAsync("practice-empty", 8, createEmptySubtopic: true);
+
+        var response = await PostAsUserAsync("/api/practice/session/start", new
+        {
+            skillNodeId = "practice-empty",
+            topicId = (int?)null,
+            subtopicId = quizData.EmptySubtopicId,
+            targetQuestions = 10,
+            preferredDifficulty = "medium"
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var payload = await ReadJsonAsync(response);
+        Assert.False(payload.GetProperty("success").GetBoolean());
+        Assert.Equal("NO_PLAYABLE_QUESTIONS", payload.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task LegacyQuizQuestions_TopicKeySelectsQuestionsAcrossTopicSubtopics()
+    {
+        var quizData = await SeedQuizPoolAsync("legacy-topic-key", 2, createEmptySubtopic: true);
+        int topicId;
+        using (var scopeHandle = _factory.Services.CreateScope())
+        {
+            var db = scopeHandle.ServiceProvider.GetRequiredService<ApiDbContext>();
+            topicId = await db.Subtopics
+                .Where(x => x.Id == quizData.HotSubtopicId)
+                .Select(x => x.TopicId)
+                .SingleAsync();
+        }
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/quiz/questions?topic=topic_{topicId}&count=2");
+        request.Headers.Add("X-Test-UserId", "1");
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await ReadJsonAsync(response);
+        AssertPreAnswerQuestionArrayShape(
+            payload.GetProperty("questions"),
+            2,
+            "legacy-topic-key quiz hot path question");
+    }
+
+    [Fact]
+    public async Task QuizStart_ExcludesDraftAndDeletedQuestions()
+    {
+        var quizData = await SeedQuizPoolAsync("start-playability", 1, createEmptySubtopic: true);
+
+        using (var scopeHandle = _factory.Services.CreateScope())
+        {
+            var db = scopeHandle.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+            var draft = new Question("Draft question", 1, 1);
+            draft.SetSubtopic(quizData.HotSubtopicId);
+            draft.ReplaceOptions(new[]
+            {
+                new QuestionOption("Draft A", true, order: 1),
+                new QuestionOption("Draft B", false, order: 2)
+            });
+            db.Questions.Add(draft);
+
+            var deleted = new Question("Deleted question", 1, 1);
+            deleted.SetSubtopic(quizData.HotSubtopicId);
+            deleted.ReplaceOptions(new[]
+            {
+                new QuestionOption("Deleted A", true, order: 1),
+                new QuestionOption("Deleted B", false, order: 2)
+            });
+            deleted.SetPublishState(QuestionPublishStates.Published, "test-fixture", DateTime.UtcNow);
+            deleted.SoftDelete();
+            db.Questions.Add(deleted);
+
+            await db.SaveChangesAsync();
+        }
+
+        var response = await PostAsUserAsync("/api/quiz/start", new
+        {
+            subtopicId = quizData.HotSubtopicId,
+            questionCount = 10
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await ReadJsonAsync(response);
+        Assert.Equal(1, payload.GetProperty("questions").GetArrayLength());
     }
 
     [Theory]
@@ -129,6 +220,7 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
                 new QuestionOption($"Answer {i} C", false, order: 3),
                 new QuestionOption($"Answer {i} D", false, order: 4)
             });
+            question.SetPublishState(QuestionPublishStates.Published, "test-fixture", DateTime.UtcNow);
 
             db.Questions.Add(question);
         }

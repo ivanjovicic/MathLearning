@@ -9,7 +9,7 @@ Mobile contract source: `ivanjovicic/Mathlearning-Mobile-App/docs/mobile_api_con
 |---|---|---|---|
 | `POST /api/quiz/answer` | `quiz_answer` | **Implemented / tested** | `IdempotencyLedger` + `QuizAnswerIdempotencyTests.cs` + `MobileMutationContractIntegrationTests.cs` |
 | `POST /api/quiz/srs/update` | `srs_update` | **Implemented / tested** | `SrsUpdateIdempotencyTests.cs` + `MobileMutationContractIntegrationTests.cs` |
-| `GET /api/quiz/srs/daily`, `GET /api/quiz/srs/mixed`, `POST /api/quiz/start`, `POST /api/quiz/next-question`, legacy `/api/quiz/questions` | pre-answer quiz/SRS question shape | **Verified** | `QuizStartContractIntegrationTests.cs` + `SrsEndpointsIntegrationTests.cs` + `openapi.yaml` + `docs/API_ENDPOINT_INVENTORY.md` |
+| `GET /api/quiz/srs/daily`, `GET /api/quiz/srs/mixed`, `POST /api/quiz/start`, `POST /api/quiz/next-question`, legacy `/api/quiz/questions` | pre-answer quiz/SRS question shape and playable-content gate | **Code-verified; live content audit pending** | `QuizStartContractIntegrationTests.cs` + `SrsEndpointsIntegrationTests.cs` + `openapi.yaml` + `docs/API_ENDPOINT_INVENTORY.md`; authenticated production/content evidence still required |
 | `POST /api/daily-run/chest/claim` | `daily_run_chest_claim` | **Verified (domain-table Policy B)** | `DailyRunChestClaimIdempotencyTests.cs` + endpoint integration tests + `MobileMutationContractIntegrationTests.cs` |
 | Economy mutations | various | **Verified** | `EconomyOperationIdIdempotencyTests.cs` + `MobileEconomyContractIntegrationTests.cs` + `MobileMutationContractIntegrationTests.cs` |
 | Cosmetics mutations | various | **Verified** | `CosmeticsMutationResponseTests.cs` + cosmetics contract tests + `MobileApiRouteContractTests.cs` |
