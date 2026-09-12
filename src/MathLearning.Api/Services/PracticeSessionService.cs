@@ -97,6 +97,9 @@ public sealed class PracticeSessionService : IPracticeSessionService
                 Take: 1),
             ct);
 
+        if (firstQuestion is null)
+            throw new KeyNotFoundException("No playable questions are published for this topic.");
+
         PracticeQuestionDto? firstQuestionDto = null;
         if (firstQuestion is not null)
         {
