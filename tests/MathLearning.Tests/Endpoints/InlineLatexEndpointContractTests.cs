@@ -41,11 +41,10 @@ public sealed class InlineLatexEndpointContractTests :
         Assert.Equal(
             "Za $x=1$ i $f(x)=2x+3$, izračunaj vrednost.",
             question.GetProperty("text").GetString());
-        Assert.Equal(
-            "Vrednost je $5$.",
-            Assert.Single(question.GetProperty("options").EnumerateArray().ToArray())
-                .GetProperty("text")
-                .GetString());
+        var options = question.GetProperty("options").EnumerateArray().ToArray();
+        Assert.Contains(
+            options,
+            option => option.GetProperty("text").GetString() == "Vrednost je $5$.");
         Assert.Equal("Koristi $x=1$.", question.GetProperty("hintLight").GetString());
         Assert.False(question.TryGetProperty("correctAnswerId", out _));
         Assert.False(question.TryGetProperty("hintFull", out _));
@@ -78,8 +77,10 @@ public sealed class InlineLatexEndpointContractTests :
         question.SetHintFormula("Koristi $x=1$.");
         question.ReplaceOptions(new[]
         {
-            new QuestionOption("Vrednost je $5$.", isCorrect: true)
+            new QuestionOption("Vrednost je $5$.", isCorrect: true),
+            new QuestionOption("Vrednost je $8$.", isCorrect: false)
         });
+        question.SetPublishState(QuestionPublishStates.Published, "test-fixture", DateTime.UtcNow);
         db.Questions.Add(question);
         await db.SaveChangesAsync();
 

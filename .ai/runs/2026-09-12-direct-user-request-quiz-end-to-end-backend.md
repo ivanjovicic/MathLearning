@@ -8,15 +8,15 @@ Client/IDE: Codex desktop
 Run mode: investigation
 Token budget: high
 Started at UTC: 2026-09-12T10:50:00Z
-Completed at UTC: 2026-09-12T11:32:00Z
+Completed at UTC: 2026-09-12T11:37:43Z
 Elapsed time: 42m
 Relevant prior mistakes read: BACKEND-MISTAKE-VALIDATION-001
 How this run avoids prior mistakes: Live production evidence is not inferred from fixtures or anonymous 401 responses; focused executable tests and an explicit pending audit are recorded.
 Owner/hypothesis: Backend quiz/practice content selection; one shared playable-question predicate plus explicit no-content responses prevents unusable sessions without inventing a mobile/API mapping.
-Files inspected: 18
-Files changed: 12
+Files inspected: 19
+Files changed: 13
 Searches: 11
-Validation runs: 4
+Validation runs: 5
 Failed retries: 0
 Mistakes observed: BACKEND-MISTAKE-VALIDATION-001 (prevention=keep live content evidence pending and require executable focused validation before Done)
 Waste: none
@@ -29,7 +29,7 @@ State: Needs validation
 Branch/PR: codex/quiz-content-playability-20260912 -> PR #27
 Commit SHA: ae7241a
 Completion %: 75
-Validation run: dotnet focused contract/service tests pass (16); local evidence validator pass; prior CI evidence-schema issue corrected.
+Validation run: dotnet focused contract/service tests pass (16), Inline-Latex contract test passes (1), and local evidence validator passes; prior CI evidence-schema issue corrected.
 
 ## Outcome
 
@@ -47,12 +47,14 @@ Make classic quiz and learning-map adaptive practice return playable content or 
 - Applied the gate to classic start, legacy questions, next-question, and adaptive selection.
 - Prevented persistence of practice sessions without a first question.
 - Mapped `NO_PLAYABLE_QUESTIONS` to HTTP 404 and updated focused contract tests.
+- Updated the inline-LaTeX endpoint fixture to contain two published options, matching the playable-content contract.
 
 ## Proof
 
 - `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --no-restore --filter "FullyQualifiedName~QuizStartContractIntegrationTests|FullyQualifiedName~PracticeSessionServiceIntegrationTests"` -> pass (16).
 - `git diff --check` -> pass.
 - `python scripts/validate_agent_evidence.py --changed-from 8faa5b9f75d9d3e607f74f3907df2b709f0606e8 --verify-git` -> pass (0 failures; compact-log warning resolved by this rewrite).
+- `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --no-restore --filter "FullyQualifiedName~InlineLatexEndpointContractTests"` -> pass (1).
 
 ## Not run / handoff
 
