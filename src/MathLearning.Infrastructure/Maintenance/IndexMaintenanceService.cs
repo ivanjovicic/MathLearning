@@ -71,8 +71,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
         const string query = """
             SELECT
                 i.schemaname,
-                i.relname,
-                i.indexrelname,
+                i.relname AS tablename,
+                i.indexrelname AS indexname,
                 pg_size_pretty(pg_relation_size(i.indexrelid)) as size,
                 i.idx_scan as scans,
                 i.idx_tup_read as tuples_read,
@@ -148,8 +148,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
         const string query = """
             SELECT
                 schemaname,
-                relname,
-                indexrelname,
+                relname AS tablename,
+                indexrelname AS indexname,
                 pg_size_pretty(pg_relation_size(indexrelid)) as size,
                 idx_scan as scans,
                 idx_tup_read as tuples_read,
