@@ -20,6 +20,18 @@ public sealed class RateLimitClientIdentityTests
     }
 
     [Fact]
+    public void Resolve_AuthenticatedUser_TrimsWhitespaceFromUserIdClaim()
+    {
+        var context = new DefaultHttpContext();
+        context.User = new System.Security.Claims.ClaimsPrincipal(
+            new ClaimsIdentity(
+                [new Claim("userId", "  learner-42  ")],
+                authenticationType: "Test"));
+
+        Assert.Equal("user:learner-42", RateLimitClientIdentity.Resolve(context));
+    }
+
+    [Fact]
     public void Resolve_Anonymous_UsesPhysicalPeerIpFromItems()
     {
         var context = new DefaultHttpContext
@@ -29,6 +41,18 @@ public sealed class RateLimitClientIdentityTests
         context.Items[ConnectionRemoteIpMiddleware.ItemKey] = IPAddress.Parse("198.51.100.4");
 
         Assert.Equal("ip:198.51.100.4", RateLimitClientIdentity.Resolve(context));
+    }
+
+    [Fact]
+    public void Resolve_Anonymous_UsesCanonicalIpv6FromPhysicalPeer()
+    {
+        var context = new DefaultHttpContext
+        {
+            Connection = { RemoteIpAddress = IPAddress.Parse("2001:0db8:0:0:0:0:0:1") }
+        };
+        context.Items[ConnectionRemoteIpMiddleware.ItemKey] = IPAddress.Parse("2001:0db8:0:0:0:0:0:1");
+
+        Assert.Equal("ip:2001:db8::1", RateLimitClientIdentity.Resolve(context));
     }
 
     [Fact]

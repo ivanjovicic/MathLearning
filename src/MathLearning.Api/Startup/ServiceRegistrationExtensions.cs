@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -36,6 +37,9 @@ public static class ServiceRegistrationExtensions
         var otelServiceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         var enableEfCoreTracing = builder.Configuration.GetValue<bool?>("OpenTelemetry:EnableEntityFrameworkInstrumentation")
             ?? !builder.Environment.IsDevelopment();
+        var traceSampleRate = builder.Configuration.GetValue<double?>("OpenTelemetry:TraceSampleRate")
+            ?? (builder.Environment.IsDevelopment() ? 1.0 : 0.05);
+        traceSampleRate = Math.Clamp(traceSampleRate, 0.0, 1.0);
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(
@@ -43,6 +47,8 @@ public static class ServiceRegistrationExtensions
                 serviceVersion: otelServiceVersion))
             .WithTracing(tracerProviderBuilder =>
             {
+                tracerProviderBuilder.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(traceSampleRate)));
+
                 tracerProviderBuilder
                     .AddAspNetCoreInstrumentation(options =>
                     {
@@ -167,6 +173,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<OutboxBatchProcessor>();
         builder.Services.AddScoped<IEventHandler<QuizCompleted>, QuizCompletedCoinsHandler>();
         builder.Services.AddScoped<IEventHandler<QuizAttemptIngestRequested>, QuizAttemptIngestRequestedHandler>();
+        builder.Services.AddScoped<IEventHandler<AdaptiveAnswerLegacySrsSyncRequested>, AdaptiveAnswerLegacySrsSyncRequestedHandler>();
         builder.Services.AddScoped<IEventHandler<StreakProtectedByFreeze>, FreezeUsedHandler>();
         builder.Services.AddScoped<IEventHandler<CoinsGranted>, CoinsGrantedHandler>();
 
@@ -187,6 +194,8 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<ICommonMistakeDetector, CommonMistakeDetector>();
         builder.Services.AddScoped<IFormulaReferenceService, FormulaReferenceService>();
         builder.Services.AddScoped<IAiTutorEnhancer, AiTutorEnhancer>();
+        builder.Services.AddSingleton<ExplanationCacheMetrics>();
+        builder.Services.AddSingleton<RequestPerformanceMetrics>();
         builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
         builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
         builder.Services.AddScoped<LegacyStepExplanationAdapter>();
@@ -198,6 +207,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
         builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
         builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
+        builder.Services.AddHostedService<ExplanationCacheCleanupBackgroundService>();
     }
 
     public static void AddCacheAndInfrastructureServices(this WebApplicationBuilder builder)
@@ -207,6 +217,7 @@ public static class ServiceRegistrationExtensions
             options.SizeLimit = 1000;
         });
 
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.Services.AddControllers();
         builder.Services.AddValidatorsFromAssemblyContaining<GenerateExplanationRequestValidator>();
@@ -214,7 +225,11 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<InMemoryLockService>();
         builder.Services.AddScoped<RequestDataCacheService>();
 
-        var redisConnectionString = ResolveRedisConnectionString(builder.Configuration);
+        var redisConfiguration = ResolveRedisConfiguration(builder.Configuration);
+        var redisStatus = new RedisRuntimeStatus(redisConfiguration.Required);
+        builder.Services.AddSingleton(redisStatus);
+
+        var redisConnectionString = redisConfiguration.ConnectionString;
         if (!string.IsNullOrWhiteSpace(redisConnectionString))
         {
             try
@@ -222,10 +237,23 @@ public static class ServiceRegistrationExtensions
                 var redisOptions = BuildRedisConfigurationOptions(builder.Configuration, redisConnectionString);
                 var redisMultiplexer = ConnectionMultiplexer.Connect(redisOptions);
 
+                if (redisConfiguration.Required && !redisMultiplexer.IsConnected)
+                {
+                    redisMultiplexer.Dispose();
+                    throw new InvalidOperationException(
+                        "Redis:Required is enabled but the Redis connection was not established.");
+                }
+
                 builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
                 builder.Services.AddSingleton<IRedisLeaderboardService, MathLearning.Services.RedisLeaderboardService>();
+                redisStatus.MarkRedis(redisMultiplexer.IsConnected);
+                redisMultiplexer.ConnectionFailed += (_, args) =>
+                    redisStatus.MarkRedisDisconnected(args.FailureType.ToString());
+                redisMultiplexer.ConnectionRestored += (_, _) => redisStatus.MarkRedisConnected();
                 Log.Information(
-                    "Redis connection configured for cache-backed features. ConnectTimeoutMs={ConnectTimeoutMs} SyncTimeoutMs={SyncTimeoutMs} ConnectRetry={ConnectRetry} KeepAliveSeconds={KeepAliveSeconds} AbortOnConnectFail={AbortOnConnectFail}",
+                    "Redis connection configured for cache-backed features. Required={Required} Connected={Connected} ConnectTimeoutMs={ConnectTimeoutMs} SyncTimeoutMs={SyncTimeoutMs} ConnectRetry={ConnectRetry} KeepAliveSeconds={KeepAliveSeconds} AbortOnConnectFail={AbortOnConnectFail}",
+                    redisConfiguration.Required,
+                    redisMultiplexer.IsConnected,
                     redisOptions.ConnectTimeout,
                     redisOptions.SyncTimeout,
                     redisOptions.ConnectRetry,
@@ -234,16 +262,37 @@ public static class ServiceRegistrationExtensions
             }
             catch (Exception ex)
             {
+                redisStatus.MarkDbFallback("StartupInitializationFailed");
+                if (redisConfiguration.Required)
+                {
+                    throw new InvalidOperationException(
+                        "Redis:Required is enabled but the Redis connection could not be established.",
+                        ex);
+                }
+
                 builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
                 Log.Warning(
                     ex,
-                    "Redis startup initialization failed. Falling back to DB-backed leaderboard service.");
+                    "Redis startup initialization failed. Falling back to DB-backed leaderboard service. Required={Required} Mode={Mode}",
+                    redisConfiguration.Required,
+                    redisStatus.Snapshot().Mode);
             }
         }
         else
         {
+            redisStatus.MarkDbFallback("ConnectionStringMissing");
+            if (redisConfiguration.Required)
+            {
+                throw new InvalidOperationException(
+                    "Redis:Required is enabled but no Redis connection string is configured.");
+            }
+
             builder.Services.AddScoped<IRedisLeaderboardService, DbBackedRedisLeaderboardService>();
-            Log.Warning("Redis connection string is not configured. Falling back to DB-backed leaderboard service.");
+            Log.Warning(
+                "Redis connection string is not configured. Falling back to DB-backed leaderboard service. Required={Required} Mode={Mode} FailureReason={FailureReason}",
+                redisConfiguration.Required,
+                redisStatus.Snapshot().Mode,
+                redisStatus.Snapshot().FailureReason);
         }
 
         builder.Services.AddScoped<IBugReportService, BugReportService>();
@@ -256,9 +305,10 @@ public static class ServiceRegistrationExtensions
             builder.Services.AddScoped<ISchoolLeaderboardService>(sp => sp.GetRequiredService<LeaderboardService>());
         }
 
-        builder.Services.AddScoped<SchoolLeaderboardAggregationService>();
         builder.Services.Configure<XpTrackingOptions>(
             builder.Configuration.GetSection(XpTrackingOptions.SectionName));
+        builder.Services.AddScoped<IXpResetOwnershipLease, PostgresXpResetOwnershipLease>();
+        builder.Services.AddScoped<XpResetProcessor>();
         builder.Services.AddScoped<XpTrackingService>();
         builder.Services.AddScoped<IXpTrackingService>(sp => sp.GetRequiredService<XpTrackingService>());
         builder.Services.AddScoped<StudentLeaderboardService>();
@@ -285,9 +335,13 @@ public static class ServiceRegistrationExtensions
         return options;
     }
 
-    private static string? ResolveRedisConnectionString(IConfiguration configuration) =>
-        configuration.GetConnectionString("Redis")
-        ?? configuration["Redis:ConnectionString"];
+    public static RedisConfiguration ResolveRedisConfiguration(IConfiguration configuration) =>
+        new(
+            configuration.GetValue<bool>("Redis:Required"),
+            configuration.GetConnectionString("Redis")
+                ?? configuration["Redis:ConnectionString"]);
+
+    public sealed record RedisConfiguration(bool Required, string? ConnectionString);
 
     public static void AddSecurityServices(this WebApplicationBuilder builder)
     {
@@ -402,40 +456,41 @@ public static class ServiceRegistrationExtensions
     public static void AddCorsAndSwagger(this WebApplicationBuilder builder)
     {
         var isDevelopmentOrTest = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test");
-        var allowedOrigins = Array.Empty<string>();
+        var allowedOrigins = GetConfiguredCorsAllowedOrigins(builder.Configuration);
 
-        if (!isDevelopmentOrTest)
+        if (isDevelopmentOrTest || allowedOrigins.Length > 0)
         {
-            allowedOrigins = GetConfiguredCorsAllowedOrigins(builder.Configuration);
-            if (allowedOrigins.Length == 0)
+            builder.Services.AddCors(options =>
             {
-                Log.Error("Cors:AllowedOrigins must be configured outside Development/Test.");
-                throw new InvalidOperationException("Cors:AllowedOrigins must be configured outside Development/Test.");
-            }
-        }
-
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
-            {
-                if (isDevelopmentOrTest)
+                options.AddDefaultPolicy(policy =>
                 {
-                    policy.AllowAnyOrigin()
+                    if (isDevelopmentOrTest)
+                    {
+                        policy.AllowAnyOrigin()
+                            .AllowAnyMethod()
+                            .AllowAnyHeader()
+                            .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
+                        return;
+                    }
+
+                    policy.WithOrigins(allowedOrigins)
                         .AllowAnyMethod()
                         .AllowAnyHeader()
                         .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
-                    return;
-                }
-
-                policy.WithOrigins(allowedOrigins)
-                    .AllowAnyMethod()
-                    .AllowAnyHeader()
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(30));
+                });
             });
-        });
+        }
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+    }
+
+    public static bool ShouldUseCors(IHostEnvironment environment, IConfiguration configuration)
+    {
+        if (environment.IsDevelopment() || environment.IsEnvironment("Test"))
+            return true;
+
+        return GetConfiguredCorsAllowedOrigins(configuration).Length > 0;
     }
 
     private static string[] GetConfiguredCorsAllowedOrigins(IConfiguration configuration)

@@ -134,6 +134,28 @@ public sealed class DatabaseSchemaValidationTests
 
     [Fact]
     [Trait("Category", "DatabaseSchema")]
+    public void RedriveSchemaRepairMigrationEmitsMissingColumnSql()
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseNpgsql("Host=localhost;Database=metadata_only;Username=test;Password=test")
+            .Options;
+
+        using var db = new ApiDbContext(options);
+        var migrator = db.GetService<IMigrator>();
+
+        var script = migrator.GenerateScript(
+            fromMigration: "20260728112337_AddPracticeSessionReplayState",
+            toMigration: "20260908130000_EnsureSyncDeadLetterRedriveSchema",
+            options: MigrationsSqlGenerationOptions.Idempotent);
+
+        Assert.Contains(
+            "ADD COLUMN IF NOT EXISTS \"LastRedriveAttemptAtUtc\" timestamp with time zone NULL",
+            script,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "DatabaseSchema")]
     public async Task MigrationHistoryMatchesCompiledModel()
     {
         if (!IsValidationRequired())

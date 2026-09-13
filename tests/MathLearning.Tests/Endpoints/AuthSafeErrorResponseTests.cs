@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace MathLearning.Tests.Endpoints;
 
+[Collection("ThrowOnSaveDbContext")]
 public sealed class AuthSafeErrorResponseTests :
     IClassFixture<AuthSafeErrorWebApplicationFactory>,
     IAsyncLifetime

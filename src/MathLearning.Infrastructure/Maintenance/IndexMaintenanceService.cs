@@ -67,6 +67,7 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
         var healthInfo = new List<IndexHealthInfo>();
         await using var connection = await OpenConnectionAsync(cancellationToken);
 
+        // pg_stat_user_indexes exposes relname/indexrelname (not tablename/indexname).
         const string query = """
             SELECT
                 i.schemaname,
@@ -142,6 +143,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
         NpgsqlConnection connection,
         CancellationToken cancellationToken)
     {
+        // pg_stat_user_indexes exposes relname/indexrelname (not tablename/indexname).
+        // Exact index bloat needs pgstattuple; without it report 0 rather than a false fork delta.
         const string query = """
             SELECT
                 schemaname,
@@ -151,13 +154,7 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
                 idx_scan as scans,
                 idx_tup_read as tuples_read,
                 idx_tup_fetch as tuples_fetched,
-                CASE
-                    WHEN pg_relation_size(indexrelid) > 0
-                    THEN ROUND(100 * (pg_relation_size(indexrelid) -
-                         pg_relation_size(indexrelid, 'main')) /
-                         pg_relation_size(indexrelid)::numeric, 2)
-                    ELSE 0
-                END as bloat_percentage
+                0::numeric as bloat_percentage
             FROM pg_stat_user_indexes
             WHERE schemaname = 'public'
               AND pg_relation_size(indexrelid) > 1048576

@@ -1,6 +1,6 @@
 # Backend API Endpoint Inventory
 
-Last aligned: 2026-07-22
+Last aligned: 2026-07-30
 Repo: `ivanjovicic/MathLearning`
 
 This inventory is for agents and backend/mobile contract work. It is intentionally compact: route, auth, owner file, and notes. Always inspect the owning endpoint file before changing a route.
@@ -37,8 +37,8 @@ Auth legend:
 | GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias. |
 | GET | `/metrics` | Public/internal | `Program.cs` | Process metrics; public-detail minimization remains BACKEND-TEST-026. |
 | GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
-| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary; detail minimization pending. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema and cosmetic catalog revision checks; returns 503 when required catalog state is missing or invalid. |
+| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary plus explicit Redis mode/configuration/connection state; detail minimization pending. |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema, cosmetic catalog and required-Redis checks; returns 503 when required state is missing or invalid. |
 | GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Migration/schema detail; minimization pending. |
 | GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema-health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. |
@@ -52,6 +52,21 @@ Auth legend:
 ## Authentication
 
 Owner: `AuthEndpoints.cs`
+
+Mobile registration rejection logs include a bounded diagnostic reason
+(`username_format`, `email_format`, `password_length`, `password_policy`,
+`identity_validation`, `account_conflict`, `registration_rate_limited`,
+`registration_db_failure`, or `registration_unexpected`), HTTP status and
+correlation/trace IDs. Public response bodies stay generic and may include a
+safe machine-readable `code` (`invalid_username`, `invalid_email`,
+`invalid_password`, `registration_invalid`, `registration_conflict`,
+`registration_unavailable`, `registration_unexpected`). Unexpected failures do
+not log exception messages or request/account data. The registration password
+policy is 10–256 characters; login accepts existing passwords.
+
+Flutter Web against Production requires an explicit `Cors:AllowedOrigins` entry
+for the web origin. Development/Test already enable permissive CORS. Do not use
+`AllowAnyOrigin` with credentials in Production.
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
@@ -169,8 +184,8 @@ Owner: `EconomySettlementEndpoints.cs`
 | GET | `/api/economy/rewards/preview` | Auth | Canonical read | Must not mutate. |
 | POST | `/api/economy/rewards/claim` | Auth | Canonical P0 | Idempotent reward claim. |
 | POST | `/api/shop/streak-freeze/purchase` | Auth | Canonical P0 | Idempotent purchase. |
-| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP. |
-| POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 | Season milestone claim. |
+| POST | `/api/seasons/daily-run-claim` | Auth | Canonical P0 | Season Daily Run XP; chest day must fall in the selected/owning season calendar window. |
+| POST | `/api/seasons/milestones/{milestoneId}/claim` | Auth | Canonical P0 | Season milestone claim; `xp` rewards go through `IXpTrackingService` (`season:{seasonId}:milestone:{milestoneId}`). |
 | POST | `/api/admin/economy/rewards/grant` | Admin | Admin | Actor from auth, target from body. |
 
 ---
@@ -185,6 +200,8 @@ Owners: `CosmeticsEndpoints.cs`, `AvatarEndpoints.cs`, `DailyRunEndpoints.cs`
 | GET | `/api/cosmetics/inventory` | Auth | Canonical mobile | Current-user inventory/fragments. |
 | GET | `/api/cosmetics/avatar` | Auth | Canonical mobile | Current equipped slots. |
 | PUT | `/api/cosmetics/avatar` | Auth | Canonical mobile | Ownership-validated equip. |
+| GET | `/api/cosmetics/reward-track` | Auth | Platform/legacy | Unlock/claimability uses `UserSeasonProgress.EarnedXp` for the selected season (not lifetime `UserProfile.Xp`). Explicit `seasonId` must pass the shared active/`reward_lock` claim-window policy; draft/scheduled/completed/archived/future seasons return not found. `trackType=free` is usable without premium state; `trackType=premium` is deny-by-default until a persisted premium entitlement owner exists (no schema in this change). Current Flutter has no runtime caller. |
+| POST | `/api/cosmetics/reward-track/claim` | Auth | Platform/legacy | Same season XP, claim-window and premium fail-closed policy as GET. Duplicate same-tier claims are deterministic already-claimed with one inventory/claim mutation. Rejected claims write nothing. Stable transport errors remain `{ error }` BadRequest / NotFound. |
 | POST | `/api/cosmetics/items/{itemKey}/claim` | Auth | Canonical P0 | Consume server-issued cosmetic item entitlement via cosmetics ledger. |
 | POST | `/api/cosmetics/fragments/grant` | Auth | Canonical P0 | Daily Run server-derived grant or consume server-issued fragment entitlement via cosmetics ledger. |
 | POST | `/api/daily-run/chest/claim` | Auth | Canonical P0 | Server-authoritative Policy B idempotency. |
@@ -228,6 +245,8 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 | POST `/api/questions/{id}/revalidate` | Content author | `QuestionAuthoringEndpoints.cs` | Revalidation. |
 | GET `/api/admin/sync/dead-letters` | Admin | `AdminSyncController.cs` | Sync dead-letter list now includes the dead-letter ID. |
 | POST `/api/admin/sync/dead-letters/{deadLetterId}/redrive` | Admin | `AdminSyncController.cs` | Redrive by dead-letter ID; sync identity is scoped per user/device. |
+| GET | `/api/offline/bundle` | Auth | `SyncEndpoints.cs` | Canonical offline bundle. Locale resolves from user settings first, then `Accept-Language`. Only published, non-deleted questions are eligible. `Manifest.Version` is the content revision; `Manifest.SnapshotVersion` is the user snapshot revision. |
+| GET | `/api/offline/bundle/manifest` | Auth | `SyncEndpoints.cs` | Manifest-only offline bundle response with the same content/snapshot version semantics and published-question filtering. |
 | `/api/sync/*` | Auth | `SyncEndpoints.cs` | Reject payload/auth user mismatch. |
 
 `QuestionEndpoints.MapQuestionEndpoints` remains defined but unwired; decision remains BACKEND-TEST-027.

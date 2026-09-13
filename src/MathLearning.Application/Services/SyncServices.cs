@@ -21,6 +21,7 @@ public interface IOfflineBundleService
         string userId,
         int? subtopicId,
         int questionCount,
+        string? acceptLanguage,
         CancellationToken cancellationToken);
 }
 

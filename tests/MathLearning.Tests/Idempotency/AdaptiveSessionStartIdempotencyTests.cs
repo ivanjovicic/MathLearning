@@ -474,7 +474,7 @@ public sealed class AdaptiveSessionStartIdempotencyTests
             return session;
         }
 
-        public Task<AdaptiveAnswerResult> SubmitAnswerAsync(string userId, AdaptiveAnswerRequest request) =>
+        public Task<AdaptiveAnswerSubmissionResult> SubmitAnswerAsync(string userId, AdaptiveAnswerRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<List<AdaptiveRecommendation>> GetRecommendationsAsync(string userId) =>

@@ -25,5 +25,8 @@ public sealed class ServerSyncEventConfiguration : IEntityTypeConfiguration<Serv
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc })
             .HasDatabaseName("IX_ServerSyncEvent_User_CreatedAtUtc");
+
+        builder.HasIndex(x => new { x.CreatedAtUtc, x.Id })
+            .HasDatabaseName("IX_ServerSyncEvent_CreatedAtUtc_Id");
     }
 }

@@ -386,6 +386,7 @@ public class SyncServiceTests
             Options.Create(new SyncOptions
             {
                 RequireOperationSignatures = requireSignatures,
+                MaxOperationsPerBatch = 100,
                 MaxBatchSize = 100,
                 MaxServerEventsPerSync = 100,
                 MaxProcessingRetries = 3,

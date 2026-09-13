@@ -66,6 +66,29 @@ public class AdaptiveApiFacadeIntegrationTests
         Assert.Empty(result.Data.Payload.DueReviews);
     }
 
+    [Fact]
+    public async Task SubmitAdaptiveSessionAnswer_PassesCancellationTokenToService()
+    {
+        var fakeAdaptiveService = new FakeAdaptiveLearningService();
+        var facade = BuildFacade(fakeAdaptiveService);
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var request = new AdaptiveAnswerRequest
+        {
+            AdaptiveSessionId = Guid.NewGuid(),
+            AdaptiveSessionItemId = Guid.NewGuid(),
+            QuestionId = 10,
+            Answer = "42",
+            ResponseTimeSeconds = 4,
+            Confidence = 0.5
+        };
+
+        var result = await facade.SubmitAdaptiveSessionAnswerAsync("1", request, cancellationTokenSource.Token);
+
+        Assert.True(result.Success);
+        Assert.Equal(cancellationTokenSource.Token, fakeAdaptiveService.LastSubmitAnswerCancellationToken);
+    }
+
     private static AdaptiveApiFacade BuildFacade(FakeAdaptiveLearningService fakeAdaptiveService)
     {
         var services = new ServiceCollection();
@@ -87,6 +110,7 @@ public class AdaptiveApiFacadeIntegrationTests
         public bool FailReviews { get; set; }
         public bool ReturnEmptyRecommendations { get; set; }
         public bool ReturnEmptyReviews { get; set; }
+        public CancellationToken LastSubmitAnswerCancellationToken { get; private set; }
 
         public Task<AdaptiveSession> GeneratePracticeSessionAsync(string userId)
         {
@@ -114,15 +138,23 @@ public class AdaptiveApiFacadeIntegrationTests
             return Task.FromResult(session);
         }
 
-        public Task<AdaptiveAnswerResult> SubmitAnswerAsync(string userId, AdaptiveAnswerRequest request) =>
-            Task.FromResult(new AdaptiveAnswerResult
-            {
-                IsCorrect = true,
-                DifficultyLevel = AdaptiveDifficultyLevels.Medium,
-                NextReviewAt = DateTime.UtcNow.AddDays(1),
-                ReviewIntervalDays = 1,
-                ReviewEasinessFactor = 2.5
-            });
+        public Task<AdaptiveAnswerSubmissionResult> SubmitAnswerAsync(
+            string userId,
+            AdaptiveAnswerRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LastSubmitAnswerCancellationToken = cancellationToken;
+            return Task.FromResult(new AdaptiveAnswerSubmissionResult(
+                new AdaptiveAnswerResult
+                {
+                    IsCorrect = true,
+                    DifficultyLevel = AdaptiveDifficultyLevels.Medium,
+                    NextReviewAt = DateTime.UtcNow.AddDays(1),
+                    ReviewIntervalDays = 1,
+                    ReviewEasinessFactor = 2.5
+                },
+                WasReplayed: false));
+        }
 
         public Task<List<AdaptiveRecommendation>> GetRecommendationsAsync(string userId)
         {

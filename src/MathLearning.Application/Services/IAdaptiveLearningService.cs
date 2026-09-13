@@ -6,9 +6,10 @@ public interface IAdaptiveLearningService
 {
     Task<AdaptiveSession> GeneratePracticeSessionAsync(string userId);
 
-    Task<AdaptiveAnswerResult> SubmitAnswerAsync(
+    Task<AdaptiveAnswerSubmissionResult> SubmitAnswerAsync(
         string userId,
-        AdaptiveAnswerRequest request);
+        AdaptiveAnswerRequest request,
+        CancellationToken cancellationToken = default);
 
     Task<List<AdaptiveRecommendation>> GetRecommendationsAsync(string userId);
 

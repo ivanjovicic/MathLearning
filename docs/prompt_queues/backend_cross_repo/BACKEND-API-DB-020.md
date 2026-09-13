@@ -55,6 +55,11 @@ Risk/ownership model:
 - Content type and length come from validated stored metadata, not user-controlled file names.
 - Create/report failure deletes the uploaded object; report deletion/retention defines attachment cleanup.
 
+Test-first contract:
+- Pre-change proof: the focused bug attachment authorization test must fail before private opaque-key reads are enforced.
+- Post-change proof: the same `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter BugEndpoint` command must pass after implementation.
+- Counterexample cases: anonymous/other-user denial, admin/reporter success and upload compensation.
+
 Failure-mode matrix:
 - Anonymous, another learner and non-admin request a known screenshot route/key.
 - Reporter and admin request an existing valid attachment.

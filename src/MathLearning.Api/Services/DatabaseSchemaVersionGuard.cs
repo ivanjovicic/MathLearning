@@ -68,6 +68,9 @@ public sealed class DatabaseSchemaState
 
 public sealed class DatabaseSchemaVersionGuard
 {
+    private const string LegacyAdminIdentityAndDomainMigration =
+        "20260118125140_InitIdentityAndDomain";
+
     private readonly ILogger<DatabaseSchemaVersionGuard> logger;
 
     public DatabaseSchemaVersionGuard(ILogger<DatabaseSchemaVersionGuard> logger)
@@ -102,7 +105,7 @@ public sealed class DatabaseSchemaVersionGuard
         var codeMigrations = db.Database.GetMigrations().ToArray();
         var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray();
         var pendingMigrations = codeMigrations.Except(appliedMigrations, StringComparer.Ordinal).ToArray();
-        var unknownAppliedMigrations = appliedMigrations.Except(codeMigrations, StringComparer.Ordinal).ToArray();
+        var unknownAppliedMigrations = FilterUnknownAppliedMigrations(appliedMigrations, codeMigrations);
         var isSchemaReady = pendingMigrations.Length == 0 && unknownAppliedMigrations.Length == 0;
 
         var status = new DatabaseSchemaStatus(
@@ -132,6 +135,21 @@ public sealed class DatabaseSchemaVersionGuard
         }
 
         return status;
+    }
+
+    internal static string[] FilterUnknownAppliedMigrations(
+        IEnumerable<string> appliedMigrations,
+        IEnumerable<string> codeMigrations)
+    {
+        var knownCodeMigrations = codeMigrations.ToHashSet(StringComparer.Ordinal);
+
+        return appliedMigrations
+            .Except(knownCodeMigrations, StringComparer.Ordinal)
+            .Where(migration => !string.Equals(
+                migration,
+                LegacyAdminIdentityAndDomainMigration,
+                StringComparison.Ordinal))
+            .ToArray();
     }
 
     public InvalidOperationException CreateMismatchException(

@@ -226,6 +226,81 @@ Response is the raw `AdaptiveSessionDto` JSON:
 }
 ```
 
+## Offline bundle
+
+Auth: Required.
+
+Offline bundle routes resolve the content language from `UserSettings.Language` first and then the request `Accept-Language` header. The response is localized before versioning, so the manifest revision tracks the serialized content actually sent to the app.
+Only published, non-deleted questions are eligible for selection.
+
+### `GET /api/offline/bundle`
+
+Returns the full offline bundle payload for the current user.
+
+Query params:
+- `subtopicId`
+- `questionCount`
+
+Response shape:
+```json
+{
+  "manifest": {
+    "version": "content-rev-20260730-001",
+    "snapshotVersion": "user-snapshot-20260730-001",
+    "generatedAtUtc": "2026-07-30T12:00:00Z",
+    "questionCount": 1,
+    "topicCount": 1,
+    "subtopicCount": 1
+  },
+  "questions": [
+    {
+      "id": 1,
+      "type": "multiple_choice",
+      "text": "Deutsche Frage",
+      "difficulty": 2,
+      "options": [
+        {
+          "id": 10,
+          "text": "Deutsche Option",
+          "textFormat": "PlainText",
+          "renderMode": "Auto",
+          "semanticsAltText": "Option semantics override"
+        }
+      ],
+      "hintLight": "DE light",
+      "hintMedium": "DE medium",
+      "hintFull": "DE full",
+      "explanation": "DE explanation",
+      "textFormat": "MarkdownWithMath",
+      "explanationFormat": "MarkdownWithMath",
+      "hintFormat": "MarkdownWithMath",
+      "textRenderMode": "Auto",
+      "explanationRenderMode": "Auto",
+      "hintRenderMode": "Auto",
+      "semanticsAltText": "Question semantics override"
+    }
+  ],
+  "topics": [],
+  "subtopics": [],
+  "quizSequence": [1],
+  "userSnapshot": {
+    "xp": 100,
+    "level": 1,
+    "streak": 0,
+    "questionProgress": []
+  }
+}
+```
+
+Versioning rules:
+- `manifest.version` changes when any serialized learning content changes, including localized question text, options, hints, explanation, formatting, semantics metadata, topic/subtopic data and step content used by the bundle fingerprint.
+- `manifest.snapshotVersion` changes when the user snapshot changes, such as profile XP/level/streak or per-question progress.
+- A profile-only change must not invalidate the content revision.
+
+### `GET /api/offline/bundle/manifest`
+
+Returns only the manifest object with the same `version` and `snapshotVersion` semantics as the full bundle route.
+
 ## Leaderboard
 
 Auth: Required.

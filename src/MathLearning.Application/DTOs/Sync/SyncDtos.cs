@@ -59,7 +59,12 @@ public sealed record SyncMetricsSnapshotDto(
     long RejectedOperations,
     long FailedOperations,
     long DeadLetterOperations,
-    IReadOnlyDictionary<string, long> FailuresByCode);
+    long RetentionCleanupRuns,
+    long RetentionDeletedRows,
+    long RetentionDurationMilliseconds,
+    IReadOnlyDictionary<string, long> FailuresByCode,
+    IReadOnlyDictionary<string, long> PayloadSizeBuckets,
+    IReadOnlyDictionary<string, long> RetentionDeletedRowsByTable);
 
 public sealed record SyncAdminOverviewDto(
     long ActiveDevices24h,
@@ -152,6 +157,7 @@ public sealed record SyncBundleOptionDto(
 
 public sealed record OfflineBundleManifestDto(
     string Version,
+    string SnapshotVersion,
     DateTime GeneratedAtUtc,
     int QuestionCount,
     int TopicCount,

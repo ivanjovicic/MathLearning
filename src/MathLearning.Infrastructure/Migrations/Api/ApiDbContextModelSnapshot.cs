@@ -1984,6 +1984,9 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CompletionResponseJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("CorrectAnswers")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -2092,6 +2095,12 @@ namespace MathLearning.Infrastructure.Migrations.Api
 
                     b.Property<Guid>("SessionId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SettledResponseJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubmissionFingerprintJson")
+                        .HasColumnType("text");
 
                     b.Property<int>("SubtopicId")
                         .HasColumnType("integer");
@@ -4400,8 +4409,14 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.Property<int>("QuestionId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RequestFingerprintJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("ResponseTimeSeconds")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SettledResponseJson")
+                        .HasColumnType("text");
 
                     b.Property<int>("SubtopicId")
                         .HasColumnType("integer");
@@ -4415,6 +4430,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasColumnType("character varying(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdaptiveSessionItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserQuestionHistory_AdaptiveSessionItem");
 
                     b.HasIndex("QuestionId");
 

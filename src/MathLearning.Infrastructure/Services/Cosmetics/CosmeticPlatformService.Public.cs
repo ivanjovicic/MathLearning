@@ -98,15 +98,24 @@ public sealed partial class CosmeticPlatformService
         string trackType,
         CancellationToken cancellationToken)
     {
-        var effectiveTrackType = string.IsNullOrWhiteSpace(trackType) ? CosmeticTrackTypes.Free : trackType.Trim().ToLowerInvariant();
+        string effectiveTrackType;
+        try
+        {
+            effectiveTrackType = NormalizeRewardTrackType(trackType);
+            EnsureRewardTrackTypeAccess(userId, effectiveTrackType);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+
         var season = await ResolveSeasonAsync(seasonId, cancellationToken);
         if (season is null)
         {
             return null;
         }
 
-        var profile = await db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
-        var currentXp = profile?.Xp ?? 0;
+        var currentXp = await GetSeasonEarnedXpAsync(userId, season.Id, cancellationToken);
         var claimPrefix = BuildRewardTrackSourceRef(season.Id, effectiveTrackType, string.Empty);
         var claimedRefs = await db.CosmeticRewardClaims
             .AsNoTracking()

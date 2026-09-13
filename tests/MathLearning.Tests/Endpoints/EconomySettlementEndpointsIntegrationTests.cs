@@ -1056,6 +1056,171 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     [Fact]
+    public async Task SeasonDailyRunClaim_OldChest_CannotFundLaterActiveSeason()
+    {
+        var userId = $"user-season-old-chest-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 100);
+
+        var oldSeasonId = await EnsureSeasonAsync(
+            key: $"old-{Guid.NewGuid():N}",
+            start: new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            end: new DateTime(2030, 1, 31, 23, 59, 59, DateTimeKind.Utc),
+            isActive: false,
+            status: CosmeticSeasonStatuses.Completed);
+        var newSeasonId = await EnsureSeasonAsync(
+            key: $"new-{Guid.NewGuid():N}",
+            start: new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            end: new DateTime(2030, 6, 30, 23, 59, 59, DateTimeKind.Utc),
+            isActive: true,
+            status: CosmeticSeasonStatuses.Active);
+
+        var chestDay = new DateOnly(2030, 1, 15);
+        var suffix = Guid.NewGuid().ToString("N");
+        await SeedDailyRunChestClaimAsync(userId, $"old-chest-tx-{suffix}", xp: 40, day: chestDay);
+
+        var response = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"old-chest-key-{suffix}",
+            transactionId = $"old-chest-tx-{suffix}",
+            seasonId = newSeasonId,
+            xp = 999
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("not_eligible", payload.GetProperty("errorCode").GetString());
+        Assert.Equal(0, await CountSeasonDailyRunClaimsAsync(userId, newSeasonId));
+        Assert.Equal(0, await CountSeasonDailyRunClaimsAsync(userId, oldSeasonId));
+        Assert.False(await SeasonProgressExistsAsync(userId, newSeasonId));
+    }
+
+    [Fact]
+    public async Task SeasonDailyRunClaim_ChestDayBoundaries_AndWrongSeasonAreDeterministic()
+    {
+        var userId = $"user-season-boundary-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 100);
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var start = new DateTime(2031, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2031, 3, 31, 23, 59, 59, DateTimeKind.Utc);
+        var seasonId = await EnsureSeasonAsync(
+            key: $"boundary-{suffix}",
+            start: start,
+            end: end,
+            isActive: true,
+            status: CosmeticSeasonStatuses.Active);
+
+        await SeedDailyRunChestClaimAsync(userId, $"boundary-start-tx-{suffix}", xp: 10, day: new DateOnly(2031, 3, 1));
+        await SeedDailyRunChestClaimAsync(userId, $"boundary-end-tx-{suffix}", xp: 11, day: new DateOnly(2031, 3, 31));
+        await SeedDailyRunChestClaimAsync(userId, $"before-tx-{suffix}", xp: 12, day: new DateOnly(2031, 2, 28));
+        await SeedDailyRunChestClaimAsync(userId, $"after-tx-{suffix}", xp: 13, day: new DateOnly(2031, 4, 1));
+
+        var startOk = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"boundary-start-key-{suffix}",
+            transactionId = $"boundary-start-tx-{suffix}",
+            seasonId,
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.OK, startOk.StatusCode);
+
+        var endOk = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"boundary-end-key-{suffix}",
+            transactionId = $"boundary-end-tx-{suffix}",
+            seasonId,
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.OK, endOk.StatusCode);
+
+        var before = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"before-key-{suffix}",
+            transactionId = $"before-tx-{suffix}",
+            seasonId,
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.Conflict, before.StatusCode);
+        Assert.Equal("not_eligible", (await before.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errorCode").GetString());
+
+        var after = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"after-key-{suffix}",
+            transactionId = $"after-tx-{suffix}",
+            seasonId,
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.Conflict, after.StatusCode);
+        Assert.Equal("not_eligible", (await after.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errorCode").GetString());
+
+        var progress = await GetSeasonProgressAsync(userId, seasonId);
+        Assert.Equal(21, progress.EarnedXp);
+        Assert.Equal(2, await CountSeasonDailyRunClaimsAsync(userId, seasonId));
+    }
+
+    [Fact]
+    public async Task SeasonDailyRunClaim_OmittedSeasonId_UsesChestDayOwner_AndReplayKeepsOriginalSeason()
+    {
+        var userId = $"user-season-owner-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 100);
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var ownerSeasonId = await EnsureSeasonAsync(
+            key: $"owner-{suffix}",
+            start: new DateTime(2032, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            end: new DateTime(2032, 6, 30, 23, 59, 59, DateTimeKind.Utc),
+            isActive: true,
+            status: CosmeticSeasonStatuses.Active);
+        var otherSeasonId = await EnsureSeasonAsync(
+            key: $"other-{suffix}",
+            start: new DateTime(2032, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            end: new DateTime(2032, 1, 31, 23, 59, 59, DateTimeKind.Utc),
+            isActive: false,
+            status: CosmeticSeasonStatuses.Completed);
+
+        var day = new DateOnly(2032, 6, 15);
+        await SeedDailyRunChestClaimAsync(userId, $"owner-chest-tx-{suffix}", xp: 17, day: day);
+        await SeedDailyRunChestClaimAsync(userId, $"wrong-season-first-tx-{suffix}", xp: 9, day: day);
+
+        var wrongFirst = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"wrong-first-key-{suffix}",
+            transactionId = $"wrong-season-first-tx-{suffix}",
+            seasonId = otherSeasonId,
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.Conflict, wrongFirst.StatusCode);
+        var wrongFirstPayload = await wrongFirst.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("not_eligible", wrongFirstPayload.GetProperty("errorCode").GetString());
+        Assert.Equal(0, await CountSeasonDailyRunClaimsAsync(userId, otherSeasonId));
+
+        var first = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"owner-key-1-{suffix}",
+            transactionId = $"owner-chest-tx-{suffix}",
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(ownerSeasonId, firstPayload.GetProperty("season").GetProperty("seasonId").GetInt32());
+        Assert.Equal(17, firstPayload.GetProperty("awardedXp").GetInt32());
+
+        var replay = await PostAsUserAsync(userId, "/api/seasons/daily-run-claim", new
+        {
+            idempotencyKey = $"owner-key-1-{suffix}",
+            transactionId = $"owner-chest-tx-{suffix}",
+            xp = 1
+        });
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        var replayPayload = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(replayPayload.GetProperty("alreadyClaimed").GetBoolean());
+        Assert.Equal(ownerSeasonId, replayPayload.GetProperty("season").GetProperty("seasonId").GetInt32());
+        Assert.Equal(17, (await GetSeasonProgressAsync(userId, ownerSeasonId)).EarnedXp);
+        Assert.Equal(0, await CountSeasonDailyRunClaimsAsync(userId, otherSeasonId));
+        Assert.Equal(1, await CountSeasonDailyRunClaimsAsync(userId, ownerSeasonId));
+    }
+
+    [Fact]
     public async Task SeasonMilestone_ClaimFlow_WorksAndIsIdempotent()
     {
         var userId = $"user-season-ms-{Guid.NewGuid():N}";
@@ -1117,6 +1282,66 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         var dupPayload = await duplicate.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(dupPayload.GetProperty("alreadyClaimed").GetBoolean());
         Assert.Equal(50, await GetCoinsAsync(userId));
+    }
+
+    [Fact]
+    public async Task SeasonMilestone_XpReward_UsesCanonicalXpTrackingBucketsAndSource()
+    {
+        var userId = $"user-season-ms-xp-{Guid.NewGuid():N}";
+        await EnsureUserAsync(userId, coins: 0, xp: 20);
+        var seasonId = await EnsureActiveSeasonAsync();
+        var milestoneId = await EnsureSeasonMilestoneAsync(
+            seasonId,
+            xpRequired: 50,
+            rewardType: "xp",
+            payloadJson: """{"xp":35}""");
+        await SetSeasonXpAsync(userId, seasonId, earnedXp: 60);
+
+        var before = await GetProfileXpSnapshotAsync(userId);
+        Assert.Equal(20, before.Xp);
+        Assert.Equal(0, before.DailyXp);
+        Assert.Equal(0, before.WeeklyXp);
+        Assert.Equal(0, before.MonthlyXp);
+        Assert.Equal(0, await CountXpEventsAsync(userId));
+
+        var success = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-xp-key-{Guid.NewGuid():N}",
+            seasonId
+        });
+        Assert.Equal(HttpStatusCode.OK, success.StatusCode);
+        var payload = await success.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(35, payload.GetProperty("reward").GetProperty("xp").GetInt32());
+        Assert.Equal("xp", payload.GetProperty("reward").GetProperty("type").GetString());
+
+        var after = await GetProfileXpSnapshotAsync(userId);
+        Assert.Equal(55, after.Xp);
+        Assert.Equal(35, after.DailyXp);
+        Assert.Equal(35, after.WeeklyXp);
+        Assert.Equal(35, after.MonthlyXp);
+        Assert.Equal(1 + (55 / 100), after.Level);
+
+        var sourceId = $"season:{seasonId}:milestone:{milestoneId}";
+        Assert.Equal(1, await CountXpEventsAsync(userId));
+        var xpEvent = await GetXpEventAsync(userId, "season_milestone", sourceId);
+        Assert.Equal(35, xpEvent.XpDelta);
+        Assert.Equal("season_milestone", xpEvent.SourceType);
+        Assert.Equal(sourceId, xpEvent.SourceId);
+
+        var replay = await PostAsUserAsync(userId, $"/api/seasons/milestones/{milestoneId}/claim", new
+        {
+            idempotencyKey = $"ms-xp-key-replay-{Guid.NewGuid():N}",
+            seasonId
+        });
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.True((await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("alreadyClaimed").GetBoolean());
+
+        var afterReplay = await GetProfileXpSnapshotAsync(userId);
+        Assert.Equal(55, afterReplay.Xp);
+        Assert.Equal(35, afterReplay.DailyXp);
+        Assert.Equal(35, afterReplay.WeeklyXp);
+        Assert.Equal(35, afterReplay.MonthlyXp);
+        Assert.Equal(1, await CountXpEventsAsync(userId));
     }
 
     [Fact]
@@ -1359,6 +1584,37 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
             .FirstAsync();
     }
 
+    private async Task<(int Xp, int DailyXp, int WeeklyXp, int MonthlyXp, int Level)> GetProfileXpSnapshotAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserProfiles
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => new ValueTuple<int, int, int, int, int>(x.Xp, x.DailyXp, x.WeeklyXp, x.MonthlyXp, x.Level))
+            .FirstAsync();
+    }
+
+    private async Task<int> CountXpEventsAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserXpEvents.CountAsync(x => x.UserId == userId);
+    }
+
+    private async Task<(int XpDelta, string SourceType, string? SourceId)> GetXpEventAsync(
+        string userId,
+        string sourceType,
+        string sourceId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var xpEvent = await db.UserXpEvents
+            .AsNoTracking()
+            .SingleAsync(x => x.UserId == userId && x.SourceType == sourceType && x.SourceId == sourceId);
+        return (xpEvent.XpDelta, xpEvent.SourceType, xpEvent.SourceId);
+    }
+
     private async Task<int> CountEconomyTransactionsAsync(string userId)
     {
         using var scope = _factory.Services.CreateScope();
@@ -1562,18 +1818,31 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     private async Task<int> EnsureActiveSeasonAsync()
+        => await EnsureSeasonAsync(
+            key: $"season-{Guid.NewGuid():N}",
+            start: DateTime.UtcNow.AddDays(-1),
+            end: DateTime.UtcNow.AddDays(30),
+            isActive: true,
+            status: CosmeticSeasonStatuses.Active);
+
+    private async Task<int> EnsureSeasonAsync(
+        string key,
+        DateTime start,
+        DateTime end,
+        bool isActive,
+        string status)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
 
         var season = new CosmeticSeason
         {
-            Key = $"season-{Guid.NewGuid():N}",
+            Key = key,
             Name = "Test Season",
-            Status = CosmeticSeasonStatuses.Active,
-            IsActive = true,
-            StartDate = DateTime.UtcNow.AddDays(-1),
-            EndDate = DateTime.UtcNow.AddDays(30)
+            Status = status,
+            IsActive = isActive,
+            StartDate = start,
+            EndDate = end
         };
         db.CosmeticSeasons.Add(season);
         await db.SaveChangesAsync();
@@ -1585,7 +1854,8 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         string transactionId,
         int xp,
         string fragmentName = "Comet Frame Fragment",
-        int fragmentCopies = 2)
+        int fragmentCopies = 2,
+        DateOnly? day = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -1593,7 +1863,7 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         db.DailyRunChestClaims.Add(new DailyRunChestClaim
         {
             UserId = userId,
-            Day = DateOnly.FromDateTime(DateTime.UtcNow),
+            Day = day ?? DateOnly.FromDateTime(DateTime.UtcNow),
             TransactionId = transactionId,
             Xp = xp,
             Coins = 10,
@@ -1603,6 +1873,15 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
         });
 
         await db.SaveChangesAsync();
+    }
+
+    private async Task<bool> SeasonProgressExistsAsync(string userId, int seasonId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.UserSeasonProgresses
+            .AsNoTracking()
+            .AnyAsync(x => x.UserId == userId && x.SeasonId == seasonId);
     }
 
     private async Task<(int EarnedXp, int Level)> GetSeasonProgressAsync(string userId, int seasonId)

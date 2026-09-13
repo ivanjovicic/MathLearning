@@ -1,7 +1,9 @@
 using MathLearning.Application.DTOs.Sync;
+using MathLearning.Application.DTOs.Common;
 using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Sync;
+using MathLearning.Api.Middleware;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Api.Endpoints;
@@ -31,6 +33,16 @@ public static class SyncEndpoints
                 var response = await syncService.RegisterDeviceAsync(userId, request, cancellationToken);
                 return Results.Ok(response);
             }
+            catch (SyncRequestValidationException ex)
+            {
+                return Results.Json(
+                    ApiResult<object>.Fail(
+                        ex.PublicMessage,
+                        ex.ErrorCode,
+                        SafeClientErrorResponse.BuildClientDetails(ctx, ctx.TraceIdentifier),
+                        ctx.TraceIdentifier),
+                    statusCode: ex.StatusCode);
+            }
             catch (InvalidOperationException ex)
             {
                 return Results.BadRequest(new { error = ex.Message });
@@ -53,6 +65,16 @@ public static class SyncEndpoints
             {
                 var response = await syncService.SyncAsync(userId, request, cancellationToken);
                 return Results.Ok(response);
+            }
+            catch (SyncRequestValidationException ex)
+            {
+                return Results.Json(
+                    ApiResult<object>.Fail(
+                        ex.PublicMessage,
+                        ex.ErrorCode,
+                        SafeClientErrorResponse.BuildClientDetails(ctx, ctx.TraceIdentifier),
+                        ctx.TraceIdentifier),
+                    statusCode: ex.StatusCode);
             }
             catch (SyncConcurrencyException ex)
             {
@@ -77,7 +99,8 @@ public static class SyncEndpoints
                 return Results.Unauthorized();
             }
 
-            return Results.Ok(await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, cancellationToken));
+            var acceptLanguage = ctx.Request.Headers.AcceptLanguage.ToString();
+            return Results.Ok(await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, acceptLanguage, cancellationToken));
         });
 
         syncGroup.MapGet("/offline/bundle/manifest", async (
@@ -93,7 +116,8 @@ public static class SyncEndpoints
                 return Results.Unauthorized();
             }
 
-            var bundle = await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, cancellationToken);
+            var acceptLanguage = ctx.Request.Headers.AcceptLanguage.ToString();
+            var bundle = await offlineBundleService.GetBundleAsync(userId, subtopicId, questionCount, acceptLanguage, cancellationToken);
             return Results.Ok(bundle.Manifest);
         });
 

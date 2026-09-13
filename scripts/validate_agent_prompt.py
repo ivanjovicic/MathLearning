@@ -65,8 +65,10 @@ ADMISSION_FIELDS: dict[str, tuple[str, ...]] = {
     "queue placement": ("Queue placement",),
 }
 ALL_ALIASES = tuple(alias for group in (*REQUIRED_FIELDS.values(), *ADMISSION_FIELDS.values()) for alias in group)
+TEST_FIRST_FIELD = "Test-first contract"
+TEST_FIRST_RUNTIME_LANES = {"known-fix", "implementation", "tests"}
 NEXT_FIELD_RE = re.compile(
-    rf"^\s*(?:{'|'.join(re.escape(name) for name in sorted(set(ALL_ALIASES), key=len, reverse=True))})\s*:",
+    rf"^\s*(?:{'|'.join(re.escape(name) for name in sorted(set((*ALL_ALIASES, TEST_FIRST_FIELD)), key=len, reverse=True))})\s*:",
     re.IGNORECASE,
 )
 
@@ -156,7 +158,14 @@ def command_lines(text: str) -> list[str]:
     return result
 
 
-def validate_section(path: Path, section: PromptSection, *, strict: bool, template: bool = False) -> list[Finding]:
+def validate_section(
+    path: Path,
+    section: PromptSection,
+    *,
+    strict: bool,
+    template: bool = False,
+    enforce_test_first: bool = False,
+) -> list[Finding]:
     text = section.text
     if not strict and not CONTRACT_RE.search(text):
         return []
@@ -182,6 +191,30 @@ def validate_section(path: Path, section: PromptSection, *, strict: bool, templa
     lane = (field_value(text, REQUIRED_FIELDS["run lane"]) or "").casefold()
     if lane and not template and lane not in LANES:
         findings.append(Finding("FAIL", path, prompt_id, f"unsupported run lane: {lane}"))
+
+    if enforce_test_first and not template:
+        test_first = field_block(text, (TEST_FIRST_FIELD,))
+        if not test_first:
+            findings.append(Finding("FAIL", path, prompt_id, "missing required field: Test-first contract:"))
+        else:
+            lowered_test_first = test_first.casefold()
+            if lane in TEST_FIRST_RUNTIME_LANES:
+                required_markers = (
+                    "pre-change proof",
+                    "post-change proof",
+                    "counterexample",
+                )
+                for marker in required_markers:
+                    if marker not in lowered_test_first:
+                        findings.append(Finding("FAIL", path, prompt_id, f"Test-first contract must name {marker}"))
+                if "must fail" not in lowered_test_first and "expected to fail" not in lowered_test_first:
+                    findings.append(Finding("FAIL", path, prompt_id, "Pre-change proof must state that the test is expected to fail"))
+                if "must pass" not in lowered_test_first and "expected to pass" not in lowered_test_first:
+                    findings.append(Finding("FAIL", path, prompt_id, "Post-change proof must state that the test is expected to pass"))
+                if "dotnet test" not in lowered_test_first and "run_guarded.py" not in lowered_test_first:
+                    findings.append(Finding("FAIL", path, prompt_id, "Test-first contract must include a focused test command"))
+            elif "exception" not in lowered_test_first or "runtime prompt" not in lowered_test_first:
+                findings.append(Finding("FAIL", path, prompt_id, "Non-runtime prompt must state a test-first exception and routed runtime prompt requirement"))
 
     budget = (field_value(text, REQUIRED_FIELDS["token budget"]) or "").casefold()
     if budget and not template and budget not in BUDGETS:
@@ -259,7 +292,14 @@ def default_files() -> list[Path]:
     return sorted(result)
 
 
-def validate_files(paths: Iterable[Path], *, strict: bool = False) -> list[Finding]:
+def validate_files(
+    paths: Iterable[Path],
+    *,
+    strict: bool = False,
+    enforce_test_first: bool | None = None,
+) -> list[Finding]:
+    if enforce_test_first is None:
+        enforce_test_first = strict
     findings: list[Finding] = []
     for path in paths:
         if not path.exists():
@@ -272,7 +312,15 @@ def validate_files(paths: Iterable[Path], *, strict: bool = False) -> list[Findi
             continue
         template = path.relative_to(ROOT).as_posix() in TEMPLATE_PATHS if path.is_relative_to(ROOT) else False
         for section in sections:
-            findings.extend(validate_section(path, section, strict=strict, template=template))
+            findings.extend(
+                validate_section(
+                    path,
+                    section,
+                    strict=strict,
+                    template=template,
+                    enforce_test_first=enforce_test_first,
+                )
+            )
     return findings
 
 
@@ -290,7 +338,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         paths = default_files()
 
-    findings = validate_files(paths, strict=args.strict)
+    findings = validate_files(
+        paths,
+        strict=args.strict,
+        enforce_test_first=bool(args.changed_from or args.files or args.strict),
+    )
     failures = [item for item in findings if item.severity == "FAIL"]
     print(f"Backend prompt validation: files={len(paths)} failures={len(failures)}")
     for finding in findings:

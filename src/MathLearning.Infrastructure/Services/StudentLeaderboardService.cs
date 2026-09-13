@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.DTOs.Leaderboard;
 using MathLearning.Application.Services;
@@ -29,7 +28,6 @@ public class StudentLeaderboardService : IStudentLeaderboardService
 
     private readonly ApiDbContext _db;
     private readonly ILogger<StudentLeaderboardService> _logger;
-    private readonly ICosmeticRewardService? _cosmeticRewardService;
     private readonly HybridCacheService _cache;
     private readonly IAvatarAppearanceReader _appearanceReader;
 
@@ -44,7 +42,6 @@ public class StudentLeaderboardService : IStudentLeaderboardService
         _logger = logger;
         _cache = cache;
         _appearanceReader = appearanceReader;
-        _cosmeticRewardService = cosmeticRewardService;
     }
 
     public async Task<LeaderboardResponseDto> GetLeaderboardAsync(
@@ -191,29 +188,6 @@ public class StudentLeaderboardService : IStudentLeaderboardService
                 Badges = BadgeRules.BuildBadges(scope, percentile, myRank)
             };
 
-            if (_cosmeticRewardService is not null)
-            {
-                var leaderboardSourceRef = BuildLeaderboardSourceRef(normalizedScope, normalizedPeriod);
-
-                await _cosmeticRewardService.ProcessRewardSourceAsync(
-                    new CosmeticRewardSourceRequest(
-                        userId,
-                        CosmeticUnlockTypes.Leaderboard,
-                        leaderboardSourceRef,
-                        JsonSerializer.Serialize(new { scope = normalizedScope, period = normalizedPeriod, rank = myRank, percentile })),
-                    CancellationToken.None);
-
-                foreach (var badge in meDto.Badges)
-                {
-                    await _cosmeticRewardService.ProcessRewardSourceAsync(
-                        new CosmeticRewardSourceRequest(
-                            userId,
-                            CosmeticUnlockTypes.Badge,
-                            $"badge:{normalizedScope}:{badge}",
-                            JsonSerializer.Serialize(new { scope = normalizedScope, badgeKey = badge, rank = myRank, percentile })),
-                        CancellationToken.None);
-                }
-            }
         }
 
         _logger.LogInformation(
@@ -278,15 +252,4 @@ public class StudentLeaderboardService : IStudentLeaderboardService
         return loaded.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
     }
 
-    private static string BuildLeaderboardSourceRef(string scope, string period)
-    {
-        var periodKey = period switch
-        {
-            "day" => DateTime.UtcNow.ToString("yyyyMMdd"),
-            "week" => SchoolLeaderboardPeriods.StartOfWeekUtc(DateTime.UtcNow.Date).ToString("yyyyMMdd"),
-            "month" => DateTime.UtcNow.ToString("yyyyMM"),
-            _ => "all-time"
-        };
-        return $"leaderboard:{scope}:{period}:{periodKey}";
-    }
 }

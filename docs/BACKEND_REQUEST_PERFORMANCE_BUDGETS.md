@@ -13,8 +13,9 @@ Targets assume PostgreSQL in-region, warm connection pool, no pending migrations
 
 | Source | Location | Fields / signal | When emitted |
 |---|---|---|---|
-| Request performance log | `RequestPerformanceLoggingMiddleware` | `Method`, `Path`, `StatusCode`, `ElapsedMs`, `DbQueryCount` | Every HTTP request (finally block) |
-| Serilog HTTP completion | `Program.cs` → `UseSerilogRequestLogging` | `RequestMethod`, `RequestPath`, `StatusCode`, `Elapsed`, `CorrelationId` | Every HTTP request |
+| Request performance log | `Program.cs` → `UseSerilogRequestLogging` | `RequestMethod`, normalized `RouteTemplate`, `StatusCode`, `ElapsedMs`, `DbQueryCount`, `Reason` | Slow requests, query-budget violations, sampled requests and errors |
+| Request performance snapshot | `GET /metrics` | `requestPerformance.totalRequests`, `emittedRequests`, `slowRequests`, `queryBudgetViolations`, `sampledRequests`, `errorRequests` | On demand |
+| Serilog HTTP completion | `Program.cs` → `UseSerilogRequestLogging` | `RequestMethod`, `RouteTemplate`, `StatusCode`, `Elapsed`, `CorrelationId` | Only when the request-performance policy emits an event |
 | DB query counter | `PerformanceDbCommandInterceptor` | `HttpContext.Items["perf:db-query-count"]` | Per EF command inside request scope |
 | OpenTelemetry trace | `ServiceRegistrationExtensions.AddObservabilityServices` | ASP.NET Core span + optional EF span | When OTLP/console exporter configured |
 | Cold-start timing | `Program.cs` database block | `Database startup completed in {ElapsedMs}ms` | Once per process start |
@@ -24,7 +25,7 @@ Targets assume PostgreSQL in-region, warm connection pool, no pending migrations
 Middleware order (relevant for correlation):
 
 ```text
-GlobalException → CorrelationId → RequestPerformanceLogging → SerilogRequestLogging → …
+GlobalException → CorrelationId → SerilogRequestLogging → …
 ```
 
 EF command counts include reader, scalar, and non-query commands issued through `ApiDbContext` during the request.
@@ -70,6 +71,8 @@ EF command counts include reader, scalar, and non-query commands issued through 
 
 **Auth profile**: post-login bootstrap; should be a small number of profile + cosmetic projection reads.
 
+**Request performance** (`BE-PERF-017`): request completion logging is anomaly-only, uses normalized route templates and exposes aggregate counters through `/metrics`. Keep warning-level evidence for slow or over-budget requests so production log-level filters do not hide it.
+
 **Startup**: not a request budget — see [`BACKEND_COLD_START_BUDGET.md`](BACKEND_COLD_START_BUDGET.md).
 
 ---
@@ -79,7 +82,7 @@ EF command counts include reader, scalar, and non-query commands issued through 
 ### 1. Request performance line (primary budget check)
 
 ```text
-Request performance. Method=POST Path=/api/quiz/start StatusCode=200 ElapsedMs=142.5 DbQueryCount=9
+Request performance. Method=POST Route=/api/quiz/start StatusCode=200 ElapsedMs=142.5 DbQueryCount=9 Reason=slow_request
 ```
 
 Filter locally (PowerShell):
@@ -100,7 +103,7 @@ GET /api/logs/search?searchTerm=Request%20performance%20Path%3D%2Fapi%2Fquiz%2Fs
 HTTP POST /api/quiz/start responded 200 in 145.3200 ms
 ```
 
-Includes `CorrelationId` in structured properties when using JSON sink. Compare with `ElapsedMs` above; small delta is normal (middleware ordering).
+Includes `CorrelationId` in structured properties when using JSON sink. Compare with `ElapsedMs` above; small delta is normal (middleware ordering). Normal requests do not emit this line unless sampled or over budget.
 
 ### 3. OpenTelemetry
 

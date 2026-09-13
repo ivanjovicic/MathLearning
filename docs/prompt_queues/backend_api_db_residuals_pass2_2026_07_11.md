@@ -456,6 +456,10 @@ Choose one explicit public route, preferably the current canonical mobile contra
 8. Ensure login detects an incomplete account and follows the chosen repair/deny path rather than issuing more tokens and continuing partially.
 9. Update endpoint inventory, OpenAPI, backend contract gap report and Flutter contract/status.
 
+### Cross-repository error contract residual (sharpened from the 2026-09-09 audit)
+
+This canonical account-provisioning owner also owns the failure response for `/auth/mobile/register`; do not leave the endpoint-local `catch (Exception)` as an unlogged generic 500. Define one safe response matrix for validation, duplicate, rate-limit and unexpected transaction failures containing HTTP status, stable `errorCode`, user-safe message, safe `traceId`/`correlationId` details and `X-Correlation-ID` behavior. Unexpected failures must retain the original exception in structured backend logs with operation/route and correlation context, while rollback/compensation failures remain separately observable. The Flutter companion is `MOB65-REGISTRATION-ERROR-CONTRACT-001` in `Mathlearning-Mobile-App`; both prompts consume the same fixture matrix and neither exposes provider detail, credentials, tokens, passwords or full private request/response bodies.
+
 ## Required tests
 
 Prove:
@@ -472,6 +476,8 @@ Prove:
 - another user's account data is never returned;
 - anonymous/auth/admin route metadata is exact;
 - logs and public errors do not expose password, token or provider detail.
+
+Also prove the cross-repository failure contract: injected unexpected registration exceptions appear once in structured backend logs with route/operation and correlation context, the public response remains safe, and the active Flutter registration path preserves status/code/correlation instead of converting the response to `null`/`Registration failed`.
 
 ## Validation
 

@@ -34,9 +34,18 @@ Queue placement: <exact queue/order reason>.
 
 Task: <one outcome>
 Source of truth: current code/tests + exact owning docs.
+Interpretation before work: <what current code/tests prove and what remains falsifiable>.
 Ambiguity rule: stop for unresolved authority/auth/schema/API/idempotency/privacy/destructive-migration ambiguity.
+Risk/ownership model: <authoritative owner, risk boundary and excluded owners>.
 
-Failure modes:
+Test-first contract:
+- Runtime lane: add the smallest regression test before implementation.
+- Pre-change proof: <guarded focused command expected to fail, or explicit not-practical reason>.
+- Post-change proof: <same focused command expected to pass after implementation>.
+- Counterexample cases: <negative/auth/retry/rollback/provider case>.
+- Non-runtime exception: <why test-first runtime proof is not applicable>; routed runtime prompts must include their own red/green proof.
+
+Failure-mode matrix:
 - <normal/no-op/idempotent>
 - <error/auth/retry/cancel/concurrency/provider>
 - <third case for P0>
@@ -60,10 +69,12 @@ Acceptance:
 2. <negative/counterexample/provider behavior>
 3. <scope/contract/safety behavior>
 
+Proof required: <focused runtime/regression/provider proof or explicit docs/audit proof>.
 Validation:
 - <one command per line>
 
 Completion gate: target/counterexample proof + compact v2 log + delivery + changed evidence validation.
+Stop conditions: second owner, second falsifier, unavailable proof or deadline.
 Evidence: .ai/runs/<yyyy-mm-dd>-<PROMPT-ID>-evidence.md
 ```
 

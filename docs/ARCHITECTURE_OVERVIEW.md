@@ -30,7 +30,16 @@ Production admin bootstrap (`SeedAdmin`):
 - Production requires `SeedAdmin__Enabled=true` and an explicit `SeedAdmin__Password` (Development default password is rejected).
 - `SeedAdmin__ResetPasswordOnStart` in production is ignored unless `SeedAdmin__AllowEmergencyPasswordReset=true` for a one-time emergency recovery.
 - Startup audit logs include admin username only; passwords are never logged.
+- Operational decision: keep `SeedAdmin` disabled in the normal Fly deployment. For an intentional first-admin bootstrap, use a separately reviewed one-time release with `SeedAdmin__Enabled=true` and a secret-managed password, verify the account, then remove the enable/password settings; never leave reset-on-start enabled as the normal policy.
 - health, metrics, endpoint mapping, static uploaded avatars, Hangfire recurring jobs
+
+Production runtime configuration:
+
+- DataProtection is production-fail-fast: `DataProtection__KeysPath` must point to a durable absolute path, and either `DataProtection__CertificatePath` or secret-managed `DataProtection__CertificateBase64` plus `DataProtection__CertificatePassword` must provide a PFX certificate with a private key.
+- The Fly deployment maps `/data` to the `mathlearning_data` volume and uses `/data/dataprotection-keys`; create the volume before deploying a build that enables this requirement: `fly volumes create mathlearning_data --app mathlearning-api --region ams --size 1`.
+- Never commit certificate material, passwords, database strings or Redis URLs. Set them through Fly secrets or an equivalent secret manager. The certificate protects the persisted key ring at rest; the volume protects it from container replacement.
+- Redis is optional by default (`Redis__Required=false`). Configure `ConnectionStrings__Redis` or `Redis__ConnectionString` when cache-backed leaderboard operation is desired. If it is absent or unavailable, the DB-backed leaderboard is an explicit fallback and health responses expose `redis.mode=DbFallback`; setting `Redis__Required=true` makes startup/readiness fail closed.
+- Fly uses `ASPNETCORE_URLS=http://+:8080`; `HTTP_PORTS` and `HTTPS_PORTS` are cleared so the framework does not report a harmless URL override.
 
 Endpoint mapping order is visible in `Program.cs` and currently includes:
 
@@ -153,6 +162,11 @@ Cosmetics catalog behavior is explicit and versioned:
 - startup does not silently rewrite catalog rows
 - operator-run manifest import is available through `--apply-cosmetic-catalog`
 - `/api/health/ready` must fail when the revision/default/fragment checks are not satisfied
+
+Production catalog operation:
+
+- A fresh or upgraded production database is not made ready by an API restart. After reviewing the manifest and taking a database backup, run the explicit operator job with the production connection string: `dotnet run --no-launch-profile --project src/MathLearning.Api -- --apply-cosmetic-catalog` (or invoke the published API binary with the same flag).
+- Verify `/api/health/ready` reports `status=Ready`, a non-empty catalog revision and checksum, and `fragmentIssues`/`rewardIssues` are empty. The import is versioned and does not alter economy/reward settlement authority.
 
 Migration rules:
 

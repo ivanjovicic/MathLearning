@@ -1,6 +1,6 @@
 # Backend Validation Selector
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Owner: `backend-agent-system`
 
 Choose the narrowest executable proof that confirms or falsifies the changed behavior. Do not start with the full solution suite unless the task owns release readiness or focused proof exposes wider risk.
@@ -17,6 +17,8 @@ current contract/reproducer
 ```
 
 Existence, compilation, source searches and queued CI are supporting information, not behavior proof.
+
+For runtime prompt work, execute the smallest regression test before editing and retain the red result. After editing, rerun that command plus the relevant negative/counterexample case. If pre-change execution is impossible, record the exact reason and owner; do not claim Done from test existence or compilation.
 
 ## Documentation and agent tooling
 

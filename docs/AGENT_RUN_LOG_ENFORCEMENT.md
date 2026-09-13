@@ -1,6 +1,6 @@
 # Agent Run Log Enforcement Gate (Backend)
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Status: mandatory, compact and changed-scope  
 Owner: `backend-agent-system`
 
@@ -40,6 +40,8 @@ Required evidence groups:
 5. exact validation run/skipped;
 6. exceptions/learning;
 7. delivery state, `self|SHA` and completion.
+
+Runtime bugfix logs should also record the pre-change failing regression command when practical and the post-change passing command plus counterexample. If the red run was not practical, record the reason, unblock owner and honest non-Done state.
 
 Target 35–70 lines; warning above 90. Use `none` instead of empty narrative sections.
 

@@ -84,32 +84,34 @@ public sealed class StepExplanationService : IStepExplanationService
             request.Language);
 
         var problemHash = ComputeProblemHash(descriptor);
-        if (!request.ForceRefresh)
-        {
-            var cached = await _cache.GetMistakeAnalysisAsync(problemHash, descriptor.Context.Grade, descriptor.Context.Difficulty.ToString(), descriptor.Language, ct);
-            if (cached is not null)
-                return cached;
-        }
+        var difficulty = descriptor.Context.Difficulty.ToString();
 
-        var graph = _graphEngine.Build(descriptor);
-        var normalizedDescriptor = EnsureExpectedAnswer(descriptor, graph);
-        var mistakes = await _mistakeDetector.DetectAsync(normalizedDescriptor, ct);
-        var formulaReferences = await ResolveFormulaReferencesAsync(graph, mistakes, ct);
-
-        IReadOnlyList<StepExplanation> steps = _generator.Generate(graph, formulaReferences, mistakes);
-        steps = await _aiTutorEnhancer.EnhanceAsync(normalizedDescriptor, steps, mistakes, ct);
-
-        var response = new MistakeAnalysisResponseDto(
-            normalizedDescriptor.ProblemId,
-            normalizedDescriptor.ProblemText,
+        return await _cache.GetOrCreateMistakeAnalysisAsync(
             problemHash,
-            false,
-            mistakes,
-            steps.Select(MapStep).ToList(),
-            formulaReferences.Values.Select(MapFormula).ToList());
+            descriptor.Context.Grade,
+            difficulty,
+            descriptor.Language,
+            request.ForceRefresh,
+            async innerCt =>
+            {
+                var graph = _graphEngine.Build(descriptor);
+                var normalizedDescriptor = EnsureExpectedAnswer(descriptor, graph);
+                var mistakes = await _mistakeDetector.DetectAsync(normalizedDescriptor, innerCt);
+                var formulaReferences = await ResolveFormulaReferencesAsync(graph, mistakes, innerCt);
 
-        await _cache.SetMistakeAnalysisAsync(problemHash, normalizedDescriptor.Context.Grade, normalizedDescriptor.Context.Difficulty.ToString(), normalizedDescriptor.Language, response, ct);
-        return response;
+                IReadOnlyList<StepExplanation> steps = _generator.Generate(graph, formulaReferences, mistakes);
+                steps = await _aiTutorEnhancer.EnhanceAsync(normalizedDescriptor, steps, mistakes, innerCt);
+
+                return new MistakeAnalysisResponseDto(
+                    normalizedDescriptor.ProblemId,
+                    normalizedDescriptor.ProblemText,
+                    problemHash,
+                    false,
+                    mistakes,
+                    steps.Select(MapStep).ToList(),
+                    formulaReferences.Values.Select(MapFormula).ToList());
+            },
+            ct);
     }
 
     private async Task<ExplanationResponseDto> GenerateCoreAsync(GenerateExplanationRequest request, Question? loadedQuestion, CancellationToken ct)
@@ -134,46 +136,50 @@ public sealed class StepExplanationService : IStepExplanationService
             request.Language);
 
         var problemHash = ComputeProblemHash(descriptor);
-        if (!request.ForceRefresh)
-        {
-            var cached = await _cache.GetExplanationAsync(problemHash, descriptor.Context.Grade, descriptor.Context.Difficulty.ToString(), descriptor.Language, ct);
-            if (cached is not null)
-                return cached;
-        }
+        var difficulty = descriptor.Context.Difficulty.ToString();
 
-        var graph = _graphEngine.Build(descriptor);
-        var normalizedDescriptor = EnsureExpectedAnswer(descriptor, graph);
-        var mistakes = await _mistakeDetector.DetectAsync(normalizedDescriptor, ct);
-        var formulaReferences = await ResolveFormulaReferencesAsync(graph, mistakes, ct);
-
-        IReadOnlyList<StepExplanation> steps;
-        if (question is not null &&
-            question.Steps.Count > 0 &&
-            graph.RootNode.RuleApplied == ReasoningRule.Unknown)
-        {
-            steps = BuildFromStoredSteps(question, normalizedDescriptor);
-        }
-        else
-        {
-            steps = _generator.Generate(graph, formulaReferences, mistakes);
-        }
-
-        if (request.EnableAiTutorEnhancement)
-            steps = await _aiTutorEnhancer.EnhanceAsync(normalizedDescriptor, steps, mistakes, ct);
-
-        var response = new ExplanationResponseDto(
-            normalizedDescriptor.ProblemId,
-            normalizedDescriptor.ProblemText,
+        return await _cache.GetOrCreateExplanationAsync(
             problemHash,
-            normalizedDescriptor.Language,
-            false,
-            steps.Select(MapStep).ToList(),
-            formulaReferences.Values.Select(MapFormula).ToList(),
-            mistakes);
+            descriptor.Context.Grade,
+            difficulty,
+            descriptor.Language,
+            request.ForceRefresh,
+            async innerCt =>
+            {
+                var graph = _graphEngine.Build(descriptor);
+                var normalizedDescriptor = EnsureExpectedAnswer(descriptor, graph);
+                var mistakes = await _mistakeDetector.DetectAsync(normalizedDescriptor, innerCt);
+                var formulaReferences = await ResolveFormulaReferencesAsync(graph, mistakes, innerCt);
 
-        await _cache.SetExplanationAsync(problemHash, normalizedDescriptor.Context.Grade, normalizedDescriptor.Context.Difficulty.ToString(), normalizedDescriptor.Language, response, ct);
-        _logger.LogInformation("Generated explanation for problem hash {ProblemHash}.", problemHash);
-        return response;
+                IReadOnlyList<StepExplanation> steps;
+                if (question is not null &&
+                    question.Steps.Count > 0 &&
+                    graph.RootNode.RuleApplied == ReasoningRule.Unknown)
+                {
+                    steps = BuildFromStoredSteps(question, normalizedDescriptor);
+                }
+                else
+                {
+                    steps = _generator.Generate(graph, formulaReferences, mistakes);
+                }
+
+                if (request.EnableAiTutorEnhancement)
+                    steps = await _aiTutorEnhancer.EnhanceAsync(normalizedDescriptor, steps, mistakes, innerCt);
+
+                var response = new ExplanationResponseDto(
+                    normalizedDescriptor.ProblemId,
+                    normalizedDescriptor.ProblemText,
+                    problemHash,
+                    normalizedDescriptor.Language,
+                    false,
+                    steps.Select(MapStep).ToList(),
+                    formulaReferences.Values.Select(MapFormula).ToList(),
+                    mistakes);
+
+                _logger.LogInformation("Generated explanation for problem hash {ProblemHash}.", problemHash);
+                return response;
+            },
+            ct);
     }
 
     private async Task<Question?> LoadQuestionAsync(int problemId, CancellationToken ct)

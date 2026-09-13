@@ -25,6 +25,17 @@ Prompt queues:
 - [`backend_api_db_residuals_pass3_2026_07_16.md`](backend_api_db_residuals_pass3_2026_07_16.md) — BACKEND-API-DB-016…019 for private bug screenshots, credential abuse protection, revocable access sessions and cosmetics catalog readiness
 - [`backend_failing_test_followups_2026_07_11.md`](backend_failing_test_followups_2026_07_11.md) — BACKEND-MIGRATION-001 for the remaining clean/upgraded PostgreSQL cosmetics migration blocker
 
+## Highest remaining bugs
+
+These are the biggest unresolved queue items on current `main`:
+
+- `BACKEND-API-DB-015` â€” stale pending economy/cosmetics idempotency recovery and dual-settlement prevention.
+- `BACKEND-API-DB-013` â€” single account-provisioning owner and Identity/profile/token orphan reconciliation.
+- `BACKEND-TEST-033` â€” cancellation/rollback matrix for canonical P0 mutations, especially the adaptive and practice settlement lanes.
+
+- `BACKEND-TEST-049` â€” question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety.
+- `BACKEND-TEST-050` â€” design-token draft version identity and same-second collision safety.
+- `BACKEND-TEST-051` - design-token bootstrap race and startup ownership.
 ## Read first
 
 - `../../AGENTS.md`
@@ -68,7 +79,7 @@ Prompt queues:
 | BACKEND-TEST-010 | Validated | Bounded reads and enum normalization: 70 passed. |
 | BACKEND-TEST-011 | Implemented / Workflow validation needed | GitHub summary plus HTML/merged Cobertura coverage artifact. |
 | BACKEND-TEST-012 | Validated | Refresh-token generator/model/snapshot drift resolved by aligning EF metadata and snapshot to the existing 128-char migration target, without creating a redundant migration. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~RefreshTokenServiceSecurityTests"`: 8 passed, 0 failed, 0 skipped; `dotnet ef migrations has-pending-model-changes --project src/MathLearning.Infrastructure/MathLearning.Infrastructure.csproj --startup-project src/MathLearning.Api/MathLearning.Api.csproj --context ApiDbContext --no-build`: no pending model changes. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-012-evidence.md`. |
-| BACKEND-TEST-013 | Ready / P0 contract decision | Require, gate or isolate missing operation identity. |
+| BACKEND-TEST-013 | Done | Require, gate or isolate missing operation identity. Done 100% - Run log: `.ai/runs/2026-07-30-BACKEND-TEST-013-evidence.md`; Validation: `python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "FullyQualifiedName~OperationIdentityContractIntegrationTests|FullyQualifiedName~OperationIdentityResolutionTests|FullyQualifiedName~QuizAnswerIdempotencyTests|FullyQualifiedName~SrsUpdateIdempotencyTests"` passed; Residual risk: legacy no-key path remains intentionally supported per `docs/mobile_contract_idempotency_handoff.md`; Commit: self. |
 | BACKEND-TEST-014 | Implemented / Needs validation | Shared/cosmetics idempotency state machines and canonical payload semantics. |
 | BACKEND-TEST-015 | Implemented / Needs validation | Real HTTP refresh-token rotation race against relational SQLite. |
 | BACKEND-TEST-016 | Implemented / Needs validation | Transaction helper commit, rollback-after-SQL, retry, exhaustion and cancellation. |
@@ -78,7 +89,7 @@ Prompt queues:
 | BACKEND-TEST-020 | Runtime-fixed / Needs validation | Bug report user/admin authorization boundaries. |
 | BACKEND-TEST-021 | Runtime-fixed / Needs validation | Maintenance routes require exact admin policy. |
 | BACKEND-TEST-022 | Runtime-fixed / Needs schema validation | Quiz/offline settlement now enqueues durable outbox ingest commands inside the authoritative transaction, keeps client success independent from async analytics delivery, and deduplicates ingest by stable `AttemptKey`; focused tests passed but `scripts/db/validate-schema.ps1` still needs a reachable local PostgreSQL instance. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-022-evidence.md` |
-| BACKEND-TEST-023 | Runtime-fixed / Workflow validation needed | Canonical runtime owner now uses `FOR UPDATE SKIP LOCKED`, bounded retry/dead-letter state, redacted persisted errors and hosted-service wiring; PostgreSQL proof still needs CI evidence or valid local credentials before linked BE-PERF-016 can be marked validated. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-023-evidence.md` |
+| BACKEND-TEST-023 | Done 100% — Run log: `.ai/runs/2026-08-02-BACKEND-TEST-023-evidence.md`; Validation: `python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~OutboxBatchProcessorTests" --no-restore` passed `5/5`; Residual risk: none observed in the focused claim/lease/backoff coverage; Commit: self. | Canonical runtime owner now uses `FOR UPDATE SKIP LOCKED`, bounded retry/dead-letter state, redacted persisted errors and hosted-service wiring; PostgreSQL proof is now executable locally and linked BE-PERF-016 is validated. |
 | BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
 | BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation; private read/durable storage runtime ownership is BACKEND-API-DB-016. |
 | BACKEND-TEST-026 | P1 / Prompt-ready | Minimize public health/metrics/schema/job information. |
@@ -93,6 +104,9 @@ Prompt queues:
 | BACKEND-TEST-035 | Implemented / Needs validation | Direct test-auth default/anonymous/role contract tests. |
 | BACKEND-TEST-036 | Validated | Identity mapping, observability, startup/schema decisions, weakness math, LaTeX preservation, sanitization, step generation, translation fallback and question invariants. Verified with `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter "MaintenanceEndpoint|AnalyticsEndpoint|ExplanationEndpoint|TestAuthHandlerTests|PaginationBounds|ExtremePagination|BugReportServicePagination|UserIdGuidMapperTests|IdempotencyObservability|DatabaseSchemaVersionGuard|WeaknessScoring|InlineLatex|StepEngine|MathContentSanitizer|TranslationHelper|QuestionEntityTests"`: 272 passed, 0 failed, 0 skipped. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-TEST-042…047 | Prompt-ready | Distributed maintenance, explanation cost/input limits, deterministic scheduler, DB/cursor analytics paging, remaining pagination inventory and privileged-route metadata audit. |
+| BACKEND-TEST-049 | P1 / Prompt-ready | Question authoring snapshot truth, atomic revalidate repair and preview-cache rollback safety. |
+| BACKEND-TEST-050 | P1 / Prompt-ready | Design-token draft version identity and same-second collision safety. |
+| BACKEND-TEST-051 | P1 / Prompt-ready | Design-token bootstrap race and startup ownership. |
 | BACKEND-LATEST-VALIDATION-002 | Validated | Latest July 3 implementation/test batch verified; `dotnet build MathLearning.slnx -c Release --no-restore` passed with 0 errors/5 warnings and the focused test package passed 272/272. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-VALIDATION-002-evidence.md`. |
 | BACKEND-LATEST-WORKFLOW-002 | P0/P1 / Validated | Database Validation run `29899827848` succeeded on exact `main` SHA `a5406568df339bb6c562ed4f79f31c72d6ac2939`; classifier returned `docs/agent-tooling-only change; expensive database suite skipped`, so `database-suite` was skipped and no artifacts were produced. Run log: `.ai/runs/2026-07-22-BACKEND-LATEST-WORKFLOW-002-evidence.md`. |
 | BACKEND-LATEST-EVIDENCE-002 | P1 / Done 75% | Linted the latest referenced July 3 evidence logs, added missing `Commit SHA:` fields, and reconciled completion caps; older legacy queue/log debt remains. Run log: `.ai/runs/2026-07-13-BACKEND-LATEST-EVIDENCE-002-evidence.md`. |
@@ -217,9 +231,9 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 14. Run BACKEND-API-DB-012 for Redis/DB leaderboard parity after the string cursor contract is stable.
 15. Run BACKEND-API-DB-013 for one complete account-provisioning owner and orphan reconciliation.
 16. Run BACKEND-API-DB-014 to retire or repair the photo-avatar contract/storage.
-17. Re-run BACKEND-TEST-023 with working PostgreSQL credentials or CI evidence, then close linked BE-PERF-016.
+17. BACKEND-TEST-023 completed with local PostgreSQL proof on 2026-08-02; linked BE-PERF-016 is validated and the regression row remains the contract gate.
 18. Re-run BACKEND-TEST-022 schema validation on reachable local/CI PostgreSQL, then close the durable ingest lane.
-19. Resolve BACKEND-TEST-013 operation-identity contract with mobile sync.
+19. BACKEND-TEST-013 completed on exact `main` SHA `953260a`; run log `.ai/runs/2026-07-30-BACKEND-TEST-013-evidence.md`.
 20. Run BACKEND-API-DB-005 and 006 for offline bundle truth and sync envelope/data lifecycle.
 21. Run BACKEND-API-DB-007 for refresh-token at-rest and retention protection; coordinate with 018 without merging owners.
 22. Run BACKEND-API-DB-008 under the canonical BE-PERF-013 pure-read owner.

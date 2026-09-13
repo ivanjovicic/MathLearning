@@ -1,6 +1,6 @@
 # Backend Prompt Lifecycle
 
-Last aligned: 2026-07-17  
+Last aligned: 2026-07-31
 Owner: `backend-agent-system`
 
 ## Two entry paths
@@ -98,6 +98,7 @@ For direct main, record main SHA. For PR delivery, record PR, head SHA, targeted
 Before Done:
 
 - target and counterexample proof executed;
+- runtime prompt has pre-change failing proof and post-change passing proof, or a documented exception with a named unblock owner;
 - required provider/CI proof executed or honest non-Done state used;
 - no collision/scope breach above 79%;
 - compact v2 log closed;

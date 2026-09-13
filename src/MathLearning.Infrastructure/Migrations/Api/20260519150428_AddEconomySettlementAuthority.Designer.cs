@@ -1227,6 +1227,10 @@ namespace MathLearning.Infrastructure.Migrations.Api
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<string>("OperationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("RequestHash")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -1265,6 +1269,11 @@ namespace MathLearning.Infrastructure.Migrations.Api
                     b.HasIndex("UserId", "TransactionType", "IdempotencyKey")
                         .IsUnique()
                         .HasDatabaseName("UX_economy_transactions_user_type_key");
+
+                    b.HasIndex("UserId", "TransactionType", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_economy_transactions_user_type_operation")
+                        .HasFilter("\"OperationId\" IS NOT NULL");
 
                     b.ToTable("economy_transactions", (string)null);
                 });

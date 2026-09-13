@@ -132,6 +132,11 @@ Status update 2026-07-14:
 - Added provider-gated regression coverage in `tests/MathLearning.Tests/Infrastructure/OutboxBatchProcessorTests.cs`.
 - Local compile/no-op validation passed, but local PostgreSQL proof is still blocked by `28P01 password authentication failed for user "postgres"`; keep this row in workflow-validation state until CI or a valid local maintenance connection string is available.
 
+Status update 2026-08-02:
+
+- Local PostgreSQL maintenance credentials on `localhost:5432` validated the focused `OutboxBatchProcessorTests` package with `5/5` passing.
+- The workflow-validation blocker is cleared; keep this row as the test-side contract and regression gate only.
+
 ### Required tests
 
 - two processors race; each message is claimed by one worker at a time;

@@ -25,6 +25,11 @@ Source of truth: current code and focused tests
 Interpretation before work: preserve the mobile contract and change one owner.
 Ambiguity rule: stop on auth, persistence or contract ambiguity.
 Risk/ownership model: the application service is authoritative; endpoint formatting is excluded.
+Test-first contract:
+- Pre-change proof: the focused test must fail before the fix.
+- Post-change proof: the same test must pass after the fix.
+- Counterexample cases: duplicate retry and cross-user access remain covered.
+- Focused command: python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj
 Failure-mode matrix:
 - normal request returns the documented response;
 - duplicate retry does not apply the mutation twice.
@@ -78,6 +83,28 @@ class PromptValidatorTests(unittest.TestCase):
     def test_rejects_timebox_above_thirty_minutes(self) -> None:
         findings = validate(VALID_PROMPT.replace("Timebox: 15 minutes", "Timebox: 45 minutes"))
         self.assertTrue(any("must not exceed 30" in item.message for item in findings), findings)
+
+    def test_rejects_runtime_prompt_without_test_first_contract(self) -> None:
+        findings = validate(VALID_PROMPT.replace(
+            "Test-first contract:\n- Pre-change proof: the focused test must fail before the fix.\n"
+            "- Post-change proof: the same test must pass after the fix.\n"
+            "- Counterexample cases: duplicate retry and cross-user access remain covered.\n"
+            "- Focused command: python scripts/run_guarded.py --timeout-seconds 180 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj\n",
+            "",
+        ))
+        self.assertTrue(any("Test-first contract" in item.message for item in findings), findings)
+
+    def test_accepts_audit_test_first_exception(self) -> None:
+        audit = VALID_PROMPT.replace("Run lane: known-fix", "Run lane: audit")
+        start = audit.index("Test-first contract:")
+        end = audit.index("Failure-mode matrix:")
+        audit = audit[:start] + (
+            "Test-first contract:\n"
+            "- Exception: this is an audit/docs-only prompt and does not change runtime behavior.\n"
+            "- Routed runtime prompts must contain pre-change and post-change proof.\n"
+        ) + audit[end:]
+        findings = validate(audit)
+        self.assertFalse(any(item.severity == "FAIL" for item in findings), findings)
 
     def test_accepts_repository_task_template_placeholders(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

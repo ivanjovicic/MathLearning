@@ -54,6 +54,11 @@ Risk/ownership model:
 - Readiness reports configuration/access failures without leaking secrets or object names.
 - Migration never deletes local originals before remote verification and rollback checkpoint.
 
+Test-first contract:
+- Exception: this is an investigation prompt and does not implement runtime behavior.
+- Validation proof: the provider decision must include executable acceptance tests or a named operator handoff for the future runtime prompt.
+- Routed runtime prompts must contain their own pre-change failing proof, post-change passing proof and counterexample.
+
 Failure-mode matrix:
 - API deploys with missing/invalid credentials or inaccessible bucket/container.
 - Two replicas upload/read/delete the same logical attachment.

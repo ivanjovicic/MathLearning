@@ -48,6 +48,20 @@ public sealed class HealthEndpointContractTests : IClassFixture<CustomWebApplica
         AssertHealthStatus(response.StatusCode);
     }
 
+    [Fact]
+    public async Task DatabaseHealth_ExposesExplicitRedisRuntimeMode()
+    {
+        var response = await _client.GetAsync("/api/health/db");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(payload.TryGetProperty("redis", out var redis));
+        Assert.True(redis.TryGetProperty("mode", out var mode));
+        Assert.False(string.IsNullOrWhiteSpace(mode.GetString()));
+        Assert.True(redis.TryGetProperty("required", out _));
+        Assert.True(redis.TryGetProperty("configured", out _));
+        Assert.True(redis.TryGetProperty("connected", out _));
+    }
+
     private static void AssertHealthStatus(HttpStatusCode statusCode)
     {
         Assert.True(

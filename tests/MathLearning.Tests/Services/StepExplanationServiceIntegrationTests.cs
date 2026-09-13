@@ -98,6 +98,7 @@ public class StepExplanationServiceIntegrationTests
             provider.GetRequiredService<IMemoryCache>(),
             db,
             provider,
+            new ExplanationCacheMetrics(),
             NullLogger<ExplanationCacheService>.Instance);
         var mistakeDetector = new CommonMistakeDetector(db);
         var generator = new StepExplanationGenerator();

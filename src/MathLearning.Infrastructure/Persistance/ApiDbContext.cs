@@ -896,6 +896,10 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.UserId, e.QuestionId })
                   .HasDatabaseName("IX_UserQuestionHistory_User_Question");
 
+            entity.HasIndex(e => e.AdaptiveSessionItemId)
+                  .IsUnique()
+                  .HasDatabaseName("UX_UserQuestionHistory_AdaptiveSessionItem");
+
             entity.HasOne(e => e.Question)
                   .WithMany()
                   .HasForeignKey(e => e.QuestionId)
