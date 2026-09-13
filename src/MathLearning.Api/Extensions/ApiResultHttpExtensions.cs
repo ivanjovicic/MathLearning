@@ -29,6 +29,7 @@ public static class ApiResultHttpExtensions
             "VALIDATION_ERROR" => StatusCodes.Status400BadRequest,
             "UNAUTHORIZED" => StatusCodes.Status401Unauthorized,
             "FORBIDDEN" => StatusCodes.Status403Forbidden,
+            "NO_PLAYABLE_QUESTIONS" => StatusCodes.Status404NotFound,
             "NOT_FOUND" => StatusCodes.Status404NotFound,
             "CONFLICT" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError,

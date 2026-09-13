@@ -38,6 +38,16 @@ public static class QuizEndpoints
             string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
             var questionCount = NormalizeQuizQuestionCount(request.QuestionCount);
 
+            var questionIds = await SelectRandomQuestionIdsAsync(
+                db.Questions.AsNoTracking()
+                    .WherePlayable()
+                    .Where(q => q.SubtopicId == request.SubtopicId),
+                questionCount,
+                ctx.RequestAborted);
+
+            if (questionIds.Count == 0)
+                return Results.NotFound(new { errorCode = "NO_PLAYABLE_QUESTIONS", message = "No playable questions are published for this topic." });
+
             var quiz = new QuizSession
             {
                 Id = Guid.NewGuid(),
@@ -46,11 +56,6 @@ public static class QuizEndpoints
             };
 
             db.QuizSessions.Add(quiz);
-
-            var questionIds = await SelectRandomQuestionIdsAsync(
-                db.Questions.AsNoTracking().Where(q => q.SubtopicId == request.SubtopicId),
-                questionCount,
-                ctx.RequestAborted);
             quiz.SetIssuedQuestionIds(questionIds);
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
 
@@ -69,6 +74,13 @@ public static class QuizEndpoints
             int? subtopicId,
             int count = DefaultQuizQuestionCount) =>
         {
+            if (subtopicId is not > 0 && !string.IsNullOrWhiteSpace(topic) &&
+                !ParseTopicIdFromTopic(topic).HasValue)
+                return Results.BadRequest(new { errorCode = "INVALID_TOPIC_KEY", message = "A numeric topic key is required." });
+
+            if (subtopicId is not > 0 && string.IsNullOrWhiteSpace(topic))
+                return Results.BadRequest(new { errorCode = "MISSING_CONTENT_ID", message = "A subtopicId or topic key is required." });
+
             var topicId = ParseTopicIdFromTopic(topic ?? string.Empty);
             return await BuildLegacyQuestionsResponse(
                 db,
@@ -96,7 +108,12 @@ public static class QuizEndpoints
             else if (TryGetString(payload, "topic", out var topicRaw))
             {
                 topicId = ParseTopicIdFromTopic(topicRaw!);
+                if (!topicId.HasValue)
+                    return Results.BadRequest(new { errorCode = "INVALID_TOPIC_KEY", message = "A numeric topic key is required." });
             }
+
+            if (!subtopicId.HasValue && !topicId.HasValue)
+                return Results.BadRequest(new { errorCode = "MISSING_CONTENT_ID", message = "A subtopicId or topic key is required." });
 
             return await BuildLegacyQuestionsResponse(db, ctx, count, subtopicId, topicId);
         });
@@ -111,7 +128,7 @@ public static class QuizEndpoints
             string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
 
             var question = await (
-                from q in db.Questions.AsNoTracking()
+                from q in db.Questions.AsNoTracking().WherePlayable()
                     .Include(q => q.Options).ThenInclude(o => o.Translations)
                     .Include(q => q.Translations)
                     .Include(q => q.Steps).ThenInclude(s => s.Translations)
@@ -129,7 +146,11 @@ public static class QuizEndpoints
             ).FirstOrDefaultAsync();
 
             if (question == null)
-                return Results.NotFound("No questions available");
+                return Results.NotFound(new
+                {
+                    errorCode = "NO_PLAYABLE_QUESTIONS",
+                    message = "No playable questions are published for this topic."
+                });
 
             var questionText = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, lang)) ?? string.Empty;
             var options = question.Options
@@ -595,7 +616,7 @@ public static class QuizEndpoints
         string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
         var normalizedCount = NormalizeQuizQuestionCount(count);
 
-        IQueryable<Question> query = db.Questions.AsNoTracking();
+        IQueryable<Question> query = db.Questions.AsNoTracking().WherePlayable();
 
         if (subtopicId.HasValue)
         {
@@ -610,6 +631,8 @@ public static class QuizEndpoints
             query,
             normalizedCount,
             ctx.RequestAborted);
+        if (questionIds.Count == 0)
+            return Results.NotFound(new { errorCode = "NO_PLAYABLE_QUESTIONS", message = "No playable questions are published for this topic." });
         var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
 
         var quizSession = new QuizSession

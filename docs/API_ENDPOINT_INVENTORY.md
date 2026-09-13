@@ -108,10 +108,10 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/quiz/start` | Auth | Canonical | Question count normalized to 1..25; pre-answer question shape omits answer key and full solution material. |
-| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Count normalized to 1..25; pre-answer question shape omits answer key and full solution material. |
-| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; pre-answer question shape omits answer key and full solution material. |
-| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question; pre-answer question shape omits answer key and full solution material. |
+| POST | `/api/quiz/start` | Auth | Canonical | Body uses numeric `subtopicId`; only published, non-deleted, structurally playable questions are returned. Empty content is `404 NO_PLAYABLE_QUESTIONS`; pre-answer shape omits answer key and full solution material. |
+| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Compatibility-only. Use `subtopicId` or confirmed `topic_<numericId>`; never derive identity from a localized title. Same playable-content gate and `404 NO_PLAYABLE_QUESTIONS`. |
+| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; explicit `subtopicId` or numeric topic key required; same playable-content gate. |
+| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question is limited to published, non-deleted, structurally playable content; pre-answer shape omits answer key and full solution material. |
 | POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. Missing-key decision remains BACKEND-TEST-013. |
 | POST | `/api/quiz/offline-submit` | Auth | Canonical offline | Auth-scoped replay path. Durable analytics handoff remains BACKEND-TEST-022. |
 | POST | `/api/quiz/batch-submit` | Auth | Legacy alias | Adapter to offline-submit. |
@@ -128,7 +128,7 @@ Owner: `PracticeSessionEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned session. |
+| POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned session; no playable published content returns `404 NO_PLAYABLE_QUESTIONS`. Success is an `ApiResult` envelope and question options are `{ id, text, ... }` DTOs. |
 | POST | `/api/practice/session/{sessionId:guid}/answer` | Auth | Canonical | Ownership enforced. |
 | POST | `/api/practice/session/{sessionId:guid}/complete` | Auth | Canonical | Ownership enforced. |
 
