@@ -454,72 +454,15 @@ public sealed partial class CosmeticPlatformService
 
     /// <summary>
     /// Reward-track mobile routes share one claim-window policy for implicit and explicit season selection.
-    /// Allowed: active within the play/claim window; reward_lock until RewardLockAt (or EndDate).
-    /// Denied: draft, scheduled, completed, archived, future starts, and seasons past their claim deadline.
     /// </summary>
     private static bool IsRewardTrackSeasonAccessible(CosmeticSeason season, DateTime nowUtc)
-    {
-        if (season.Status is CosmeticSeasonStatuses.Draft
-            or CosmeticSeasonStatuses.Scheduled
-            or CosmeticSeasonStatuses.Completed
-            or CosmeticSeasonStatuses.Archived)
-        {
-            return false;
-        }
-
-        if (nowUtc < season.StartDate)
-        {
-            return false;
-        }
-
-        if (season.Status == CosmeticSeasonStatuses.RewardLock)
-        {
-            var claimUntil = season.RewardLockAt ?? season.EndDate;
-            return nowUtc <= claimUntil;
-        }
-
-        if (season.Status != CosmeticSeasonStatuses.Active || !season.IsActive)
-        {
-            return false;
-        }
-
-        var activeClaimUntil = season.RewardLockAt is { } lockAt && lockAt > season.EndDate
-            ? lockAt
-            : season.EndDate;
-        return nowUtc <= activeClaimUntil;
-    }
+        => SeasonClaimWindow.IsAccessible(season, nowUtc);
 
     private static string NormalizeRewardTrackType(string? trackType)
-    {
-        var normalized = string.IsNullOrWhiteSpace(trackType)
-            ? CosmeticTrackTypes.Free
-            : trackType.Trim().ToLowerInvariant();
-
-        if (normalized is not (CosmeticTrackTypes.Free or CosmeticTrackTypes.Premium))
-        {
-            throw new InvalidOperationException("Unsupported reward track type.");
-        }
-
-        return normalized;
-    }
-
-    /// <summary>
-    /// Premium reward-track access is deny-by-default until a persisted premium entitlement owner exists.
-    /// No schema is introduced here; request trackType text is never proof of entitlement.
-    /// </summary>
-    private static bool HasPremiumRewardTrackEntitlement(string userId)
-    {
-        _ = userId;
-        return false;
-    }
+        => SeasonRewardTrackAccess.NormalizeTrackType(trackType);
 
     private static void EnsureRewardTrackTypeAccess(string userId, string trackType)
-    {
-        if (trackType == CosmeticTrackTypes.Premium && !HasPremiumRewardTrackEntitlement(userId))
-        {
-            throw new InvalidOperationException("Premium reward track entitlement is required.");
-        }
-    }
+        => SeasonRewardTrackAccess.EnsureTrackAccess(userId, trackType);
 
     private async Task<int> GetSeasonEarnedXpAsync(string userId, int seasonId, CancellationToken cancellationToken)
     {

@@ -179,7 +179,7 @@ Business failures return `400` with `{ "error": "message" }`.
 
 ### `POST /api/cosmetics/items/{itemKey}/claim`
 
-See [mobile_economy_api_contract.md](./mobile_economy_api_contract.md#7-post-apicosmeticsitemsitemkeyclaim).
+See [mobile_economy_api_contract.md](./mobile_economy_api_contract.md#8-post-apicosmeticsitemsitemkeyclaim).
 
 This route now consumes a server-issued `entitlementId`; arbitrary client-declared reward sources are rejected.
 
@@ -335,7 +335,7 @@ Stable cursor error codes:
 
 ### `POST /api/cosmetics/fragments/grant`
 
-See [mobile_economy_api_contract.md](./mobile_economy_api_contract.md#8-post-apicosmeticsfragmentsgrant).
+See [mobile_economy_api_contract.md](./mobile_economy_api_contract.md#9-post-apicosmeticsfragmentsgrant).
 
 Non-Daily-Run fragment grants now require a server-issued `entitlementId`. Daily Run remains server-derived from `transactionId`.
 
