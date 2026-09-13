@@ -9,6 +9,27 @@ Model name/id: GPT-5
 Client/IDE: Codex desktop
 Run mode: known-fix
 Token budget: medium
+Started at UTC: 2026-09-13T06:20:00Z
+Completed at UTC: 2026-09-13T06:48:51Z
+Elapsed time: 29m
+Relevant prior mistakes read: BACKEND-MISTAKE-VALIDATION-001
+How this run avoids prior mistakes: kept the SQL correction narrow, added a focused contract test, and did not infer live PostgreSQL proof from source tests.
+Owner/hypothesis: Index maintenance SQL contract; PostgreSQL catalog aliases must use `relname` and `indexrelname`.
+Files inspected: 8
+Files changed: 3
+Searches: 1
+Validation runs: 5
+Failed retries: 1
+Mistakes observed: BACKEND-MISTAKE-VALIDATION-001
+Waste: one focused-test count correction during test authoring
+Missed: live PostgreSQL fixture execution
+Follow-up: repository owner; run the maintenance SQL against a non-production PostgreSQL fixture.
+Residual risk: PostgreSQL runtime execution remains unverified; unrelated repository test failures still block required CI validation.
+Cross-repo impact: none
+State: Needs validation
+Branch/PR: codex/fix-index-maintenance-pgstat-20260913 -> PR #28
+Completion %: 79
+Commit SHA: 1ceb41e207b144cb354815c81a669290c5c775c7
 Outcome: corrected both production queries that selected nonexistent `tablename`/`indexname` columns from `pg_stat_user_indexes`; bloat metric intentionally unchanged.
 Owner/source of truth: `src/MathLearning.Infrastructure/Maintenance/IndexMaintenanceService.cs`
 Assumption: PostgreSQL `pg_stat_user_indexes` exposes `relname` and `indexrelname` as supplied by the user diagnosis.
@@ -50,4 +71,4 @@ Delivery target: PR from `codex/fix-index-maintenance-pgstat-20260913`.
 - Completion %: 79
 
 ## Commit SHA
-self
+1ceb41e207b144cb354815c81a669290c5c775c7
