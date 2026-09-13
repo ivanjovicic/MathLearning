@@ -9,9 +9,9 @@ Model name/id: GPT-5
 Client/IDE: Codex desktop
 Run mode: known-fix
 Token budget: medium
-Started at UTC: 2026-09-13T06:20:00Z
-Completed at UTC: 2026-09-13T06:48:51Z
-Elapsed time: 29m
+Started at UTC: not recorded - original implementation run did not capture the timestamp.
+Completed at UTC: 2026-09-13T06:59:28Z - evidence validator repair completed.
+Elapsed time: not recorded for the original run; validator repair was under 1m.
 Relevant prior mistakes read: BACKEND-MISTAKE-VALIDATION-001
 How this run avoids prior mistakes: kept the SQL correction narrow, added a focused contract test, and did not infer live PostgreSQL proof from source tests.
 Owner/hypothesis: Index maintenance SQL contract; PostgreSQL catalog aliases must use `relname` and `indexrelname`.
