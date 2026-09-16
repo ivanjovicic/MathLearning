@@ -94,6 +94,12 @@ public static class ProgressEndpoints
             HttpContext ctx) =>
             await GetTopicProgressAsync(db, ctx));
 
+        group.MapGet("/topics/{topicId:int}/subtopics", async (
+            int topicId,
+            ApiDbContext db,
+            HttpContext ctx) =>
+            await GetSubtopicProgressAsync(db, ctx, topicId));
+
         app.MapGet("/api/topics/progress", async (
             ApiDbContext db,
             HttpContext ctx) =>
@@ -101,6 +107,15 @@ public static class ProgressEndpoints
             .RequireAuthorization()
             .WithTags("Progress")
             .WithName("GetTopicProgressLegacyAlias");
+
+        app.MapGet("/api/topics/{topicId:int}/subtopics", async (
+            int topicId,
+            ApiDbContext db,
+            HttpContext ctx) =>
+            await GetSubtopicProgressAsync(db, ctx, topicId))
+            .RequireAuthorization()
+            .WithTags("Progress")
+            .WithName("GetSubtopicProgressLegacyAlias");
 
         group.MapPost("/sync", async (
             ProgressSyncRequestDto request,
@@ -391,56 +406,136 @@ public static class ProgressEndpoints
             .OrderBy(t => t.Id)
             .ToListAsync();
 
+        var playableCountsByTopic = await (
+            from q in db.Questions.AsNoTracking().WherePlayable()
+            join st in db.Subtopics.AsNoTracking()
+                on q.SubtopicId equals st.Id
+            group q by st.TopicId into g
+            select new { TopicId = g.Key, Count = g.Count() }
+        ).ToDictionaryAsync(x => x.TopicId, x => x.Count);
+
         var result = new List<TopicProgressDto>();
 
         for (int i = 0; i < orderedTopics.Count; i++)
         {
             var topic = orderedTopics[i];
-            var stats = await (
-                from q in db.Questions.AsNoTracking()
-                join st in db.Subtopics.AsNoTracking()
-                    on q.SubtopicId equals st.Id
-                join s in db.UserQuestionStats.AsNoTracking()
-                    .Where(x => x.UserId == userId)
-                    on q.Id equals s.QuestionId
-                where st.TopicId == topic.Id
-                select new { s.Attempts, s.CorrectAttempts }
-            ).ToListAsync();
+            var stats = await GetTopicAttemptStatsAsync(db, userId, topic.Id);
 
-            int attempts = stats.Sum(x => x.Attempts);
-            int correct = stats.Sum(x => x.CorrectAttempts);
+            int attempts = stats.Attempts;
+            int correct = stats.CorrectAttempts;
             double accuracy = attempts == 0 ? 0 : (double)correct / attempts * 100;
-            bool unlocked = i == 0;
+            int playableQuestionCount = playableCountsByTopic.GetValueOrDefault(topic.Id);
 
+            var gateTopic = orderedTopics
+                .Take(i)
+                .LastOrDefault(t => playableCountsByTopic.GetValueOrDefault(t.Id) > 0);
+
+            bool unlocked = gateTopic is null;
             if (!unlocked)
             {
-                var previousTopic = orderedTopics[i - 1];
-                var previousStats = await (
-                    from q in db.Questions.AsNoTracking()
-                    join st in db.Subtopics.AsNoTracking()
-                        on q.SubtopicId equals st.Id
-                    join s in db.UserQuestionStats.AsNoTracking()
-                        .Where(x => x.UserId == userId)
-                        on q.Id equals s.QuestionId
-                    where st.TopicId == previousTopic.Id
-                    select new { s.Attempts, s.CorrectAttempts }
-                ).ToListAsync();
-
-                int prevAttempts = previousStats.Sum(x => x.Attempts);
-                int prevCorrect = previousStats.Sum(x => x.CorrectAttempts);
-                double prevAccuracy = prevAttempts == 0 ? 0 : (double)prevCorrect / prevAttempts * 100;
-                unlocked = prevAccuracy >= 60.0;
+                var gateStats = await GetTopicAttemptStatsAsync(db, userId, gateTopic!.Id);
+                double gateAccuracy = gateStats.Attempts == 0
+                    ? 0
+                    : (double)gateStats.CorrectAttempts / gateStats.Attempts * 100;
+                unlocked = gateAccuracy >= 60.0;
             }
 
             result.Add(new TopicProgressDto(
                 topic.Id,
                 topic.Name,
                 Math.Round(accuracy, 2),
-                unlocked
+                unlocked,
+                playableQuestionCount,
+                unlocked && playableQuestionCount > 0
             ));
         }
 
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetSubtopicProgressAsync(
+        ApiDbContext db,
+        HttpContext ctx,
+        int topicId)
+    {
+        var topicExists = await db.Topics.AsNoTracking().AnyAsync(t => t.Id == topicId);
+        if (!topicExists)
+            return Results.NotFound(new { errorCode = "UNKNOWN_TOPIC", message = "Topic was not found." });
+
+        string userId = ctx.User.FindFirst("userId")!.Value;
+        var orderedTopics = await db.Topics.AsNoTracking().OrderBy(t => t.Id).ToListAsync();
+        var topicIndex = orderedTopics.FindIndex(t => t.Id == topicId);
+        if (topicIndex < 0)
+            return Results.NotFound(new { errorCode = "UNKNOWN_TOPIC", message = "Topic was not found." });
+
+        var playableCountsByTopic = await (
+            from q in db.Questions.AsNoTracking().WherePlayable()
+            join st in db.Subtopics.AsNoTracking()
+                on q.SubtopicId equals st.Id
+            group q by st.TopicId into g
+            select new { TopicId = g.Key, Count = g.Count() }
+        ).ToDictionaryAsync(x => x.TopicId, x => x.Count);
+
+        var gateTopic = orderedTopics
+            .Take(topicIndex)
+            .LastOrDefault(t => playableCountsByTopic.GetValueOrDefault(t.Id) > 0);
+
+        bool topicUnlocked = gateTopic is null;
+        if (!topicUnlocked)
+        {
+            var gateStats = await GetTopicAttemptStatsAsync(db, userId, gateTopic!.Id);
+            double gateAccuracy = gateStats.Attempts == 0
+                ? 0
+                : (double)gateStats.CorrectAttempts / gateStats.Attempts * 100;
+            topicUnlocked = gateAccuracy >= 60.0;
+        }
+
+        var playableCountsBySubtopic = await (
+            from q in db.Questions.AsNoTracking().WherePlayable()
+            where q.SubtopicId != 0
+            group q by q.SubtopicId into g
+            select new { SubtopicId = g.Key, Count = g.Count() }
+        ).ToDictionaryAsync(x => x.SubtopicId, x => x.Count);
+
+        var subtopics = await db.Subtopics
+            .AsNoTracking()
+            .Where(st => st.TopicId == topicId)
+            .OrderBy(st => st.Id)
+            .ToListAsync();
+
+        var result = subtopics
+            .Select(st =>
+            {
+                var playableQuestionCount = playableCountsBySubtopic.GetValueOrDefault(st.Id);
+                return new SubtopicProgressDto(
+                    st.Id,
+                    st.TopicId,
+                    st.Name,
+                    playableQuestionCount,
+                    topicUnlocked && playableQuestionCount > 0);
+            })
+            .ToList();
+
+        return Results.Ok(result);
+    }
+
+    private static async Task<(int Attempts, int CorrectAttempts)> GetTopicAttemptStatsAsync(
+        ApiDbContext db,
+        string userId,
+        int topicId)
+    {
+        var stats = await (
+            from q in db.Questions.AsNoTracking()
+            join st in db.Subtopics.AsNoTracking()
+                on q.SubtopicId equals st.Id
+            join s in db.UserQuestionStats.AsNoTracking()
+                .Where(x => x.UserId == userId)
+                on q.Id equals s.QuestionId
+            where st.TopicId == topicId
+            select new { s.Attempts, s.CorrectAttempts }
+        ).ToListAsync();
+
+        return (stats.Sum(x => x.Attempts), stats.Sum(x => x.CorrectAttempts));
     }
 
     private static async Task<UserProfile> EnsureUserProfileAsync(

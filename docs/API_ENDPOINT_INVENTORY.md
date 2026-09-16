@@ -152,8 +152,10 @@ Owner: `ProgressEndpoints.cs`
 |---|---|---|---|---|
 | GET | `/api/progress/overview` | Auth | Canonical mobile | Attempts, accuracy, streak and freezes. |
 | GET | `/api/progress/weak-areas` | Auth | Canonical | Lowest-accuracy subtopics. |
-| GET | `/api/progress/topics` | Auth | Canonical | Topic progress. |
+| GET | `/api/progress/topics` | Auth | Canonical | Topic progress with `playableQuestionCount` and `canStartQuiz`. Unlock follows the nearest previous topic that has playable content (>=60% accuracy). |
+| GET | `/api/progress/topics/{topicId}/subtopics` | Auth | Canonical | Subtopic ids/counts for classic quiz start (`subtopicId`). |
 | GET | `/api/topics/progress` | Auth | Legacy alias | Topic-progress alias. |
+| GET | `/api/topics/{topicId}/subtopics` | Auth | Legacy alias | Subtopic-progress alias. |
 | POST | `/api/progress/sync` | Auth | Mobile sync | Server-verifiable settlement; legacy completed/day payloads are rejected. |
 
 ---

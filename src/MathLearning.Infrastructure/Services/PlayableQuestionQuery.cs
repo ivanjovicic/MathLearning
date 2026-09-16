@@ -1,14 +1,14 @@
 using MathLearning.Domain.Entities;
 
-namespace MathLearning.Api.Services;
+namespace MathLearning.Infrastructure.Services;
 
-/// Keeps every user-facing question selector on the same publish/content gate.
-/// The predicate is based on canonical option metadata, never on a localized
-/// title or a client-provided answer key.
+/// <summary>
+/// Shared publish/content gate for every user-facing question selector.
+/// The predicate uses canonical option metadata, never localized titles.
+/// </summary>
 public static class PlayableQuestionQuery
 {
-    public static IQueryable<Question> WherePlayable(
-        this IQueryable<Question> query)
+    public static IQueryable<Question> WherePlayable(this IQueryable<Question> query)
     {
         return query.Where(q =>
             q.PublishState == QuestionPublishStates.Published &&

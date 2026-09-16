@@ -200,6 +200,17 @@ The legacy `/api/quiz/questions` route accepts explicit `subtopicId` or the
 confirmed `topic_<numericId>` compatibility key. A localized skill title is
 never a content identity.
 
+### `GET /api/progress/topics` and `GET /api/progress/topics/{topicId}/subtopics`
+
+Topic progress now includes:
+- `playableQuestionCount`
+- `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
+
+Use the subtopics route to resolve the numeric `subtopicId` for
+`POST /api/quiz/start`. Never send the topic id as `subtopicId`.
+
+Legacy aliases: `/api/topics/progress` and `/api/topics/{topicId}/subtopics`.
+
 ### `POST /api/practice/session/start`
 
 The response is an `ApiResult` envelope. Its `data.question.options` values are
