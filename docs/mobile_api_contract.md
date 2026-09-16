@@ -185,6 +185,27 @@ This route now consumes a server-issued `entitlementId`; arbitrary client-declar
 
 Response includes refreshed `inventory` (string item keys) and `fragmentProgress`.
 
+## Quiz and practice
+
+### `POST /api/quiz/start`
+
+The canonical classic quiz start request uses numeric `subtopicId` and
+`questionCount`. The response is raw `{ quizId, questions }`; questions are
+pre-answer safe and omit the correct answer identifier. Selection is restricted
+to published, non-deleted questions with meaningful text, at least two non-empty
+options, and exactly one correct option. No playable content returns `404` with
+`errorCode: "NO_PLAYABLE_QUESTIONS"`.
+
+The legacy `/api/quiz/questions` route accepts explicit `subtopicId` or the
+confirmed `topic_<numericId>` compatibility key. A localized skill title is
+never a content identity.
+
+### `POST /api/practice/session/start`
+
+The response is an `ApiResult` envelope. Its `data.question.options` values are
+objects with stable `id` and user-facing `text`; clients render the text and
+must not stringify the option object.
+
 ## Adaptive
 
 Auth: Required.
