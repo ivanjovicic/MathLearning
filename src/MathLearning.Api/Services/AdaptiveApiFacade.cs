@@ -107,6 +107,14 @@ public sealed class AdaptiveApiFacade
 
             return Results.Content(sessionJson, "application/json", statusCode: StatusCodes.Status200OK);
         }
+        catch (KeyNotFoundException ex) when (ex.Message.Contains("playable", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.NotFound(new
+            {
+                errorCode = "NO_PLAYABLE_QUESTIONS",
+                message = ex.Message
+            });
+        }
         catch (Exception ex)
         {
             return BuildFailureResult<AdaptiveSessionDto>(ex, "Failed to start adaptive session.").ToHttpResult();

@@ -47,6 +47,31 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
     }
 
     [Fact]
+    public async Task QuizStart_TopicIdPassedAsSubtopicId_ReturnsPlayableQuestions()
+    {
+        var quizData = await SeedQuizPoolAsync("start-topic-id-fallback", 4, createEmptySubtopic: true);
+        int topicId;
+        using (var scopeHandle = _factory.Services.CreateScope())
+        {
+            var db = scopeHandle.ServiceProvider.GetRequiredService<ApiDbContext>();
+            topicId = await db.Subtopics
+                .Where(x => x.Id == quizData.HotSubtopicId)
+                .Select(x => x.TopicId)
+                .SingleAsync();
+        }
+
+        var response = await PostAsUserAsync("/api/quiz/start", new
+        {
+            subtopicId = topicId,
+            questionCount = 2
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await ReadJsonAsync(response);
+        AssertPreAnswerQuestionArrayShape(payload.GetProperty("questions"), 2, "start-topic-id-fallback");
+    }
+
+    [Fact]
     public async Task QuizStart_EmptySubtopic_ReturnsNoPlayableQuestions()
     {
         var quizData = await SeedQuizPoolAsync("start-empty", 8, createEmptySubtopic: true);

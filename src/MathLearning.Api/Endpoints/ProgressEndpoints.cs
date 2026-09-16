@@ -512,6 +512,7 @@ public static class ProgressEndpoints
                     st.TopicId,
                     st.Name,
                     playableQuestionCount,
+                    topicUnlocked,
                     topicUnlocked && playableQuestionCount > 0);
             })
             .ToList();

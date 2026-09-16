@@ -38,10 +38,22 @@ public static class QuizEndpoints
             string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
             var questionCount = NormalizeQuizQuestionCount(request.QuestionCount);
 
+            var scope = await QuizContentScopeResolver.ResolveAsync(db, request.SubtopicId, ctx.RequestAborted);
+            if (scope is null)
+            {
+                return Results.NotFound(new
+                {
+                    errorCode = "UNKNOWN_CONTENT_ID",
+                    message = "No topic or subtopic matches the requested content id."
+                });
+            }
+
+            var scopedQuery = QuizContentScopeResolver.ApplyScope(
+                db.Questions.AsNoTracking().WherePlayable(),
+                scope);
+
             var questionIds = await SelectRandomQuestionIdsAsync(
-                db.Questions.AsNoTracking()
-                    .WherePlayable()
-                    .Where(q => q.SubtopicId == request.SubtopicId),
+                scopedQuery,
                 questionCount,
                 ctx.RequestAborted);
 
@@ -618,9 +630,19 @@ public static class QuizEndpoints
 
         IQueryable<Question> query = db.Questions.AsNoTracking().WherePlayable();
 
-        if (subtopicId.HasValue)
+        if (subtopicId is > 0)
         {
-            query = query.Where(q => q.SubtopicId == subtopicId.Value);
+            var scope = await QuizContentScopeResolver.ResolveAsync(db, subtopicId.Value, ctx.RequestAborted);
+            if (scope is null)
+            {
+                return Results.NotFound(new
+                {
+                    errorCode = "UNKNOWN_CONTENT_ID",
+                    message = "No topic or subtopic matches the requested content id."
+                });
+            }
+
+            query = QuizContentScopeResolver.ApplyScope(query, scope);
         }
         else if (topicId.HasValue)
         {

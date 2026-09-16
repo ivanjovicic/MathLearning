@@ -5,5 +5,6 @@ public record SubtopicProgressDto(
     int TopicId,
     string Name,
     int PlayableQuestionCount,
+    bool Unlocked,
     bool CanStartQuiz
 );

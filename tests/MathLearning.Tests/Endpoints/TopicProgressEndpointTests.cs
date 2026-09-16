@@ -61,6 +61,7 @@ public sealed class TopicProgressEndpointTests : IClassFixture<CustomWebApplicat
         var topics = await topicResponse.Content.ReadFromJsonAsync<TopicProgressResponse[]>();
         var topic = Assert.Single(topics!, x => x.TopicId == seeded.TopicId);
         Assert.Equal(topic.Unlocked && subtopic.PlayableQuestionCount > 0, subtopic.CanStartQuiz);
+        Assert.Equal(topic.Unlocked, subtopic.Unlocked);
     }
 
     private async Task<(int TopicId, int SubtopicId)> SeedPublishedTopicAsync(
@@ -112,5 +113,6 @@ public sealed class TopicProgressEndpointTests : IClassFixture<CustomWebApplicat
         int TopicId,
         string Name,
         int PlayableQuestionCount,
+        bool Unlocked,
         bool CanStartQuiz);
 }

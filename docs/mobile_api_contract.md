@@ -190,7 +190,10 @@ Response includes refreshed `inventory` (string item keys) and `fragmentProgress
 ### `POST /api/quiz/start`
 
 The canonical classic quiz start request uses numeric `subtopicId` and
-`questionCount`. The response is raw `{ quizId, questions }`; questions are
+`questionCount`. For mobile compatibility, when `subtopicId` matches a
+`Topic.Id` but not a `Subtopic.Id`, the backend resolves it across all
+subtopics in that topic (same behavior as legacy `topic_<id>`). Prefer the
+explicit subtopic id from `GET /api/progress/topics/{topicId}/subtopics`.
 pre-answer safe and omit the correct answer identifier. Selection is restricted
 to published, non-deleted questions with meaningful text, at least two non-empty
 options, and exactly one correct option. No playable content returns `404` with
@@ -204,6 +207,10 @@ never a content identity.
 
 Topic progress now includes:
 - `playableQuestionCount`
+- `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
+
+Subtopic progress now includes:
+- `unlocked` (topic gate)
 - `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
 
 Use the subtopics route to resolve the numeric `subtopicId` for

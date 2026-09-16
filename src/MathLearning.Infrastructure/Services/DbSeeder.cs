@@ -989,17 +989,21 @@ public static class DbSeeder
     private static async Task<bool> PublishPlayableQuestionsAsync(DbContext db)
     {
         var candidates = await db.Set<Question>()
-            .Include(q => q.Options)
+            .Include(q => q.Options).ThenInclude(o => o.Translations)
+            .Include(q => q.Translations)
             .Where(q =>
                 q.PublishState != QuestionPublishStates.Published &&
                 !q.IsDeleted &&
-                q.Text.Trim() != string.Empty)
+                (q.Text.Trim() != string.Empty ||
+                 q.Translations.Any(t => t.Text.Trim() != string.Empty)))
             .ToListAsync();
 
         var updated = false;
         foreach (var question in candidates)
         {
-            if (question.Options.Count(o => o.Text.Trim() != string.Empty) < 2)
+            if (question.Options.Count(o =>
+                    o.Text.Trim() != string.Empty ||
+                    o.Translations.Any(t => t.Text.Trim() != string.Empty)) < 2)
                 continue;
 
             if (question.Options.Count(o => o.IsCorrect) != 1)

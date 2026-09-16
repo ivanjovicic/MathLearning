@@ -108,7 +108,7 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/quiz/start` | Auth | Canonical | Body uses numeric `subtopicId`; only published, non-deleted, structurally playable questions are returned. Empty content is `404 NO_PLAYABLE_QUESTIONS`; pre-answer shape omits answer key and full solution material. |
+| POST | `/api/quiz/start` | Auth | Canonical | Body uses numeric `subtopicId` (or topic id fallback when no subtopic matches). Only published, non-deleted, structurally playable questions are returned. Empty content is `404 NO_PLAYABLE_QUESTIONS`; pre-answer shape omits answer key and full solution material. |
 | GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Compatibility-only. Use `subtopicId` or confirmed `topic_<numericId>`; never derive identity from a localized title. Same playable-content gate and `404 NO_PLAYABLE_QUESTIONS`. |
 | POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; explicit `subtopicId` or numeric topic key required; same playable-content gate. |
 | POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question is limited to published, non-deleted, structurally playable content; pre-answer shape omits answer key and full solution material. |
@@ -153,7 +153,7 @@ Owner: `ProgressEndpoints.cs`
 | GET | `/api/progress/overview` | Auth | Canonical mobile | Attempts, accuracy, streak and freezes. |
 | GET | `/api/progress/weak-areas` | Auth | Canonical | Lowest-accuracy subtopics. |
 | GET | `/api/progress/topics` | Auth | Canonical | Topic progress with `playableQuestionCount` and `canStartQuiz`. Unlock follows the nearest previous topic that has playable content (>=60% accuracy). |
-| GET | `/api/progress/topics/{topicId}/subtopics` | Auth | Canonical | Subtopic ids/counts for classic quiz start (`subtopicId`). |
+| GET | `/api/progress/topics/{topicId}/subtopics` | Auth | Canonical | Subtopic ids/counts, `unlocked`, and `canStartQuiz` for classic quiz start (`subtopicId`). |
 | GET | `/api/topics/progress` | Auth | Legacy alias | Topic-progress alias. |
 | GET | `/api/topics/{topicId}/subtopics` | Auth | Legacy alias | Subtopic-progress alias. |
 | POST | `/api/progress/sync` | Auth | Mobile sync | Server-verifiable settlement; legacy completed/day payloads are rejected. |

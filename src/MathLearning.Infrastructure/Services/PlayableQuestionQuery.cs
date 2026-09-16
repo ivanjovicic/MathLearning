@@ -13,8 +13,11 @@ public static class PlayableQuestionQuery
         return query.Where(q =>
             q.PublishState == QuestionPublishStates.Published &&
             !q.IsDeleted &&
-            q.Text.Trim() != string.Empty &&
-            q.Options.Count(o => o.Text.Trim() != string.Empty) >= 2 &&
+            (q.Text.Trim() != string.Empty ||
+             q.Translations.Any(t => t.Text.Trim() != string.Empty)) &&
+            q.Options.Count(o =>
+                o.Text.Trim() != string.Empty ||
+                o.Translations.Any(t => t.Text.Trim() != string.Empty)) >= 2 &&
             q.Options.Count(o => o.IsCorrect) == 1);
     }
 }
