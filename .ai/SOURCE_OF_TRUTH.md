@@ -58,3 +58,4 @@ When a workflow or documentation rule changes:
 - Cross-repo work records both main baselines and reuses existing runtime owners before creating prompts.
 - Docs/agent-tooling-only changes skip the expensive database suite through the classifier.
 - Required proof, not checklist length, determines completion.
+- **Delivery target is `origin/main`.** Agents push/merge there after focused proof and do not wait for CI before closing a run.

@@ -91,7 +91,9 @@ python scripts/analyze_agent_runs.py --changed-from <base-sha> --fail-on-regress
 python scripts/check_documentation_health.py --full-links
 ```
 
-For direct main, record main SHA. For PR delivery, record PR, head SHA, targeted checks, merge SHA and main verification.
+**Delivery policy:** complete bounded work by pushing to `origin/main` in the same run after focused proof. Do **not** wait for CI, PR checks, or `Database Validation` completion before merge/push. CI failures discovered afterward become a separate bounded owner; they do not retroactively block delivery that already reached `main`.
+
+For direct main, record main SHA. For PR delivery, record PR, head SHA, targeted checks, merge SHA and main verification. PR/CI status is recorded as pending/pass/fail; it is not a substitute for `origin/main` SHA proof.
 
 ## Compact closure
 
