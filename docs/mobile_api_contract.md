@@ -190,14 +190,16 @@ Response includes refreshed `inventory` (string item keys) and `fragmentProgress
 ### `POST /api/quiz/start`
 
 The canonical classic quiz start request uses numeric `subtopicId` and
-`questionCount`. For mobile compatibility, when `subtopicId` matches a
-`Topic.Id` but not a `Subtopic.Id`, the backend resolves it across all
-subtopics in that topic (same behavior as legacy `topic_<id>`). Prefer the
-explicit subtopic id from `GET /api/progress/topics/{topicId}/subtopics`.
+`questionCount`. The response is raw `{ quizId, questions }`; questions are
 pre-answer safe and omit the correct answer identifier. Selection is restricted
 to published, non-deleted questions with meaningful text, at least two non-empty
 options, and exactly one correct option. No playable content returns `404` with
 `errorCode: "NO_PLAYABLE_QUESTIONS"`.
+
+For mobile compatibility, when `subtopicId` matches a `Topic.Id` but not a
+`Subtopic.Id`, the backend resolves it across all subtopics in that topic (same
+behavior as legacy `topic_<id>`). Prefer the explicit subtopic id from
+`GET /api/progress/topics/{topicId}/subtopics`.
 
 The legacy `/api/quiz/questions` route accepts explicit `subtopicId` or the
 confirmed `topic_<numericId>` compatibility key. A localized skill title is
@@ -214,7 +216,8 @@ Subtopic progress now includes:
 - `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
 
 Use the subtopics route to resolve the numeric `subtopicId` for
-`POST /api/quiz/start`. Never send the topic id as `subtopicId`.
+`POST /api/quiz/start`. Avoid relying on topic ids as `subtopicId`; the backend
+only accepts that shape as a compatibility fallback.
 
 Legacy aliases: `/api/topics/progress` and `/api/topics/{topicId}/subtopics`.
 
