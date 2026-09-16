@@ -977,9 +977,42 @@ public static class DbSeeder
         // UserProfiles are 1:1 with Identity users (AspNetUsers) and should be created via UserManager
         // (e.g. during app startup backfill), not by this data seeder.
 
+        if (await PublishPlayableQuestionsAsync(db))
+            changed = true;
+
         if (changed)
         {
             Console.WriteLine("✓ Database seeded with initial data");
         }
+    }
+
+    private static async Task<bool> PublishPlayableQuestionsAsync(DbContext db)
+    {
+        var candidates = await db.Set<Question>()
+            .Include(q => q.Options)
+            .Where(q =>
+                q.PublishState != QuestionPublishStates.Published &&
+                !q.IsDeleted &&
+                q.Text.Trim() != string.Empty)
+            .ToListAsync();
+
+        var updated = false;
+        foreach (var question in candidates)
+        {
+            if (question.Options.Count(o => o.Text.Trim() != string.Empty) < 2)
+                continue;
+
+            if (question.Options.Count(o => o.IsCorrect) != 1)
+                continue;
+
+            question.SetPublishState(QuestionPublishStates.Published, "db-seeder", DateTime.UtcNow);
+            question.SyncCorrectOptionFromOptions();
+            updated = true;
+        }
+
+        if (updated)
+            await db.SaveChangesAsync();
+
+        return updated;
     }
 }
