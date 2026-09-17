@@ -42,11 +42,8 @@ public sealed class OfflineBundleService : IOfflineBundleService
             .AsNoTracking()
             .Include(x => x.Options).ThenInclude(o => o.Translations)
             .Include(x => x.Translations)
-            .Include(x => x.Steps).ThenInclude(s => s.Translations);
-
-        query = query.Where(x =>
-            x.PublishState == QuestionPublishStates.Published &&
-            !x.IsDeleted);
+            .Include(x => x.Steps).ThenInclude(s => s.Translations)
+            .WherePlayable();
 
         if (subtopicId.HasValue)
         {
@@ -60,11 +57,17 @@ public sealed class OfflineBundleService : IOfflineBundleService
             .ToListAsync(cancellationToken);
 
         var questionIds = questions.Select(x => x.Id).ToList();
-        var subtopicIds = questions.Select(x => x.SubtopicId).Distinct().ToList();
+
+        var catalogSubtopicIds = await db.Questions
+            .AsNoTracking()
+            .WherePlayable()
+            .Select(x => x.SubtopicId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
 
         var subtopics = await db.Subtopics
             .AsNoTracking()
-            .Where(x => subtopicIds.Contains(x.Id))
+            .Where(x => catalogSubtopicIds.Contains(x.Id))
             .OrderBy(x => x.TopicId)
             .ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
@@ -73,7 +76,7 @@ public sealed class OfflineBundleService : IOfflineBundleService
         var topics = await db.Topics
             .AsNoTracking()
             .Where(x => topicIds.Contains(x.Id))
-            .OrderBy(x => x.Name)
+            .OrderBy(x => x.Id)
             .ToListAsync(cancellationToken);
 
         var userStats = await db.UserQuestionStats

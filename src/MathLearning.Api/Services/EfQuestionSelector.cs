@@ -2,6 +2,7 @@ using MathLearning.Application.Services;
 using MathLearning.Application.Helpers;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Api.Services;
@@ -24,7 +25,7 @@ public sealed class EfQuestionSelector : IQuestionSelector
         var targetDifficulty = DifficultyToNumeric(normalizedDifficulty);
 
         var baseQuery =
-            from q in _db.Questions.AsNoTracking()
+            from q in _db.Questions.AsNoTracking().WherePlayable()
                 .Include(x => x.Options)
             join s in _db.Subtopics.AsNoTracking()
                 on q.SubtopicId equals s.Id

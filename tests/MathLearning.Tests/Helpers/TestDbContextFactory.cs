@@ -53,6 +53,7 @@ public static class TestDbContextFactory
                 new($"{i * 3}", false),
             };
             q.ReplaceOptions(options);
+            q.SetPublishState(QuestionPublishStates.Published, "test-fixture", DateTime.UtcNow);
 
             db.Questions.Add(q);
         }

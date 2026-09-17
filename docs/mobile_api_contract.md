@@ -185,6 +185,48 @@ This route now consumes a server-issued `entitlementId`; arbitrary client-declar
 
 Response includes refreshed `inventory` (string item keys) and `fragmentProgress`.
 
+## Quiz and practice
+
+### `POST /api/quiz/start`
+
+The canonical classic quiz start request uses numeric `subtopicId` and
+`questionCount`. The response is raw `{ quizId, questions }`; questions are
+pre-answer safe and omit the correct answer identifier. Selection is restricted
+to published, non-deleted questions with meaningful text, at least two non-empty
+options, and exactly one correct option. No playable content returns `404` with
+`errorCode: "NO_PLAYABLE_QUESTIONS"`.
+
+For mobile compatibility, when `subtopicId` matches a `Topic.Id` but not a
+`Subtopic.Id`, the backend resolves it across all subtopics in that topic (same
+behavior as legacy `topic_<id>`). Prefer the explicit subtopic id from
+`GET /api/progress/topics/{topicId}/subtopics`.
+
+The legacy `/api/quiz/questions` route accepts explicit `subtopicId` or the
+confirmed `topic_<numericId>` compatibility key. A localized skill title is
+never a content identity.
+
+### `GET /api/progress/topics` and `GET /api/progress/topics/{topicId}/subtopics`
+
+Topic progress now includes:
+- `playableQuestionCount`
+- `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
+
+Subtopic progress now includes:
+- `unlocked` (topic gate)
+- `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
+
+Use the subtopics route to resolve the numeric `subtopicId` for
+`POST /api/quiz/start`. Avoid relying on topic ids as `subtopicId`; the backend
+only accepts that shape as a compatibility fallback.
+
+Legacy aliases: `/api/topics/progress` and `/api/topics/{topicId}/subtopics`.
+
+### `POST /api/practice/session/start`
+
+The response is an `ApiResult` envelope. Its `data.question.options` values are
+objects with stable `id` and user-facing `text`; clients render the text and
+must not stringify the option object.
+
 ## Adaptive
 
 Auth: Required.

@@ -73,13 +73,13 @@ for the web origin. Development/Test already enable permissive CORS. Do not use
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/auth/mobile/register` | Public | Canonical mobile | Creates Identity user, profile and tokens with generic registration failures, real email parsing, and confirmed managed/no-email provisioning. |
-| POST | `/auth/login` | Public | Canonical | Lockout-aware login and refresh-token issuance with generic 401/429 contract. |
-| POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle contract as `/auth/login`. |
+| POST | `/auth/mobile/register` | Public | Canonical mobile | Uses `IAccountProvisioningService` for Identity + `UserProfile`, then issues tokens only after mandatory state is durable. Generic registration failures, real email parsing, confirmed managed/no-email provisioning. |
+| POST | `/auth/login` | Public | Canonical | Lockout-aware login. Denies Identity-only incomplete accounts with stable `403 Account setup incomplete` and does not mint tokens. Otherwise refresh-token issuance with generic 401/429 contract. |
+| POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle/incomplete-account contract as `/auth/login`. |
 | POST | `/auth/refresh` | Public | Canonical | Single-use token rotation with generic 401/429 contract. Model length drift remains BACKEND-TEST-012. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
 | POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens and invalidates existing access tokens by rotating the user security stamp. |
-| POST | `/auth/register` | Public/legacy | Legacy | Generic conflict/failure contract, real email parsing, and confirmed managed/no-email provisioning. |
+| POST | `/auth/register` | Public/legacy | Legacy alias | Delegates mandatory Identity + profile creation to the same `IAccountProvisioningService` owner as mobile register; tokens only after complete account. Generic conflict/failure contract. |
 
 ---
 
@@ -111,10 +111,10 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/quiz/start` | Auth | Canonical | Question count normalized to 1..25; pre-answer question shape omits answer key and full solution material. |
-| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Count normalized to 1..25; pre-answer question shape omits answer key and full solution material. |
-| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; pre-answer question shape omits answer key and full solution material. |
-| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question; pre-answer question shape omits answer key and full solution material. |
+| POST | `/api/quiz/start` | Auth | Canonical | Body uses numeric `subtopicId` (or topic id fallback when no subtopic matches). Only published, non-deleted, structurally playable questions are returned. Empty content is `404 NO_PLAYABLE_QUESTIONS`; pre-answer shape omits answer key and full solution material. |
+| GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Compatibility-only. Use `subtopicId` or confirmed `topic_<numericId>`; never derive identity from a localized title. Same playable-content gate and `404 NO_PLAYABLE_QUESTIONS`. |
+| POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; explicit `subtopicId` or numeric topic key required; same playable-content gate. |
+| POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question is limited to published, non-deleted, structurally playable content; pre-answer shape omits answer key and full solution material. |
 | POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. Missing-key decision remains BACKEND-TEST-013. |
 | POST | `/api/quiz/offline-submit` | Auth | Canonical offline | Auth-scoped replay path. Durable analytics handoff remains BACKEND-TEST-022. |
 | POST | `/api/quiz/batch-submit` | Auth | Legacy alias | Adapter to offline-submit. |
@@ -131,7 +131,7 @@ Owner: `PracticeSessionEndpoints.cs`
 
 | Method | Route | Auth | Status | Notes |
 |---|---|---|---|---|
-| POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned session. |
+| POST | `/api/practice/session/start` | Auth | Canonical | Starts user-owned session; no playable published content returns `404 NO_PLAYABLE_QUESTIONS`. Success is an `ApiResult` envelope and question options are `{ id, text, ... }` DTOs. |
 | POST | `/api/practice/session/{sessionId:guid}/answer` | Auth | Canonical | Ownership enforced. |
 | POST | `/api/practice/session/{sessionId:guid}/complete` | Auth | Canonical | Ownership enforced. |
 
@@ -155,8 +155,10 @@ Owner: `ProgressEndpoints.cs`
 |---|---|---|---|---|
 | GET | `/api/progress/overview` | Auth | Canonical mobile | Attempts, accuracy, streak and freezes. |
 | GET | `/api/progress/weak-areas` | Auth | Canonical | Lowest-accuracy subtopics. |
-| GET | `/api/progress/topics` | Auth | Canonical | Topic progress. |
+| GET | `/api/progress/topics` | Auth | Canonical | Topic progress with `playableQuestionCount` and `canStartQuiz`. Unlock follows the nearest previous topic that has playable content (>=60% accuracy). |
+| GET | `/api/progress/topics/{topicId}/subtopics` | Auth | Canonical | Subtopic ids/counts, `unlocked`, and `canStartQuiz` for classic quiz start (`subtopicId`). |
 | GET | `/api/topics/progress` | Auth | Legacy alias | Topic-progress alias. |
+| GET | `/api/topics/{topicId}/subtopics` | Auth | Legacy alias | Subtopic-progress alias. |
 | POST | `/api/progress/sync` | Auth | Mobile sync | Server-verifiable settlement; legacy completed/day payloads are rejected. |
 
 ---

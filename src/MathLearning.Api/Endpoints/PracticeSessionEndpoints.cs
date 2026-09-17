@@ -83,6 +83,12 @@ public static class PracticeSessionEndpoints
 
     private static ApiResult<T> MapError<T>(Exception ex)
     {
+        if (ex is KeyNotFoundException &&
+            ex.Message.StartsWith("No playable questions", StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResult<T>.Fail(ex.Message, "NO_PLAYABLE_QUESTIONS");
+        }
+
         return ex switch
         {
             ArgumentException => ApiResult<T>.Fail(ex.Message, "VALIDATION_ERROR"),

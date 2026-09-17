@@ -180,4 +180,34 @@ Details belong in the run log, not the queue table.
 
 Use a bounded branch/PR for broad tooling/workflow/migration/high-risk runtime changes unless direct main is explicitly requested/permitted.
 
-Final response includes run log, mistakes, branch/PR/commit/merge SHA, files changed, validation executed/skipped, exact CI/main verification, completion state and residual owner. Do not claim Done/100% with failed proof, missing delivery or material residual work.
+### Main delivery is mandatory; CI is not a delivery gate
+
+Agents must **deliver to `origin/main` in the same run** when the bounded task is complete. Delivery means the target changes are **committed and pushed to `main`** (direct push or merge of the task branch into `main` followed by push). Do **not** end the run waiting for GitHub Actions, `Database Validation`, or the full PostgreSQL suite to finish.
+
+```text
+focused local proof passes
+→ commit
+→ push to origin/main (merge first when using a task branch)
+→ record exact main SHA
+→ close run / update PR metadata
+→ CI runs asynchronously afterward
+```
+
+Rules:
+
+1. **Never block delivery on CI.** Green CI is follow-up verification, not a prerequisite to push or to claim that code reached `main`.
+2. **Never leave completed work only on a local branch, feature branch, or “ready after CI” state.** If focused proof passed and the task owner is satisfied, merge/push to `main` before closing.
+3. **Still run focused proof before push.** Local/unit/integration proof required by [`.ai/VALIDATION_SELECTOR.md`](.ai/VALIDATION_SELECTOR.md) is mandatory; skipping proof is not allowed just because CI will run later.
+4. **Record CI honestly.** In the run log and final response, state `Validation: focused … pass; CI: pending|<url>|failure-<reason>`. Do not claim CI passed unless it did.
+5. **CI failure after delivery** opens a new bounded fix owner; it does not undo the fact that the change is already on `main`.
+6. **Cloud/user-assigned tasks:** open or update the PR for traceability, but **do not wait for PR checks** before merging/pushing to `main` when the bounded fix is ready.
+
+Forbidden closure patterns:
+
+```text
+local edit / pushed branch / open PR != Done
+waiting for CI != Done
+Done candidate = focused proof + commit on origin/main + recorded SHA + synchronized evidence
+```
+
+Final response includes run log, mistakes, branch/PR/commit/merge SHA, files changed, validation executed/skipped, CI status (pending/pass/fail with link), exact `origin/main` SHA verification, completion state and residual owner. Do not claim Done/100% with failed focused proof, missing push to `main`, or material residual work.

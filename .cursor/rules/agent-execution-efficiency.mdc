@@ -73,3 +73,13 @@ Stop delegation and return to direct work or split/handoff when:
 - the parent already has enough evidence to patch and prove the task.
 
 Subagents are a context-isolation tool for exceptional bounded work, not the default execution engine.
+
+## Main delivery without waiting for CI
+
+When bounded work is ready, **deliver to `origin/main` in the same run**:
+
+```text
+focused proof -> commit -> push/merge to origin/main -> record SHA -> close
+```
+
+Do **not** block closure on GitHub Actions, PR checks, or `Database Validation`. CI is follow-up verification; record it as pending/pass/fail in evidence, but never defer push/merge merely because checks are running.

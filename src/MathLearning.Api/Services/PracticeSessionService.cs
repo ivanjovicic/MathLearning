@@ -60,6 +60,26 @@ public sealed class PracticeSessionService : IPracticeSessionService
         var topicId = request.TopicId;
         var subtopicId = request.SubtopicId;
 
+        if (subtopicId.HasValue)
+        {
+            var subtopicExists = await _db.Subtopics
+                .AsNoTracking()
+                .AnyAsync(x => x.Id == subtopicId.Value, ct);
+
+            if (!subtopicExists)
+            {
+                var topicExists = await _db.Topics
+                    .AsNoTracking()
+                    .AnyAsync(x => x.Id == subtopicId.Value, ct);
+
+                if (topicExists)
+                {
+                    topicId = subtopicId;
+                    subtopicId = null;
+                }
+            }
+        }
+
         if (!topicId.HasValue && subtopicId.HasValue)
         {
             topicId = await _db.Subtopics
@@ -96,6 +116,9 @@ public sealed class PracticeSessionService : IPracticeSessionService
                 ExcludedQuestionIds: [],
                 Take: 1),
             ct);
+
+        if (firstQuestion is null)
+            throw new KeyNotFoundException("No playable questions are published for this topic.");
 
         PracticeQuestionDto? firstQuestionDto = null;
         if (firstQuestion is not null)

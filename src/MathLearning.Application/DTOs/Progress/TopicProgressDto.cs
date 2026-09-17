@@ -4,5 +4,7 @@ public record TopicProgressDto(
     int TopicId,
     string Name,
     double Accuracy,
-    bool Unlocked
+    bool Unlocked,
+    int PlayableQuestionCount,
+    bool CanStartQuiz
 );

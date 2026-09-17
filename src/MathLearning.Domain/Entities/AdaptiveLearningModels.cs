@@ -161,6 +161,7 @@ public class AdaptiveSessionItem
 public class AdaptiveRecommendation
 {
     public int TopicId { get; set; }
+    public int? SubtopicId { get; set; }
     public string Topic { get; set; } = string.Empty;
     public string Difficulty { get; set; } = AdaptiveDifficultyLevels.Medium;
     public int QuestionCount { get; set; }

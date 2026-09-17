@@ -4,6 +4,7 @@ using MathLearning.Domain.Entities;
 using MathLearning.Domain.Events;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Persistance.Models;
+using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.Idempotency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -130,6 +131,9 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         }
 
         var ordered = BuildDifficultyAwareSequence(selected);
+
+        if (ordered.Count == 0)
+            throw new KeyNotFoundException("No playable questions are published for this user.");
 
         var session = new AdaptiveSession
         {
@@ -476,6 +480,41 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
 
                 if (recommendations.Count >= 5)
                     break;
+            }
+        }
+
+        if (recommendations.Count == 0)
+        {
+            var starters = await (
+                from q in _db.Questions.AsNoTracking().WherePlayable()
+                join st in _db.Subtopics.AsNoTracking()
+                    on q.SubtopicId equals st.Id
+                join topic in _db.Topics.AsNoTracking()
+                    on st.TopicId equals topic.Id
+                group q by new { st.TopicId, TopicName = topic.Name, st.Id } into g
+                orderby g.Key.TopicId, g.Key.Id
+                select new
+                {
+                    g.Key.TopicId,
+                    g.Key.TopicName,
+                    SubtopicId = g.Key.Id,
+                    QuestionCount = g.Count()
+                })
+                .Take(5)
+                .ToListAsync(ct);
+
+            foreach (var starter in starters)
+            {
+                recommendations.Add(new AdaptiveRecommendation
+                {
+                    TopicId = starter.TopicId,
+                    SubtopicId = starter.SubtopicId,
+                    Topic = starter.TopicName,
+                    Difficulty = AdaptiveDifficultyLevels.Medium,
+                    QuestionCount = Math.Min(10, Math.Max(1, starter.QuestionCount)),
+                    Confidence = 0.6d,
+                    Reason = "Starter content is available for this topic."
+                });
             }
         }
 
@@ -980,7 +1019,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
 
         var rows = await (
             from review in _db.ReviewSchedules.AsNoTracking()
-            join question in _db.Questions.AsNoTracking()
+            join question in _db.Questions.AsNoTracking().WherePlayable()
                 on review.QuestionId equals question.Id
             join subtopic in _db.Subtopics.AsNoTracking()
                 on question.SubtopicId equals subtopic.Id
@@ -1026,7 +1065,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         var excluded = usedQuestionIds.ToList();
 
         var rawCandidates = await (
-            from question in _db.Questions.AsNoTracking()
+            from question in _db.Questions.AsNoTracking().WherePlayable()
             join subtopic in _db.Subtopics.AsNoTracking()
                 on question.SubtopicId equals subtopic.Id
             where distinctTopicIds.Contains(subtopic.TopicId) &&
@@ -1085,7 +1124,7 @@ public sealed class AdaptiveLearningService : IAdaptiveLearningService
         var excluded = usedQuestionIds.ToList();
 
         var fallback = await (
-            from question in _db.Questions.AsNoTracking()
+            from question in _db.Questions.AsNoTracking().WherePlayable()
             join subtopic in _db.Subtopics.AsNoTracking()
                 on question.SubtopicId equals subtopic.Id
             where !excluded.Contains(question.Id)

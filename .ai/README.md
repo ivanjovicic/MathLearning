@@ -41,7 +41,7 @@ First hypothesis/falsifier:
 Expected changed paths and limit:
 Focused proof:
 Stop/handoff trigger:
-Delivery target:
+Delivery target: origin/main (push/merge in-run; do not wait for CI)
 ```
 
 Use [`TOKEN_BUDGETS.md`](TOKEN_BUDGETS.md). A second subsystem, second falsified hypothesis, repeated unchanged failure or budget breach stops implementation.
@@ -101,6 +101,21 @@ python scripts/agent_run.py finish .ai/runs/<log>.md `
 ## CI routing
 
 `Database Validation` classifies changed paths first. Docs/agent-tooling-only changes skip PostgreSQL/full-suite work and still complete the `validate-database` gate. Runtime, test, migration, solution and DB-script changes run the full suite.
+
+**CI is asynchronous verification, not a delivery gate.** After focused local proof passes, agents must commit and push to `origin/main` without waiting for workflow completion. Record CI as pending/pass/fail in evidence; subscribe or link the run for follow-up, but do not hold the task open merely because checks are queued or running.
+
+## Main delivery checklist
+
+```text
+1. focused proof executed locally
+2. git commit on task branch or main
+3. git push -u origin <branch> when using a branch
+4. merge into main when required
+5. git push origin main
+6. record origin/main SHA in evidence and final response
+7. create/update PR for traceability (optional for direct-main)
+8. note CI status as pending — do not await it
+```
 
 ## Stop rules
 
