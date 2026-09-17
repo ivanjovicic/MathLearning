@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using MathLearning.Api;
+using MathLearning.Api.Middleware;
 using MathLearning.Application.DTOs.Auth;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Tests.Helpers;
@@ -102,7 +103,7 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         Assert.Equal("invalid_password", body.Code);
         Assert.Contains(factory.RegistrationLogs.Messages,
             entry => entry.Level == LogLevel.Warning
-                && entry.Message.Contains("Reason=password_length")
+                && entry.Message.Contains("Reason=password_policy")
                 && entry.Message.Contains("CorrelationId=ml-test-registration-1"));
         Assert.DoesNotContain(factory.RegistrationLogs.Messages,
             entry => entry.Message.Contains(request.Password) || entry.Message.Contains(request.Email)
@@ -121,6 +122,29 @@ public sealed class AuthMobileRegistrationAtomicityTests :
         Assert.Equal("invalid_email", body.Code);
         Assert.Contains(factory.RegistrationLogs.Messages,
             entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Reason=email_format"));
+    }
+
+    [Fact]
+    public async Task EntityFrameworkSaveFailure_ReturnsUnavailableAndLogsSafeDatabaseReason()
+    {
+        var request = CreateRequest("db-update");
+        failureState.FailOnSaveCall = 1;
+        failureState.ThrowDbUpdateException = true;
+
+        var response = await client.PostAsJsonAsync("/auth/mobile/register", request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<MobileRegisterResponse>();
+        Assert.NotNull(body);
+        Assert.False(body!.Success);
+        Assert.Equal("registration_unavailable", body.Code);
+        Assert.Contains(factory.RegistrationLogs.Messages,
+            entry => entry.Level == LogLevel.Error
+                && entry.Message.Contains("Reason=registration_db_failure"));
+        Assert.DoesNotContain(factory.RegistrationLogs.Messages,
+            entry => entry.Message.Contains(request.Password)
+                || entry.Message.Contains(request.Email)
+                || entry.Message.Contains(request.Username));
     }
 
     [Fact]
@@ -233,6 +257,8 @@ public sealed class AuthMobileRegistrationWebApplicationFactory : CustomWebAppli
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<ILogger<Program>>(RegistrationLogs);
+            services.RemoveAll<IRateLimitCounterStore>();
+            services.AddSingleton<IRateLimitCounterStore, AllowAllRateLimitCounterStore>();
             services.RemoveAll<DbContextOptions<ApiDbContext>>();
             services.RemoveAll<ApiDbContext>();
 
@@ -246,6 +272,28 @@ public sealed class AuthMobileRegistrationWebApplicationFactory : CustomWebAppli
             services.AddScoped<ApiDbContext, RegistrationFailureApiDbContext>();
         });
     }
+}
+
+internal sealed class AllowAllRateLimitCounterStore : IRateLimitCounterStore
+{
+    public bool TryAcquire(
+        string key,
+        int limit,
+        TimeSpan window,
+        out int retryAfterSeconds,
+        int maxPartitions = 100_000)
+    {
+        retryAfterSeconds = 0;
+        return true;
+    }
+
+    public RateLimitStoreSnapshot GetSnapshot() => new(
+        PartitionCount: 0,
+        AllowedRequests: 0,
+        RejectedRequests: 0,
+        SaturationRejections: 0,
+        EvictedPartitions: 0,
+        CleanupRuns: 0);
 }
 
 public sealed class RecordingRegistrationLogger : ILogger<Program>
@@ -264,10 +312,13 @@ public sealed class RegistrationFailureState
 
     public int? FailOnSaveCall { get; set; }
 
+    public bool ThrowDbUpdateException { get; set; }
+
     public void Reset()
     {
         saveCallCount = 0;
         FailOnSaveCall = null;
+        ThrowDbUpdateException = false;
     }
 
     public bool ShouldThrowOnCurrentSave()
@@ -291,7 +342,10 @@ internal sealed class RegistrationFailureApiDbContext : ApiDbContext
 
     public override int SaveChanges()
     {
-        if (state.ShouldThrowOnCurrentSave())
+        var shouldThrow = state.ShouldThrowOnCurrentSave();
+        if (shouldThrow && state.ThrowDbUpdateException)
+            throw new DbUpdateException("simulated database write failure");
+        if (shouldThrow)
             throw new InvalidOperationException(AuthMobileRegistrationAtomicityTestsSecret.SecretMessage);
 
         return base.SaveChanges();
@@ -299,7 +353,10 @@ internal sealed class RegistrationFailureApiDbContext : ApiDbContext
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        if (state.ShouldThrowOnCurrentSave())
+        var shouldThrow = state.ShouldThrowOnCurrentSave();
+        if (shouldThrow && state.ThrowDbUpdateException)
+            throw new DbUpdateException("simulated database write failure");
+        if (shouldThrow)
             throw new InvalidOperationException(AuthMobileRegistrationAtomicityTestsSecret.SecretMessage);
 
         return base.SaveChangesAsync(cancellationToken);

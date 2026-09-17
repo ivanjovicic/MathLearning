@@ -21,6 +21,9 @@ namespace MathLearning.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    private const int MaxAuthUsernameLength = 128;
+    private const int MaxAuthEmailLength = 254;
+    private const int MaxPasswordLength = 256;
     private static readonly TimeSpan LoginRateLimitWindow = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan RegisterRateLimitWindow = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan RefreshRateLimitWindow = TimeSpan.FromMinutes(10);
@@ -115,10 +118,10 @@ public static class AuthEndpoints
                 var canonicalUsernameForLimit = (request.Username ?? string.Empty).Trim();
                 var normalizedUsername = NormalizeAuthDimension(
                     lookupNormalizer.NormalizeName(canonicalUsernameForLimit) ?? canonicalUsernameForLimit,
-                    128);
+                    MaxAuthUsernameLength);
                 var normalizedEmail = NormalizeAuthDimension(
                     lookupNormalizer.NormalizeEmail(request.Email ?? string.Empty) ?? (request.Email ?? string.Empty),
-                    256);
+                    MaxAuthEmailLength);
 
                 if (!TryApplyAuthRateLimit(
                         authThrottleStore,
@@ -139,10 +142,15 @@ public static class AuthEndpoints
                     return CreateAuthRateLimitedResponse(ctx, registerRetryAfter);
                 }
 
-                if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
+                if (canonicalUsernameForLimit.Length < 3)
                 {
                     return RejectRegistration(400, "username_format", "invalid_username",
                         "Username must be at least 3 characters long");
+                }
+
+                if (canonicalUsernameForLimit.Length > MaxAuthUsernameLength)
+                {
+                    return RejectRegistration(400, "username_length", "invalid_username");
                 }
 
                 if (!IsValidEmailAddress(request.Email ?? string.Empty, out var canonicalEmail))
@@ -150,12 +158,12 @@ public static class AuthEndpoints
                     return RejectRegistration(400, "email_format", "invalid_email");
                 }
 
-                if (!IsRegistrationPasswordLengthAcceptable(request.Password))
+                if (!IsPasswordLengthAcceptable(request.Password))
                 {
                     return RejectRegistration(400, "password_length", "invalid_password");
                 }
 
-                var canonicalUsername = request.Username.Trim();
+                var canonicalUsername = canonicalUsernameForLimit;
 
                 var existingUser = await userManager.FindByNameAsync(canonicalUsername);
                 if (existingUser != null)
@@ -252,7 +260,7 @@ public static class AuthEndpoints
                     )
                 ));
             }
-            catch (DbException ex)
+            catch (Exception ex) when (ex is DbException or DbUpdateException)
             {
                 logger.LogError(
                     "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId} StackTrace={StackTrace}",
@@ -377,12 +385,12 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
-                logger.LogInformation("Login attempt for username: {Username}", normalizedUsername);
+                logger.LogInformation("Login attempt.");
 
                 var user = await userManager.FindByNameAsync(canonicalUsername);
                 if (user == null)
                 {
-                    logger.LogWarning("Login failed - user not found: {Username}", normalizedUsername);
+                    logger.LogWarning("Login failed - unknown account.");
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
@@ -390,9 +398,8 @@ public static class AuthEndpoints
                 if (!signInResult.Succeeded)
                 {
                     logger.LogWarning(
-                        "Login failed - {Reason} for user: {Username}",
-                        signInResult.IsLockedOut ? "locked out" : "invalid password or not allowed",
-                        normalizedUsername);
+                        "Login failed - {Reason}.",
+                        signInResult.IsLockedOut ? "locked out" : "invalid password or not allowed");
                     return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
                 }
 
@@ -410,7 +417,7 @@ public static class AuthEndpoints
                         await db.SaveChangesAsync();
                 }
 
-                logger.LogInformation("User authenticated successfully: {Username}, UserId: {UserId}", canonicalUsername, userId);
+                logger.LogInformation("User authenticated successfully.");
 
                 // Generate Access Token (short-lived: 30 min)
                 var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
@@ -424,7 +431,7 @@ public static class AuthEndpoints
                 db.RefreshTokens.Add(refreshToken);
                 await db.SaveChangesAsync();
 
-                logger.LogInformation("Login successful for user: {Username}", canonicalUsername);
+                logger.LogInformation("Login successful.");
 
                 return Results.Ok(new TokenResponse(
                     AccessToken: accessToken,
@@ -440,8 +447,7 @@ public static class AuthEndpoints
                     ctx,
                     logger,
                     ex,
-                    "Login error for username: {Username}",
-                    request.Username);
+                    "Login error");
             }
         }
 
@@ -638,10 +644,10 @@ public static class AuthEndpoints
                 var canonicalUsername = request.Username.Trim();
                 var normalizedUsername = NormalizeAuthDimension(
                     lookupNormalizer.NormalizeName(canonicalUsername) ?? canonicalUsername,
-                    128);
+                    MaxAuthUsernameLength);
                 var normalizedEmail = NormalizeAuthDimension(
                     lookupNormalizer.NormalizeEmail(request.Email) ?? request.Email,
-                    256);
+                    MaxAuthEmailLength);
 
                 if (!TryApplyAuthRateLimit(
                         authThrottleStore,
@@ -661,7 +667,12 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
 
-                if (!IsRegistrationPasswordLengthAcceptable(request.Password))
+                if (canonicalUsername.Length < 3 || canonicalUsername.Length > MaxAuthUsernameLength)
+                {
+                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                }
+
+                if (!IsPasswordLengthAcceptable(request.Password))
                 {
                     return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
                 }
@@ -788,7 +799,7 @@ public static class AuthEndpoints
         {
             var parsed = new MailAddress(email.Trim());
             canonicalEmail = parsed.Address;
-            return canonicalEmail.Length <= 254;
+            return canonicalEmail.Length <= MaxAuthEmailLength;
         }
         catch (FormatException)
         {
@@ -797,16 +808,7 @@ public static class AuthEndpoints
     }
 
     private static bool IsPasswordLengthAcceptable(string password) =>
-        !string.IsNullOrWhiteSpace(password) && password.Length <= 256;
-
-    /// <summary>
-    /// Registration-only password length. Login keeps [IsPasswordLengthAcceptable]
-    /// so existing accounts with shorter historical passwords can still sign in.
-    /// </summary>
-    private static bool IsRegistrationPasswordLengthAcceptable(string password) =>
-        !string.IsNullOrWhiteSpace(password)
-        && password.Length >= 10
-        && password.Length <= 256;
+        !string.IsNullOrWhiteSpace(password) && password.Length <= MaxPasswordLength;
 
     private static Task<string> GetCurrentSecurityStampAsync(
         UserManager<IdentityUser> userManager,

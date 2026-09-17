@@ -54,7 +54,7 @@ Auth legend:
 Owner: `AuthEndpoints.cs`
 
 Mobile registration rejection logs include a bounded diagnostic reason
-(`username_format`, `email_format`, `password_length`, `password_policy`,
+(`username_format`, `username_length`, `email_format`, `password_length`, `password_policy`,
 `identity_validation`, `account_conflict`, `registration_rate_limited`,
 `registration_db_failure`, or `registration_unexpected`), HTTP status and
 correlation/trace IDs. Public response bodies stay generic and may include a
@@ -62,7 +62,10 @@ safe machine-readable `code` (`invalid_username`, `invalid_email`,
 `invalid_password`, `registration_invalid`, `registration_conflict`,
 `registration_unavailable`, `registration_unexpected`). Unexpected failures do
 not log exception messages or request/account data. The registration password
-policy is 10–256 characters; login accepts existing passwords.
+policy is 10–256 characters through the Identity validator; the endpoint only
+applies the pre-hash maximum of 256. Usernames are trimmed and limited to
+3–128 characters, and canonical email is limited to 254 characters; login
+accepts existing passwords.
 
 Flutter Web against Production requires an explicit `Cors:AllowedOrigins` entry
 for the web origin. Development/Test already enable permissive CORS. Do not use
