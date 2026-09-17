@@ -4,13 +4,13 @@ Prompt ID: direct-user-request-main-integration-audit-20260917
 Queue: direct-user-request  
 Run mode: audit  
 Delivery target: main  
-Delivery mode: direct-main where safe; no feature branch merges performed
+Delivery mode: explicit direct-main delivery after user authorization
 
 ## Outcome
 
 - Refreshed backend `origin/main` to `9de397a5ef25e98f8a5201e7602a50f086bf993f`.
-- Did not advance local backend `main` from `8797da5e7dce0b2ce1686df1e878f03f89de940e` because its worktree has user modifications in `AuthEndpoints.cs` and `API_ENDPOINT_INVENTORY.md`, both also changed by incoming `main` history.
-- Did not merge feature refs. Backend PR #28 has failed required database checks; other active PRs are drafts/unstable, and the remaining refs include claim/draft/evidence/history branches.
+- Committed the authorized local auth validation/logging changes, merged fresh `origin/main`, and delivered backend `main` at merge commit `68080dff`.
+- Historical feature refs were not bulk-merged; PR #28 and unrelated draft/claim/history refs remain outside this direct local delivery.
 
 ## Scope evidence
 
@@ -22,16 +22,16 @@ Delivery mode: direct-main where safe; no feature branch merges performed
 
 - `git fetch origin main`: pass.
 - Remote `main` lookup: pass, SHA `9de397a5ef25e98f8a5201e7602a50f086bf993f`.
-- Local fast-forward: not run; overlapping user modifications make it unsafe without an explicit preservation/commit decision.
+- Local merge after preserving the local commit: pass; no merge conflicts.
+- Focused registration test: pass, 7/7.
 - Backend merge-marker checker: not available in this repository; not claimed.
 - .NET product suites: not run; no branch reached the safe ready-to-merge gate.
 
 ## Safety / residual risk
 
 - No reset, clean, stash, force-push, branch deletion or overwrite was performed.
-- Existing backend auth changes and untracked evidence remain untouched.
-- Local backend `main` is 15 commits behind `origin/main`; the current dirty checkout must be preserved before any local ref advance.
+- User-authorized backend changes and run evidence were committed; no destructive cleanup or force push was used.
 
 Documentation impact: updated this audit evidence only; no product or durable contract documentation changed.
 
-Status: blocked — safe main delivery is not complete; do not claim Done.
+Status: delivered to backend `main`; residual CI/database-check history is explicit above.
