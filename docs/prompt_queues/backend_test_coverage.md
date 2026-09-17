@@ -93,7 +93,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
 | BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation; private read/durable storage runtime ownership is BACKEND-API-DB-016. |
 | BACKEND-TEST-026 | P1 / Prompt-ready | Minimize public health/metrics/schema/job information. |
-| BACKEND-TEST-027 | P1/P2 / Prompt-ready | Decide whether to wire, merge or remove dead `QuestionEndpoints`. |
+| BACKEND-TEST-027 | P1/P2 / Done 100% — Run log: `.ai/runs/2026-08-03-BACKEND-TEST-027-evidence.md`; Validation: QuestionEndpointsAbsence; Residual risk: none; Commit: self | Decide whether to wire, merge or remove dead `QuestionEndpoints`. |
 | BACKEND-TEST-028 | Runtime-fixed / Needs validation | Shared checked pagination bounds, analytics/bug migration and extreme-value tests. |
 | BACKEND-TEST-029 | Implemented / Needs validation | Analytics/recommendation auth, user scope, paging, shape and safe-error endpoint tests. |
 | BACKEND-TEST-030 | Runtime-fixed / Needs validation | Explanation validation contracts and stable safe not-found messages. |
