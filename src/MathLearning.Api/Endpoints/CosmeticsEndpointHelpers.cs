@@ -1,5 +1,7 @@
 using System.Text.Json.Nodes;
 using MathLearning.Application.Services;
+using MathLearning.Infrastructure.Persistance;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -68,6 +70,58 @@ internal static class CosmeticsEndpointHelpers
                 Conflict: true,
                 ErrorCode: "idempotency_conflict",
                 Message: "Idempotency keys already exist with a different request payload.")));
+        }
+    }
+
+    /// <summary>
+    /// Pattern A: open the ambient DB transaction before claiming the cosmetics ledger so an abandoned
+    /// request cannot leave a durable pending tombstone outside the domain transaction.
+    /// </summary>
+    public static async Task<(IDbContextTransaction? DbTx, CosmeticsIdempotencyBeginResult? Begin, IResult? EarlyResult)> BeginClaimInTransactionAsync(
+        ApiDbContext db,
+        ICosmeticsIdempotencyService idempotencyService,
+        string userId,
+        string operationType,
+        string operationId,
+        string idempotencyKey,
+        object requestPayload,
+        CancellationToken ct,
+        bool markAlreadyClaimed)
+    {
+        var dbTx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ct);
+        try
+        {
+            var beginTuple = await TryBeginCosmeticsMutationAsync(
+                idempotencyService,
+                userId,
+                operationType,
+                operationId,
+                idempotencyKey,
+                requestPayload,
+                ct);
+            if (beginTuple.Error is not null)
+            {
+                if (dbTx is not null)
+                    await dbTx.RollbackAsync(ct);
+                return (null, null, beginTuple.Error);
+            }
+
+            var begin = beginTuple.Begin!;
+            var early = HandleCosmeticsIdempotentDecision(begin, markAlreadyClaimed);
+            if (early is not null)
+            {
+                if (dbTx is not null)
+                    await dbTx.RollbackAsync(ct);
+                return (null, begin, early);
+            }
+
+            return (dbTx, begin, null);
+        }
+        catch
+        {
+            if (dbTx is not null)
+                await dbTx.RollbackAsync(ct);
+            throw;
         }
     }
 
