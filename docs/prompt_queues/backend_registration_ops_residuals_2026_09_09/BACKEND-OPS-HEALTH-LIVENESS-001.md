@@ -39,6 +39,8 @@ Owner boundary:
 
 Queue placement: first active row in `backend_registration_ops_residuals_2026_09_09.md`.
 
+Claim: In progress — claimed 2026-09-19 on `agent/BACKEND-OPS-HEALTH-LIVENESS-001`.
+
 Task: Keep `GET /api/health/` answering under Neon/DB worker pressure and make `/db` plus `/ready` bounded with safe structured failure logs.
 
 Source of truth:

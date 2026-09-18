@@ -1,4 +1,5 @@
-﻿using MathLearning.Api.Services;
+using MathLearning.Api.Middleware;
+using MathLearning.Api.Services;
 using MathLearning.Application.Services;
 using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
@@ -9,13 +10,33 @@ namespace MathLearning.Api.Endpoints;
 
 public static class HealthEndpoints
 {
+    internal static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(2);
+
+    internal static async Task ExecuteBoundedProbeAsync(
+        Func<CancellationToken, Task> probe,
+        CancellationToken requestAborted)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        timeout.CancelAfter(ProbeTimeout);
+        await probe(timeout.Token);
+    }
+
+    internal static async Task<T> ExecuteBoundedProbeAsync<T>(
+        Func<CancellationToken, Task<T>> probe,
+        CancellationToken requestAborted)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        timeout.CancelAfter(ProbeTimeout);
+        return await probe(timeout.Token);
+    }
+
     public static void MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/health")
                        .WithTags("Health")
                        .AllowAnonymous();
 
-        // 🏥 Basic liveness check
+        // Basic liveness check intentionally has no database or other external dependency.
         group.MapGet("/", () => Results.Ok(new
         {
             status = "Healthy",
@@ -24,142 +45,176 @@ public static class HealthEndpoints
         .WithName("HealthCheck")
         .WithDescription("Basic liveness check");
 
-        // 🗄️ Database connectivity check
-        group.MapGet("/db", async (ApiDbContext db, DatabaseSchemaState schemaState, RedisRuntimeStatus redisStatus) =>
+        group.MapGet("/db", async (
+            ApiDbContext db,
+            DatabaseSchemaState schemaState,
+            RedisRuntimeStatus redisStatus,
+            ILogger<global::Program> logger,
+            HttpContext httpContext) =>
         {
+            var isRelational = db.Database.IsRelational();
+            var previousCommandTimeout = isRelational ? db.Database.GetCommandTimeout() : null;
             try
             {
-                var canConnect = await db.Database.CanConnectAsync();
-                if (!canConnect)
+                if (isRelational)
+                    db.Database.SetCommandTimeout((int)ProbeTimeout.TotalSeconds);
+                return await ExecuteBoundedProbeAsync(async cancellationToken =>
                 {
-                    return Results.Json(new
+                    var canConnect = await db.Database.CanConnectAsync(cancellationToken);
+                    if (!canConnect)
                     {
-                        status = "Unhealthy",
-                        db = "Cannot connect",
+                        return Results.Json(new
+                        {
+                            status = "Unhealthy",
+                            db = "Cannot connect",
+                            redis = redisStatus.Snapshot(),
+                            schema = BuildSchemaSummary(schemaState.Current),
+                            timestamp = DateTime.UtcNow
+                        }, statusCode: 503);
+                    }
+
+                    await db.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
+
+                    return Results.Ok(new
+                    {
+                        status = "Healthy",
+                        db = "Connected",
+                        provider = "PostgreSQL",
                         redis = redisStatus.Snapshot(),
                         schema = BuildSchemaSummary(schemaState.Current),
                         timestamp = DateTime.UtcNow
-                    }, statusCode: 503);
-                }
-
-                // Run a simple query to verify the connection is truly working
-                await db.Database.ExecuteSqlRawAsync("SELECT 1");
-
-                return Results.Ok(new
-                {
-                    status = "Healthy",
-                    db = "Connected",
-                    provider = "PostgreSQL",
-                    redis = redisStatus.Snapshot(),
-                    schema = BuildSchemaSummary(schemaState.Current),
-                    timestamp = DateTime.UtcNow
-                });
+                    });
+                }, httpContext.RequestAborted);
             }
-            catch
+            catch (Exception exception)
             {
+                LogProbeFailure(logger, httpContext, "db", exception, "DatabaseHealthCheckFailed");
                 return Results.Json(new
                 {
                     status = "Unhealthy",
                     db = "Error",
-                    reason = "DatabaseHealthCheckFailed",
+                    reason = GetFailureReason(exception, "DatabaseHealthCheckFailed"),
                     redis = redisStatus.Snapshot(),
                     schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 }, statusCode: 503);
+            }
+            finally
+            {
+                if (isRelational)
+                    db.Database.SetCommandTimeout(previousCommandTimeout);
             }
         })
         .WithName("DatabaseHealthCheck")
         .WithDescription("Check PostgreSQL database connectivity");
 
-        // 📊 Detailed readiness check (DB + data counts)
-        group.MapGet("/ready", async (ApiDbContext db, DatabaseSchemaState schemaState, ICosmeticCatalogService catalogService, RedisRuntimeStatus redisStatus) =>
+        group.MapGet("/ready", async (
+            ApiDbContext db,
+            DatabaseSchemaState schemaState,
+            ICosmeticCatalogService catalogService,
+            RedisRuntimeStatus redisStatus,
+            ILogger<global::Program> logger,
+            HttpContext httpContext) =>
         {
+            var isRelational = db.Database.IsRelational();
+            var previousCommandTimeout = isRelational ? db.Database.GetCommandTimeout() : null;
             try
             {
-                var canConnect = await db.Database.CanConnectAsync();
-                if (!canConnect)
+                if (isRelational)
+                    db.Database.SetCommandTimeout((int)ProbeTimeout.TotalSeconds);
+                return await ExecuteBoundedProbeAsync(async cancellationToken =>
                 {
-                    return Results.Json(new
+                    var canConnect = await db.Database.CanConnectAsync(cancellationToken);
+                    if (!canConnect)
                     {
-                        status = "NotReady",
-                        reason = "DatabaseUnavailable",
-                        redis = redisStatus.Snapshot(),
-                        schema = BuildSchemaSummary(schemaState.Current)
-                    }, statusCode: 503);
-                }
+                        return Results.Json(new
+                        {
+                            status = "NotReady",
+                            reason = "DatabaseUnavailable",
+                            redis = redisStatus.Snapshot(),
+                            schema = BuildSchemaSummary(schemaState.Current)
+                        }, statusCode: 503);
+                    }
 
-                var schemaStatus = schemaState.Current;
-                if (!schemaStatus.IsSchemaReady)
-                {
-                    return Results.Json(new
+                    var schemaStatus = schemaState.Current;
+                    if (!schemaStatus.IsSchemaReady)
                     {
-                        status = "NotReady",
-                        reason = "SchemaNotReady",
-                        redis = redisStatus.Snapshot(),
-                        schema = BuildSchemaSummary(schemaStatus)
-                    }, statusCode: 503);
-                }
+                        return Results.Json(new
+                        {
+                            status = "NotReady",
+                            reason = "SchemaNotReady",
+                            redis = redisStatus.Snapshot(),
+                            schema = BuildSchemaSummary(schemaStatus)
+                        }, statusCode: 503);
+                    }
 
-                var catalogReadiness = await catalogService.GetCatalogReadinessAsync(CancellationToken.None);
-                if (!catalogReadiness.IsReady)
-                {
-                    return Results.Json(new
+                    var catalogReadiness = await catalogService.GetCatalogReadinessAsync(cancellationToken);
+                    if (!catalogReadiness.IsReady)
                     {
-                        status = catalogReadiness.Status,
-                        reason = catalogReadiness.Reason,
-                        catalog = catalogReadiness,
-                        redis = redisStatus.Snapshot(),
-                        schema = BuildSchemaSummary(schemaStatus)
-                    }, statusCode: 503);
-                }
+                        return Results.Json(new
+                        {
+                            status = catalogReadiness.Status,
+                            reason = catalogReadiness.Reason,
+                            catalog = catalogReadiness,
+                            redis = redisStatus.Snapshot(),
+                            schema = BuildSchemaSummary(schemaStatus)
+                        }, statusCode: 503);
+                    }
 
-                var redisReadiness = redisStatus.Snapshot();
-                if (redisReadiness.Required && !redisReadiness.Connected)
-                {
-                    return Results.Json(new
+                    var redisReadiness = redisStatus.Snapshot();
+                    if (redisReadiness.Required && !redisReadiness.Connected)
                     {
-                        status = "NotReady",
-                        reason = "RedisUnavailable",
+                        return Results.Json(new
+                        {
+                            status = "NotReady",
+                            reason = "RedisUnavailable",
+                            redis = redisReadiness,
+                            schema = BuildSchemaSummary(schemaStatus)
+                        }, statusCode: 503);
+                    }
+
+                    var questionCount = await db.Questions.CountAsync(cancellationToken);
+                    var categoryCount = await db.Categories.CountAsync(cancellationToken);
+                    var userCount = await db.UserProfiles.CountAsync(cancellationToken);
+
+                    return Results.Ok(new
+                    {
+                        status = "Ready",
+                        db = "Connected",
                         redis = redisReadiness,
-                        schema = BuildSchemaSummary(schemaStatus)
-                    }, statusCode: 503);
-                }
-
-                var questionCount = await db.Questions.CountAsync();
-                var categoryCount = await db.Categories.CountAsync();
-                var userCount = await db.UserProfiles.CountAsync();
-
-                return Results.Ok(new
-                {
-                    status = "Ready",
-                    db = "Connected",
-                    redis = redisReadiness,
-                    catalog = new
-                    {
-                        catalogReadiness.Status,
-                        catalogReadiness.RevisionKey,
-                        catalogReadiness.Checksum,
-                        catalogReadiness.CatalogVersion
-                    },
-                    data = new
-                    {
-                        questions = questionCount,
-                        categories = categoryCount,
-                        users = userCount
-                    },
-                    schema = BuildSchemaSummary(schemaStatus),
-                    timestamp = DateTime.UtcNow
-                });
+                        catalog = new
+                        {
+                            catalogReadiness.Status,
+                            catalogReadiness.RevisionKey,
+                            catalogReadiness.Checksum,
+                            catalogReadiness.CatalogVersion
+                        },
+                        data = new
+                        {
+                            questions = questionCount,
+                            categories = categoryCount,
+                            users = userCount
+                        },
+                        schema = BuildSchemaSummary(schemaStatus),
+                        timestamp = DateTime.UtcNow
+                    });
+                }, httpContext.RequestAborted);
             }
-            catch
+            catch (Exception exception)
             {
+                LogProbeFailure(logger, httpContext, "ready", exception, "ReadinessCheckFailed");
                 return Results.Json(new
                 {
                     status = "NotReady",
-                    reason = "ReadinessCheckFailed",
+                    reason = GetFailureReason(exception, "ReadinessCheckFailed"),
                     redis = redisStatus.Snapshot(),
                     schema = BuildSchemaSummary(schemaState.Current)
                 }, statusCode: 503);
+            }
+            finally
+            {
+                if (isRelational)
+                    db.Database.SetCommandTimeout(previousCommandTimeout);
             }
         })
         .WithName("ReadinessCheck")
@@ -175,6 +230,25 @@ public static class HealthEndpoints
             .WithTags("Health")
             .WithDescription("Expose database schema/migration state");
     }
+
+    private static void LogProbeFailure(
+        ILogger logger,
+        HttpContext httpContext,
+        string probe,
+        Exception exception,
+        string reason)
+    {
+        logger.LogWarning(
+            "Health probe failed. Probe={Probe} Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+            probe,
+            reason,
+            exception.GetType().FullName,
+            SafeClientErrorResponse.ResolveCorrelationId(httpContext) ?? "unknown",
+            httpContext.TraceIdentifier);
+    }
+
+    private static string GetFailureReason(Exception exception, string fallback) =>
+        exception is OperationCanceledException ? "HealthProbeTimeout" : fallback;
 
     private static IResult BuildSchemaHealthResult(DatabaseSchemaState schemaState)
     {

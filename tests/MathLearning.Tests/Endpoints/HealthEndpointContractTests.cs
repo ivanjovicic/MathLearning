@@ -69,3 +69,28 @@ public sealed class HealthEndpointContractTests : IClassFixture<CustomWebApplica
             $"Expected 200 or 503, got {(int)statusCode} {statusCode}.");
     }
 }
+
+public sealed class HealthProbeTests
+{
+    [Fact]
+    public async Task BoundedProbe_CancelsAStalledDependency()
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            MathLearning.Api.Endpoints.HealthEndpoints.ExecuteBoundedProbeAsync(
+                async cancellationToken => await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken),
+                CancellationToken.None));
+
+        Assert.InRange(stopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void FlyHealthCheckTargetsDbFreeLiveness()
+    {
+        var flyConfig = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "fly.toml"));
+
+        Assert.Contains("path = \"/api/health/\"", flyConfig, StringComparison.Ordinal);
+        Assert.Contains("timeout = \"5s\"", flyConfig, StringComparison.Ordinal);
+    }
+}
