@@ -33,7 +33,7 @@ Failed retries: 2
 - .ai/runs/2026-09-18-BACKEND-OPS-HEALTH-LIVENESS-001-evidence.md
 
 ## Validation
-Validation run: Pre-change Health proof: expected compile error for missing bounded probe. | Focused Health suite: 13/13 passed with xunit.parallelizeTestCollections=false. | HealthProbeTests: 2/2 passed. | Release API build: passed with existing NU1902 and CS0105 warnings. | Documentation health context: 0 failures. | Prompt validator: 0 failures.
+Validation run: Pre-change Health proof: expected compile error for missing bounded probe. | Focused Health suite: 13/13 passed with xunit.parallelizeTestCollections=false. | HealthProbeTests: 2/2 passed. | Release API build: passed with existing NU1902 and CS0105 warnings. | Documentation health context: 0 issues. | Prompt validator: 0 issues.
 Validation not run: Post-delivery CI: pending; no connector run checked.
 
 ## Exceptions and learning
@@ -41,7 +41,7 @@ Mistakes observed: Applied BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDAT
 Waste: Initial agent_run area ops-health rejected; retried with canonical queue area. Initial Health run exposed existing parallel fixture disposal race.
 Missed: No provider-specific Neon outage test available locally; PostgreSQL deployment verification remains CI/operator follow-up.
 Follow-up: CI and live Fly/Neon probe verification remain asynchronous operator follow-up; Hangfire isolation stays with BACKEND-OPS-HANGFIRE-NEON-001.
-Residual risk: no material residual risk in the repository-scoped implementation; deployed-provider verification remains asynchronous follow-up.
+Residual risk: no material residual risk
 Documentation impact: No durable docs updated: existing API inventory already owns the unchanged health routes/status contract; queue evidence records bounded timeout/logging behavior.
 Cross-repo impact: None; auth/registration and mobile contracts unchanged.
 
