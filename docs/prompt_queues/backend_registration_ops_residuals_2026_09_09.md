@@ -26,7 +26,7 @@ python scripts/prompt_agent.py next --agent <UNIQUE-AGENT-ID> --preferred-queue 
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
 | `BACKEND-OPS-HEALTH-LIVENESS-001` | P0 reliability | Done 100% — Run log: `.ai/runs/2026-09-18-BACKEND-OPS-HEALTH-LIVENESS-001-evidence.md`; Validation: Health 13/13 + bounded probe 2/2 + Release API build + docs/prompt validation; Residual risk: deployed Neon/Fly starvation probe remains operator follow-up; Commit: self | [Open](backend_registration_ops_residuals_2026_09_09/BACKEND-OPS-HEALTH-LIVENESS-001.md) | Keep anonymous liveness answering under Neon/DB worker starvation with bounded DB health and Fly HTTP checks. |
-| `BACKEND-OPS-HANGFIRE-NEON-001` | P1 reliability | Ready after `BACKEND-OPS-HEALTH-LIVENESS-001` | [Open](backend_registration_ops_residuals_2026_09_09/BACKEND-OPS-HANGFIRE-NEON-001.md) | Isolate Hangfire/outbox/background DB work so Neon timeouts cannot exhaust the request thread pool. |
+| `BACKEND-OPS-HANGFIRE-NEON-001` | P1 reliability | Needs validation — 79% — Run log: `.ai/runs/2026-09-18-BACKEND-OPS-HANGFIRE-NEON-001-evidence.md`; Validation: Hangfire 6/6 + isolation 1/1 + Release API build + docs/prompt validation; Residual risk: PostgreSQL/provider and deployed Neon/Fly starvation proof unavailable locally; Commit: self | [Open](backend_registration_ops_residuals_2026_09_09/BACKEND-OPS-HANGFIRE-NEON-001.md) | Isolate Hangfire/outbox/background DB work so Neon timeouts cannot exhaust the request thread pool. |
 
 ## Ordering and collision rules
 

@@ -10,6 +10,10 @@ Scope: Hangfire recurring jobs registered in `src/MathLearning.Api/Program.cs`
 
 ## Hangfire hosting notes
 
+- Hangfire uses the `default` queue with a bounded worker pool: 2 workers by default, clamped to 1–4 by `Hangfire:WorkerCount`.
+- EF/Npgsql commands use a 15-second default command timeout, clamped to 1–120 seconds by `Database:CommandTimeoutSeconds`; health probes may apply a shorter local bound.
+- Server shutdown is bounded to 30 seconds so a stalled background operation cannot hold process termination indefinitely.
+
 - Recurring jobs register only when environment is not `Test`, database startup succeeded, and Hangfire is enabled.
 - PostgreSQL storage uses `InvisibilityTimeout = 5 minutes` (see `AddBackgroundJobServices`).
 - Recurring Hangfire entry points use `[DisableConcurrentExecution]` to prevent overlapping runs of the same recurring job id.

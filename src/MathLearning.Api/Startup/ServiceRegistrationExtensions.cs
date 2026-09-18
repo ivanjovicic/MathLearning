@@ -30,6 +30,27 @@ namespace MathLearning.Api.Startup;
 public static class ServiceRegistrationExtensions
 {
     private const string FallbackJwtSecret = "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
+    private const int DefaultDatabaseCommandTimeoutSeconds = 15;
+    private const int DefaultHangfireWorkerCount = 2;
+
+    internal static int ResolveDatabaseCommandTimeoutSeconds(IConfiguration configuration) =>
+        Math.Clamp(
+            configuration.GetValue<int?>("Database:CommandTimeoutSeconds") ?? DefaultDatabaseCommandTimeoutSeconds,
+            1,
+            120);
+
+    internal static BackgroundJobServerOptions BuildHangfireServerOptions(IConfiguration configuration)
+    {
+        return new BackgroundJobServerOptions
+        {
+            WorkerCount = Math.Clamp(
+                configuration.GetValue<int?>("Hangfire:WorkerCount") ?? DefaultHangfireWorkerCount,
+                1,
+                4),
+            Queues = new[] { "default" },
+            ShutdownTimeout = TimeSpan.FromSeconds(30)
+        };
+    }
 
     public static void AddObservabilityServices(this WebApplicationBuilder builder)
     {
@@ -81,6 +102,7 @@ public static class ServiceRegistrationExtensions
 
     public static void AddDatabaseServices(this WebApplicationBuilder builder, string defaultConnectionString, bool isDevelopment)
     {
+        var databaseCommandTimeoutSeconds = ResolveDatabaseCommandTimeoutSeconds(builder.Configuration);
         var healthChecks = builder.Services.AddHealthChecks();
         if (!builder.Environment.IsEnvironment("Test") && !string.IsNullOrWhiteSpace(defaultConnectionString))
         {
@@ -96,7 +118,11 @@ public static class ServiceRegistrationExtensions
         {
             options.UseNpgsql(
                     defaultConnectionString,
-                    npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+                    npgsql =>
+                    {
+                        npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                        npgsql.CommandTimeout(databaseCommandTimeoutSeconds);
+                    });
             options.AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>());
 
             if (isDevelopment)
@@ -111,7 +137,11 @@ public static class ServiceRegistrationExtensions
         {
             options.UseNpgsql(
                     defaultConnectionString,
-                    npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+                    npgsql =>
+                    {
+                        npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                        npgsql.CommandTimeout(databaseCommandTimeoutSeconds);
+                    });
             options.AddInterceptors(sp.GetRequiredService<PerformanceDbCommandInterceptor>());
 
             if (isDevelopment)
@@ -145,7 +175,13 @@ public static class ServiceRegistrationExtensions
                         QueuePollInterval = TimeSpan.FromSeconds(15),
                         InvisibilityTimeout = TimeSpan.FromMinutes(5)
                     }));
-                builder.Services.AddHangfireServer();
+                var serverOptions = BuildHangfireServerOptions(builder.Configuration);
+                builder.Services.AddHangfireServer(options =>
+                {
+                    options.WorkerCount = serverOptions.WorkerCount;
+                    options.Queues = serverOptions.Queues;
+                    options.ShutdownTimeout = serverOptions.ShutdownTimeout;
+                });
                 hangfireEnabled = true;
             }
             else
