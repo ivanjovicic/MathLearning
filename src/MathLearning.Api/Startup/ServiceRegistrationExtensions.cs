@@ -348,6 +348,23 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<MathLearning.Api.Middleware.IRateLimitCounterStore, MathLearning.Api.Middleware.InMemoryRateLimitCounterStore>();
         builder.Services.AddScoped<AuthSessionValidationService>();
         builder.Services.AddScoped<IAccountProvisioningService, AccountProvisioningService>();
+        builder.Services.Configure<PasswordResetDeliveryOptions>(
+            builder.Configuration.GetSection(PasswordResetDeliveryOptions.SectionName));
+        builder.Services.AddSingleton<IPasswordResetDelivery>(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PasswordResetDeliveryOptions>>().Value;
+            var environment = sp.GetRequiredService<IHostEnvironment>();
+
+            if (environment.IsEnvironment("Test") || environment.IsDevelopment())
+                return new InMemoryPasswordResetDelivery();
+
+            if (!options.Enabled || string.IsNullOrWhiteSpace(options.SmtpHost) ||
+                string.IsNullOrWhiteSpace(options.FromAddress))
+                return new UnavailablePasswordResetDelivery();
+
+            return new SmtpPasswordResetDelivery(
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PasswordResetDeliveryOptions>>());
+        });
 
         builder.Services.AddIdentityCore<IdentityUser>(options =>
         {

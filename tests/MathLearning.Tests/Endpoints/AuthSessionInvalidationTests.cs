@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MathLearning.Api;
+using MathLearning.Api.Services;
 using MathLearning.Application.DTOs.Auth;
 using MathLearning.Application.Services;
 using MathLearning.Core.Services;
@@ -142,6 +143,7 @@ public sealed class AuthSessionInvalidationTests :
         using var scope = factory.Services.CreateScope();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var provisioning = scope.ServiceProvider.GetRequiredService<IAccountProvisioningService>();
 
         if (!await roleManager.RoleExistsAsync(DesignTokenSecurity.AdminRole))
         {
@@ -149,16 +151,14 @@ public sealed class AuthSessionInvalidationTests :
             Assert.True(roleResult.Succeeded);
         }
 
-        var user = new IdentityUser
-        {
-            UserName = username,
-            Email = $"{username}@mathlearning.local",
-            EmailConfirmed = true,
-            LockoutEnabled = true
-        };
-
-        var createResult = await userManager.CreateAsync(user, password);
-        Assert.True(createResult.Succeeded);
+        var provisioned = await provisioning.CreateCompleteAccountAsync(
+            username,
+            $"{username}@mathlearning.local",
+            password,
+            username);
+        Assert.True(provisioned.Succeeded);
+        var user = provisioned.User;
+        Assert.NotNull(user);
 
         var roleAddResult = await userManager.AddToRoleAsync(user, DesignTokenSecurity.AdminRole);
         Assert.True(roleAddResult.Succeeded);

@@ -5,6 +5,27 @@ public record LoginRequest(
     string Password
 );
 
+public record AuthFailureResponse(
+    string Code,
+    string Message,
+    string? CorrelationId = null,
+    int? RetryAfterSeconds = null
+);
+
+public record PasswordResetForgotRequest(string Email);
+
+public record PasswordResetRequest(
+    string Email,
+    string Token,
+    string NewPassword
+);
+
+public record PasswordResetResponse(
+    bool Success,
+    string Code,
+    string Message
+);
+
 public record LoginResponse(
     string Token,
     string UserId,

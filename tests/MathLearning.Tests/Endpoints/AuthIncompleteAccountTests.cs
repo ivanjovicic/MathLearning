@@ -94,7 +94,7 @@ public sealed class AuthIncompleteAccountTests : IClassFixture<CustomWebApplicat
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("Account setup incomplete", doc.RootElement.GetProperty("error").GetString());
+        Assert.Equal("account_incomplete", doc.RootElement.GetProperty("code").GetString());
 
         using var assertScope = factory.Services.CreateScope();
         var db = assertScope.ServiceProvider.GetRequiredService<ApiDbContext>();
