@@ -489,7 +489,6 @@ public static class AuthEndpoints
             PasswordResetForgotRequest? request,
             UserManager<IdentityUser> userManager,
             IPasswordResetDeliveryDispatcher deliveryDispatcher,
-            IOptions<PasswordResetDeliveryOptions> deliveryOptions,
             HttpContext ctx,
             ILogger<Program> logger,
             IRateLimitCounterStore authThrottleStore,
@@ -527,7 +526,6 @@ public static class AuthEndpoints
                     canonicalEmail,
                     userManager,
                     deliveryDispatcher,
-                    deliveryOptions.Value,
                     ctx,
                     logger);
             }
@@ -992,7 +990,6 @@ public static class AuthEndpoints
         string canonicalEmail,
         UserManager<IdentityUser> userManager,
         IPasswordResetDeliveryDispatcher deliveryDispatcher,
-        PasswordResetDeliveryOptions deliveryOptions,
         HttpContext ctx,
         ILogger<Program> logger)
     {
@@ -1005,13 +1002,10 @@ public static class AuthEndpoints
                 statusCode: StatusCodes.Status202Accepted);
         }
 
-        var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-        var separator = deliveryOptions.ResetBaseUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?';
-        var resetUrl = $"{deliveryOptions.ResetBaseUrl}{separator}email={Uri.EscapeDataString(canonicalEmail)}&token={Uri.EscapeDataString(resetToken)}";
         try
         {
             await deliveryDispatcher.DispatchAsync(
-                new PasswordResetDeliveryMessage(canonicalEmail, resetToken, resetUrl),
+                user.Id,
                 ctx.RequestAborted);
         }
         catch (Exception ex)

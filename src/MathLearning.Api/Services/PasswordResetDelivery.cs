@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Mail;
 using Hangfire;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace MathLearning.Api.Services;
@@ -77,29 +79,51 @@ public interface IPasswordResetDelivery
 
 public interface IPasswordResetDeliveryDispatcher
 {
-    Task DispatchAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default);
+    Task DispatchAsync(string userId, CancellationToken cancellationToken = default);
 }
 
 public interface IPasswordResetDeliveryJob
 {
-    Task SendAsync(PasswordResetDeliveryMessage message);
+    Task SendAsync(string userId);
 }
 
 public sealed class PasswordResetDeliveryJob : IPasswordResetDeliveryJob
 {
+    private readonly UserManager<IdentityUser> userManager;
+    private readonly IOptions<PasswordResetDeliveryOptions> deliveryOptions;
     private readonly IPasswordResetDelivery delivery;
     private readonly ILogger<PasswordResetDeliveryJob> logger;
 
     public PasswordResetDeliveryJob(
+        UserManager<IdentityUser> userManager,
+        IOptions<PasswordResetDeliveryOptions> deliveryOptions,
         IPasswordResetDelivery delivery,
         ILogger<PasswordResetDeliveryJob> logger)
     {
+        this.userManager = userManager;
+        this.deliveryOptions = deliveryOptions;
         this.delivery = delivery;
         this.logger = logger;
     }
 
-    public async Task SendAsync(PasswordResetDeliveryMessage message)
+    public async Task SendAsync(string userId)
     {
+        var user = await userManager.FindByIdAsync(userId);
+        if (user is null || string.IsNullOrWhiteSpace(user.Email))
+        {
+            logger.LogWarning(
+                "Password-reset delivery skipped. Reason={Reason}",
+                user is null ? "user_not_found" : "email_unavailable");
+            return;
+        }
+
+        var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+        var resetUrl = PasswordResetDeliveryMessageFactory.CreateResetUrl(
+            deliveryOptions.Value.ResetBaseUrl,
+            user.Email,
+            resetToken);
+        var message = new PasswordResetDeliveryMessage(user.Email, resetToken, resetUrl);
+
         try
         {
             if (!await delivery.SendAsync(message, CancellationToken.None))
@@ -114,23 +138,35 @@ public sealed class PasswordResetDeliveryJob : IPasswordResetDeliveryJob
             logger.LogError(
                 "Password-reset delivery failed. ExceptionType={ExceptionType}",
                 ex.GetType().Name);
-            throw;
+            // Do not let provider exception text persist a token or URL in Hangfire's failed-job state.
+            throw new PasswordResetDeliveryException();
         }
+    }
+}
+
+public sealed class PasswordResetDeliveryException : Exception
+{
+    public PasswordResetDeliveryException()
+        : base("Password reset delivery failed.")
+    {
     }
 }
 
 public sealed class InlinePasswordResetDeliveryDispatcher : IPasswordResetDeliveryDispatcher
 {
-    private readonly IPasswordResetDelivery delivery;
+    private readonly IServiceScopeFactory scopeFactory;
 
-    public InlinePasswordResetDeliveryDispatcher(IPasswordResetDelivery delivery)
+    public InlinePasswordResetDeliveryDispatcher(IServiceScopeFactory scopeFactory)
     {
-        this.delivery = delivery;
+        this.scopeFactory = scopeFactory;
     }
 
-    public async Task DispatchAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default)
+    public async Task DispatchAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await delivery.SendAsync(message, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var job = scope.ServiceProvider.GetRequiredService<IPasswordResetDeliveryJob>();
+        await job.SendAsync(userId);
     }
 }
 
@@ -143,11 +179,20 @@ public sealed class HangfirePasswordResetDeliveryDispatcher : IPasswordResetDeli
         this.backgroundJobs = backgroundJobs;
     }
 
-    public Task DispatchAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default)
+    public Task DispatchAsync(string userId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        backgroundJobs.Enqueue<IPasswordResetDeliveryJob>(job => job.SendAsync(message));
+        backgroundJobs.Enqueue<IPasswordResetDeliveryJob>(job => job.SendAsync(userId));
         return Task.CompletedTask;
+    }
+}
+
+public static class PasswordResetDeliveryMessageFactory
+{
+    public static string CreateResetUrl(string resetBaseUrl, string email, string resetToken)
+    {
+        var separator = resetBaseUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{resetBaseUrl}{separator}email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(resetToken)}";
     }
 }
 

@@ -375,11 +375,11 @@ public static class ServiceRegistrationExtensions
 
             if (environment.IsEnvironment("Test") || environment.IsDevelopment())
                 return new InlinePasswordResetDeliveryDispatcher(
-                    sp.GetRequiredService<IPasswordResetDelivery>());
+                    sp.GetRequiredService<IServiceScopeFactory>());
 
             if (!options.Enabled)
                 return new InlinePasswordResetDeliveryDispatcher(
-                    sp.GetRequiredService<IPasswordResetDelivery>());
+                    sp.GetRequiredService<IServiceScopeFactory>());
 
             return new HangfirePasswordResetDeliveryDispatcher(
                 sp.GetRequiredService<Hangfire.IBackgroundJobClient>());

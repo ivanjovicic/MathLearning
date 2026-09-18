@@ -76,7 +76,7 @@ for the web origin. Development/Test already enable permissive CORS. Do not use
 | POST | `/auth/mobile/register` | Public | Canonical mobile | Uses `IAccountProvisioningService` for Identity + `UserProfile`, then issues tokens only after mandatory state is durable. Generic registration failures, real email parsing, confirmed managed/no-email provisioning. |
 | POST | `/auth/login` | Public | Canonical | Lockout-aware login. Typed safe failures: `invalid_credentials`, `account_incomplete`, `login_rate_limited`, `login_unavailable`; 429 responses include `Retry-After`. |
 | POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle/incomplete-account contract as `/auth/login`. |
-| POST | `/auth/password/forgot` | Public | Canonical | Generic 202 response for matching and non-matching email; rate limited by normalized email and network/device; production delivery is dispatched through Hangfire, with inline delivery in Test/Development. |
+| POST | `/auth/password/forgot` | Public | Canonical | Generic 202 response for matching and non-matching email; rate limited by normalized email and network/device; production Hangfire arguments contain only the stable Identity user id, with the same delivery job run inline in Test/Development. |
 | POST | `/auth/password/reset` | Public | Canonical | Identity token reset; safe invalid/policy/rate-limit failures; relational success transactionally commits the Identity password/security-stamp update with revocation of all refresh tokens. |
 | POST | `/auth/refresh` | Public | Canonical | Single-use token rotation with generic 401/429 contract. Model length drift remains BACKEND-TEST-012. |
 | POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |

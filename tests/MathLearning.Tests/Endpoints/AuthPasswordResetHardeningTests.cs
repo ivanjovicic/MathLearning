@@ -91,38 +91,42 @@ public sealed class AuthPasswordResetAtomicityTests
         var factory = new PasswordResetRelationalWebApplicationFactory();
         try
         {
-            using var client = factory.CreateClient();
-            var account = await CreateAccountAsync(factory);
-            var session = await LoginAsync(client, account.Username, account.OldPassword);
-            var resetToken = await RequestResetTokenAsync(factory, client, account.Email);
+            using (var client = factory.CreateClient())
+            {
+                var account = await CreateAccountAsync(factory);
+                var session = await LoginAsync(client, account.Username, account.OldPassword);
+                var resetToken = await RequestResetTokenAsync(factory, client, account.Email);
 
-            factory.FailureInterceptor.Arm(target);
-            var reset = await client.PostAsJsonAsync(
-                "/auth/password/reset",
-                new
+                factory.FailureInterceptor.Arm(target);
+                var reset = await client.PostAsJsonAsync(
+                    "/auth/password/reset",
+                    new
+                    {
+                        email = account.Email,
+                        token = resetToken,
+                        newPassword = account.NewPassword
+                    });
+
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, reset.StatusCode);
+                Assert.Equal(1, factory.FailureInterceptor.ThrowCount);
+
+                var oldLogin = await client.PostAsJsonAsync(
+                    "/auth/login",
+                    new { username = account.Username, password = account.OldPassword });
+                Assert.Equal(HttpStatusCode.OK, oldLogin.StatusCode);
+
+                var newLogin = await client.PostAsJsonAsync(
+                    "/auth/login",
+                    new { username = account.Username, password = account.NewPassword });
+                Assert.Equal(HttpStatusCode.Unauthorized, newLogin.StatusCode);
+
+                using (var scope = factory.Services.CreateScope())
                 {
-                    email = account.Email,
-                    token = resetToken,
-                    newPassword = account.NewPassword
-                });
-
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, reset.StatusCode);
-            Assert.Equal(1, factory.FailureInterceptor.ThrowCount);
-
-            var oldLogin = await client.PostAsJsonAsync(
-                "/auth/login",
-                new { username = account.Username, password = account.OldPassword });
-            Assert.Equal(HttpStatusCode.OK, oldLogin.StatusCode);
-
-            var newLogin = await client.PostAsJsonAsync(
-                "/auth/login",
-                new { username = account.Username, password = account.NewPassword });
-            Assert.Equal(HttpStatusCode.Unauthorized, newLogin.StatusCode);
-
-            using var scope = factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<MathLearning.Infrastructure.Persistance.ApiDbContext>();
-            var originalRefresh = await db.RefreshTokens.SingleAsync(token => token.Token == session.RefreshToken);
-            Assert.Null(originalRefresh.RevokedAt);
+                    var db = scope.ServiceProvider.GetRequiredService<MathLearning.Infrastructure.Persistance.ApiDbContext>();
+                    var originalRefresh = await db.RefreshTokens.SingleAsync(token => token.Token == session.RefreshToken);
+                    Assert.Null(originalRefresh.RevokedAt);
+                }
+            }
         }
         finally
         {
@@ -137,27 +141,29 @@ public sealed class AuthPasswordResetAtomicityTests
         var factory = new PasswordResetRelationalWebApplicationFactory();
         try
         {
-            using var client = factory.CreateClient();
-            var account = await CreateAccountAsync(factory);
+            using (var client = factory.CreateClient())
+            {
+                var account = await CreateAccountAsync(factory);
 
-            var reset = await client.PostAsJsonAsync(
-                "/auth/password/reset",
-                new
-                {
-                    email = account.Email,
-                    token = "invalid-reset-token",
-                    newPassword = account.NewPassword
-                });
+                var reset = await client.PostAsJsonAsync(
+                    "/auth/password/reset",
+                    new
+                    {
+                        email = account.Email,
+                        token = "invalid-reset-token",
+                        newPassword = account.NewPassword
+                    });
 
-            Assert.Equal(HttpStatusCode.BadRequest, reset.StatusCode);
-            var oldLogin = await client.PostAsJsonAsync(
-                "/auth/login",
-                new { username = account.Username, password = account.OldPassword });
-            Assert.Equal(HttpStatusCode.OK, oldLogin.StatusCode);
-            var newLogin = await client.PostAsJsonAsync(
-                "/auth/login",
-                new { username = account.Username, password = account.NewPassword });
-            Assert.Equal(HttpStatusCode.Unauthorized, newLogin.StatusCode);
+                Assert.Equal(HttpStatusCode.BadRequest, reset.StatusCode);
+                var oldLogin = await client.PostAsJsonAsync(
+                    "/auth/login",
+                    new { username = account.Username, password = account.OldPassword });
+                Assert.Equal(HttpStatusCode.OK, oldLogin.StatusCode);
+                var newLogin = await client.PostAsJsonAsync(
+                    "/auth/login",
+                    new { username = account.Username, password = account.NewPassword });
+                Assert.Equal(HttpStatusCode.Unauthorized, newLogin.StatusCode);
+            }
         }
         finally
         {
