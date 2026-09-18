@@ -82,7 +82,23 @@ Auth: Mixed (login/refresh/register are anonymous; revoke-all requires auth)
   - Auth: Anonymous
   - Body: `LoginRequest` (Username, Password)
   - Response: `TokenResponse` { AccessToken, RefreshToken, ExpiresIn, UserId, Username }
-  - Errors: 401 for invalid credentials
+  - Errors: `400 invalid_request`, `401 invalid_credentials`, `403 account_incomplete`, `429 login_rate_limited` (with `Retry-After`), `503 login_unavailable`
+
+- POST /auth/password/forgot
+  - Auth: Anonymous
+  - Body: `{ email }` (syntactically validated; max 254 characters)
+  - Response: `202` `{ success: true, code: "password_reset_requested", message }` for both matching and non-matching emails
+  - Errors: `400 invalid_request`, `429 password_reset_rate_limited` (with `Retry-After`)
+  - The response never discloses whether an account exists. Reset delivery is server-side only.
+
+- POST /auth/password/reset
+  - Auth: Anonymous
+  - Body: `{ email, token, newPassword }`; password policy is the Identity registration policy (10–256 characters)
+  - Response: `200` `{ success: true, code: "password_reset_success", message }`
+  - Errors: `400 password_reset_invalid` or `invalid_password`, `429 password_reset_rate_limited` (with `Retry-After`), `503 password_reset_unavailable`
+  - Successful reset rotates the Identity security stamp and revokes all outstanding refresh tokens.
+
+Auth failure responses use `{ code, message, correlationId?, retryAfterSeconds? }`. Stable public codes include `invalid_request`, `invalid_credentials`, `login_rate_limited`, `account_incomplete`, `login_unavailable`, `invalid_username`, `invalid_email`, `invalid_password`, `registration_conflict`, `registration_invalid`, `registration_rate_limited`, `registration_unavailable`, `password_reset_requested`, `password_reset_success`, `password_reset_invalid`, `password_reset_rate_limited`, and `password_reset_unavailable`. They never expose passwords, reset tokens, Identity internals, or account existence.
 
 - POST /auth/refresh
   - Auth: Anonymous

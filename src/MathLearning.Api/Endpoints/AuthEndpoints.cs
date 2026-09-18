@@ -16,6 +16,7 @@ using System.Net.Mail;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace MathLearning.Api.Endpoints;
 
@@ -26,7 +27,9 @@ public static class AuthEndpoints
     private const int MaxPasswordLength = 256;
     private static readonly TimeSpan LoginRateLimitWindow = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan RegisterRateLimitWindow = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan PasswordResetRateLimitWindow = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan RefreshRateLimitWindow = TimeSpan.FromMinutes(10);
+    private const string PasswordResetRequestedMessage = "If an account matches that email, password reset instructions will be sent.";
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -140,7 +143,7 @@ public static class AuthEndpoints
                         StatusCodes.Status429TooManyRequests,
                         ResolveCorrelationId(),
                         ctx.TraceIdentifier);
-                    return CreateAuthRateLimitedResponse(ctx, registerRetryAfter);
+                    return CreateAuthRateLimitedResponse(ctx, registerRetryAfter, "registration_rate_limited");
                 }
 
                 if (canonicalUsernameForLimit.Length < 3)
@@ -237,12 +240,11 @@ public static class AuthEndpoints
             catch (Exception ex) when (ex is DbException or DbUpdateException)
             {
                 logger.LogError(
-                    "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId} StackTrace={StackTrace}",
+                    "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
                     "registration_db_failure",
                     ex.GetType().Name,
                     ResolveCorrelationId(),
-                    ctx.TraceIdentifier,
-                    ex.StackTrace);
+                    ctx.TraceIdentifier);
                 if (tx != null)
                 {
                     try
@@ -277,12 +279,11 @@ public static class AuthEndpoints
             {
                 // Exception messages can contain database/account data. Keep only safe diagnostics.
                 logger.LogError(
-                    "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId} StackTrace={StackTrace}",
+                    "Mobile registration failed. Reason={Reason} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
                     "registration_unexpected",
                     ex.GetType().Name,
                     ResolveCorrelationId(),
-                    ctx.TraceIdentifier,
-                    ex.StackTrace);
+                    ctx.TraceIdentifier);
                 if (tx != null)
                 {
                     try
@@ -324,7 +325,7 @@ public static class AuthEndpoints
 
         // 🔐 LOGIN (sa Refresh Token)
         static async Task<IResult> LoginHandler(
-            LoginRequest request,
+            LoginRequest? request,
             UserManager<IdentityUser> userManager,
             SignInManager<IdentityUser> signInManager,
             ApiDbContext db,
@@ -337,7 +338,26 @@ public static class AuthEndpoints
         {
             try
             {
+                if (request is null || string.IsNullOrWhiteSpace(request.Username) ||
+                    string.IsNullOrWhiteSpace(request.Password))
+                {
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status400BadRequest,
+                        "invalid_request",
+                        "A username and password are required.");
+                }
+
                 var canonicalUsername = request.Username.Trim();
+                if (canonicalUsername.Length > MaxAuthUsernameLength)
+                {
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status400BadRequest,
+                        "invalid_request",
+                        "The username or password is invalid.");
+                }
+
                 var normalizedUsername = NormalizeAuthDimension(
                     lookupNormalizer.NormalizeName(canonicalUsername) ?? canonicalUsername,
                     128);
@@ -352,12 +372,16 @@ public static class AuthEndpoints
                         LoginRateLimitWindow,
                         out var loginRetryAfter))
                 {
-                    return CreateAuthRateLimitedResponse(ctx, loginRetryAfter);
+                    return CreateAuthRateLimitedResponse(ctx, loginRetryAfter, "login_rate_limited");
                 }
 
                 if (!IsPasswordLengthAcceptable(request.Password))
                 {
-                    return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status400BadRequest,
+                        "invalid_request",
+                        "The username or password is invalid.");
                 }
 
                 logger.LogInformation("Login attempt.");
@@ -366,7 +390,11 @@ public static class AuthEndpoints
                 if (user == null)
                 {
                     logger.LogWarning("Login failed - unknown account.");
-                    return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status401Unauthorized,
+                        "invalid_credentials",
+                        "Invalid username or password");
                 }
 
                 var signInResult = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
@@ -375,7 +403,20 @@ public static class AuthEndpoints
                     logger.LogWarning(
                         "Login failed - {Reason}.",
                         signInResult.IsLockedOut ? "locked out" : "invalid password or not allowed");
-                    return Results.Json(new { error = "Invalid username or password" }, statusCode: 401);
+                    if (signInResult.IsLockedOut)
+                    {
+                        var lockoutEnd = await userManager.GetLockoutEndDateAsync(user);
+                        var retryAfter = lockoutEnd is null
+                            ? 1
+                            : (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalSeconds);
+                        return CreateAuthRateLimitedResponse(ctx, Math.Max(1, retryAfter), "login_rate_limited");
+                    }
+
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status401Unauthorized,
+                        "invalid_credentials",
+                        "Invalid username or password");
                 }
 
                 // Identity key is the stable user id
@@ -384,9 +425,13 @@ public static class AuthEndpoints
                 if (!await accountProvisioning.HasCompleteProfileAsync(userId, ctx.RequestAborted))
                 {
                     logger.LogWarning(
-                        "Login denied - incomplete account missing UserProfile for user: {Username}",
-                        normalizedUsername);
-                    return Results.Json(new { error = "Account setup incomplete" }, statusCode: 403);
+                        "Login denied - incomplete account. CorrelationId={CorrelationId}",
+                        SafeClientErrorResponse.ResolveCorrelationId(ctx));
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status403Forbidden,
+                        "account_incomplete",
+                        "Account setup is incomplete.");
                 }
 
                 var profile = await db.UserProfiles
@@ -426,7 +471,7 @@ public static class AuthEndpoints
             }
             catch (Exception ex)
             {
-                return SafeClientErrorResponse.AuthUnexpectedFailure(
+                return SafeClientErrorResponse.AuthUnavailableFailure(
                     ctx,
                     logger,
                     ex,
@@ -439,6 +484,180 @@ public static class AuthEndpoints
            .AllowAnonymous()
            .WithTags("Authentication")
            .WithName("LoginApiAlias");
+
+        group.MapPost("/password/forgot", async (
+            PasswordResetForgotRequest? request,
+            UserManager<IdentityUser> userManager,
+            IPasswordResetDeliveryDispatcher deliveryDispatcher,
+            HttpContext ctx,
+            ILogger<Program> logger,
+            IRateLimitCounterStore authThrottleStore,
+            ILookupNormalizer lookupNormalizer) =>
+        {
+            try
+            {
+                if (request is null || !IsValidEmailAddress(request.Email, out var canonicalEmail))
+                {
+                    return CreateAuthFailureResponse(
+                        ctx,
+                        StatusCodes.Status400BadRequest,
+                        "invalid_request",
+                        "A valid email address is required.");
+                }
+
+                var normalizedEmail = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeEmail(canonicalEmail) ?? canonicalEmail,
+                    MaxAuthEmailLength);
+
+                if (!TryApplyAuthRateLimit(
+                        authThrottleStore,
+                        purpose: "password-forgot",
+                        principal: normalizedEmail,
+                        ctx,
+                        accountLimit: 3,
+                        networkLimit: 8,
+                        PasswordResetRateLimitWindow,
+                        out var retryAfter))
+                {
+                    return CreateAuthRateLimitedResponse(ctx, retryAfter, "password_reset_rate_limited");
+                }
+
+                return await ProcessForgotPasswordAsync(
+                    canonicalEmail,
+                    userManager,
+                    deliveryDispatcher,
+                    ctx,
+                    logger);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    "Forgot-password processing failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                    ex.GetType().Name,
+                    SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                    SafeClientErrorResponse.ResolveTraceId(ctx));
+
+                // Keep account existence and delivery failures indistinguishable from a missing account.
+                return Results.Json(
+                    new PasswordResetResponse(true, "password_reset_requested", PasswordResetRequestedMessage),
+                    statusCode: StatusCodes.Status202Accepted);
+            }
+        }).WithName("ForgotPassword");
+
+        group.MapPost("/password/reset", async (
+            PasswordResetRequest? request,
+            UserManager<IdentityUser> userManager,
+            IOptions<IdentityOptions> identityOptions,
+            ApiDbContext db,
+            HttpContext ctx,
+            ILogger<Program> logger,
+            IRateLimitCounterStore authThrottleStore,
+            ILookupNormalizer lookupNormalizer) =>
+        {
+            try
+            {
+                if (request is null || !IsValidEmailAddress(request.Email, out var canonicalEmail) ||
+                    string.IsNullOrWhiteSpace(request.Token) || request.Token.Length > 4096 ||
+                    string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length > MaxPasswordLength)
+                {
+                    return CreatePasswordResetFailure(ctx, "password_reset_invalid", StatusCodes.Status400BadRequest);
+                }
+
+                if (request.NewPassword.Length < identityOptions.Value.Password.RequiredLength)
+                {
+                    return CreatePasswordResetFailure(ctx, "invalid_password", StatusCodes.Status400BadRequest);
+                }
+
+                var normalizedEmail = NormalizeAuthDimension(
+                    lookupNormalizer.NormalizeEmail(canonicalEmail) ?? canonicalEmail,
+                    MaxAuthEmailLength);
+
+                if (!TryApplyAuthRateLimit(
+                        authThrottleStore,
+                        purpose: "password-reset",
+                        principal: normalizedEmail,
+                        ctx,
+                        accountLimit: 5,
+                        networkLimit: 12,
+                        PasswordResetRateLimitWindow,
+                        out var retryAfter))
+                {
+                    return CreateAuthRateLimitedResponse(ctx, retryAfter, "password_reset_rate_limited");
+                }
+
+                var user = await userManager.FindByEmailAsync(canonicalEmail);
+                if (user is null)
+                    return CreatePasswordResetFailure(ctx, "password_reset_invalid", StatusCodes.Status400BadRequest);
+
+                var resetToken = Uri.UnescapeDataString(request.Token);
+                // AddEntityFrameworkStores<ApiDbContext>() resolves Identity's user store from this same
+                // scoped ApiDbContext. Begin before ResetPasswordAsync because it saves the password hash.
+                var tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
+                try
+                {
+                    // Identity 8.0.12's UpdatePasswordHash rotates the security stamp as part of
+                    // ResetPasswordAsync. That stamp is the single access/refresh session authority here.
+                    var resetResult = await userManager.ResetPasswordAsync(user, resetToken, request.NewPassword);
+                    if (!resetResult.Succeeded)
+                    {
+                        if (tx != null)
+                            await tx.RollbackAsync(CancellationToken.None);
+                        var invalidPassword = resetResult.Errors.Any(error =>
+                            error.Code.StartsWith("Password", StringComparison.Ordinal));
+                        return CreatePasswordResetFailure(
+                            ctx,
+                            invalidPassword ? "invalid_password" : "password_reset_invalid",
+                            StatusCodes.Status400BadRequest);
+                    }
+
+                    var refreshTokens = await db.RefreshTokens
+                        .Where(token => token.UserId == user.Id && token.RevokedAt == null)
+                        .ToListAsync(ctx.RequestAborted);
+                    foreach (var refreshToken in refreshTokens)
+                        RefreshTokenService.RevokeToken(refreshToken);
+
+                    await db.SaveChangesAsync(ctx.RequestAborted);
+                    if (tx != null)
+                        await tx.CommitAsync(CancellationToken.None);
+
+                    return Results.Ok(new PasswordResetResponse(true, "password_reset_success", "Password reset successfully."));
+                }
+                catch
+                {
+                    if (tx != null)
+                    {
+                        try
+                        {
+                            await tx.RollbackAsync(CancellationToken.None);
+                        }
+                        catch (Exception rollbackException)
+                        {
+                            logger.LogError(
+                                "Password reset transaction rollback failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                                rollbackException.GetType().Name,
+                                SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                                SafeClientErrorResponse.ResolveTraceId(ctx));
+                        }
+                    }
+
+                    throw;
+                }
+                finally
+                {
+                    if (tx != null)
+                        await tx.DisposeAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    "Password reset failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                    ex.GetType().Name,
+                    SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                    SafeClientErrorResponse.ResolveTraceId(ctx));
+                return CreatePasswordResetFailure(ctx, "password_reset_unavailable", StatusCodes.Status503ServiceUnavailable);
+            }
+        }).WithName("ResetPassword");
 
         // 🔄 REFRESH TOKEN
         group.MapPost("/refresh", async (
@@ -649,22 +868,22 @@ public static class AuthEndpoints
                         RegisterRateLimitWindow,
                         out var registerRetryAfter))
                 {
-                    return CreateAuthRateLimitedResponse(ctx, registerRetryAfter);
+                    return CreateAuthRateLimitedResponse(ctx, registerRetryAfter, "registration_rate_limited");
                 }
 
                 if (!IsValidEmailAddress(request.Email, out var canonicalEmail))
                 {
-                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                    return CreateAuthFailureResponse(ctx, StatusCodes.Status400BadRequest, "invalid_email", "Registration could not be completed.");
                 }
 
                 if (canonicalUsername.Length < 3 || canonicalUsername.Length > MaxAuthUsernameLength)
                 {
-                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                    return CreateAuthFailureResponse(ctx, StatusCodes.Status400BadRequest, "invalid_username", "Registration could not be completed.");
                 }
 
                 if (!IsPasswordLengthAcceptable(request.Password))
                 {
-                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                    return CreateAuthFailureResponse(ctx, StatusCodes.Status400BadRequest, "invalid_password", "Registration could not be completed.");
                 }
 
                 tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
@@ -681,7 +900,7 @@ public static class AuthEndpoints
                     if (tx != null)
                         await tx.RollbackAsync(ctx.RequestAborted);
 
-                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 409);
+                    return CreateAuthFailureResponse(ctx, StatusCodes.Status409Conflict, "registration_conflict", "Registration could not be completed.");
                 }
 
                 if (!provisioned.Succeeded || provisioned.User is null || provisioned.Profile is null)
@@ -689,7 +908,7 @@ public static class AuthEndpoints
                     if (tx != null)
                         await tx.RollbackAsync(ctx.RequestAborted);
 
-                    return Results.Json(new { error = "Registration could not be completed" }, statusCode: 400);
+                    return CreateAuthFailureResponse(ctx, StatusCodes.Status400BadRequest, "registration_invalid", "Registration could not be completed.");
                 }
 
                 user = provisioned.User;
@@ -741,7 +960,16 @@ public static class AuthEndpoints
                         ctx.RequestAborted);
                 }
 
-                return SafeClientErrorResponse.AuthUnexpectedFailure(ctx, logger, ex, "Register error");
+                logger.LogError(
+                    "Register error. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                    ex.GetType().Name,
+                    SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                    SafeClientErrorResponse.ResolveTraceId(ctx));
+                return CreateAuthFailureResponse(
+                    ctx,
+                    StatusCodes.Status503ServiceUnavailable,
+                    "registration_unavailable",
+                    "Registration is temporarily unavailable. Please try again later.");
             }
             finally
             {
@@ -756,6 +984,70 @@ public static class AuthEndpoints
             message = "Auth endpoints are working!",
             timestamp = DateTime.UtcNow
         })).WithName("TestAuth");
+    }
+
+    private static async Task<IResult> ProcessForgotPasswordAsync(
+        string canonicalEmail,
+        UserManager<IdentityUser> userManager,
+        IPasswordResetDeliveryDispatcher deliveryDispatcher,
+        HttpContext ctx,
+        ILogger<Program> logger)
+    {
+        var user = await userManager.FindByEmailAsync(canonicalEmail);
+        if (user is null)
+        {
+            // Deliberately perform no account-specific work for an unknown address.
+            return Results.Json(
+                new PasswordResetResponse(true, "password_reset_requested", PasswordResetRequestedMessage),
+                statusCode: StatusCodes.Status202Accepted);
+        }
+
+        try
+        {
+            await deliveryDispatcher.DispatchAsync(
+                user.Id,
+                ctx.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            // Preserve the same public response as a missing account; do not log the email or token.
+            logger.LogError(
+                "Password-reset dispatch failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                ex.GetType().Name,
+                SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                SafeClientErrorResponse.ResolveTraceId(ctx));
+        }
+
+        return Results.Json(
+            new PasswordResetResponse(true, "password_reset_requested", PasswordResetRequestedMessage),
+            statusCode: StatusCodes.Status202Accepted);
+    }
+
+    private static IResult CreateAuthFailureResponse(
+        HttpContext ctx,
+        int statusCode,
+        string code,
+        string message,
+        int? retryAfterSeconds = null) =>
+        Results.Json(
+            new AuthFailureResponse(
+                code,
+                message,
+                SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                retryAfterSeconds),
+            statusCode: statusCode);
+
+    private static IResult CreatePasswordResetFailure(HttpContext ctx, string code, int statusCode)
+    {
+        var message = code switch
+        {
+            "invalid_password" => "The new password does not meet the password requirements.",
+            "password_reset_rate_limited" => "Too many password reset attempts. Try again later.",
+            "password_reset_unavailable" => "Password reset is temporarily unavailable. Please try again later.",
+            _ => "The password reset request is invalid."
+        };
+
+        return CreateAuthFailureResponse(ctx, statusCode, code, message);
     }
 
     private static bool TryApplyAuthRateLimit(
@@ -781,13 +1073,19 @@ public static class AuthEndpoints
         return true;
     }
 
-    private static IResult CreateAuthRateLimitedResponse(HttpContext ctx, int retryAfterSeconds)
+    private static IResult CreateAuthRateLimitedResponse(
+        HttpContext ctx,
+        int retryAfterSeconds,
+        string code = "login_rate_limited")
     {
         var boundedRetryAfter = Math.Max(1, retryAfterSeconds);
         ctx.Response.Headers["Retry-After"] = boundedRetryAfter.ToString(CultureInfo.InvariantCulture);
-        return Results.Json(
-            new { error = "Too many attempts. Try again later." },
-            statusCode: StatusCodes.Status429TooManyRequests);
+        return CreateAuthFailureResponse(
+            ctx,
+            StatusCodes.Status429TooManyRequests,
+            code,
+            "Too many attempts. Try again later.",
+            boundedRetryAfter);
     }
 
     private static string NormalizeAuthDimension(string? value, int maxLength)

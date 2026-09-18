@@ -6,6 +6,14 @@ Backend contract for the MathLearning Flutter runtime. Economy settlement mutati
 
 Auth tokens are issued by the backend. Access JWTs include the current `userId` and `security_stamp` claims, and the backend validates them against the current Identity user state on each authenticated request.
 
+Login failures use `{ code, message, correlationId?, retryAfterSeconds? }`. Unknown usernames and wrong passwords both return `401 invalid_credentials`; incomplete accounts return `403 account_incomplete`; throttling returns `429 login_rate_limited` with `Retry-After`.
+
+`POST /auth/password/forgot` accepts `{ email }` and always returns `202 password_reset_requested` with a generic message, regardless of account existence. `POST /auth/password/reset` accepts `{ email, token, newPassword }`; success returns `password_reset_success`, while invalid tokens return `password_reset_invalid`. Password reset tokens are delivered out-of-band and never returned by the API.
+
+For relational providers, reset commits the Identity password/security-stamp update and active refresh-token revocation in one scoped transaction. Identity 8.0.12's `ResetPasswordAsync` is the authoritative security-stamp rotation path; the backend does not perform a second stamp rotation. Production forgot requests enqueue only the stable Identity user id; the Hangfire job resolves the current account, generates the reset token, and constructs the delivery URL at execution time. Test and Development use the same job owner through deterministic inline delivery.
+
+Production delivery is disabled by default and must be enabled explicitly with `PasswordReset__Delivery__Enabled=true`, a real `PasswordReset__Delivery__SmtpHost`, `PasswordReset__Delivery__FromAddress`, and secret-backed SMTP credentials as needed. `PasswordReset__Delivery__ResetBaseUrl` must be the deployed Flutter deep-link target; no localhost or provider credentials are committed.
+
 ### `POST /auth/revoke-all`
 
 Auth: Required.

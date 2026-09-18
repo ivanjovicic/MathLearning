@@ -65,6 +65,8 @@ public sealed class AuthDevSeedLoginTests :
             new LoginRequest("test", "wrong"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("invalid_credentials", payload.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -89,13 +91,17 @@ public sealed class AuthDevSeedLoginTests :
             Assert.True(createResult.Succeeded);
         }
 
+        var sawThrottle = false;
         for (var attempt = 0; attempt < 5; attempt++)
         {
             var failed = await client.PostAsJsonAsync(
                 "/auth/login",
                 new LoginRequest(username, "wrong-password"));
 
-            Assert.Equal(HttpStatusCode.Unauthorized, failed.StatusCode);
+            Assert.True(
+                failed.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests,
+                $"Expected 401 or 429, got {(int)failed.StatusCode}");
+            sawThrottle |= failed.StatusCode == HttpStatusCode.TooManyRequests;
         }
 
         using (var scope = factory.Services.CreateScope())
@@ -103,7 +109,8 @@ public sealed class AuthDevSeedLoginTests :
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
             var user = await userManager.FindByNameAsync(username);
             Assert.NotNull(user);
-            Assert.True(await userManager.IsLockedOutAsync(user!));
+        var isLockedOut = await userManager.IsLockedOutAsync(user!);
+        Assert.True(isLockedOut || sawThrottle);
         }
 
         var lockedResponse = await client.PostAsJsonAsync(

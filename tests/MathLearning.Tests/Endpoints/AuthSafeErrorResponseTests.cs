@@ -58,7 +58,7 @@ public sealed class AuthSafeErrorResponseTests :
                 "/api/auth/login",
                 new LoginRequest("test", "test-passphrase-2026!"));
 
-            await AssertSafeErrorResponseAsync(response);
+            await AssertLoginUnavailableResponseAsync(response);
         }
         finally
         {
@@ -154,6 +154,18 @@ public sealed class AuthSafeErrorResponseTests :
         using var json = JsonDocument.Parse(body);
         Assert.Equal("An unexpected error occurred.", json.RootElement.GetProperty("error").GetString());
         Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
+    }
+
+    private static async Task AssertLoginUnavailableResponseAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(SecretMessage, body);
+
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal("login_unavailable", json.RootElement.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("correlationId").GetString()));
     }
 }
 

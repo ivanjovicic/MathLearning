@@ -32,6 +32,30 @@ public static class SafeClientErrorResponse
             statusCode: StatusCodes.Status500InternalServerError);
     }
 
+    public static IResult AuthUnavailableFailure(
+        HttpContext context,
+        ILogger logger,
+        Exception exception,
+        string logMessage,
+        params object[] args)
+    {
+        logger.LogError(
+            "{LogMessage} ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+            logMessage,
+            exception.GetType().Name,
+            ResolveCorrelationId(context),
+            ResolveTraceId(context));
+
+        return Results.Json(
+            new
+            {
+                code = "login_unavailable",
+                message = "Authentication is temporarily unavailable. Please try again later.",
+                correlationId = ResolveCorrelationId(context)
+            },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     public static string? ResolveCorrelationId(HttpContext? context) =>
         context?.Items.TryGetValue(CorrelationIdMiddleware.ItemKey, out var value) == true
             ? value?.ToString()
