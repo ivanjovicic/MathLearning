@@ -47,6 +47,6 @@ Cross-repo impact: None; registration/auth and mobile contracts unchanged.
 
 ## Delivery
 State: Needs validation
-Branch/PR: agent/BACKEND-OPS-HANGFIRE-NEON-001 -> origin/main pending delivery
+Branch/PR: agent/BACKEND-OPS-HANGFIRE-NEON-001 merged into origin/main; verified SHA 57071b223c7d298c0df85f374f590cc91e6c56bf
 Commit SHA: self
 Completion %: 79
