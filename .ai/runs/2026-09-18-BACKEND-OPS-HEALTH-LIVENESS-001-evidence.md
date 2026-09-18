@@ -47,6 +47,6 @@ Cross-repo impact: None; auth/registration and mobile contracts unchanged.
 
 ## Delivery
 State: Done
-Branch/PR: agent/BACKEND-OPS-HEALTH-LIVENESS-001 -> origin/main pending delivery
+Branch/PR: agent/BACKEND-OPS-HEALTH-LIVENESS-001 merged into origin/main; verified SHA dd67f40dac2a8337bc11cf5779de1db69ce863db
 Commit SHA: self
 Completion %: 100
