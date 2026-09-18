@@ -14,7 +14,7 @@ Completed at UTC: 2026-09-18T22:55:41Z
 Elapsed time: 3m 44s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-PERF-001, BACKEND-MISTAKE-PERF-002, BACKEND-MISTAKE-PERF-003, BACKEND-MISTAKE-SCOPE-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-PERF-001; apply BACKEND-MISTAKE-PERF-002; apply BACKEND-MISTAKE-PERF-003; apply BACKEND-MISTAKE-SCOPE-001
-Owner/hypothesis: open
+Owner/hypothesis: Background DB work lacks a shared bounded command budget and Hangfire uses an unbounded worker pool; falsifier would be an existing explicit timeout and clamped server configuration already covering both paths.
 Files inspected: 8
 Files changed: 6
 Searches: 4
