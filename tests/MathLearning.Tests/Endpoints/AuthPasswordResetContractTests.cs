@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MathLearning.Api;
@@ -8,12 +9,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MathLearning.Tests.Endpoints;
 
-public sealed class AuthPasswordResetContractTests : IClassFixture<CustomWebApplicationFactory<Program>>, IAsyncLifetime
+public sealed class AuthPasswordResetContractTests : IClassFixture<RealJwtWebApplicationFactory<Program>>, IAsyncLifetime
 {
-    private readonly CustomWebApplicationFactory<Program> factory;
+    private readonly RealJwtWebApplicationFactory<Program> factory;
     private readonly HttpClient client;
 
-    public AuthPasswordResetContractTests(CustomWebApplicationFactory<Program> factory)
+    public AuthPasswordResetContractTests(RealJwtWebApplicationFactory<Program> factory)
     {
         this.factory = factory;
         client = factory.CreateClient();
@@ -98,6 +99,7 @@ public sealed class AuthPasswordResetContractTests : IClassFixture<CustomWebAppl
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var loginBody = await ReadJsonAsync(login);
         var oldRefreshToken = loginBody.GetProperty("refreshToken").GetString();
+        var oldAccessToken = loginBody.GetProperty("accessToken").GetString();
 
         var forgot = await client.PostAsJsonAsync("/auth/password/forgot", new { email });
         Assert.Equal(HttpStatusCode.Accepted, forgot.StatusCode);
@@ -115,6 +117,12 @@ public sealed class AuthPasswordResetContractTests : IClassFixture<CustomWebAppl
 
         var refresh = await client.PostAsJsonAsync("/auth/refresh", new { refreshToken = oldRefreshToken });
         Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+        using (var staleAccessRequest = new HttpRequestMessage(HttpMethod.Get, "/api/users/profile"))
+        {
+            staleAccessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", oldAccessToken);
+            var staleAccess = await client.SendAsync(staleAccessRequest);
+            Assert.Equal(HttpStatusCode.Unauthorized, staleAccess.StatusCode);
+        }
         var oldLogin = await client.PostAsJsonAsync("/auth/login", new { username, password = oldPassword });
         Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
         var newLogin = await client.PostAsJsonAsync("/auth/login", new { username, password = newPassword });

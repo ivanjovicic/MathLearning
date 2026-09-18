@@ -488,7 +488,7 @@ public static class AuthEndpoints
         group.MapPost("/password/forgot", async (
             PasswordResetForgotRequest? request,
             UserManager<IdentityUser> userManager,
-            IPasswordResetDelivery delivery,
+            IPasswordResetDeliveryDispatcher deliveryDispatcher,
             IOptions<PasswordResetDeliveryOptions> deliveryOptions,
             HttpContext ctx,
             ILogger<Program> logger,
@@ -526,7 +526,7 @@ public static class AuthEndpoints
                 return await ProcessForgotPasswordAsync(
                     canonicalEmail,
                     userManager,
-                    delivery,
+                    deliveryDispatcher,
                     deliveryOptions.Value,
                     ctx,
                     logger);
@@ -550,7 +550,6 @@ public static class AuthEndpoints
             PasswordResetRequest? request,
             UserManager<IdentityUser> userManager,
             IOptions<IdentityOptions> identityOptions,
-            AuthSessionValidationService sessionValidation,
             ApiDbContext db,
             HttpContext ctx,
             ILogger<Program> logger,
@@ -593,25 +592,24 @@ public static class AuthEndpoints
                     return CreatePasswordResetFailure(ctx, "password_reset_invalid", StatusCodes.Status400BadRequest);
 
                 var resetToken = Uri.UnescapeDataString(request.Token);
-                var resetResult = await userManager.ResetPasswordAsync(user, resetToken, request.NewPassword);
-                if (!resetResult.Succeeded)
-                {
-                    var invalidPassword = resetResult.Errors.Any(error =>
-                        error.Code.StartsWith("Password", StringComparison.Ordinal));
-                    return CreatePasswordResetFailure(
-                        ctx,
-                        invalidPassword ? "invalid_password" : "password_reset_invalid",
-                        StatusCodes.Status400BadRequest);
-                }
-
+                // AddEntityFrameworkStores<ApiDbContext>() resolves Identity's user store from this same
+                // scoped ApiDbContext. Begin before ResetPasswordAsync because it saves the password hash.
                 var tx = await EconomyEndpointHelpers.BeginDbTransactionIfSupportedAsync(db, ctx.RequestAborted);
                 try
                 {
-                    if (!await sessionValidation.InvalidateUserSessionsAsync(user))
+                    // Identity 8.0.12's UpdatePasswordHash rotates the security stamp as part of
+                    // ResetPasswordAsync. That stamp is the single access/refresh session authority here.
+                    var resetResult = await userManager.ResetPasswordAsync(user, resetToken, request.NewPassword);
+                    if (!resetResult.Succeeded)
                     {
                         if (tx != null)
-                            await tx.RollbackAsync(ctx.RequestAborted);
-                        return CreatePasswordResetFailure(ctx, "password_reset_unavailable", StatusCodes.Status503ServiceUnavailable);
+                            await tx.RollbackAsync(CancellationToken.None);
+                        var invalidPassword = resetResult.Errors.Any(error =>
+                            error.Code.StartsWith("Password", StringComparison.Ordinal));
+                        return CreatePasswordResetFailure(
+                            ctx,
+                            invalidPassword ? "invalid_password" : "password_reset_invalid",
+                            StatusCodes.Status400BadRequest);
                     }
 
                     var refreshTokens = await db.RefreshTokens
@@ -622,9 +620,29 @@ public static class AuthEndpoints
 
                     await db.SaveChangesAsync(ctx.RequestAborted);
                     if (tx != null)
-                        await tx.CommitAsync(ctx.RequestAborted);
+                        await tx.CommitAsync(CancellationToken.None);
 
                     return Results.Ok(new PasswordResetResponse(true, "password_reset_success", "Password reset successfully."));
+                }
+                catch
+                {
+                    if (tx != null)
+                    {
+                        try
+                        {
+                            await tx.RollbackAsync(CancellationToken.None);
+                        }
+                        catch (Exception rollbackException)
+                        {
+                            logger.LogError(
+                                "Password reset transaction rollback failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                                rollbackException.GetType().Name,
+                                SafeClientErrorResponse.ResolveCorrelationId(ctx),
+                                SafeClientErrorResponse.ResolveTraceId(ctx));
+                        }
+                    }
+
+                    throw;
                 }
                 finally
                 {
@@ -973,7 +991,7 @@ public static class AuthEndpoints
     private static async Task<IResult> ProcessForgotPasswordAsync(
         string canonicalEmail,
         UserManager<IdentityUser> userManager,
-        IPasswordResetDelivery delivery,
+        IPasswordResetDeliveryDispatcher deliveryDispatcher,
         PasswordResetDeliveryOptions deliveryOptions,
         HttpContext ctx,
         ILogger<Program> logger)
@@ -990,15 +1008,18 @@ public static class AuthEndpoints
         var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
         var separator = deliveryOptions.ResetBaseUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?';
         var resetUrl = $"{deliveryOptions.ResetBaseUrl}{separator}email={Uri.EscapeDataString(canonicalEmail)}&token={Uri.EscapeDataString(resetToken)}";
-        var delivered = await delivery.SendAsync(
-            new PasswordResetDeliveryMessage(canonicalEmail, resetToken, resetUrl),
-            ctx.RequestAborted);
-
-        if (!delivered)
+        try
         {
-            logger.LogWarning(
-                "Password-reset delivery unavailable. Reason={Reason} CorrelationId={CorrelationId} TraceId={TraceId}",
-                "delivery_unavailable",
+            await deliveryDispatcher.DispatchAsync(
+                new PasswordResetDeliveryMessage(canonicalEmail, resetToken, resetUrl),
+                ctx.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            // Preserve the same public response as a missing account; do not log the email or token.
+            logger.LogError(
+                "Password-reset dispatch failed. ExceptionType={ExceptionType} CorrelationId={CorrelationId} TraceId={TraceId}",
+                ex.GetType().Name,
                 SafeClientErrorResponse.ResolveCorrelationId(ctx),
                 SafeClientErrorResponse.ResolveTraceId(ctx));
         }

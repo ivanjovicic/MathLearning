@@ -348,8 +348,11 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddSingleton<MathLearning.Api.Middleware.IRateLimitCounterStore, MathLearning.Api.Middleware.InMemoryRateLimitCounterStore>();
         builder.Services.AddScoped<AuthSessionValidationService>();
         builder.Services.AddScoped<IAccountProvisioningService, AccountProvisioningService>();
-        builder.Services.Configure<PasswordResetDeliveryOptions>(
-            builder.Configuration.GetSection(PasswordResetDeliveryOptions.SectionName));
+        builder.Services.AddOptions<PasswordResetDeliveryOptions>()
+            .Bind(builder.Configuration.GetSection(PasswordResetDeliveryOptions.SectionName))
+            .ValidateOnStart();
+        builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<PasswordResetDeliveryOptions>, PasswordResetDeliveryOptionsValidator>();
+        builder.Services.AddScoped<IPasswordResetDeliveryJob, PasswordResetDeliveryJob>();
         builder.Services.AddSingleton<IPasswordResetDelivery>(sp =>
         {
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PasswordResetDeliveryOptions>>().Value;
@@ -364,6 +367,22 @@ public static class ServiceRegistrationExtensions
 
             return new SmtpPasswordResetDelivery(
                 sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PasswordResetDeliveryOptions>>());
+        });
+        builder.Services.AddSingleton<IPasswordResetDeliveryDispatcher>(sp =>
+        {
+            var environment = sp.GetRequiredService<IHostEnvironment>();
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PasswordResetDeliveryOptions>>().Value;
+
+            if (environment.IsEnvironment("Test") || environment.IsDevelopment())
+                return new InlinePasswordResetDeliveryDispatcher(
+                    sp.GetRequiredService<IPasswordResetDelivery>());
+
+            if (!options.Enabled)
+                return new InlinePasswordResetDeliveryDispatcher(
+                    sp.GetRequiredService<IPasswordResetDelivery>());
+
+            return new HangfirePasswordResetDeliveryDispatcher(
+                sp.GetRequiredService<Hangfire.IBackgroundJobClient>());
         });
 
         builder.Services.AddIdentityCore<IdentityUser>(options =>

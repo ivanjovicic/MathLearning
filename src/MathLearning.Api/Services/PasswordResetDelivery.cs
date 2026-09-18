@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using Hangfire;
 using Microsoft.Extensions.Options;
 
 namespace MathLearning.Api.Services;
@@ -19,6 +20,51 @@ public sealed class PasswordResetDeliveryOptions
     public string ResetBaseUrl { get; set; } = "mathlearning://reset-password";
 }
 
+public sealed class PasswordResetDeliveryOptionsValidator : IValidateOptions<PasswordResetDeliveryOptions>
+{
+    public ValidateOptionsResult Validate(string? name, PasswordResetDeliveryOptions options)
+    {
+        if (!options.Enabled)
+            return ValidateOptionsResult.Success;
+
+        var failures = new List<string>();
+        if (string.IsNullOrWhiteSpace(options.SmtpHost))
+            failures.Add("SmtpHost is required when password reset delivery is enabled.");
+        if (options.SmtpPort is < 1 or > 65535)
+            failures.Add("SmtpPort must be between 1 and 65535.");
+        if (string.IsNullOrWhiteSpace(options.FromAddress) ||
+            !TryParseExactAddress(options.FromAddress, out _))
+            failures.Add("FromAddress must be a valid email address without a display-name wrapper.");
+        if (!Uri.TryCreate(options.ResetBaseUrl, UriKind.Absolute, out var resetUri) ||
+            string.IsNullOrWhiteSpace(resetUri.Scheme) ||
+            string.Equals(resetUri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
+            failures.Add("ResetBaseUrl must be a valid application or deep-link URI.");
+
+        var hasUsername = !string.IsNullOrWhiteSpace(options.SmtpUsername);
+        var hasPassword = !string.IsNullOrWhiteSpace(options.SmtpPassword);
+        if (hasUsername != hasPassword)
+            failures.Add("SmtpUsername and SmtpPassword must be configured together.");
+
+        return failures.Count == 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(failures);
+    }
+
+    private static bool TryParseExactAddress(string value, out MailAddress? address)
+    {
+        address = null;
+        try
+        {
+            address = new MailAddress(value.Trim());
+            return string.Equals(address.Address, value.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+}
+
 public sealed record PasswordResetDeliveryMessage(
     string RecipientEmail,
     string ResetToken,
@@ -27,6 +73,82 @@ public sealed record PasswordResetDeliveryMessage(
 public interface IPasswordResetDelivery
 {
     Task<bool> SendAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default);
+}
+
+public interface IPasswordResetDeliveryDispatcher
+{
+    Task DispatchAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default);
+}
+
+public interface IPasswordResetDeliveryJob
+{
+    Task SendAsync(PasswordResetDeliveryMessage message);
+}
+
+public sealed class PasswordResetDeliveryJob : IPasswordResetDeliveryJob
+{
+    private readonly IPasswordResetDelivery delivery;
+    private readonly ILogger<PasswordResetDeliveryJob> logger;
+
+    public PasswordResetDeliveryJob(
+        IPasswordResetDelivery delivery,
+        ILogger<PasswordResetDeliveryJob> logger)
+    {
+        this.delivery = delivery;
+        this.logger = logger;
+    }
+
+    public async Task SendAsync(PasswordResetDeliveryMessage message)
+    {
+        try
+        {
+            if (!await delivery.SendAsync(message, CancellationToken.None))
+            {
+                logger.LogWarning(
+                    "Password-reset delivery unavailable. Reason={Reason}",
+                    "delivery_unavailable");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                "Password-reset delivery failed. ExceptionType={ExceptionType}",
+                ex.GetType().Name);
+            throw;
+        }
+    }
+}
+
+public sealed class InlinePasswordResetDeliveryDispatcher : IPasswordResetDeliveryDispatcher
+{
+    private readonly IPasswordResetDelivery delivery;
+
+    public InlinePasswordResetDeliveryDispatcher(IPasswordResetDelivery delivery)
+    {
+        this.delivery = delivery;
+    }
+
+    public async Task DispatchAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default)
+    {
+        await delivery.SendAsync(message, cancellationToken);
+    }
+}
+
+public sealed class HangfirePasswordResetDeliveryDispatcher : IPasswordResetDeliveryDispatcher
+{
+    private readonly IBackgroundJobClient backgroundJobs;
+
+    public HangfirePasswordResetDeliveryDispatcher(IBackgroundJobClient backgroundJobs)
+    {
+        this.backgroundJobs = backgroundJobs;
+    }
+
+    public Task DispatchAsync(PasswordResetDeliveryMessage message, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        backgroundJobs.Enqueue<IPasswordResetDeliveryJob>(job => job.SendAsync(message));
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>
