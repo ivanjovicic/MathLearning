@@ -46,7 +46,7 @@ Documentation impact: updated `docs/API_ENDPOINT_INVENTORY.md` and `docs/mobile_
 Cross-repo impact: no mobile repository changes; companion remains linked.
 
 ## Delivery
-State: Ready for delivery
-Branch/PR: `agent/BACKEND-AUTH-REFRESH-LOGOUT-CONTRACT-001` (local branch; no PR required before direct main delivery)
+State: Done
+Branch/PR: task branch fast-forwarded into `origin/main`; delivery verified at `1430901` before this evidence-sync commit.
 Commit SHA: self
 Completion %: 100
