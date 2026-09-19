@@ -47,6 +47,6 @@ Cross-repo impact: mobile clients must use `progress-sync-v2` with stable identi
 
 ## Delivery
 State: Needs validation
-Branch/PR: direct `main` delivery; commit/push pending
+Branch/PR: direct `main` delivery; pushed to `origin/main` in this run
 Commit SHA: self
 Completion %: 79
