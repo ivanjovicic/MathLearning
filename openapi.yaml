@@ -191,12 +191,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OptionDto'
-        correctAnswerId: { type: integer }
         difficulty: { type: integer }
         hintLight: { type: string, nullable: true }
         hintMedium: { type: string, nullable: true }
-        hintFull: { type: string, nullable: true }
-        explanation: { type: string, nullable: true }
+        textFormat: { type: string }
+        hintFormat: { type: string }
+        textRenderMode: { type: string }
+        hintRenderMode: { type: string }
+        semanticsAltText: { type: string, nullable: true }
 
     QuizQuestionDto:
       type: object
@@ -1833,7 +1835,7 @@ paths:
           schema: { type: integer, default: 20 }
       responses:
         '200':
-          description: Array of QuestionDto
+          description: Array of pre-answer-safe QuestionDto
           content:
             application/json:
               schema:
@@ -1852,7 +1854,7 @@ paths:
           schema: { type: integer }
       responses:
         '200':
-          description: QuestionDto
+          description: pre-answer-safe QuestionDto
           content:
             application/json:
               schema:

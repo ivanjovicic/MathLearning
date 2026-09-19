@@ -217,6 +217,15 @@ The legacy `/api/quiz/questions` route accepts explicit `subtopicId` or the
 confirmed `topic_<numericId>` compatibility key. A localized skill title is
 never a content identity.
 
+All online pre-answer question routes use the same safe question shape:
+`POST /api/quiz/start`, `GET|POST /api/quiz/questions`,
+`POST /api/quiz/next-question`, `GET /api/quiz/srs/daily` and
+`GET /api/quiz/srs/mixed` omit `correctAnswerId`, option correctness flags,
+`hintFull`, `explanation` and worked `steps` entirely. `hintLight` and
+`hintMedium` are progressive hints only; authoritative explanation/steps are
+returned by `POST /api/quiz/answer` after server settlement for an incorrect
+answer, preserving the existing feedback rule.
+
 ### `GET /api/progress/topics` and `GET /api/progress/topics/{topicId}/subtopics`
 
 Topic progress now includes:

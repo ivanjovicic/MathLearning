@@ -214,6 +214,48 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
         AssertPreAnswerQuestionShape(payload);
     }
 
+    [Fact]
+    public async Task OnlineQuestionShape_DoesNotSerializeHiddenSolutionContent_ButAnswerStillReturnsFeedback()
+    {
+        var quizData = await SeedQuizPoolAsync("solution-redaction", 1, createEmptySubtopic: true);
+        const string secret = "SECRET-SOLUTION-42";
+
+        using (var scopeHandle = _factory.Services.CreateScope())
+        {
+            var db = scopeHandle.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var question = await db.Questions
+                .SingleAsync(x => x.SubtopicId == quizData.HotSubtopicId);
+            question.SetExplanation($"The complete solution is {secret}.");
+            question.SetHintFull($"The full hint reveals {secret}.");
+            await db.SaveChangesAsync();
+        }
+
+        var startResponse = await PostAsUserAsync("/api/quiz/start", new
+        {
+            subtopicId = quizData.HotSubtopicId,
+            questionCount = 1
+        });
+
+        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+        var startPayload = await ReadJsonAsync(startResponse);
+        var questionPayload = startPayload.GetProperty("questions")[0];
+        AssertPreAnswerQuestionShape(questionPayload);
+        Assert.DoesNotContain(secret, await startResponse.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        var answerResponse = await PostAsUserAsync("/api/quiz/answer", new
+        {
+            quizId = startPayload.GetProperty("quizId").GetString(),
+            questionId = questionPayload.GetProperty("id").GetInt32(),
+            answer = "Answer 1 B",
+            timeSpentSeconds = 1
+        });
+
+        Assert.Equal(HttpStatusCode.OK, answerResponse.StatusCode);
+        var answerPayload = await ReadJsonAsync(answerResponse);
+        Assert.False(answerPayload.GetProperty("isCorrect").GetBoolean());
+        Assert.Contains(secret, answerPayload.GetProperty("explanation").GetString() ?? string.Empty, StringComparison.Ordinal);
+    }
+
     private async Task<(int HotSubtopicId, int EmptySubtopicId)> SeedQuizPoolAsync(
         string scope,
         int hotQuestionCount,
@@ -334,5 +376,8 @@ public sealed class QuizStartContractIntegrationTests : IClassFixture<CustomWebA
         Assert.False(question.TryGetProperty("hintFull", out _));
         Assert.False(question.TryGetProperty("explanation", out _));
         Assert.False(question.TryGetProperty("steps", out _));
+
+        foreach (var option in optionsElement.EnumerateArray())
+            Assert.False(option.TryGetProperty("isCorrect", out _));
     }
 }
