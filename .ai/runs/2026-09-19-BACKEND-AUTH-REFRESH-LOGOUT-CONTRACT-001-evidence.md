@@ -41,7 +41,7 @@ Mistakes observed: BACKEND-MISTAKE-VALIDATION-001 — initial rate-limit regress
 Waste: one focused rerun after correcting the test fixture boundary.
 Missed: no known in-scope miss.
 Follow-up: mobile companion `MOB66-AUTH-LOGOUT-REVOCATION-001` remains a separate owner.
-Residual risk: none in scope; CI is pending asynchronously and existing package advisory/duplicate-using warnings remain outside this prompt.
+Residual risk: none
 Documentation impact: updated `docs/API_ENDPOINT_INVENTORY.md` and `docs/mobile_api_contract.md` in this run.
 Cross-repo impact: no mobile repository changes; companion remains linked.
 
