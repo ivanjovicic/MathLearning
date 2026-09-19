@@ -2,21 +2,27 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MathLearning.Api;
+using MathLearning.Application.DTOs.Cosmetics;
+using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Tests.Helpers;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace MathLearning.Tests.Endpoints;
 
-public sealed class ProgressSyncIntegrationTests : IClassFixture<CustomWebApplicationFactory<Program>>
+public sealed class ProgressSyncIntegrationTests : IClassFixture<ProgressSyncIntegrationTests.ProgressSyncWebApplicationFactory>
 {
     private readonly HttpClient _client;
-    private readonly CustomWebApplicationFactory<Program> _factory;
+    private readonly ProgressSyncWebApplicationFactory _factory;
 
-    public ProgressSyncIntegrationTests(CustomWebApplicationFactory<Program> factory)
+    public ProgressSyncIntegrationTests(ProgressSyncWebApplicationFactory factory)
     {
         _factory = factory;
         _client = factory.CreateClient();
@@ -207,6 +213,7 @@ public sealed class ProgressSyncIntegrationTests : IClassFixture<CustomWebApplic
             UserId = userId,
             ClientSequence = 1,
             OperationType = "submit_answer",
+            PayloadHash = IdempotencyPayloadCanonicalizer.ComputePayloadHash("{}"),
             PayloadJson = "{}",
             Status = SyncEventStatuses.Processed,
             OccurredAtUtc = answeredAt,
@@ -308,4 +315,36 @@ public sealed class ProgressSyncIntegrationTests : IClassFixture<CustomWebApplic
     }
 
     private static string NewUserId(string suffix) => $"progress-sync-{suffix}-{Guid.NewGuid():N}";
+
+    public sealed class ProgressSyncWebApplicationFactory : CustomWebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ICosmeticRewardService>();
+                services.AddSingleton<ICosmeticRewardService, NoOpCosmeticRewardService>();
+            });
+        }
+    }
+
+    private sealed class NoOpCosmeticRewardService : ICosmeticRewardService
+    {
+        public Task<IReadOnlyList<CosmeticUnlockResultDto>> ProcessProgressRewardsAsync(
+            string userId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<CosmeticUnlockResultDto>>([]);
+
+        public Task<IReadOnlyList<CosmeticUnlockResultDto>> ProcessRewardSourceAsync(
+            CosmeticRewardSourceRequest request,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<CosmeticUnlockResultDto>>([]);
+
+        public Task<ClaimRewardTrackTierResponse> ClaimRewardTrackTierAsync(
+            string userId,
+            ClaimRewardTrackTierRequest request,
+            CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+    }
 }

@@ -249,6 +249,20 @@ Subtopic progress now includes:
 - `unlocked` (topic gate)
 - `canStartQuiz` (`unlocked && playableQuestionCount > 0`)
 
+### `POST /api/progress/sync`
+
+Progress completion is server-derived. The request must include a registered
+active `deviceId`, stable `operationId`/`idempotencyKey`, and at least one
+settled `quizOperationIds` or completed `practiceSessionIds` reference owned by
+the authenticated user and device. The server resolves the UTC calendar day
+from the settled evidence, rejects future dates and dates outside the configured
+offline window, and updates daily progress/rewards idempotently. A legacy body
+containing only `completed` and `day` receives `426` with
+`errorCode: "progress_sync_legacy_client"` and `requiredVersion:
+"progress-sync-v2"`; it cannot create a daily completion. Replaying the same
+identity returns the stored response, while the same identity with different
+evidence returns `409 idempotency_conflict`.
+
 Use the subtopics route to resolve the numeric `subtopicId` for
 `POST /api/quiz/start`. Avoid relying on topic ids as `subtopicId`; the backend
 only accepts that shape as a compatibility fallback.
