@@ -248,6 +248,37 @@ public sealed class CosmeticsIdempotencyServiceTests
             service.BeginOrGetExistingAsync("user", "cosmetics_item_claim", "operation", " ", new { }));
     }
 
+    [Fact]
+    public async Task StalePendingLedger_IsTakenOver_AndOldOwnerCannotComplete()
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseInMemoryDatabase($"stale-cosmetics-{Guid.NewGuid():N}")
+            .Options;
+
+        await using var firstDb = new ApiDbContext(options);
+        var firstService = CreateService(firstDb);
+        var first = await firstService.BeginOrGetExistingAsync(
+            "user-1", "cosmetics_item_claim", "operation-1", "key-1", new { itemKey = "frame_comet" });
+
+        var pending = await firstDb.CosmeticsIdempotencyLedgers.SingleAsync();
+        pending.UpdatedAtUtc = DateTime.UtcNow.AddMinutes(-10);
+        pending.LeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(-5);
+        await firstDb.SaveChangesAsync();
+
+        await using var secondDb = new ApiDbContext(options);
+        var secondService = CreateService(secondDb);
+        var takeover = await secondService.BeginOrGetExistingAsync(
+            "user-1", "cosmetics_item_claim", "operation-1", "key-1", new { itemKey = "frame_comet" });
+
+        Assert.True(takeover.IsExisting);
+        Assert.True(takeover.ShouldProcess);
+        Assert.Equal(first.LedgerId, takeover.LedgerId);
+
+        firstDb.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            firstService.CompleteAsync(first.LedgerId, new { success = true }));
+    }
+
     private static CosmeticsIdempotencyService CreateService(ApiDbContext db)
         => new(
             db,

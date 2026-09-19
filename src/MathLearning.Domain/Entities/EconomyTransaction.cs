@@ -22,4 +22,7 @@ public class EconomyTransaction
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public string? OwnerToken { get; set; }
+    public DateTime? LeaseExpiresAtUtc { get; set; }
+    public int AttemptCount { get; set; }
 }

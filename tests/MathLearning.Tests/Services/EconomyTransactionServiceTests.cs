@@ -3,6 +3,7 @@ using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Tests.Helpers;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MathLearning.Tests.Services;
@@ -112,6 +113,35 @@ public sealed class EconomyTransactionServiceTests
         Assert.False(byIdempotency.ShouldProcess);
         Assert.Equal(first.TransactionId, byOperation.TransactionId);
         Assert.Equal(first.TransactionId, byIdempotency.TransactionId);
+    }
+
+    [Fact]
+    public async Task StalePendingTransaction_IsTakenOver_AndOldOwnerCannotComplete()
+    {
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseInMemoryDatabase($"stale-economy-{Guid.NewGuid():N}")
+            .Options;
+
+        await using var firstDb = new ApiDbContext(options);
+        var firstService = CreateService(firstDb);
+        var first = await firstService.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
+
+        var pending = await firstDb.EconomyTransactions.SingleAsync();
+        pending.UpdatedAtUtc = DateTime.UtcNow.AddMinutes(-10);
+        pending.LeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(-5);
+        await firstDb.SaveChangesAsync();
+
+        await using var secondDb = new ApiDbContext(options);
+        var secondService = CreateService(secondDb);
+        var takeover = await secondService.BeginOrGetExistingAsync("u1", "coins_spend", "k1", new { amount = 10 });
+
+        Assert.True(takeover.IsExisting);
+        Assert.True(takeover.ShouldProcess);
+        Assert.Equal(first.TransactionId, takeover.TransactionId);
+
+        firstDb.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            firstService.CompleteAsync(first.TransactionId, new { success = true }));
     }
 
     private static EconomyTransactionService CreateService(ApiDbContext db)

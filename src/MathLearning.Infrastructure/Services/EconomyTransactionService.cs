@@ -9,9 +9,11 @@ namespace MathLearning.Infrastructure.Services;
 
 public sealed class EconomyTransactionService : IEconomyTransactionService
 {
+    private static readonly TimeSpan PendingLeaseDuration = TimeSpan.FromMinutes(5);
     private readonly ApiDbContext db;
     private readonly ILogger<EconomyTransactionService> logger;
     private readonly IdempotencyObservabilityService observability;
+    private string? ownerToken;
 
     public EconomyTransactionService(
         ApiDbContext db,
@@ -105,7 +107,27 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                     effectiveIdempotencyKey);
             }
 
-            return ValidateAndMapExisting(existing, requestHash);
+            var stalePending = existing.Status == EconomyTransactionStatus.Pending && IsLeaseStale(existing, DateTime.UtcNow);
+            var existingResult = ValidateAndMapExisting(existing, requestHash, recordReplay: !stalePending);
+            if (stalePending)
+            {
+                var takeoverToken = CreateOwnerToken();
+                if (await TryTakeoverAsync(existing.Id, takeoverToken, cancellationToken))
+                {
+                    ownerToken = takeoverToken;
+                    db.ChangeTracker.Clear();
+                    var takenOver = await db.EconomyTransactions
+                        .SingleAsync(x => x.Id == existing.Id, cancellationToken);
+                    return ToBeginResult(takenOver, isExisting: true, shouldProcess: true);
+                }
+
+                db.ChangeTracker.Clear();
+                var raced = await db.EconomyTransactions
+                    .SingleAsync(x => x.Id == existing.Id, cancellationToken);
+                return ValidateAndMapExisting(raced, requestHash);
+            }
+
+            return existingResult;
         }
 
         var now = DateTime.UtcNow;
@@ -119,8 +141,13 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
             RequestHash = requestHash,
             RequestJson = requestJson,
             CreatedAtUtc = now,
-            UpdatedAtUtc = now
+            UpdatedAtUtc = now,
+            OwnerToken = CreateOwnerToken(),
+            LeaseExpiresAtUtc = now.Add(PendingLeaseDuration),
+            AttemptCount = 1
         };
+
+        ownerToken = transaction.OwnerToken;
 
         db.EconomyTransactions.Add(transaction);
 
@@ -162,7 +189,22 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                 "Economy transaction creation raced with another request. Reusing transaction {TransactionId}.",
                 existing!.Id);
 
-            return ValidateAndMapExisting(existing, requestHash);
+            var stalePending = existing.Status == EconomyTransactionStatus.Pending && IsLeaseStale(existing, DateTime.UtcNow);
+            var existingResult = ValidateAndMapExisting(existing, requestHash, recordReplay: !stalePending);
+            if (stalePending)
+            {
+                var takeoverToken = CreateOwnerToken();
+                if (await TryTakeoverAsync(existing.Id, takeoverToken, cancellationToken))
+                {
+                    ownerToken = takeoverToken;
+                    db.ChangeTracker.Clear();
+                    var takenOver = await db.EconomyTransactions
+                        .SingleAsync(x => x.Id == existing.Id, cancellationToken);
+                    return ToBeginResult(takenOver, isExisting: true, shouldProcess: true);
+                }
+            }
+
+            return existingResult;
         }
 
         return ToBeginResult(transaction, isExisting: false, shouldProcess: true);
@@ -193,12 +235,16 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                 $"Economy transaction {transactionId} is already failed and cannot be completed.");
         }
 
+        EnsureOwnership(transaction);
+
         var now = DateTime.UtcNow;
         transaction.Status = EconomyTransactionStatus.Completed;
         transaction.ResultJson = resultJson;
         transaction.ErrorCode = null;
         transaction.CompletedAtUtc = now;
         transaction.UpdatedAtUtc = now;
+        transaction.OwnerToken = null;
+        transaction.LeaseExpiresAtUtc = null;
 
         await db.SaveChangesAsync(cancellationToken);
         observability.RecordFirstSuccess(
@@ -237,11 +283,15 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                 $"Economy transaction {transactionId} is already completed and cannot be failed.");
         }
 
+        EnsureOwnership(transaction);
+
         transaction.Status = EconomyTransactionStatus.Failed;
         transaction.ResultJson = resultJson;
         transaction.ErrorCode = effectiveErrorCode;
         transaction.CompletedAtUtc = null;
         transaction.UpdatedAtUtc = DateTime.UtcNow;
+        transaction.OwnerToken = null;
+        transaction.LeaseExpiresAtUtc = null;
 
         await db.SaveChangesAsync(cancellationToken);
         observability.RecordFailure(
@@ -286,7 +336,80 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
             ?? throw new InvalidOperationException($"Economy transaction {transactionId} was not found.");
     }
 
-    private EconomyTransactionBeginResult ValidateAndMapExisting(EconomyTransaction transaction, string requestHash)
+    private async Task<bool> TryTakeoverAsync(
+        Guid transactionId,
+        string newOwnerToken,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        if (string.Equals(db.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal))
+        {
+            var inMemory = await db.EconomyTransactions
+                .SingleOrDefaultAsync(x => x.Id == transactionId, cancellationToken);
+            if (inMemory is null ||
+                inMemory.Status != EconomyTransactionStatus.Pending ||
+                !IsLeaseStale(inMemory, now))
+            {
+                return false;
+            }
+
+            inMemory.OwnerToken = newOwnerToken;
+            inMemory.LeaseExpiresAtUtc = now.Add(PendingLeaseDuration);
+            inMemory.AttemptCount++;
+            inMemory.UpdatedAtUtc = now;
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        var updated = await db.EconomyTransactions
+            .Where(x => x.Id == transactionId &&
+                        x.Status == EconomyTransactionStatus.Pending &&
+                        x.LeaseExpiresAtUtc == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.OwnerToken, newOwnerToken)
+                .SetProperty(x => x.LeaseExpiresAtUtc, now.Add(PendingLeaseDuration))
+                .SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1)
+                .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
+
+        if (updated == 1)
+            return true;
+
+        updated = await db.EconomyTransactions
+            .Where(x => x.Id == transactionId &&
+                        x.Status == EconomyTransactionStatus.Pending &&
+                        x.LeaseExpiresAtUtc <= now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.OwnerToken, newOwnerToken)
+                .SetProperty(x => x.LeaseExpiresAtUtc, now.Add(PendingLeaseDuration))
+                .SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1)
+                .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
+
+        return updated == 1;
+    }
+
+    private void EnsureOwnership(EconomyTransaction transaction)
+    {
+        if (string.IsNullOrWhiteSpace(ownerToken) ||
+            !string.Equals(transaction.OwnerToken, ownerToken, StringComparison.Ordinal) ||
+            transaction.LeaseExpiresAtUtc is null ||
+            transaction.LeaseExpiresAtUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException(
+                $"Economy transaction {transaction.Id} is no longer owned by this request.");
+        }
+    }
+
+    private static bool IsLeaseStale(EconomyTransaction transaction, DateTime now)
+    {
+        return transaction.LeaseExpiresAtUtc is null || transaction.LeaseExpiresAtUtc <= now;
+    }
+
+    private static string CreateOwnerToken() => Guid.NewGuid().ToString("N");
+
+    private EconomyTransactionBeginResult ValidateAndMapExisting(
+        EconomyTransaction transaction,
+        string requestHash,
+        bool recordReplay = true)
     {
         if (!string.Equals(transaction.RequestHash, requestHash, StringComparison.Ordinal))
         {
@@ -307,12 +430,15 @@ public sealed class EconomyTransactionService : IEconomyTransactionService
                 transaction.IdempotencyKey);
         }
 
-        observability.RecordReplay(
-            IdempotencyObservabilityService.ResolveEconomyEndpoint(transaction.TransactionType),
-            transaction.TransactionType,
-            transaction.OperationId ?? transaction.IdempotencyKey,
-            transaction.UserId,
-            transaction.Status.ToString());
+        if (recordReplay)
+        {
+            observability.RecordReplay(
+                IdempotencyObservabilityService.ResolveEconomyEndpoint(transaction.TransactionType),
+                transaction.TransactionType,
+                transaction.OperationId ?? transaction.IdempotencyKey,
+                transaction.UserId,
+                transaction.Status.ToString());
+        }
         return ToBeginResult(transaction, isExisting: true, shouldProcess: false);
     }
 

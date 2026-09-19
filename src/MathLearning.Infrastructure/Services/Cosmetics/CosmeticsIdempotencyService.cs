@@ -9,9 +9,11 @@ namespace MathLearning.Infrastructure.Services.Cosmetics;
 
 public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
 {
+    private static readonly TimeSpan PendingLeaseDuration = TimeSpan.FromMinutes(5);
     private readonly ApiDbContext db;
     private readonly ILogger<CosmeticsIdempotencyService> logger;
     private readonly IdempotencyObservabilityService observability;
+    private string? ownerToken;
 
     public CosmeticsIdempotencyService(
         ApiDbContext db,
@@ -71,7 +73,27 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
                     effectiveIdempotencyKey);
             }
 
-            return ValidateAndMapExisting(existing, payloadHash);
+            var stalePending = existing.Status == CosmeticsIdempotencyStatuses.Pending && IsLeaseStale(existing, DateTime.UtcNow);
+            var existingResult = ValidateAndMapExisting(existing, payloadHash, recordReplay: !stalePending);
+            if (stalePending)
+            {
+                var takeoverToken = CreateOwnerToken();
+                if (await TryTakeoverAsync(existing.Id, takeoverToken, cancellationToken))
+                {
+                    ownerToken = takeoverToken;
+                    db.ChangeTracker.Clear();
+                    var takenOver = await db.CosmeticsIdempotencyLedgers
+                        .SingleAsync(x => x.Id == existing.Id, cancellationToken);
+                    return ToBeginResult(takenOver, isExisting: true, shouldProcess: true);
+                }
+
+                db.ChangeTracker.Clear();
+                var raced = await db.CosmeticsIdempotencyLedgers
+                    .SingleAsync(x => x.Id == existing.Id, cancellationToken);
+                return ValidateAndMapExisting(raced, payloadHash);
+            }
+
+            return existingResult;
         }
 
         var now = DateTime.UtcNow;
@@ -85,8 +107,13 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
             RequestJson = requestJson,
             Status = CosmeticsIdempotencyStatuses.Pending,
             CreatedAtUtc = now,
-            UpdatedAtUtc = now
+            UpdatedAtUtc = now,
+            OwnerToken = CreateOwnerToken(),
+            LeaseExpiresAtUtc = now.Add(PendingLeaseDuration),
+            AttemptCount = 1
         };
+
+        ownerToken = ledger.OwnerToken;
 
         db.CosmeticsIdempotencyLedgers.Add(ledger);
 
@@ -114,7 +141,22 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
 
             existing = byOperationId ?? byIdempotencyKey;
             logger.LogDebug(ex, "Cosmetics idempotency creation raced. Reusing ledger {LedgerId}.", existing!.Id);
-            return ValidateAndMapExisting(existing, payloadHash);
+            var stalePending = existing.Status == CosmeticsIdempotencyStatuses.Pending && IsLeaseStale(existing, DateTime.UtcNow);
+            var existingResult = ValidateAndMapExisting(existing, payloadHash, recordReplay: !stalePending);
+            if (stalePending)
+            {
+                var takeoverToken = CreateOwnerToken();
+                if (await TryTakeoverAsync(existing.Id, takeoverToken, cancellationToken))
+                {
+                    ownerToken = takeoverToken;
+                    db.ChangeTracker.Clear();
+                    var takenOver = await db.CosmeticsIdempotencyLedgers
+                        .SingleAsync(x => x.Id == existing.Id, cancellationToken);
+                    return ToBeginResult(takenOver, isExisting: true, shouldProcess: true);
+                }
+            }
+
+            return existingResult;
         }
 
         return ToBeginResult(ledger, isExisting: false, shouldProcess: true);
@@ -145,12 +187,16 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
                 $"Cosmetics idempotency ledger {ledgerId} is already failed and cannot be completed.");
         }
 
+        EnsureOwnership(ledger);
+
         var now = DateTime.UtcNow;
         ledger.Status = CosmeticsIdempotencyStatuses.Completed;
         ledger.ResultJson = resultJson;
         ledger.ErrorCode = null;
         ledger.CompletedAtUtc = now;
         ledger.UpdatedAtUtc = now;
+        ledger.OwnerToken = null;
+        ledger.LeaseExpiresAtUtc = null;
 
         await db.SaveChangesAsync(cancellationToken);
         observability.RecordFirstSuccess(
@@ -189,11 +235,15 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
                 $"Cosmetics idempotency ledger {ledgerId} is already completed and cannot be failed.");
         }
 
+        EnsureOwnership(ledger);
+
         ledger.Status = CosmeticsIdempotencyStatuses.Failed;
         ledger.ResultJson = resultJson;
         ledger.ErrorCode = effectiveErrorCode;
         ledger.CompletedAtUtc = null;
         ledger.UpdatedAtUtc = DateTime.UtcNow;
+        ledger.OwnerToken = null;
+        ledger.LeaseExpiresAtUtc = null;
 
         await db.SaveChangesAsync(cancellationToken);
         observability.RecordFailure(
@@ -232,7 +282,80 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
             ?? throw new InvalidOperationException($"Cosmetics idempotency ledger {ledgerId} was not found.");
     }
 
-    private CosmeticsIdempotencyBeginResult ValidateAndMapExisting(CosmeticsIdempotencyLedger ledger, string payloadHash)
+    private async Task<bool> TryTakeoverAsync(
+        Guid ledgerId,
+        string newOwnerToken,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        if (string.Equals(db.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal))
+        {
+            var inMemory = await db.CosmeticsIdempotencyLedgers
+                .SingleOrDefaultAsync(x => x.Id == ledgerId, cancellationToken);
+            if (inMemory is null ||
+                inMemory.Status != CosmeticsIdempotencyStatuses.Pending ||
+                !IsLeaseStale(inMemory, now))
+            {
+                return false;
+            }
+
+            inMemory.OwnerToken = newOwnerToken;
+            inMemory.LeaseExpiresAtUtc = now.Add(PendingLeaseDuration);
+            inMemory.AttemptCount++;
+            inMemory.UpdatedAtUtc = now;
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        var updated = await db.CosmeticsIdempotencyLedgers
+            .Where(x => x.Id == ledgerId &&
+                        x.Status == CosmeticsIdempotencyStatuses.Pending &&
+                        x.LeaseExpiresAtUtc == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.OwnerToken, newOwnerToken)
+                .SetProperty(x => x.LeaseExpiresAtUtc, now.Add(PendingLeaseDuration))
+                .SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1)
+                .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
+
+        if (updated == 1)
+            return true;
+
+        updated = await db.CosmeticsIdempotencyLedgers
+            .Where(x => x.Id == ledgerId &&
+                        x.Status == CosmeticsIdempotencyStatuses.Pending &&
+                        x.LeaseExpiresAtUtc <= now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.OwnerToken, newOwnerToken)
+                .SetProperty(x => x.LeaseExpiresAtUtc, now.Add(PendingLeaseDuration))
+                .SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1)
+                .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
+
+        return updated == 1;
+    }
+
+    private void EnsureOwnership(CosmeticsIdempotencyLedger ledger)
+    {
+        if (string.IsNullOrWhiteSpace(ownerToken) ||
+            !string.Equals(ledger.OwnerToken, ownerToken, StringComparison.Ordinal) ||
+            ledger.LeaseExpiresAtUtc is null ||
+            ledger.LeaseExpiresAtUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException(
+                $"Cosmetics idempotency ledger {ledger.Id} is no longer owned by this request.");
+        }
+    }
+
+    private static bool IsLeaseStale(CosmeticsIdempotencyLedger ledger, DateTime now)
+    {
+        return ledger.LeaseExpiresAtUtc is null || ledger.LeaseExpiresAtUtc <= now;
+    }
+
+    private static string CreateOwnerToken() => Guid.NewGuid().ToString("N");
+
+    private CosmeticsIdempotencyBeginResult ValidateAndMapExisting(
+        CosmeticsIdempotencyLedger ledger,
+        string payloadHash,
+        bool recordReplay = true)
     {
         if (!string.Equals(ledger.PayloadHash, payloadHash, StringComparison.Ordinal))
         {
@@ -253,12 +376,15 @@ public sealed class CosmeticsIdempotencyService : ICosmeticsIdempotencyService
                 ledger.IdempotencyKey);
         }
 
-        observability.RecordReplay(
-            IdempotencyObservabilityService.ResolveCosmeticsEndpoint(ledger.OperationType),
-            ledger.OperationType,
-            ledger.OperationId,
-            ledger.UserId,
-            ledger.Status);
+        if (recordReplay)
+        {
+            observability.RecordReplay(
+                IdempotencyObservabilityService.ResolveCosmeticsEndpoint(ledger.OperationType),
+                ledger.OperationType,
+                ledger.OperationId,
+                ledger.UserId,
+                ledger.Status);
+        }
         return ToBeginResult(ledger, isExisting: true, shouldProcess: false);
     }
 

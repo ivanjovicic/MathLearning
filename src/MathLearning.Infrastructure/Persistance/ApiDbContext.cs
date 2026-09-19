@@ -615,6 +615,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.CreatedAtUtc).HasColumnType("timestamp with time zone");
             entity.Property(e => e.CompletedAtUtc).HasColumnType("timestamp with time zone");
             entity.Property(e => e.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.OwnerToken).HasMaxLength(64);
+            entity.Property(e => e.LeaseExpiresAtUtc).HasColumnType("timestamp with time zone");
 
             entity.HasIndex(e => new { e.UserId, e.OperationId })
                 .IsUnique()
@@ -622,6 +624,8 @@ public class ApiDbContext : IdentityDbContext<IdentityUser>
             entity.HasIndex(e => new { e.UserId, e.IdempotencyKey })
                 .IsUnique()
                 .HasDatabaseName("UX_cosmetics_idempotency_ledger_user_idempotency");
+            entity.HasIndex(e => new { e.Status, e.LeaseExpiresAtUtc })
+                .HasDatabaseName("IX_cosmetics_idempotency_ledger_pending_lease");
         });
 
         builder.Entity<IdempotencyLedger>(entity =>

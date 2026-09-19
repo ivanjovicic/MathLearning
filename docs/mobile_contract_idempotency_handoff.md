@@ -50,12 +50,16 @@ Domain-table idempotency (not shared ledger). See `DailyRunChestClaimIdempotency
 
 - `operationId` wired through `EconomyEndpointHelpers.TryBeginAsync` → `EconomyTransactionService`.
 - Fallback: `operationId` → `transactionId` → `idempotencyKey`.
+- Pending ownership uses a five-minute durable lease (`OwnerToken`, `LeaseExpiresAtUtc`, `AttemptCount`).
+- A stale pending row is taken over by one conditional database update; the previous request cannot complete it after ownership changes.
+- Completion/failure clears the lease, while exact replay and payload-conflict behavior remains unchanged.
 - Tests: `EconomyOperationIdIdempotencyTests.cs`.
 
 ### Cosmetics mutations (`cosmetics_idempotency_ledger`)
 
 - Mutation responses load `inventory` after `SaveChanges` so newly granted items appear without a follow-up GET.
 - Item claim binds `sourceEvent` for idempotency hash (not metadata-only).
+- Pending ownership uses the same five-minute durable lease/takeover contract as economy mutations.
 - Tests: `CosmeticsMutationResponseTests.cs`.
 
 ### Adaptive session start (`adaptive_session_start`)

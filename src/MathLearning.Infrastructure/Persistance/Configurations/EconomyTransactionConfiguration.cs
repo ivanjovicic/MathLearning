@@ -54,6 +54,12 @@ public sealed class EconomyTransactionConfiguration : IEntityTypeConfiguration<E
         builder.Property(x => x.UpdatedAtUtc)
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(x => x.OwnerToken)
+            .HasMaxLength(64);
+
+        builder.Property(x => x.LeaseExpiresAtUtc)
+            .HasColumnType("timestamp with time zone");
+
         builder.HasIndex(x => new { x.UserId, x.TransactionType, x.IdempotencyKey })
             .IsUnique()
             .HasDatabaseName("UX_economy_transactions_user_type_key");
@@ -65,5 +71,8 @@ public sealed class EconomyTransactionConfiguration : IEntityTypeConfiguration<E
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc })
             .HasDatabaseName("IX_economy_transactions_user_created_at");
+
+        builder.HasIndex(x => new { x.Status, x.LeaseExpiresAtUtc })
+            .HasDatabaseName("IX_economy_transactions_pending_lease");
     }
 }
