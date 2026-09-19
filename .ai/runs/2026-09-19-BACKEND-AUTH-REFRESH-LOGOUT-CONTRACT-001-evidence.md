@@ -37,11 +37,11 @@ Validation run: pre-change regression recorded the expected legacy-contract mism
 Validation not run: PostgreSQL/deployed-provider proof was not required for this response-shape-only change; CI remains asynchronous.
 
 ## Exceptions and learning
-Mistakes observed: initial rate-limit regression fixture also rejected the global sliding-window middleware; the fixture was narrowed to refresh-purpose keys and the focused suite passed.
+Mistakes observed: BACKEND-MISTAKE-VALIDATION-001 — initial rate-limit regression fixture also rejected the global sliding-window middleware; the fixture was narrowed to refresh-purpose keys and the focused suite passed.
 Waste: one focused rerun after correcting the test fixture boundary.
 Missed: no known in-scope miss.
 Follow-up: mobile companion `MOB66-AUTH-LOGOUT-REVOCATION-001` remains a separate owner.
-Residual risk: CI is pending; existing package advisory and duplicate-using warnings remain outside this prompt.
+Residual risk: none in scope; CI is pending asynchronously and existing package advisory/duplicate-using warnings remain outside this prompt.
 Documentation impact: updated `docs/API_ENDPOINT_INVENTORY.md` and `docs/mobile_api_contract.md` in this run.
 Cross-repo impact: no mobile repository changes; companion remains linked.
 
