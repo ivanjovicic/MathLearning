@@ -204,6 +204,121 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
             x => (x.UserId == userA || x.UserId == userB) && (x.QuestionId == quizA.QuestionId || x.QuestionId == quizB.QuestionId) && x.Attempts == 1));
     }
 
+    [Fact]
+    public async Task MissingOrMalformedSessionId_ReturnsStableBadRequestWithoutCreatingSession()
+    {
+        var userId = NewUserId("missing-session");
+        var questionId = (await GetQuestionIdsAsync(1)).Single();
+
+        using var beforeScope = _factory.Services.CreateScope();
+        var beforeDb = beforeScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var sessionsBefore = await beforeDb.QuizSessions.CountAsync(x => x.UserId == userId);
+        var answersBefore = await beforeDb.UserAnswers.CountAsync(x => x.UserId == userId);
+
+        var missing = await PostQuizAnswerAsync(userId, new
+        {
+            questionId,
+            answer = "answer"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Equal("QUIZ_SESSION_ID_REQUIRED", (await ReadJsonAsync(missing)).GetProperty("errorCode").GetString());
+
+        var malformed = await PostQuizAnswerAsync(userId, new
+        {
+            quizId = "not-a-guid",
+            questionId,
+            answer = "answer"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+        Assert.Equal("QUIZ_SESSION_ID_REQUIRED", (await ReadJsonAsync(malformed)).GetProperty("errorCode").GetString());
+
+        using var afterScope = _factory.Services.CreateScope();
+        var afterDb = afterScope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        Assert.Equal(sessionsBefore, await afterDb.QuizSessions.CountAsync(x => x.UserId == userId));
+        Assert.Equal(answersBefore, await afterDb.UserAnswers.CountAsync(x => x.UserId == userId));
+    }
+
+    [Fact]
+    public async Task ForeignSession_ReturnsStableNotFoundWithoutSettlingAnswer()
+    {
+        var ownerId = NewUserId("session-owner");
+        var callerId = NewUserId("session-caller");
+        var questionId = (await GetQuestionIdsAsync(1)).Single();
+        var sessionId = await CreateIssuedSessionAsync(ownerId, new[] { questionId }, DateTime.UtcNow);
+
+        var response = await PostQuizAnswerAsync(callerId, new
+        {
+            quizId = sessionId,
+            questionId,
+            answer = "answer"
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("QUIZ_SESSION_NOT_FOUND", (await ReadJsonAsync(response)).GetProperty("errorCode").GetString());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        Assert.False(await db.UserAnswers.AnyAsync(x => x.UserId == callerId && x.QuizSessionId == sessionId));
+    }
+
+    [Fact]
+    public async Task NonIssuedQuestionAndExpiredSession_ReturnStableNotFound()
+    {
+        var userId = NewUserId("invalid-session-state");
+        var questionIds = await GetQuestionIdsAsync(2);
+        var currentSessionId = await CreateIssuedSessionAsync(userId, new[] { questionIds[0] }, DateTime.UtcNow);
+        var expiredSessionId = await CreateIssuedSessionAsync(userId, new[] { questionIds[0] }, DateTime.UtcNow.AddDays(-2));
+
+        foreach (var (sessionId, questionId) in new[]
+        {
+            (currentSessionId, questionIds[1]),
+            (expiredSessionId, questionIds[0])
+        })
+        {
+            var response = await PostQuizAnswerAsync(userId, new
+            {
+                quizId = sessionId,
+                questionId,
+                answer = "answer"
+            });
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("QUIZ_SESSION_NOT_FOUND", (await ReadJsonAsync(response)).GetProperty("errorCode").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task CompletedSession_ReturnsStableNotFound()
+    {
+        var userId = NewUserId("completed-session");
+        var questionId = (await GetQuestionIdsAsync(1)).Single();
+        var sessionId = await CreateIssuedSessionAsync(userId, new[] { questionId }, DateTime.UtcNow);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.UserAnswers.Add(new UserAnswer
+            {
+                UserId = userId,
+                QuestionId = questionId,
+                QuizSessionId = sessionId,
+                Answer = "previous-answer",
+                AnsweredAt = DateTime.UtcNow.AddMinutes(-1)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await PostQuizAnswerAsync(userId, new
+        {
+            quizId = sessionId,
+            questionId,
+            answer = "answer"
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("QUIZ_SESSION_NOT_FOUND", (await ReadJsonAsync(response)).GetProperty("errorCode").GetString());
+    }
+
     private static object BuildPayload(
         string quizId,
         int questionId,
@@ -322,5 +437,32 @@ public sealed class QuizAnswerIdempotencyTests : IClassFixture<CustomWebApplicat
         var quizId = Guid.Parse(payload.GetProperty("quizId").GetString()!);
         var questionId = payload.GetProperty("questions").EnumerateArray().Single().GetProperty("id").GetInt32();
         return (quizId, questionId);
+    }
+
+    private async Task<int[]> GetQuestionIdsAsync(int count)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        return await db.Questions.OrderBy(x => x.Id).Select(x => x.Id).Take(count).ToArrayAsync();
+    }
+
+    private async Task<Guid> CreateIssuedSessionAsync(
+        string userId,
+        IReadOnlyCollection<int> questionIds,
+        DateTime startedAt)
+    {
+        var session = new QuizSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            StartedAt = startedAt
+        };
+        session.SetIssuedQuestionIds(questionIds);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.QuizSessions.Add(session);
+        await db.SaveChangesAsync();
+        return session.Id;
     }
 }

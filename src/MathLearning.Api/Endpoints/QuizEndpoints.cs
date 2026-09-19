@@ -21,6 +21,7 @@ public static class QuizEndpoints
     private const int DefaultQuizQuestionCount = 10;
     private const int MinQuizQuestionCount = 1;
     private const int MaxQuizQuestionCount = 25;
+    private static readonly TimeSpan QuizSessionLifetime = TimeSpan.FromHours(24);
 
     public static void MapQuizEndpoints(this IEndpointRouteBuilder app)
     {
@@ -222,7 +223,11 @@ public static class QuizEndpoints
 
             if (!Guid.TryParse(quizIdRaw, out quizSessionId))
             {
-                quizSessionId = Guid.NewGuid();
+                return Results.BadRequest(new
+                {
+                    errorCode = "QUIZ_SESSION_ID_REQUIRED",
+                    message = "A valid quiz session id is required."
+                });
             }
 
             var quizIdForPayload = quizSessionId.ToString();
@@ -284,7 +289,7 @@ public static class QuizEndpoints
                             if (issuedSession is null)
                             {
                                 throw new IdempotentQuizAnswerEarlyReturnException(
-                                    Results.NotFound("Quiz session not found"));
+                                    QuizSessionNotFoundResult());
                             }
 
                             var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
@@ -357,33 +362,32 @@ public static class QuizEndpoints
             if (question == null)
                 return Results.NotFound("Question not found");
 
-            var issuedSession = await LoadIssuedQuizSessionAsync(
-                db,
-                userId,
-                quizSessionId,
-                questionId,
-                ctx.RequestAborted);
-            if (issuedSession is null)
-                return Results.NotFound("Quiz session not found");
-
-            var answeredAtUtc = DateTime.UtcNow;
-            var attemptInput = new AnswerAttemptInput(
-                Question: question,
-                QuestionId: questionId,
-                AnswerText: answerText!,
-                TimeSpentSeconds: timeSpentSeconds,
-                AnsweredAtUtc: answeredAtUtc,
-                IsOffline: false,
-                Source: "quiz_answer",
-                ClientId: clientId,
-                HintUsed: hintUsed,
-                QuizSessionId: quizSessionId);
-
             var legacyProcessingResult = await ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync(
                 db,
                 logger,
                 async () =>
                 {
+                    var issuedSession = await LoadIssuedQuizSessionAsync(
+                        db,
+                        userId,
+                        quizSessionId,
+                        questionId,
+                        ctx.RequestAborted);
+                    if (issuedSession is null)
+                        return null;
+
+                    var attemptInput = new AnswerAttemptInput(
+                        Question: question,
+                        QuestionId: questionId,
+                        AnswerText: answerText!,
+                        TimeSpentSeconds: timeSpentSeconds,
+                        AnsweredAtUtc: DateTime.UtcNow,
+                        IsOffline: false,
+                        Source: "quiz_answer",
+                        ClientId: clientId,
+                        HintUsed: hintUsed,
+                        QuizSessionId: quizSessionId);
+
                     var result = await ProcessAnswerAttemptWithinTransactionAsync(
                         db,
                         xpTrackingService,
@@ -396,6 +400,9 @@ public static class QuizEndpoints
                 },
                 ctx.RequestAborted,
                 uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
+
+            if (legacyProcessingResult is null)
+                return QuizSessionNotFoundResult();
 
             var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
             var legacyResponse = await BuildSubmitAnswerResponseAsync(
@@ -909,8 +916,38 @@ public static class QuizEndpoints
             return null;
         }
 
+        var now = DateTime.UtcNow;
+        if (session.StartedAt > now || session.StartedAt < now - QuizSessionLifetime)
+        {
+            return null;
+        }
+
+        var issuedQuestionIds = session.GetIssuedQuestionIds();
+        if (issuedQuestionIds.Count > 0)
+        {
+            var answeredQuestionCount = await db.UserAnswers
+                .AsNoTracking()
+                .Where(answer =>
+                    answer.UserId == userId &&
+                    answer.QuizSessionId == quizSessionId &&
+                    issuedQuestionIds.Contains(answer.QuestionId))
+                .Select(answer => answer.QuestionId)
+                .Distinct()
+                .CountAsync(cancellationToken);
+
+            if (answeredQuestionCount >= issuedQuestionIds.Count)
+                return null;
+        }
+
         return session;
     }
+
+    private static IResult QuizSessionNotFoundResult()
+        => Results.NotFound(new
+        {
+            errorCode = "QUIZ_SESSION_NOT_FOUND",
+            message = "The quiz session is unknown, not owned by the caller, expired, completed, or did not issue this question."
+        });
 
     private static async Task<AnswerAttemptResult> ProcessAnswerAttemptWithinTransactionAsync(
         ApiDbContext db,

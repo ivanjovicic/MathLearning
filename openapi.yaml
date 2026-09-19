@@ -245,10 +245,13 @@ components:
             - type: integer
         timeSpentSeconds: { type: integer }
         hintUsed: { type: boolean }
-        quizId: { type: string, format: uuid, nullable: true }
-        sessionId: { type: string, nullable: true }
+        quizId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
         clientId: { type: string, nullable: true }
       required: [questionId, answer]
+      oneOf:
+        - required: [quizId]
+        - required: [sessionId]
 
     SubmitAnswerResponse:
       type: object

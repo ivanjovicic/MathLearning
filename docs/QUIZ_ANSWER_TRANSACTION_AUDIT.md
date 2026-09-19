@@ -1,6 +1,6 @@
 # Quiz answer and offline replay transaction audit
 
-Last aligned: 2026-07-01
+Last aligned: 2026-09-19
 Prompt: `BE-PERF-003`
 Endpoints: `POST /api/quiz/answer`, `POST /api/quiz/offline-submit`, `POST /api/quiz/batch-submit`
 
@@ -9,6 +9,10 @@ Endpoints: `POST /api/quiz/answer`, `POST /api/quiz/offline-submit`, `POST /api/
 All three paths still share `ProcessAnswerAttemptWithinTransactionAsync` for the domain mutation.
 Offline paths wrap the batch in one serializable transaction through `ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync`.
 The online idempotent answer path now skips `UserSettings` and question graph reads on replay/conflict and only loads them for fresh processing.
+Canonical online answers now require a caller-owned, active session and a question
+from that session's persisted issued-question manifest before settlement. Missing
+or malformed session ids fail before any ledger/domain write; no-key validation is
+performed inside the serializable mutation transaction as well.
 
 Duplicate offline answers still dedupe by `(userId, questionId, answeredAt)` before mutation.
 First-correct XP is still guarded by in-transaction stat checks plus the unique index `UX_UserAnswerAudits_FirstCorrect_PerQuestion` with serializable retry on violation.
@@ -23,8 +27,8 @@ First-correct XP is still guarded by in-transaction stat checks plus the unique 
 3.   If replay -> return stored JSON (alreadyProcessed)
 4.   If pending/conflict -> short-circuit before question/lang load
 5.   Load question graph only for fresh processing
-6.   Resolve user language only for fresh processing
-7.   EnsureQuizSessionAsync
+6.   Validate user-owned active session and issued-question membership
+7.   Resolve user language only for fresh processing
 8.   ProcessAnswerAttemptWithinTransactionAsync
 9.   BuildSubmitAnswerResponseAsync
 10.  idempotency_ledger CompleteAsync with response body
@@ -32,7 +36,9 @@ First-correct XP is still guarded by in-transaction stat checks plus the unique 
 12. [OUTSIDE TX] ingestService.IngestAttemptsAsync when a new row was imported
 ```
 
-Legacy path without idempotency keys keeps the same domain mutation, but it loads the question before the serializable retry block and resolves language only when the response body is needed.
+Legacy path without idempotency keys keeps the same domain mutation, loads the
+question before the retry block, and validates session ownership, activity,
+completion, and issued-question membership inside the serializable retry block.
 
 ### DB call classification
 
@@ -41,7 +47,7 @@ Legacy path without idempotency keys keeps the same domain mutation, but it load
 | `idempotency_ledger` begin/complete | Yes | Yes | Must commit or roll back with the mutation |
 | Question load for fresh idempotent processing | Yes | Yes | Needed only when the request is not a replay |
 | `UserSettings` load | Yes | Yes | Needed only when a fresh response body must be built |
-| `QuizSessions` existence check | Yes | Yes | Read-only check; insert if missing |
+| `QuizSessions` ownership/membership/activity check | Yes | Yes | Persisted `IssuedQuestionIdsJson`; unknown, foreign, expired, completed, or non-issued sessions return stable `QUIZ_SESSION_NOT_FOUND` |
 | `UserAnswers` duplicate check | Yes | Yes | Replay guard on `(userId, questionId, answeredAt)` |
 | `UserAnswerAudits` replay lookup | Yes | Yes | Restores settled duplicate response |
 | `UserQuestionStats` `FOR UPDATE` | Yes | Yes | Attempt counting and first-correct detection |

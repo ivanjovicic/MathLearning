@@ -117,7 +117,7 @@ Owners: `QuizEndpoints.cs`, `SrsEndpoints.cs`
 | GET | `/api/quiz/questions` | Auth | Legacy/mobile content | Compatibility-only. Use `subtopicId` or confirmed `topic_<numericId>`; never derive identity from a localized title. Same playable-content gate and `404 NO_PLAYABLE_QUESTIONS`. |
 | POST | `/api/quiz/questions` | Auth | Legacy/mobile content | Posted question request; count bounded; explicit `subtopicId` or numeric topic key required; same playable-content gate. |
 | POST | `/api/quiz/next-question` | Auth | Canonical/adaptive | Next question is limited to published, non-deleted, structurally playable content; pre-answer shape omits answer key and full solution material. |
-| POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. Missing-key decision remains BACKEND-TEST-013. |
+| POST | `/api/quiz/answer` | Auth | Canonical P0 mutation | Requires caller-owned active quiz session and issued question membership; missing/malformed `quizId` is `400 QUIZ_SESSION_ID_REQUIRED`, invalid/foreign/expired/completed/non-issued session is stable `404 QUIZ_SESSION_NOT_FOUND`. Ledger used when operation keys are supplied; no-key mode remains the documented compatibility path from BACKEND-TEST-013. |
 | POST | `/api/quiz/offline-submit` | Auth | Canonical offline | Auth-scoped replay path. Durable analytics handoff remains BACKEND-TEST-022. |
 | POST | `/api/quiz/batch-submit` | Auth | Legacy alias | Adapter to offline-submit. |
 | POST | `/api/quiz/srs/update` | Auth | Canonical P0 mutation | Ledger used when operation keys are supplied. |

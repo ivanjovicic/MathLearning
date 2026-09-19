@@ -113,7 +113,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-LATEST-QUEUE-002 | P1 / Done | Canonical ownership and dependency map across overlapping test/performance queues. Run log: `.ai/runs/2026-07-14-BACKEND-LATEST-QUEUE-002-evidence.md`. |
 | BACKEND-MIGRATION-001 | P0 / Prompt-ready | Repair historical cosmetics FK-name drift and prove clean plus upgraded PostgreSQL migration paths without weakening the schema gate. |
 | BACKEND-API-DB-001 | P0 / Needs validation 79% — Run log: `.ai/runs/2026-09-19-BACKEND-API-DB-001-evidence.md`; Validation: focused quiz/SRS contract 27/27, Release build, OpenAPI safe-schema check; Residual risk: broad requested filter still has 2 unrelated durable-ingest seed failures; Commit: self | Remove answer keys and complete solution material from online pre-answer quiz/SRS responses. |
-| BACKEND-API-DB-002 | P0 / Prompt-ready | Require a valid user-owned issued quiz session/question before answer settlement. |
+| BACKEND-API-DB-002 | P0 / Needs validation 79% — Run log: `.ai/runs/2026-09-19-BACKEND-API-DB-002-evidence.md`; Validation: focused 22/22 pass + Release build pass; required broad filter 38/40 because two unrelated pre-existing failures; PostgreSQL schema/concurrency lane unavailable; Commit: self | Require a valid user-owned issued quiz session/question before answer settlement. |
 | BACKEND-API-DB-003 | P0/P1 / Prompt-ready | Replace client-authoritative progress completion/day with verifiable idempotent settlement. |
 | BACKEND-API-DB-004 | P0/P1 / Prompt-ready | Scope sync operation identity and serialize same-device cursor mutation on PostgreSQL. |
 | BACKEND-API-DB-005 | P1 / Prompt-ready | Correct offline bundle hint mapping and content revision/version truth. |
