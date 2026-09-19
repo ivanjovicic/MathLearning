@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MathLearning.Api;
+using MathLearning.Api.Middleware;
 using MathLearning.Api.Startup;
 using MathLearning.Application.DTOs.Auth;
 using MathLearning.Domain.Entities;
@@ -11,6 +12,9 @@ using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Hosting;
 
 namespace MathLearning.Tests.Endpoints;
@@ -258,7 +262,7 @@ public sealed class AuthRefreshEndpointRegressionTests :
         var (_, secondToken) = await LoginForTokensAsync();
 
         var logout = await client.PostAsJsonAsync("/auth/logout", new RevokeTokenRequest(firstToken));
-        Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -285,6 +289,32 @@ public sealed class AuthRefreshEndpointRegressionTests :
         Assert.All(tokens, token => Assert.NotNull(token.RevokedAt));
     }
 
+    [Fact]
+    public async Task Refresh_WithUnknownToken_ReturnsStableGenericFailureContract()
+    {
+        const string unknownToken = "unknown-refresh-token";
+
+        var response = await client.PostAsJsonAsync("/auth/refresh", new TokenRequest(unknownToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("refresh_invalid", json.RootElement.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("message").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("correlationId").GetString()));
+        Assert.DoesNotContain(unknownToken, json.RootElement.GetRawText());
+    }
+
+    [Fact]
+    public async Task Logout_WithUnknownToken_IsIdempotentAndDoesNotDiscloseState()
+    {
+        const string unknownToken = "unknown-refresh-token";
+
+        var response = await client.PostAsJsonAsync("/auth/logout", new RevokeTokenRequest(unknownToken));
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
     private async Task<(string UserId, string RefreshToken)> LoginForTokensAsync()
     {
         var response = await client.PostAsJsonAsync(
@@ -302,4 +332,91 @@ public sealed class AuthRefreshEndpointRegressionTests :
 
         return (userId!, refreshToken!);
     }
+}
+
+public sealed class AuthRefreshRateLimitContractTests :
+    IClassFixture<AuthRefreshRateLimitWebApplicationFactory>,
+    IAsyncLifetime
+{
+    private readonly AuthRefreshRateLimitWebApplicationFactory factory;
+    private readonly HttpClient client;
+
+    public AuthRefreshRateLimitContractTests(AuthRefreshRateLimitWebApplicationFactory factory)
+    {
+        this.factory = factory;
+        client = factory.CreateClient();
+    }
+
+    public async Task InitializeAsync()
+    {
+        factory.RateLimitStore.Allow = true;
+        using var scope = factory.Services.CreateScope();
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        var seeder = ActivatorUtilities.CreateInstance<TestAccountSeeder>(scope.ServiceProvider);
+        await seeder.SeedAsync(environment);
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    [Fact]
+    public async Task Refresh_WhenRateLimited_ReturnsStableCodeAndRetryAfter()
+    {
+        var login = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest("test", "test-passphrase-2026!"));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+
+        using var loginJson = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+        var refreshToken = loginJson.RootElement.GetProperty("refreshToken").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(refreshToken));
+
+        factory.RateLimitStore.Allow = false;
+        var response = await client.PostAsJsonAsync("/auth/refresh", new TokenRequest(refreshToken!));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.Equal("17", response.Headers.GetValues("Retry-After").Single());
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("refresh_rate_limited", json.RootElement.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("correlationId").GetString()));
+    }
+}
+
+public sealed class AuthRefreshRateLimitWebApplicationFactory : CustomWebApplicationFactory<Program>
+{
+    public ToggleRateLimitStore RateLimitStore { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IRateLimitCounterStore>();
+            services.AddSingleton<IRateLimitCounterStore>(RateLimitStore);
+        });
+    }
+}
+
+public sealed class ToggleRateLimitStore : IRateLimitCounterStore
+{
+    public bool Allow { get; set; }
+
+    public bool TryAcquire(
+        string key,
+        int limit,
+        TimeSpan window,
+        out int retryAfterSeconds,
+        int maxPartitions = 100_000)
+    {
+        var rejectRefresh = !Allow && key.StartsWith("refresh:", StringComparison.Ordinal);
+        retryAfterSeconds = rejectRefresh ? 17 : 0;
+        return !rejectRefresh;
+    }
+
+    public RateLimitStoreSnapshot GetSnapshot() => new(
+        PartitionCount: 0,
+        AllowedRequests: 0,
+        RejectedRequests: 0,
+        SaturationRejections: 0,
+        EvictedPartitions: 0,
+        CleanupRuns: 0);
 }

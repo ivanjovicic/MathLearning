@@ -678,20 +678,20 @@ public static class AuthEndpoints
                 // Validate token
                 if (!RefreshTokenService.ValidateRefreshToken(refreshToken))
                 {
-                    return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+                    return CreateRefreshInvalidResponse(ctx);
                 }
 
                 // Get user
                 var user = await userManager.FindByIdAsync(refreshToken!.UserId);
                 if (user == null)
                 {
-                    return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+                    return CreateRefreshInvalidResponse(ctx);
                 }
 
                 var securityStamp = await GetCurrentSecurityStampAsync(userManager, user);
                 if (!RefreshTokenService.ValidateRefreshToken(refreshToken, securityStamp))
                 {
-                    return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+                    return CreateRefreshInvalidResponse(ctx);
                 }
 
                 var device = NormalizeAuthDimension(ctx.Request.Headers.UserAgent.ToString(), 128);
@@ -706,7 +706,7 @@ public static class AuthEndpoints
                         RefreshRateLimitWindow,
                         out var refreshRetryAfter))
                 {
-                    return CreateAuthRateLimitedResponse(ctx, refreshRetryAfter);
+                    return CreateAuthRateLimitedResponse(ctx, refreshRetryAfter, "refresh_rate_limited");
                 }
 
                 // Revoke old refresh token
@@ -731,7 +731,7 @@ public static class AuthEndpoints
             catch (DbUpdateConcurrencyException ex)
             {
                 logger.LogInformation(ex, "Refresh token reuse detected during concurrent rotation.");
-                return Results.Json(new { error = "Invalid or expired refresh token" }, statusCode: 401);
+                return CreateRefreshInvalidResponse(ctx);
             }
             catch (Exception ex)
             {
@@ -753,13 +753,13 @@ public static class AuthEndpoints
 
                 if (refreshToken == null)
                 {
-                    return Results.Json(new { error = "Token not found" }, statusCode: 404);
+                    return Results.NoContent();
                 }
 
                 RefreshTokenService.RevokeToken(refreshToken);
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new { message = "Logged out successfully" });
+                return Results.NoContent();
             }
             catch (Exception ex)
             {
@@ -1036,6 +1036,17 @@ public static class AuthEndpoints
                 SafeClientErrorResponse.ResolveCorrelationId(ctx),
                 retryAfterSeconds),
             statusCode: statusCode);
+
+    private static IResult CreateRefreshInvalidResponse(HttpContext ctx) =>
+        Results.Json(
+            new
+            {
+                error = "Invalid or expired refresh token",
+                code = "refresh_invalid",
+                message = "Refresh token is invalid or expired.",
+                correlationId = SafeClientErrorResponse.ResolveCorrelationId(ctx)
+            },
+            statusCode: StatusCodes.Status401Unauthorized);
 
     private static IResult CreatePasswordResetFailure(HttpContext ctx, string code, int statusCode)
     {

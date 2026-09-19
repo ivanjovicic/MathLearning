@@ -10,6 +10,10 @@ Login failures use `{ code, message, correlationId?, retryAfterSeconds? }`. Unkn
 
 `POST /auth/password/forgot` accepts `{ email }` and always returns `202 password_reset_requested` with a generic message, regardless of account existence. `POST /auth/password/reset` accepts `{ email, token, newPassword }`; success returns `password_reset_success`, while invalid tokens return `password_reset_invalid`. Password reset tokens are delivered out-of-band and never returned by the API.
 
+`POST /auth/refresh` is anonymous and rotates a single-use refresh token. Invalid, expired, revoked, replayed, missing-user, or security-stamp-mismatch requests return `401 refresh_invalid` with a generic message and correlation id. Refresh throttling returns `429 refresh_rate_limited`, includes `Retry-After`, and does not disclose token or account state.
+
+`POST /auth/logout` is anonymous and idempotent. It returns `204 No Content` for an active, revoked, or unknown refresh token; unknown-token responses are intentionally indistinguishable from successful logout. Unexpected server failures use the standard safe error response and are correlated server-side.
+
 For relational providers, reset commits the Identity password/security-stamp update and active refresh-token revocation in one scoped transaction. Identity 8.0.12's `ResetPasswordAsync` is the authoritative security-stamp rotation path; the backend does not perform a second stamp rotation. Production forgot requests enqueue only the stable Identity user id; the Hangfire job resolves the current account, generates the reset token, and constructs the delivery URL at execution time. Test and Development use the same job owner through deterministic inline delivery.
 
 Production delivery is disabled by default and must be enabled explicitly with `PasswordReset__Delivery__Enabled=true`, a real `PasswordReset__Delivery__SmtpHost`, `PasswordReset__Delivery__FromAddress`, and secret-backed SMTP credentials as needed. `PasswordReset__Delivery__ResetBaseUrl` must be the deployed Flutter deep-link target; no localhost or provider credentials are committed.

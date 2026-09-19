@@ -78,8 +78,8 @@ for the web origin. Development/Test already enable permissive CORS. Do not use
 | POST | `/api/auth/login` | Public | Compatibility alias | Same handler and lockout/throttle/incomplete-account contract as `/auth/login`. |
 | POST | `/auth/password/forgot` | Public | Canonical | Generic 202 response for matching and non-matching email; rate limited by normalized email and network/device; production Hangfire arguments contain only the stable Identity user id, with the same delivery job run inline in Test/Development. |
 | POST | `/auth/password/reset` | Public | Canonical | Identity token reset; safe invalid/policy/rate-limit failures; relational success transactionally commits the Identity password/security-stamp update with revocation of all refresh tokens. |
-| POST | `/auth/refresh` | Public | Canonical | Single-use token rotation with generic 401/429 contract. Model length drift remains BACKEND-TEST-012. |
-| POST | `/auth/logout` | Public | Canonical | Revokes supplied refresh token. |
+| POST | `/auth/refresh` | Public | Canonical | Single-use token rotation; invalid/replayed/stamp-mismatch cases use `401 refresh_invalid`, throttling uses `429 refresh_rate_limited` with `Retry-After`. Model length drift remains BACKEND-TEST-012. |
+| POST | `/auth/logout` | Public | Canonical | Anonymous idempotent logout; active, revoked, and unknown refresh tokens all return `204 No Content`. |
 | POST | `/auth/revoke-all` | Auth | Canonical | Revokes all current-user refresh tokens and invalidates existing access tokens by rotating the user security stamp. |
 | POST | `/auth/register` | Public/legacy | Legacy alias | Delegates mandatory Identity + profile creation to the same `IAccountProvisioningService` owner as mobile register; tokens only after complete account. Generic conflict/failure contract. |
 

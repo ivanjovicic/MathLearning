@@ -10,7 +10,7 @@ Purpose: own current source-confirmed auth HTTP contract gaps without reopening 
 
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
-| `BACKEND-AUTH-REFRESH-LOGOUT-CONTRACT-001` | P1 auth/session security | Ready | [Open](backend_auth_session_residuals_2026_09_18/BACKEND-AUTH-REFRESH-LOGOUT-CONTRACT-001.md) | Normalize refresh failure codes/correlation and make logout revocation idempotent/non-disclosing for the mobile best-effort logout flow. |
+| `BACKEND-AUTH-REFRESH-LOGOUT-CONTRACT-001` | P1 auth/session security | Done 100% — Run log: `.ai/runs/2026-09-19-BACKEND-AUTH-REFRESH-LOGOUT-CONTRACT-001-evidence.md`; Validation: focused auth 10/10 + safe-error 4/4 + Release API build + docs/agent checks; Residual risk: CI pending; Commit: self | [Open](backend_auth_session_residuals_2026_09_18/BACKEND-AUTH-REFRESH-LOGOUT-CONTRACT-001.md) | Normalize refresh failure codes/correlation and make logout revocation idempotent/non-disclosing for the mobile best-effort logout flow. |
 
 ## Existing-owner boundaries
 
