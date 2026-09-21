@@ -32,7 +32,7 @@ public sealed class BackgroundWorkOptions
 
     public TimeSpan OutboxMaxIdleDelay =>
         TimeSpan.FromSeconds(Math.Clamp(
-            OutboxMaxIdleDelaySeconds ?? (IsPreProductionIdle ? 600 : 60),
+            OutboxMaxIdleDelaySeconds ?? (IsPreProductionIdle ? 600 : 1),
             OutboxInitialIdleDelay.TotalSeconds,
             3600));
 

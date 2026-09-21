@@ -71,5 +71,6 @@ public sealed class HangfireOutboxIsolationTests
         Assert.True(backgroundWork.WeaknessDailySweepEnabled);
         Assert.True(backgroundWork.ExplanationCacheCleanupEnabled);
         Assert.Equal(TimeSpan.FromSeconds(1), backgroundWork.OutboxInitialIdleDelay);
+        Assert.Equal(TimeSpan.FromSeconds(1), backgroundWork.OutboxMaxIdleDelay);
     }
 }
