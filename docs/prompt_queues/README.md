@@ -1,6 +1,6 @@
 # Backend Prompt Queue Router
 
-Last aligned: 2026-07-31
+Last aligned: 2026-09-21
 Owner: `backend-agent-system`
 
 Current code and executed tests override old queue prose. Completed archives and main-verified run evidence override stale Ready rows.
