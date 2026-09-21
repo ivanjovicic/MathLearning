@@ -11,6 +11,7 @@ primary_region = "ams"
   HTTPS_PORTS = ""
   DataProtection__KeysPath = "/data/dataprotection-keys"
   Redis__Required = "false"
+  BackgroundWork__Profile = "PreProductionIdle"
   # Keep managed heap under control to reduce the chance of the Fly VM being OOM-killed.
   # Prefer Percent unless you are sure about the machine memory size.
   DOTNET_GCHeapHardLimitPercent = "70"
@@ -24,6 +25,9 @@ primary_region = "ams"
 [[services]]
   internal_port = 8080
   protocol = "tcp"
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
 
   [[services.ports]]
     port = 80

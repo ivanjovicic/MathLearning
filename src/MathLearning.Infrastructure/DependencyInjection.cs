@@ -9,6 +9,7 @@ using MathLearning.Infrastructure.Services.Idempotency;
 using MathLearning.Infrastructure.Services.Performance;
 using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.Sync;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -86,8 +87,12 @@ public static class DependencyInjection
         services.AddScoped<ISyncAdminService>(sp => sp.GetRequiredService<SyncService>());
         services.AddScoped<SyncRetentionService>();
         services.AddScoped<IOfflineBundleService, OfflineBundleService>();
-        services.AddHostedService<SyncDeadLetterRedriveBackgroundService>();
-        services.AddHostedService<SyncRetentionCleanupBackgroundService>();
+        var backgroundWork = BackgroundWorkOptions.FromConfiguration(config);
+        if (!backgroundWork.IsPreProductionIdle)
+        {
+            services.AddHostedService<SyncDeadLetterRedriveBackgroundService>();
+            services.AddHostedService<SyncRetentionCleanupBackgroundService>();
+        }
         return services;
     }
 

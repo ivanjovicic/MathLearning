@@ -83,6 +83,39 @@ dotnet ef database update --context ApiDbContext --startup-project ../MathLearni
 
 ## 🚀 Deployment Steps
 
+## Pre-production idle machine policy
+
+The API service is configured to stop an idle Fly machine and start it
+automatically when a request arrives:
+
+- `auto_stop_machines = "stop"`
+- `auto_start_machines = true`
+- `min_machines_running = 0`
+- `BackgroundWork__Profile = "PreProductionIdle"`
+
+This is intentional while the product is pre-production. The first request
+after an idle period can incur a cold-start delay; the DB-free
+`/api/health/` check remains the machine health target. When the machine is
+stopped, hosted workers are stopped with it and cannot keep polling Neon.
+While it is running, `PreProductionIdle` disables periodic maintenance,
+sync-redrive/retention and Hangfire polling, and applies adaptive Outbox
+backoff. Set `BackgroundWork__Profile=Full` before real production traffic to
+restore the full worker set.
+
+Before real production traffic, review the idle policy and explicitly change
+`min_machines_running`/auto-stop behavior if a warm instance is required.
+Validate and observe the deployment:
+
+```bash
+fly config validate -a mathlearning-api
+fly deploy -a mathlearning-api
+fly status -a mathlearning-api
+curl.exe --max-time 20 https://mathlearning-api.fly.dev/api/health/
+```
+
+Do not claim cost savings until `fly status` shows the machine stopping after
+idle and the next request causes an automatic start.
+
 ### Complete Deployment Command Sequence
 ```bash
 # 1. Navigate to root directory

@@ -160,8 +160,9 @@ public static class ServiceRegistrationExtensions
         CancellationToken ct = default)
     {
         var hangfireEnabled = false;
+        var backgroundWork = BackgroundWorkOptions.FromConfiguration(builder.Configuration);
 
-        if (!builder.Environment.IsEnvironment("Test"))
+        if (backgroundWork.HangfireEnabled && !builder.Environment.IsEnvironment("Test"))
         {
             if (await canOpenPostgresConnectionAsync(defaultConnectionString, ct))
             {
@@ -194,6 +195,9 @@ public static class ServiceRegistrationExtensions
         else
         {
             builder.Services.AddSingleton<IBackgroundJobClient, DisabledBackgroundJobClient>();
+            Log.Information(
+                "Hangfire startup disabled by background-work profile. Profile={Profile}",
+                backgroundWork.Profile);
         }
 
         return hangfireEnabled;
@@ -201,8 +205,18 @@ public static class ServiceRegistrationExtensions
 
     public static void AddApplicationLayerServices(this WebApplicationBuilder builder)
     {
-        builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
-        builder.Services.AddHostedService<XpResetBackgroundService>();
+        var backgroundWork = BackgroundWorkOptions.FromConfiguration(builder.Configuration);
+        builder.Services.AddSingleton(backgroundWork);
+        builder.Services.AddSingleton(new OutboxProcessingOptions
+        {
+            IdleDelay = backgroundWork.OutboxInitialIdleDelay,
+            MaxIdleDelay = backgroundWork.OutboxMaxIdleDelay
+        });
+
+        if (backgroundWork.IndexMaintenanceEnabled)
+            builder.Services.AddHostedService<IndexMaintenanceBackgroundService>();
+        if (backgroundWork.XpResetEnabled)
+            builder.Services.AddHostedService<XpResetBackgroundService>();
         builder.Services.AddHostedService<OutboxProcessor>();
 
         builder.Services.AddScoped<IEventBus, InProcEventBus>();
@@ -242,8 +256,21 @@ public static class ServiceRegistrationExtensions
             builder.Configuration.GetSection(WeaknessAnalysisSchedulerOptions.SectionName));
         builder.Services.AddSingleton<IWeaknessAnalysisScheduler, WeaknessAnalysisScheduler>();
         builder.Services.AddHostedService(sp => (WeaknessAnalysisScheduler)sp.GetRequiredService<IWeaknessAnalysisScheduler>());
-        builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
-        builder.Services.AddHostedService<ExplanationCacheCleanupBackgroundService>();
+        if (backgroundWork.WeaknessDailySweepEnabled)
+            builder.Services.AddHostedService<WeaknessAnalysisDailyHostedService>();
+        if (backgroundWork.ExplanationCacheCleanupEnabled)
+            builder.Services.AddHostedService<ExplanationCacheCleanupBackgroundService>();
+
+        Log.Information(
+            "Background work profile configured. Profile={Profile} Hangfire={HangfireEnabled} IndexMaintenance={IndexMaintenanceEnabled} XpReset={XpResetEnabled} WeaknessDaily={WeaknessDailyEnabled} ExplanationCleanup={ExplanationCleanupEnabled} OutboxInitialIdleSeconds={OutboxInitialIdleSeconds} OutboxMaxIdleSeconds={OutboxMaxIdleSeconds}",
+            backgroundWork.Profile,
+            backgroundWork.HangfireEnabled,
+            backgroundWork.IndexMaintenanceEnabled,
+            backgroundWork.XpResetEnabled,
+            backgroundWork.WeaknessDailySweepEnabled,
+            backgroundWork.ExplanationCacheCleanupEnabled,
+            (int)backgroundWork.OutboxInitialIdleDelay.TotalSeconds,
+            (int)backgroundWork.OutboxMaxIdleDelay.TotalSeconds);
     }
 
     public static void AddCacheAndInfrastructureServices(this WebApplicationBuilder builder)
