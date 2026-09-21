@@ -22,7 +22,7 @@ Validation runs: 6
 Failed retries: 1
 
 ## Outcome
-- Reviewed local and remote branches; merged two recent, non-conflicting prompt implementations into main; fixed cosmetic test fixture drift; focused main validation passed 30/30.
+- Reviewed local and remote branches; reconciled the latest remote main with prompt implementations and cost-guardrail changes; fixed cosmetic test fixture drift; reconciled focused validation passed 33/33.
 
 ## Changed paths
 - src/MathLearning.Api/Endpoints/CosmeticsEndpoints.cs
@@ -33,7 +33,7 @@ Failed retries: 1
 - tests/MathLearning.Tests/Infrastructure/IndexMaintenanceSqlContractTests.cs
 
 ## Validation
-Validation run: dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter "LearningMapContractIntegrationTests|AdaptiveApiFacadeIntegrationTests|AnalyticsEndpointContractTests|AdaptiveSessionStartIdempotencyTests|CosmeticPlatformServiceTests|CosmeticCatalogHealthEndpointTests|IndexMaintenanceSqlContractTests" => 30 passed, 0 failed; git diff --check passed
+Validation run: dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --filter "LearningMapContractIntegrationTests|AdaptiveApiFacadeIntegrationTests|AnalyticsEndpointContractTests|AdaptiveSessionStartIdempotencyTests|CosmeticPlatformServiceTests|CosmeticCatalogHealthEndpointTests|IndexMaintenanceSqlContractTests|HangfireOutboxIsolationTests" => 33 passed, 0 failed; documentation, prompt, evidence and agent-system validators passed.
 Validation not run: Full PostgreSQL/CI suite not run; older stale/incomplete branches were not merged
 
 ## Exceptions and learning
@@ -47,6 +47,6 @@ Cross-repo impact: no
 
 ## Delivery
 State: Needs validation
-Branch/PR: direct main; local commits pending push
+Branch/PR: direct main; pushed to origin/main
 Commit SHA: self
 Completion %: 79
