@@ -44,7 +44,7 @@ Documentation impact: none - this is an implementation/evidence change with no d
 Cross-repo impact: yes - mobile client separately suppresses the known unsupported week-activity request.
 
 ## Delivery
-State: Needs merge
+State: Needs validation
 Branch/PR: `codex/fix-cosmetics-default-ownership-race`
 Commit SHA: self
-Completion %: 85
+Completion %: 79

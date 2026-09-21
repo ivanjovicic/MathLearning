@@ -46,7 +46,7 @@ Documentation impact: updated merged API/mobile contract and prompt evidence pat
 Cross-repo impact: no
 
 ## Delivery
-State: Done
+State: Needs validation
 Branch/PR: direct main; local commits pending push
 Commit SHA: self
-Completion %: 90
+Completion %: 79

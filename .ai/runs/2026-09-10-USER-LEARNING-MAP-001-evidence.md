@@ -14,7 +14,7 @@ Completed at UTC: 2026-09-10T07:41:39Z
 Elapsed time: 3m 0s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-XREPO-001, BACKEND-MISTAKE-AUDIT-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-XREPO-001; apply BACKEND-MISTAKE-AUDIT-001
-Owner/hypothesis: open
+Owner/hypothesis: Adaptive learning API owner; focused contract implementation is green, while full-suite and PostgreSQL proof remain required before final delivery.
 Files inspected: 25
 Files changed: 17
 Searches: 4
@@ -43,7 +43,7 @@ Validation run: Focused dotnet tests: 50 passed; API build: succeeded; documenta
 Validation not run: none
 
 ## Exceptions and learning
-Mistakes observed: Applied evidence and validation routing; removed internal exception message from facade error details after contract test exposed unsafe 500 details.
+Mistakes observed: BACKEND-MISTAKE-EVIDENCE-001; BACKEND-MISTAKE-VALIDATION-001; removed internal exception message from facade error details after contract test exposed unsafe 500 details.
 Waste: Initial agent_run lane value was invalid; corrected to investigation. Full suite exposed unrelated baseline failures.
 Missed: Flutter main SHA was not available in this backend workspace; no Flutter files changed.
 Follow-up: Run the full suite in an isolated baseline/CI environment and synchronize the Flutter client against the documented raw Learning Map and mastery shapes.
@@ -52,7 +52,7 @@ Documentation impact: updated docs/mobile_api_contract.md, docs/API_ENDPOINT_INV
 Cross-repo impact: Flutter sync deferred: backend contract is documented; Flutter baseline/owner was not present in this workspace.
 
 ## Delivery
-State: complete_with_residual
+State: Needs validation
 Branch/PR: codex/fix-cosmetics-default-ownership-race; pushed, PR not available because GitHub CLI is unauthenticated
 Commit SHA: bddcdca541d42ec3405cf1258064988bea95f9b3
-Completion %: 90
+Completion %: 79
