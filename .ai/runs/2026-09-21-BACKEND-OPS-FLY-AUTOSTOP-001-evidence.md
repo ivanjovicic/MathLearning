@@ -42,7 +42,7 @@ Documentation impact: Updated FLY_DEPLOYMENT_GUIDE.md with pre-production idle p
 Cross-repo impact: None.
 
 ## Delivery
-State: Done
+State: Needs validation
 Branch/PR: cursor/backend-ops-fly-autostop-001-8371 head 9cc95f3; pending main delivery
 Commit SHA: self
-Completion %: 100
+Completion %: 79
