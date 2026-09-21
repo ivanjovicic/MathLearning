@@ -18,10 +18,39 @@ public sealed record AdaptiveSessionDto(
     string ProfileDifficulty,
     IReadOnlyList<AdaptiveSessionItemDto> Items);
 
+public sealed record LearningMapNodeDto(
+    string Id,
+    string Title,
+    string TopicName,
+    int TopicId,
+    int SubtopicId,
+    double Mastery,
+    bool IsLocked,
+    string RecommendedDifficulty);
+
+public sealed record LearningMapEdgeDto(
+    string From,
+    string To);
+
+public sealed record LearningMapDto(
+    IReadOnlyList<LearningMapNodeDto> Nodes,
+    IReadOnlyList<LearningMapEdgeDto> Edges,
+    string? RecommendedNext,
+    DateTime GeneratedAt,
+    string? EmptyReason = null);
+
+public sealed record MasteryDto(
+    int TopicId,
+    string TopicName,
+    double MasteryProbability);
+
 public sealed record AdaptivePathPayload(
     IReadOnlyList<AdaptiveRecommendation> Recommendations,
     IReadOnlyList<ReviewItem> DueReviews,
-    DateTime GeneratedAtUtc);
+    DateTime GeneratedAtUtc)
+{
+    public LearningMapDto? LearningMap { get; init; }
+}
 
 public sealed record AdaptivePathResponse(
     AdaptivePathPayload Payload,

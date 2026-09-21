@@ -4,6 +4,7 @@ using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Npgsql;
 
 namespace MathLearning.Infrastructure.Services.Cosmetics;
 
@@ -237,8 +238,26 @@ public sealed partial class CosmeticPlatformService
             Version = 0
         };
         db.UserAvatarConfigs.Add(config);
-        await db.SaveChangesAsync(cancellationToken);
-        return config;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return config;
+        }
+        catch (DbUpdateException ex) when (IsPostgresUniqueViolation(ex))
+        {
+            // Two first-load requests can create the avatar row concurrently.
+            // The losing insert is safe to treat as success, but its tracked
+            // entity must be detached before reading the committed row.
+            db.Entry(config).State = EntityState.Detached;
+            var existing = await db.UserAvatarConfigs
+                .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
+            if (existing is null)
+            {
+                throw;
+            }
+
+            return existing;
+        }
     }
 
     private async Task EnsureDefaultOwnershipAsync(string userId, CancellationToken cancellationToken)
@@ -281,9 +300,46 @@ public sealed partial class CosmeticPlatformService
 
         if (changed)
         {
-            await db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsCosmeticOwnershipUniqueViolation(ex))
+            {
+                // Inventory and avatar requests are loaded in parallel on the
+                // client. If another request granted the same defaults first,
+                // the unique constraint is the expected idempotent outcome.
+                foreach (var entry in db.ChangeTracker
+                    .Entries<UserCosmeticInventory>()
+                    .Where(x => x.State == EntityState.Added))
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
         }
     }
+
+    private static bool IsCosmeticOwnershipUniqueViolation(DbUpdateException exception)
+    {
+        return FindPostgresUniqueViolation(exception) is { ConstraintName: "UX_user_cosmetics_user_item" };
+    }
+
+    private static PostgresException? FindPostgresUniqueViolation(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException postgres &&
+                postgres.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                return postgres;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsPostgresUniqueViolation(DbUpdateException exception)
+        => FindPostgresUniqueViolation(exception) is not null;
 
     private async Task ApplyAvatarChangesAsync(
         string userId,

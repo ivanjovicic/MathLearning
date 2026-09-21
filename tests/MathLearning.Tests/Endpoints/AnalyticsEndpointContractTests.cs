@@ -131,6 +131,10 @@ public sealed class AnalyticsEndpointContractTests :
         Assert.Equal(2, json.RootElement.GetProperty("pageSize").GetInt32());
         Assert.Equal(2, json.RootElement.GetProperty("returned").GetInt32());
         Assert.Equal("recommendation-3", json.RootElement.GetProperty("recommendations")[0].GetProperty("id").GetString());
+        Assert.Equal("recommendation-3", json.RootElement.GetProperty("recommendations")[0].GetProperty("practiceId").GetString());
+        Assert.Equal("Practice 3", json.RootElement.GetProperty("recommendations")[0].GetProperty("topicName").GetString());
+        Assert.Equal(1m / 3m, json.RootElement.GetProperty("recommendations")[0].GetProperty("priorityScore").GetDecimal());
+        Assert.Equal("Medium", json.RootElement.GetProperty("recommendations")[0].GetProperty("recommendedDifficulty").GetString());
     }
 
     [Fact]

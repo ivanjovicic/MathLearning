@@ -1,5 +1,7 @@
 namespace MathLearning.Application.DTOs.Analytics;
 
+using MathLearning.Domain.Entities;
+
 public sealed record WeakTopicDto(
     int TopicId,
     string TopicName,
@@ -28,7 +30,11 @@ public sealed record PracticeRecommendationDto(
     int TopicId,
     int? SubtopicId,
     string Reason,
-    decimal Priority);
+    decimal Priority)
+{
+    public string TopicName { get; init; } = string.Empty;
+    public string RecommendedDifficulty { get; init; } = AdaptiveDifficultyLevels.Medium;
+}
 
 public sealed record PracticeRecommendationsResponse(
     IReadOnlyList<PracticeRecommendationDto> Recommendations,

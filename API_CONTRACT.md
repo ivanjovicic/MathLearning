@@ -12,7 +12,6 @@ Notes:
 - `Compatibility alias` means the route exists for older mobile clients; canonical routes should be preferred for new clients.
 
 Unsupported mobile routes:
-- `/api/analytics/mastery` is not implemented.
 - `/api/chase/*` is not implemented.
 
 ---
@@ -34,12 +33,12 @@ Auth: Required
 
 - GET /api/adaptive/path
   - Auth: Required
-  - Response: ApiResult (adaptive path / lesson sequence)
+  - Response: raw Learning Map `{ nodes, edges, recommendedNext, generatedAt }`; empty users receive `200` with `nodes: []` and `emptyReason: "not_enough_learning_data"`.
 
 - GET /api/adaptive/recommendations
   - Auth: Required
-  - Query: `page` (int, default 1), `pageSize` (int, default 5)
-  - Response: ApiResult (recommendations list)
+  - Query: `page` (int, default 1), `pageSize` (int, default 10)
+  - Compatibility alias for canonical `/api/recommendations/practice`; same JSON shape.
 
 - GET /api/adaptive/reviews/due
   - Auth: Required
@@ -62,11 +61,11 @@ Auth: Required
   - Response: { weakTopics: [...], weakSubtopics: [...], page, pageSize, returnedTopics, returnedSubtopics }
 
 - GET /api/recommendations/practice?page=1&pageSize=10
-  - Response: `PracticeRecommendationsResponse` (Recommendations list, Page/PageSize, Returned)
+  - Canonical response fields per recommendation: `practiceId`, `topicId`, `topicName`, `reason`, `priorityScore`, `recommendedDifficulty`, `subtopicId`.
 
 - GET /api/analytics/mastery
-  - Not implemented.
-  - Use `/api/adaptive/path` or `/api/progress/overview` depending on product need.
+  - Response: raw list of `{ topicId, topicName, masteryProbability }` for the authenticated user.
+  - Empty result: `200 []`; unauthenticated: `401`; authorization policy denial: `403`; service/database failure: safe `500`.
 
 ---
 
