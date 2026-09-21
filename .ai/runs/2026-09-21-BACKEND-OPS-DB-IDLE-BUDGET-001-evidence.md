@@ -41,7 +41,7 @@ Validation not run: Required dotnet focused tests and Release build unavailable 
 
 ## Exceptions and learning
 Mistakes observed: Applied BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-PERF-001, BACKEND-MISTAKE-PERF-002, BACKEND-MISTAKE-PERF-003 and BACKEND-MISTAKE-SCOPE-001.
-Waste: No unrelated branches were merged; the stale Fly queue statement was corrected while touching the cost queue.
+Waste: No unrelated branches were merged; the stale Fly queue statement was corrected while touching the cost queue. A follow-up review caught and fixed a potential Full-profile Outbox cadence regression before closure.
 Missed: Fresh compile/test proof could not run because the local .NET toolchain is unavailable.
 Follow-up: Run Hangfire/Outbox/Background focused tests and Release API build in a .NET-enabled environment; then observe Fly/Neon idle behavior.
 Residual risk: A compile or provider-specific issue could remain undetected until CI/.NET validation; PreProductionIdle is reversible via BackgroundWork__Profile=Full.
@@ -50,6 +50,6 @@ Cross-repo impact: None.
 
 ## Delivery
 State: Needs validation
-Branch/PR: main 6a01425; direct-main delivery
+Branch/PR: main 978bb49; direct-main delivery
 Commit SHA: self
 Completion %: 85
