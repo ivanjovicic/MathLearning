@@ -11,7 +11,7 @@ Purpose: prevent the pre-production API from consuming a serverless PostgreSQL q
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
 | `BACKEND-OPS-FLY-AUTOSTOP-001` | P0 cost/reliability | Done 100% — Run log: `.ai/runs/2026-09-21-BACKEND-OPS-FLY-AUTOSTOP-001-evidence.md`; Validation: TOML assertions + diff check + documentation health; Residual risk: Fly deploy/idle observation remains operator follow-up; Commit: self | [Open](backend_db_cost_guardrails_2026_09_21/BACKEND-OPS-FLY-AUTOSTOP-001.md) | Stop the idle Fly machine and auto-start it on demand before real production traffic. |
-| `BACKEND-OPS-DB-IDLE-BUDGET-001` | P0 cost/reliability | Needs validation 85% — Run log: `.ai/runs/2026-09-21-BACKEND-OPS-DB-IDLE-BUDGET-001-evidence.md`; Validation: profile assertions + diff check + documentation health; Residual risk: .NET/provider and deployed idle-window proof pending; Commit: self | [Open](backend_db_cost_guardrails_2026_09_21/BACKEND-OPS-DB-IDLE-BUDGET-001.md) | Add an explicit PreProductionIdle background-work profile and remove continuous DB wake-up polling. |
+| `BACKEND-OPS-DB-IDLE-BUDGET-001` | P0 cost/reliability | Needs validation 79% — Run log: `.ai/runs/2026-09-21-BACKEND-OPS-DB-IDLE-BUDGET-001-evidence.md`; Validation: profile assertions + diff check + documentation health; Residual risk: .NET/provider and deployed idle-window proof pending; Commit: self | [Open](backend_db_cost_guardrails_2026_09_21/BACKEND-OPS-DB-IDLE-BUDGET-001.md) | Add an explicit PreProductionIdle background-work profile and remove continuous DB wake-up polling. |
 
 ## Current evidence
 
