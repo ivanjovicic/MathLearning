@@ -3,8 +3,6 @@ using System.Text.Json.Nodes;
 using MathLearning.Application.DTOs.Cosmetics;
 using MathLearning.Application.Services;
 
-using MathLearning.Application.Services;
-
 using MathLearning.Domain.Entities;
 
 using MathLearning.Infrastructure.Persistance;

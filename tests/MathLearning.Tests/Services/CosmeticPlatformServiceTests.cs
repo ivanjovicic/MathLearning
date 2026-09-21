@@ -23,6 +23,7 @@ public class CosmeticPlatformServiceTests
     public async Task ProcessRewardSourceAsync_LeaderboardUnlock_GrantsLegacyCosmetic()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
+        await EnsureCatalogReadyAsync(db);
         db.CosmeticItems.Add(new CosmeticItem
         {
             Key = "top-10-frame",
@@ -56,6 +57,7 @@ public class CosmeticPlatformServiceTests
     public async Task ProcessRewardSourceAsync_SchoolCompetitionUnlock_GrantsLegacyCosmetic()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
+        await EnsureCatalogReadyAsync(db);
         db.CosmeticItems.Add(new CosmeticItem
         {
             Key = "school-podium-bg",
