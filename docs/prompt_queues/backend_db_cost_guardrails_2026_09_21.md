@@ -20,12 +20,12 @@ Purpose: prevent the pre-production API from consuming a serverless PostgreSQL q
 - Hangfire PostgreSQL queue polling is 15 seconds;
 - sync dead-letter polling is 60 seconds and enabled by default;
 - several hourly/daily DB-backed hosted services are registered;
-- Fly service does not currently configure auto-stop.
+- Fly service is configured for auto-stop/auto-start with zero warm machines; live idle observation remains pending.
 
 ## Ordering
 
-1. `BACKEND-OPS-FLY-AUTOSTOP-001` can run first and is path-disjoint from runtime worker semantics.
-2. `BACKEND-OPS-DB-IDLE-BUDGET-001` then makes the running VM itself DB-idle-friendly.
+1. `BACKEND-OPS-FLY-AUTOSTOP-001` is delivered; live stop/start observation remains operator follow-up.
+2. `BACKEND-OPS-DB-IDLE-BUDGET-001` makes the running VM itself DB-idle-friendly.
 3. Preserve `BACKEND-OPS-HANGFIRE-NEON-001` outage/backoff behavior; do not regress its tests.
 
 ## Guardrails

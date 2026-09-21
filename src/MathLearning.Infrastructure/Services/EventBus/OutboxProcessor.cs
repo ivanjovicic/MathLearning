@@ -29,6 +29,7 @@ public sealed class OutboxProcessor : BackgroundService
 
         try
         {
+            var consecutiveEmptyPolls = 0;
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -39,10 +40,15 @@ public sealed class OutboxProcessor : BackgroundService
 
                     if (processedCount > 0)
                     {
+                        consecutiveEmptyPolls = 0;
                         _logger.LogInformation("Processed {Count} outbox messages", processedCount);
                     }
+                    else
+                    {
+                        consecutiveEmptyPolls++;
+                    }
 
-                    await DelaySafely(_options.IdleDelay, ct);
+                    await DelaySafely(_options.GetIdleDelay(consecutiveEmptyPolls), ct);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {

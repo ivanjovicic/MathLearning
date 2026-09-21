@@ -91,11 +91,16 @@ automatically when a request arrives:
 - `auto_stop_machines = "stop"`
 - `auto_start_machines = true`
 - `min_machines_running = 0`
+- `BackgroundWork__Profile = "PreProductionIdle"`
 
 This is intentional while the product is pre-production. The first request
 after an idle period can incur a cold-start delay; the DB-free
 `/api/health/` check remains the machine health target. When the machine is
 stopped, hosted workers are stopped with it and cannot keep polling Neon.
+While it is running, `PreProductionIdle` disables periodic maintenance,
+sync-redrive/retention and Hangfire polling, and applies adaptive Outbox
+backoff. Set `BackgroundWork__Profile=Full` before real production traffic to
+restore the full worker set.
 
 Before real production traffic, review the idle policy and explicitly change
 `min_machines_running`/auto-stop behavior if a warm instance is required.
