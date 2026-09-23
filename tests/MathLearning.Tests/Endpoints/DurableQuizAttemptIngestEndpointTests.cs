@@ -110,7 +110,12 @@ public sealed class DurableQuizAttemptIngestEndpointTests : IClassFixture<Custom
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
         if (await userManager.FindByIdAsync(userId) is null)
         {
-            var create = await userManager.CreateAsync(new IdentityUser { Id = userId, UserName = userId });
+            var create = await userManager.CreateAsync(new IdentityUser
+            {
+                Id = userId,
+                UserName = userId,
+                Email = $"{userId}@test.local"
+            });
             Assert.True(create.Succeeded, string.Join(", ", create.Errors.Select(x => x.Description)));
         }
 
