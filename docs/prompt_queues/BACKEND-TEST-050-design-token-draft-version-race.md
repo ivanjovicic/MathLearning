@@ -1,7 +1,7 @@
 # BACKEND-TEST-050 - Design-token draft version identity and collision safety
 
 Priority: P1
-Status: Prompt-ready
+Status: In progress / stale PR refresh required
 Run mode: design-token versioning investigation + relational concurrency tests
 
 ## Problem
