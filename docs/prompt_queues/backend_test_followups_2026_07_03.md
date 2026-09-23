@@ -22,7 +22,7 @@ Target repo: `ivanjovicic/MathLearning`
 | BACKEND-TEST-024 | P1 | Prompt-ready | Make maintenance routes testable/read-only where appropriate and add positive admin tests. |
 | BACKEND-TEST-025 | P1 | Prompt-ready | Bound bug report input/screenshot handling and prevent orphan screenshot storage. |
 | BACKEND-TEST-026 | P1 | Prompt-ready | Minimize public health/metrics/monitoring information while retaining platform probes. |
-| BACKEND-TEST-027 | P1/P2 | Prompt-ready | Decide whether to wire, merge or remove dead `QuestionEndpoints`; prevent route/limit drift. |
+| BACKEND-TEST-027 | P1/P2 | Done 100% — refreshed from current main 2026-09-23; dead endpoint family removed with absence/authoring regression coverage; CI pending on refresh PR | Remove dead `QuestionEndpoints`; prevent route/limit drift. |
 | BACKEND-TEST-028 | P1/P2 | Prompt-ready | Prevent pagination arithmetic overflow and extreme-offset abuse. |
 | BACKEND-TEST-029 | P1 | Prompt-ready | Add analytics/recommendation HTTP contract and user-scope coverage. |
 | BACKEND-TEST-030 | P1 | Prompt-ready | Add explanation endpoint validation, safe-error and cancellation coverage. |
