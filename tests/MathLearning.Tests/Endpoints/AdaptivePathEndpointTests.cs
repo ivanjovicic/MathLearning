@@ -36,8 +36,9 @@ public sealed class AdaptivePathEndpointTests : IClassFixture<CustomWebApplicati
         Assert.NotNull(payload.Data);
         Assert.NotEmpty(payload.Data!.Payload.Recommendations);
 
-        var recommendation = payload.Data.Payload.Recommendations[0];
-        Assert.True(recommendation.SubtopicId > 0);
+        var recommendation = Assert.Single(
+            payload.Data.Payload.Recommendations,
+            item => item.Topic == "adaptive-path-starter" && item.SubtopicId > 0);
         Assert.True(recommendation.TopicId > 0);
         Assert.True(recommendation.QuestionCount > 0);
     }
