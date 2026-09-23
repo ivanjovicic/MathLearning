@@ -14,7 +14,7 @@ Completed at UTC: 2026-09-23T15:07:23Z
 Elapsed time: 22m 50s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-IDEM-001, BACKEND-MISTAKE-IDEM-002, BACKEND-MISTAKE-XREPO-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-IDEM-001; apply BACKEND-MISTAKE-IDEM-002; apply BACKEND-MISTAKE-XREPO-001
-Owner/hypothesis: open
+Owner/hypothesis: economy and cosmetics idempotency owners already enforce lease ownership and stale takeover, so stale Pattern A PRs must not be reintroduced
 Files inspected: 20
 Files changed: 0
 Searches: 6
@@ -28,11 +28,11 @@ Failed retries: 1
 - none - no runtime change in this audit; queue/evidence sync is package closure
 
 ## Validation
-Validation run: focused economy/cosmetics/relational idempotency: 32 passed, 0 failed
+Validation run: focused economy/cosmetics/relational idempotency: 32 passed; zero failures
 Validation not run: live PostgreSQL takeover/concurrency matrix; CI pending
 
 ## Exceptions and learning
-Mistakes observed: classified stale pre-fetch test as baseline drift; refreshed origin/main before deciding
+Mistakes observed: BACKEND-MISTAKE-VALIDATION-001; prevention=refresh origin/main before deciding whether a stale test is still actionable
 Waste: two invalid agent_run plan invocations before selecting supported area/lane
 Missed: none observed
 Follow-up: run PostgreSQL owner-token/takeover matrix under BACKEND-TEST-032 provider workflow
