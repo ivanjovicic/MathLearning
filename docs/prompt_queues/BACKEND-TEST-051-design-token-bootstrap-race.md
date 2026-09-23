@@ -1,7 +1,7 @@
 # BACKEND-TEST-051 - Design-token bootstrap race and startup ownership
 
 Priority: P1
-Status: Prompt-ready
+Status: In progress / stale PR refresh required
 Run mode: design-token bootstrap investigation + startup/concurrency tests
 
 ## Problem
