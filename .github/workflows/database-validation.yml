@@ -167,13 +167,14 @@ jobs:
       - name: Smoke startup schema guard
         env:
           ASPNETCORE_ENVIRONMENT: CI
+          DOTNET_ENVIRONMENT: CI
           ConnectionStrings__Default: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_ci_validation;Pooling=true;
         run: |
-          dotnet run --project src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-build --urls http://127.0.0.1:5087 > api.log 2>&1 &
+          dotnet run --project src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5087 > api.log 2>&1 &
           API_PID=$!
           trap "kill $API_PID || true" EXIT
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:5087/api/health/ready; then exit 0; fi
+            if curl -fsS http://127.0.0.1:5087/health/schema; then exit 0; fi
             sleep 2
           done
           cat api.log
