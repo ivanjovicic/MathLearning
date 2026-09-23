@@ -30,7 +30,7 @@ Before implementing any prompt:
 | `BACKEND-API-DB-012` | P1 | Prompt-ready | Make Redis and DB leaderboard implementations contract-equivalent for scope, cursor, rank and failover. | Depends on `BACKEND-API-DB-011`; link `BE-PERF-004/005/008` |
 | `BACKEND-API-DB-013` | P1 | Done 75% — Run log: `.ai/runs/2026-08-01-BACKEND-API-DB-013-evidence.md`; Validation: focused AuthIncompleteAccount + AuthMobileRegistrationAtomicity; Residual risk: historical orphan backfill/operator repair job and Flutter contract SHA sync deferred; Commit: self | Unify registration ownership and repair/prevent incomplete Identity-only accounts. | Link registration atomicity tests and mobile contract sync |
 | `BACKEND-API-DB-014` | P1 | Prompt-ready | Retire or correctly rebuild the legacy photo-avatar contract and durable storage path. | Preserve validated file-safety work in `BACKEND-TEST-008` |
-| `BACKEND-API-DB-015` | P0/P1 | Prompt-ready | Prevent permanent pending economy/cosmetics idempotency tombstones and prove safe recovery. | Canonical extension of `BACKEND-TEST-014`, `BACKEND-TEST-032/033` |
+| `BACKEND-API-DB-015` | P0/P1 | In progress / stale PR refresh required — economy PR #16 and cosmetics PR #17 remain open but are >120 commits behind current main; do not claim a duplicate owner or merge those branches directly. | Prevent permanent pending economy/cosmetics idempotency tombstones and prove safe recovery. | Canonical extension of `BACKEND-TEST-014`, `BACKEND-TEST-032/033` |
 
 ---
 
