@@ -47,14 +47,23 @@ Documentation impact is limited to the canonical endpoint inventory.
 Mistakes observed: none
 Waste: none after the final refresh; the prior replacement PR touched queue files that were later updated on main, so this branch deliberately excludes them.
 Missed: Fresh .NET CI has not executed at evidence creation time.
-Follow-up: Merge only after fresh CI is green, then mark BACKEND-TEST-027 Done in canonical queue files and close superseded PRs.
+Follow-up: Repository-wide Database Validation still has 12 pre-existing baseline failures unrelated to QuestionEndpoints; continue under the dedicated CI baseline repair work.
 Residual risk: Low runtime risk because the endpoint was never mapped; build/test confirmation is still mandatory.
 Documentation impact: Endpoint inventory records removal; no mobile contract change required because the route was never shipped.
 Cross-repo impact: None.
 
 ## Delivery
 
-State: Needs validation
-Branch/PR: agent/BACKEND-TEST-027-final-refresh-20260923
-Commit SHA: self
-Completion %: 79
+State: Done
+Branch/PR: PR #33 merged
+Commit SHA: a6cf0430abba25bd80a96c9dd37c139369c9117b
+Completion %: 95
+
+
+## Merge closure — 2026-09-23
+
+- PR #33 merged as `a6cf0430abba25bd80a96c9dd37c139369c9117b`.
+- Backend Agent System Validation passed.
+- Database workflow build and schema-from-zero passed.
+- Full test suite still failed on the known repository-wide 12-test baseline; none of those failures referenced `QuestionEndpointsAbsenceTests` or authoring route coverage.
+- The global baseline is being repaired separately in PR #34; it is not attributed to BACKEND-TEST-027.
