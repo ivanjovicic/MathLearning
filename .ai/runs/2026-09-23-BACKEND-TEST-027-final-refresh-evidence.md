@@ -57,7 +57,7 @@ Cross-repo impact: None.
 State: Done
 Branch/PR: PR #33 merged
 Commit SHA: a6cf0430abba25bd80a96c9dd37c139369c9117b
-Completion %: 95
+Completion %: 79
 
 
 ## Merge closure — 2026-09-23
@@ -67,3 +67,8 @@ Completion %: 95
 - Database workflow build and schema-from-zero passed.
 - Full test suite still failed on the known repository-wide 12-test baseline; none of those failures referenced `QuestionEndpointsAbsenceTests` or authoring route coverage.
 - The global baseline is being repaired separately in PR #34; it is not attributed to BACKEND-TEST-027.
+
+
+## Evidence budget note — 2026-09-23
+
+The delivery remains merged and the owner remains Done, but this run exceeded its declared evidence budget (`Files changed=4>3`, `Searches=3>2`). Per repository evidence policy, the run-level `Completion %` is capped at 79. This cap describes validation/evidence completeness, not rollback of the already merged runtime outcome.
