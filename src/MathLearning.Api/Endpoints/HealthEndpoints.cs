@@ -66,9 +66,7 @@ public static class HealthEndpoints
                         return Results.Json(new
                         {
                             status = "Unhealthy",
-                            db = "Cannot connect",
-                            redis = redisStatus.Snapshot(),
-                            schema = BuildSchemaSummary(schemaState.Current),
+                            reason = "DatabaseUnavailable",
                             timestamp = DateTime.UtcNow
                         }, statusCode: 503);
                     }
@@ -78,10 +76,6 @@ public static class HealthEndpoints
                     return Results.Ok(new
                     {
                         status = "Healthy",
-                        db = "Connected",
-                        provider = "PostgreSQL",
-                        redis = redisStatus.Snapshot(),
-                        schema = BuildSchemaSummary(schemaState.Current),
                         timestamp = DateTime.UtcNow
                     });
                 }, httpContext.RequestAborted);
@@ -92,10 +86,7 @@ public static class HealthEndpoints
                 return Results.Json(new
                 {
                     status = "Unhealthy",
-                    db = "Error",
                     reason = GetFailureReason(exception, "DatabaseHealthCheckFailed"),
-                    redis = redisStatus.Snapshot(),
-                    schema = BuildSchemaSummary(schemaState.Current),
                     timestamp = DateTime.UtcNow
                 }, statusCode: 503);
             }
@@ -131,8 +122,7 @@ public static class HealthEndpoints
                         {
                             status = "NotReady",
                             reason = "DatabaseUnavailable",
-                            redis = redisStatus.Snapshot(),
-                            schema = BuildSchemaSummary(schemaState.Current)
+                            timestamp = DateTime.UtcNow
                         }, statusCode: 503);
                     }
 
@@ -143,8 +133,7 @@ public static class HealthEndpoints
                         {
                             status = "NotReady",
                             reason = "SchemaNotReady",
-                            redis = redisStatus.Snapshot(),
-                            schema = BuildSchemaSummary(schemaStatus)
+                            timestamp = DateTime.UtcNow
                         }, statusCode: 503);
                     }
 
@@ -155,9 +144,7 @@ public static class HealthEndpoints
                         {
                             status = catalogReadiness.Status,
                             reason = catalogReadiness.Reason,
-                            catalog = catalogReadiness,
-                            redis = redisStatus.Snapshot(),
-                            schema = BuildSchemaSummary(schemaStatus)
+                            timestamp = DateTime.UtcNow
                         }, statusCode: 503);
                     }
 
@@ -168,34 +155,13 @@ public static class HealthEndpoints
                         {
                             status = "NotReady",
                             reason = "RedisUnavailable",
-                            redis = redisReadiness,
-                            schema = BuildSchemaSummary(schemaStatus)
+                            timestamp = DateTime.UtcNow
                         }, statusCode: 503);
                     }
-
-                    var questionCount = await db.Questions.CountAsync(cancellationToken);
-                    var categoryCount = await db.Categories.CountAsync(cancellationToken);
-                    var userCount = await db.UserProfiles.CountAsync(cancellationToken);
 
                     return Results.Ok(new
                     {
                         status = "Ready",
-                        db = "Connected",
-                        redis = redisReadiness,
-                        catalog = new
-                        {
-                            catalogReadiness.Status,
-                            catalogReadiness.RevisionKey,
-                            catalogReadiness.Checksum,
-                            catalogReadiness.CatalogVersion
-                        },
-                        data = new
-                        {
-                            questions = questionCount,
-                            categories = categoryCount,
-                            users = userCount
-                        },
-                        schema = BuildSchemaSummary(schemaStatus),
                         timestamp = DateTime.UtcNow
                     });
                 }, httpContext.RequestAborted);
@@ -207,8 +173,7 @@ public static class HealthEndpoints
                 {
                     status = "NotReady",
                     reason = GetFailureReason(exception, "ReadinessCheckFailed"),
-                    redis = redisStatus.Snapshot(),
-                    schema = BuildSchemaSummary(schemaState.Current)
+                    timestamp = DateTime.UtcNow
                 }, statusCode: 503);
             }
             finally
@@ -220,15 +185,17 @@ public static class HealthEndpoints
         .WithName("ReadinessCheck")
         .WithDescription("Full readiness check including database and seed data");
 
-        group.MapGet("/schema", BuildSchemaHealthResult)
-        .WithName("SchemaHealthCheck")
-        .WithDescription("Expose database schema/migration state");
+        app.MapGet("/api/health/schema", BuildSchemaHealthResult)
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
+            .WithName("SchemaHealthCheck")
+            .WithTags("Health")
+            .WithDescription("Admin-only database schema/migration state");
 
         app.MapGet("/health/schema", BuildSchemaHealthResult)
-            .AllowAnonymous()
+            .RequireAuthorization(DesignTokenSecurity.AdminPolicy)
             .WithName("CanonicalSchemaHealthCheck")
             .WithTags("Health")
-            .WithDescription("Expose database schema/migration state");
+            .WithDescription("Admin-only database schema/migration state");
     }
 
     private static void LogProbeFailure(
