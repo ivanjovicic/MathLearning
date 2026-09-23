@@ -28,7 +28,7 @@ Failed retries: 1
 - none - no runtime change in this audit; queue/evidence sync is package closure
 
 ## Validation
-Validation run: focused economy/cosmetics/relational idempotency: 32 passed; zero failures
+Validation run: focused economy/cosmetics/relational idempotency: 32 passed; all cases green
 Validation not run: live PostgreSQL takeover/concurrency matrix; CI pending
 
 ## Exceptions and learning
