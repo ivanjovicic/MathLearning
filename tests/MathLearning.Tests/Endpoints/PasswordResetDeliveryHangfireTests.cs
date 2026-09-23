@@ -5,15 +5,45 @@ using Hangfire;
 using Hangfire.Common;
 using Hangfire.States;
 using MathLearning.Api.Services;
+using MathLearning.Api.Startup;
+using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Tests.Helpers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MathLearning.Tests.Endpoints;
 
 public sealed class PasswordResetDeliveryHangfireTests
 {
+    [Fact]
+    public void PreProductionIdle_EnabledDelivery_UsesInlineDispatcherPolicy()
+    {
+        var environment = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        var delivery = new PasswordResetDeliveryOptions { Enabled = true };
+        var backgroundWork = new BackgroundWorkOptions { Profile = "PreProductionIdle" };
+
+        Assert.True(ServiceRegistrationExtensions.ShouldDispatchPasswordResetInline(
+            environment,
+            delivery,
+            backgroundWork));
+    }
+
+    [Fact]
+    public void FullProduction_EnabledDelivery_UsesHangfireDispatcherPolicy()
+    {
+        var environment = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        var delivery = new PasswordResetDeliveryOptions { Enabled = true };
+        var backgroundWork = new BackgroundWorkOptions { Profile = "Full" };
+
+        Assert.False(ServiceRegistrationExtensions.ShouldDispatchPasswordResetInline(
+            environment,
+            delivery,
+            backgroundWork));
+    }
+
     [Fact]
     public async Task ProductionDispatcher_EnqueuesOnlyTheIdentityUserId()
     {
@@ -164,6 +194,14 @@ public sealed class PasswordResetDeliveryHangfireTests
     }
 
     private sealed record TestAccount(string UserId, string Username, string Email, string NewPassword);
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Production;
+        public string ApplicationName { get; set; } = "MathLearning.Tests";
+        public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
 
     private sealed class RecordingBackgroundJobClient : IBackgroundJobClient
     {
