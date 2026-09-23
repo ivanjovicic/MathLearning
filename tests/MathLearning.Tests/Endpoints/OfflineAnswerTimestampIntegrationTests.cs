@@ -106,7 +106,7 @@ public sealed class OfflineAnswerTimestampIntegrationTests : IClassFixture<Custo
         await EnsureUserAsync(userId);
         var correctAnswer = await GetCorrectAnswerTokenAsync();
         var sessionId = $"offset-{Guid.NewGuid():N}";
-        var answeredAt = new DateTime(2026, 6, 24, 10, 0, 0, 123, DateTimeKind.Utc);
+        var answeredAt = DateTime.UtcNow.AddMinutes(-30).AddTicks(-(DateTime.UtcNow.Ticks % TimeSpan.TicksPerMillisecond));
 
         var firstPayload = new Dictionary<string, object?>
         {
@@ -157,7 +157,7 @@ public sealed class OfflineAnswerTimestampIntegrationTests : IClassFixture<Custo
         await EnsureUserAsync(userId);
         var correctAnswer = await GetCorrectAnswerTokenAsync();
         var sessionId = $"precision-{Guid.NewGuid():N}";
-        var baseTime = new DateTime(2026, 6, 20, 8, 30, 15, 120, DateTimeKind.Utc);
+        var baseTime = DateTime.UtcNow.AddMinutes(-30).AddTicks(-(DateTime.UtcNow.Ticks % TimeSpan.TicksPerMillisecond));
 
         var firstPayload = BuildCanonicalPayload(
             sessionId,
