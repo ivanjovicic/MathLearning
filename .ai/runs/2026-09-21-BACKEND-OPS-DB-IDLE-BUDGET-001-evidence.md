@@ -53,3 +53,34 @@ State: Needs validation
 Branch/PR: main 978bb49; direct-main delivery
 Commit SHA: self
 Completion %: 79
+
+
+## Validation takeover addendum — 2026-09-23
+
+Agent/tool: ChatGPT GitHub connector  
+Run mode: validation takeover  
+Base main: `98b7bc3eb117989c68b85d03124a7552a131f89b`  
+Branch: `agent/BACKEND-OPS-DB-IDLE-BUDGET-001-validation-20260923`
+
+### Residual found
+
+Source review found a profile/feature compatibility gap:
+- `PreProductionIdle` disables Hangfire and registers `DisabledBackgroundJobClient`.
+- production password-reset delivery still selected `HangfirePasswordResetDeliveryDispatcher` whenever delivery was enabled.
+- result: enabled password-reset delivery could enqueue into the disabled client and be silently dropped.
+
+### Change
+
+- Added an explicit dispatcher policy seam in `ServiceRegistrationExtensions`.
+- Enabled password-reset delivery falls back to inline scoped dispatch when the active background-work profile disables Hangfire.
+- Full production mode still uses Hangfire.
+- Added focused tests for PreProductionIdle/Full policy selection.
+
+### Validation state
+
+Source/diff review: completed through GitHub connector.  
+Focused .NET tests: pending CI/.NET-enabled execution.  
+Release API build: pending CI/.NET-enabled execution.  
+Deployed Fly/DB idle observation: still operator follow-up.
+
+Do not mark this prompt Done until focused tests and Release build execute successfully.
