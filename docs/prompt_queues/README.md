@@ -16,7 +16,7 @@ Current open implementation owners must be refreshed from current main rather th
 - `BACKEND-TEST-026`: PR #23; ~115 commits behind current main.
 - `BACKEND-TEST-033`: PR #24; partial cancellation slice and ~115 commits behind current main.
 - season/economy contract follow-up PR #25 is also ~115 commits behind and must be re-audited before any port.
-- `BACKEND-TEST-027`: stale PR #22 and intermediate refresh PR #32 are superseded by final current-main PR #33; keep the queue row nonclaimable while #33 validates.
+- `BACKEND-TEST-027`: Done 95% via PR #33 / `a6cf0430`; dead endpoint removed and scoped validation clean. The repository-wide 12-test Database Validation baseline is tracked separately and must not reopen this owner.
 
 Superseded PRs #13, #14 and #15 are closed because their canonical BE-PERF owners are already Done on current main. PR #31 is merged; `BACKEND-OPS-DB-IDLE-BUDGET-001` is closed at 95% with provider-workflow/live-idle residuals recorded separately.
 
