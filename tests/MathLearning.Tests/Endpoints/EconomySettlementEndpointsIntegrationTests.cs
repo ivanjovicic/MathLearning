@@ -1818,12 +1818,25 @@ public sealed class EconomySettlementEndpointsIntegrationTests : IClassFixture<C
     }
 
     private async Task<int> EnsureActiveSeasonAsync()
-        => await EnsureSeasonAsync(
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var existing = (await db.CosmeticSeasons.AsNoTracking().ToListAsync())
+            .SingleOrDefault(season =>
+                today >= DateOnly.FromDateTime(season.StartDate) &&
+                today <= DateOnly.FromDateTime(season.EndDate));
+
+        if (existing is not null)
+            return existing.Id;
+
+        return await EnsureSeasonAsync(
             key: $"season-{Guid.NewGuid():N}",
             start: DateTime.UtcNow.AddDays(-1),
             end: DateTime.UtcNow.AddDays(30),
             isActive: true,
             status: CosmeticSeasonStatuses.Active);
+    }
 
     private async Task<int> EnsureSeasonAsync(
         string key,

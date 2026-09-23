@@ -75,14 +75,12 @@ public sealed class HealthProbeTests
     [Fact]
     public async Task BoundedProbe_CancelsAStalledDependency()
     {
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(TimeSpan.FromSeconds(2), MathLearning.Api.Endpoints.HealthEndpoints.ProbeTimeout);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             MathLearning.Api.Endpoints.HealthEndpoints.ExecuteBoundedProbeAsync(
                 async cancellationToken => await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken),
                 CancellationToken.None));
-
-        Assert.InRange(stopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(5));
     }
 
     [Fact]

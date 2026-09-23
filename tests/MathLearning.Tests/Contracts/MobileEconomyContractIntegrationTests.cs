@@ -550,6 +550,14 @@ public sealed class MobileEconomyContractIntegrationTests : IClassFixture<Custom
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var existing = (await db.CosmeticSeasons.AsNoTracking().ToListAsync())
+            .SingleOrDefault(season =>
+                today >= DateOnly.FromDateTime(season.StartDate) &&
+                today <= DateOnly.FromDateTime(season.EndDate));
+
+        if (existing is not null)
+            return existing.Id;
 
         var season = new CosmeticSeason
         {

@@ -5,6 +5,7 @@ using MathLearning.Infrastructure.Services;
 using MathLearning.Infrastructure.Services.Sync;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -291,14 +292,14 @@ public class SyncServiceTests
                 DateTime.UtcNow)),
             null);
 
-        var response = await service.SyncAsync(
-            "1",
-            new SyncRequestDto("device-4", 0, [operation]),
-            CancellationToken.None);
+        var exception = await Assert.ThrowsAsync<SyncRequestValidationException>(() =>
+            service.SyncAsync(
+                "1",
+                new SyncRequestDto("device-4", 0, [operation]),
+                CancellationToken.None));
 
-        Assert.Single(response.AcknowledgedOperations);
-        Assert.Equal("Rejected", response.AcknowledgedOperations[0].Status);
-        Assert.Equal("user_mismatch", response.AcknowledgedOperations[0].ErrorCode);
+        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
+        Assert.Equal("user_mismatch", exception.ErrorCode);
         Assert.Equal(0, await db.UserAnswers.CountAsync());
         Assert.Equal(0, await db.SyncEventLogs.CountAsync());
     }

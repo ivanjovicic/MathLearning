@@ -56,7 +56,7 @@ public sealed class ExplanationRequestValidatorTests
             ProblemId = -2,
             Grade = -1,
             Difficulty = "unknown",
-            Language = "nope",
+            Language = "not_a_valid_culture!",
             ProblemText = new string('p', 1001),
             StudentAnswer = new string('s', 201),
             ExpectedAnswer = new string('e', 201),

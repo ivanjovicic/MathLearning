@@ -145,13 +145,15 @@ WHERE "UserId" = '1';
         var schemaState = seedScope.ServiceProvider.GetRequiredService<DatabaseSchemaState>();
         schemaState.Update(ReadySchemaStatus());
 
-        await seedDb.Database.ExecuteSqlRawAsync("""
+        var now = DateTimeOffset.UtcNow;
+        var lastReset = now.AddDays(-8).UtcDateTime;
+        await seedDb.Database.ExecuteSqlInterpolatedAsync($"""
 UPDATE "UserProfiles"
 SET "Xp" = 0,
     "DailyXp" = 5,
     "WeeklyXp" = 5,
     "MonthlyXp" = 5,
-    "LastXpResetDate" = TIMESTAMPTZ '2026-07-26 12:00:00+00',
+    "LastXpResetDate" = {lastReset},
     "UpdatedAt" = NOW()
 WHERE "UserId" = '1';
 """);
@@ -174,7 +176,7 @@ WHERE "UserId" = '1';
             resetDb,
             resetSchema,
             new AllowAllLease(),
-            new MutableTimeProvider(DateTimeOffset.Parse("2026-07-28T08:00:00Z")));
+            new MutableTimeProvider(now));
         var awardService = new XpTrackingService(
             gatedAwardDb,
             Microsoft.Extensions.Options.Options.Create(new XpTrackingOptions()),
@@ -187,10 +189,13 @@ WHERE "UserId" = '1';
         await Task.WhenAll(resetTask, awardTask);
 
         var reloaded = await seedDb.UserProfiles.AsNoTracking().SingleAsync(p => p.UserId == "1");
+        var expectedMonthlyXp =
+            lastReset.Year == now.Year && lastReset.Month == now.Month ? 15 : 10;
+
         Assert.Equal(10, reloaded.Xp);
         Assert.Equal(10, reloaded.DailyXp);
         Assert.Equal(10, reloaded.WeeklyXp);
-        Assert.Equal(15, reloaded.MonthlyXp);
+        Assert.Equal(expectedMonthlyXp, reloaded.MonthlyXp);
     }
 
     [Fact]

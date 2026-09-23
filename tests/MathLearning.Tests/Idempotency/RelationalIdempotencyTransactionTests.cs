@@ -141,7 +141,7 @@ public sealed class RelationalIdempotencyTransactionTests
     }
 
     [Fact]
-    public async Task EconomyTransaction_ConcurrentDuplicateInsert_ReusesSinglePendingTransaction_ThenReplaysCompletion()
+    public async Task EconomyTransaction_ConcurrentDuplicateInsert_CreatesSingleOwnedPendingTransaction_AndRejectsNonOwnerCompletion()
     {
         await using var database = await SqliteFileTestDatabase.CreateAsync();
         var coordinator = new OrderedInsertCoordinator();
@@ -152,29 +152,20 @@ public sealed class RelationalIdempotencyTransactionTests
 
         Assert.Equal(1, results.Count(x => x.ShouldProcess));
         Assert.Equal(1, results.Count(x => x.IsExisting));
-        Assert.Single(results.Select(x => x.TransactionId).Distinct());
+        var transactionId = Assert.Single(results.Select(x => x.TransactionId).Distinct());
 
-        await using (var completionDb = database.CreateContext())
-        {
-            var service = CreateEconomyService(completionDb);
-            await service.CompleteAsync(
-                results[0].TransactionId,
-                new { success = true, balance = 90 });
-        }
+        await using var nonOwnerDb = database.CreateContext();
+        var nonOwnerService = CreateEconomyService(nonOwnerDb);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            nonOwnerService.CompleteAsync(
+                transactionId,
+                new { success = true, balance = 90 }));
 
-        await using var replayDb = database.CreateContext();
-        var replayService = CreateEconomyService(replayDb);
-        var replay = await replayService.BeginOrGetExistingAsync(
-            "economy-race-user",
-            "coins_spend",
-            "economy-race-key",
-            new { amount = 10, reason = "hint" },
-            operationId: "economy-race-operation");
-
-        Assert.True(replay.IsExisting);
-        Assert.True(replay.IsCompleted);
-        Assert.False(replay.ShouldProcess);
-        Assert.Equal(1, await replayDb.EconomyTransactions.CountAsync());
+        Assert.Equal(1, await nonOwnerDb.EconomyTransactions.CountAsync());
+        var pending = await nonOwnerDb.EconomyTransactions.AsNoTracking().SingleAsync();
+        Assert.Equal(EconomyTransactionStatus.Pending, pending.Status);
+        Assert.False(string.IsNullOrWhiteSpace(pending.OwnerToken));
+        Assert.NotNull(pending.LeaseExpiresAtUtc);
     }
 
     private static async Task<IdempotencyLedgerBeginResult> BeginSharedAsync(
