@@ -84,3 +84,20 @@ Release API build: pending CI/.NET-enabled execution.
 Deployed Fly/DB idle observation: still operator follow-up.
 
 Do not mark this prompt Done until focused tests and Release build execute successfully.
+
+
+## Closure addendum — 2026-09-23
+
+PR #31 was reviewed and merged to main.
+
+Validation supplied at merge:
+- `PasswordResetDeliveryHangfireTests`: 6/6 passed.
+- Release API build: 0 errors.
+- Backend Agent System Validation: passed.
+- Database Validation / validate-database CI: unsuccessful; retained as an explicit residual rather than hidden.
+- Live Fly/DB idle observation: pending.
+
+Delivery:
+- Merge commit: `678ac0232b4d0b0d39f301ebf0a9e2649d1e2058`
+- State: Done 95%
+- Residual risk: provider-specific CI remains red and deployed idle-cost behavior has not yet been observed end-to-end.
