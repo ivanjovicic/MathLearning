@@ -646,6 +646,9 @@ public static class EconomySettlementEndpoints
                 return Results.BadRequest(EconomyEndpointHelpers.BusinessError("invalid_transaction_id", "TransactionId is required."));
 
             var normalizedTxId = request.TransactionId.Trim();
+            // Chest transactionId is domain provenance, not ledger operation identity.
+            // A new idempotency key for an already-settled chest must reach the
+            // alreadyClaimed replay path instead of failing as idempotency_conflict.
             var beginTuple = await EconomyEndpointHelpers.TryBeginAsync(
                 txService,
                 userId,
@@ -653,8 +656,7 @@ public static class EconomySettlementEndpoints
                 request.IdempotencyKey!,
                 request,
                 ct,
-                operationId: request.OperationId,
-                transactionId: normalizedTxId);
+                operationId: request.OperationId);
             if (beginTuple.Error is not null)
                 return beginTuple.Error;
             var begin = beginTuple.Begin!;
@@ -673,7 +675,7 @@ public static class EconomySettlementEndpoints
                 var replay = new SeasonDailyRunClaimResponse(
                     Success: true,
                     AlreadyClaimed: true,
-                    AwardedXp: 0,
+                    AwardedXp: existing.AwardedXp,
                     Season: seasonStateExisting,
                     FragmentGrant: fragmentGrantHint,
                     ErrorCode: null,
@@ -838,6 +840,18 @@ public static class EconomySettlementEndpoints
                 await txService.CompleteAsync(begin.TransactionId, replay, ct);
                 if (dbTx is not null) await dbTx.CommitAsync(ct);
                 return Results.Ok(replay);
+            }
+
+            // Same deny-by-default premium policy as cosmetics reward-track claim
+            // (BACKEND-SEASON-TRACK-AUTHORITY-001). Milestone id must not bypass track entitlement.
+            if (!SeasonRewardTrackAccess.CanAccessTrack(userId, milestone.TrackType))
+            {
+                var error = EconomyEndpointHelpers.BusinessError(
+                    "premium_required",
+                    "Premium reward track entitlement is required.");
+                await txService.FailAsync(begin.TransactionId, "premium_required", error, ct);
+                if (dbTx is not null) await dbTx.CommitAsync(ct);
+                return Results.Conflict(error);
             }
 
             var progress = await GetOrCreateSeasonProgressAsync(db, userId, season.Id, ct);
@@ -1032,21 +1046,22 @@ public static class EconomySettlementEndpoints
         var now = DateTime.UtcNow;
         if (requestedSeasonId.HasValue)
         {
-            return await db.CosmeticSeasons
+            var season = await db.CosmeticSeasons
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.Id == requestedSeasonId.Value &&
-                    x.IsActive &&
-                    x.StartDate <= now &&
-                    x.EndDate >= now,
-                    ct);
+                .FirstOrDefaultAsync(x => x.Id == requestedSeasonId.Value, ct);
+            return season is not null && SeasonClaimWindow.IsAccessible(season, now) ? season : null;
         }
 
-        return await db.CosmeticSeasons
+        var candidates = await db.CosmeticSeasons
             .AsNoTracking()
-            .Where(x => x.IsActive && x.StartDate <= now && x.EndDate >= now)
+            .Where(x =>
+                x.Status == CosmeticSeasonStatuses.Active ||
+                x.Status == CosmeticSeasonStatuses.RewardLock ||
+                x.IsActive)
             .OrderByDescending(x => x.StartDate)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+
+        return candidates.FirstOrDefault(x => SeasonClaimWindow.IsAccessible(x, now));
     }
 
     /// <summary>
