@@ -30,6 +30,11 @@ public sealed class DesignTokenVersionConfiguration : IEntityTypeConfiguration<D
             .IsUnique()
             .HasDatabaseName("UX_DesignTokenVersion_Current");
 
+        builder.HasIndex(x => x.Status)
+            .HasFilter("\"Status\" = 'Draft'")
+            .IsUnique()
+            .HasDatabaseName("UX_DesignTokenVersion_Draft");
+
         builder.HasIndex(x => new { x.Status, x.CreatedAtUtc })
             .HasDatabaseName("IX_DesignTokenVersion_Status_CreatedAtUtc");
 
