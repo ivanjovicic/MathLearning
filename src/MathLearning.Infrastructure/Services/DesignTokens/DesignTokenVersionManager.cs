@@ -6,6 +6,9 @@ namespace MathLearning.Infrastructure.Services.DesignTokens;
 
 public sealed class DesignTokenVersionManager : IDesignTokenVersionManager
 {
+    // "draft-" (6) + yyyyMMddHHmmss (14) + "-" (1) + 8 hex = 29 <= Version max length 32
+    private const int DraftSuffixLength = 8;
+
     public string EnsureNextVersion(string? requestedVersion, string? currentVersion)
     {
         if (string.IsNullOrWhiteSpace(currentVersion))
@@ -31,6 +34,13 @@ public sealed class DesignTokenVersionManager : IDesignTokenVersionManager
 
     public string CreateRollbackVersion(string? requestedVersion, string currentVersion) =>
         EnsureNextVersion(requestedVersion, currentVersion);
+
+    public string CreateDraftVersionIdentity(DateTime? utcNow = null)
+    {
+        var stamp = (utcNow ?? DateTime.UtcNow).ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        var suffix = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..DraftSuffixLength];
+        return $"draft-{stamp}-{suffix}";
+    }
 
     private readonly record struct SemanticVersion(int Major, int Minor, int Patch)
     {
