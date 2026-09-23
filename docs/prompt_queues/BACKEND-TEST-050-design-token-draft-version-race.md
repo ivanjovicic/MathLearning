@@ -1,7 +1,7 @@
 # BACKEND-TEST-050 - Design-token draft version identity and collision safety
 
 Priority: P1
-Status: In progress / stale PR refresh required
+Status: Done 85% — fresh PR #36 merged as `c7e336f`; residual live PostgreSQL migration/concurrency proof
 Run mode: design-token versioning investigation + relational concurrency tests
 
 ## Problem

@@ -1,7 +1,7 @@
 # BACKEND-TEST-049 - Question authoring snapshot truth and atomic revalidate repair
 
 Priority: P1
-Status: In progress / stale PR refresh required
+Status: Done 85% — fresh PR #35 merged as `6a8f3ae`; residual live PostgreSQL concurrent revalidate proof
 Run mode: question-authoring integrity investigation + relational failure-injection tests
 
 ## Problem

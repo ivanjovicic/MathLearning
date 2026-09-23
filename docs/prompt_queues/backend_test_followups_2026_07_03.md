@@ -21,14 +21,14 @@ Target repo: `ivanjovicic/MathLearning`
 | BACKEND-TEST-023 | P0/P1 | Runtime-fixed / Workflow validation needed | Multi-instance-safe outbox claiming now uses `FOR UPDATE SKIP LOCKED` plus retry/dead-letter state; PostgreSQL proof still needs CI or valid local credentials. |
 | BACKEND-TEST-024 | P1 | Prompt-ready | Make maintenance routes testable/read-only where appropriate and add positive admin tests. |
 | BACKEND-TEST-025 | P1 | Prompt-ready | Bound bug report input/screenshot handling and prevent orphan screenshot storage. |
-| BACKEND-TEST-026 | P1 | In progress / stale PR refresh required — PR #23 is ~115 commits behind current main; refresh before merge. | Minimize public health/metrics/monitoring information while retaining platform probes. |
+| BACKEND-TEST-026 | P1 | Done — fresh PR #38 merged to `main` as `2eefbf5`; old PR #23 superseded. Run log: `.ai/runs/2026-09-23-BACKEND-TEST-026-evidence.md`; validation: Health/Metrics/Monitoring 28/28 pass; CI: pending. | Minimize public health/metrics/monitoring information while retaining platform probes. |
 | BACKEND-TEST-027 | P1/P2 | Done — PR #33 merged as `a6cf0430`. Run log: `.ai/runs/2026-09-23-BACKEND-TEST-027-final-refresh-evidence.md`; Validation: Agent System, Release build and schema-from-zero passed; scoped QuestionEndpoints/authoring failures=0; Residual risk: run evidence completion is capped at 79 because the evidence budget was exceeded, while repository-wide validation debt is tracked separately. | Dead `QuestionEndpoints` removed; absence tests prevent route/limit drift. |
 | BACKEND-TEST-028 | P1/P2 | Prompt-ready | Prevent pagination arithmetic overflow and extreme-offset abuse. |
 | BACKEND-TEST-029 | P1 | Prompt-ready | Add analytics/recommendation HTTP contract and user-scope coverage. |
 | BACKEND-TEST-030 | P1 | Prompt-ready | Add explanation endpoint validation, safe-error and cancellation coverage. |
 | BACKEND-TEST-031 | P1 | Prompt-ready | Make weakness scheduling bounded, deduplicated and restart-safe or document accepted loss. |
 | BACKEND-TEST-032 | P0/P1 | Implemented / Workflow validation needed | Shared PostgreSQL provider harness and initial authority tests are wired; exact workflow/local provider execution still needs valid PostgreSQL maintenance credentials. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-032-evidence.md`. |
-| BACKEND-TEST-033 | P1 | In progress / stale PR refresh required — PR #24 is partial and ~115 commits behind current main; refresh remaining cells from current main. | Add cancellation and rollback matrix for every canonical P0 mutation. |
+| BACKEND-TEST-033 | P1 | Done 79% — practice cancellation/rollback proof is already on current `main`; old PR #24 superseded. Residual: provider-wide cancellation cells outside the practice owner. | Add cancellation and rollback matrix for every canonical P0 mutation. |
 | BACKEND-TEST-034 | P1/P2 | Prompt-ready | Prove legacy route parity/deprecation and prevent duplicate settlement surfaces. |
 | BACKEND-TEST-035 | P1 | Prompt-ready | Audit all authorization tests for false “anonymous” coverage and migrate to explicit anonymous mode. |
 

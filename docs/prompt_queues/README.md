@@ -7,15 +7,15 @@ Current code and executed tests override old queue prose. Completed archives and
 
 ## 2026-09-23 PR reconciliation
 
-Current open implementation owners must be refreshed from current main rather than merged from their stale branches:
+The 2026-09-23 refresh package re-audited current `main`, ported only residuals into fresh PRs, merged them, and closed the stale implementation PRs. Current residuals and provider-validation caps are recorded in the canonical rows and run logs below.
 
-- `BACKEND-API-DB-015`: PR #16 economy + PR #17 cosmetics; both >120 commits behind current main.
-- `BACKEND-TEST-049`: PR #19; ~115 commits behind current main.
-- `BACKEND-TEST-050`: PR #20; ~115 commits behind current main.
-- `BACKEND-TEST-051`: PR #21; ~115 commits behind current main.
-- `BACKEND-TEST-026`: PR #23; ~115 commits behind current main.
-- `BACKEND-TEST-033`: PR #24; partial cancellation slice and ~115 commits behind current main.
-- season/economy contract follow-up PR #25 is also ~115 commits behind and must be re-audited before any port.
+- `BACKEND-API-DB-015`: old PRs #16/#17 superseded; current-main lease implementation is delivered, with PostgreSQL proof residual.
+- `BACKEND-TEST-049`: old PR #19 superseded by fresh PR #35, merged to `main`.
+- `BACKEND-TEST-050`: old PR #20 superseded by fresh PR #36, merged to `main`.
+- `BACKEND-TEST-051`: old PR #21 superseded by fresh PR #37, merged to `main`.
+- `BACKEND-TEST-026`: old PR #23 superseded by fresh PR #38, merged to `main`.
+- `BACKEND-TEST-033`: old PR #24 superseded; practice proof remains on current `main`, with broader provider cells residual.
+- season/economy contract PR #25 superseded by fresh PR #39, merged to `main`.
 - `BACKEND-TEST-027`: Done 95% via PR #33 / `a6cf0430`; dead endpoint removed and scoped validation clean. The repository-wide 12-test Database Validation baseline is tracked separately and must not reopen this owner.
 
 Superseded PRs #13, #14 and #15 are closed because their canonical BE-PERF owners are already Done on current main. PR #31 is merged; `BACKEND-OPS-DB-IDLE-BUDGET-001` is closed at 95% with provider-workflow/live-idle residuals recorded separately.

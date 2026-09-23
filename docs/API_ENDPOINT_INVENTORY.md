@@ -35,14 +35,14 @@ Auth legend:
 | GET | `/health` | Public | `Program.cs` | ASP.NET health checks. |
 | GET | `/health/background-jobs` | Public | `Program.cs` | Background-job startup state. |
 | GET | `/api/health/background-jobs` | Public | `Program.cs` | API alias. |
-| GET | `/metrics` | Public/internal | `Program.cs` | Process metrics; public-detail minimization remains BACKEND-TEST-026. |
+| GET | `/metrics` | Admin (`UiTokensAdminPolicy`) | `Program.cs` | Process/rate-limit metrics; anonymous access is denied. |
 | GET | `/api/health/` | Public | `HealthEndpoints.cs` | Basic liveness. |
-| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | DB/schema summary plus explicit Redis mode/configuration/connection state; detail minimization pending. |
-| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Readiness plus schema, cosmetic catalog and required-Redis checks; returns 503 when required state is missing or invalid. |
-| GET | `/api/health/schema` | Public | `HealthEndpoints.cs` | Migration/schema detail; minimization pending. |
-| GET | `/health/schema` | Public | `HealthEndpoints.cs` | Canonical schema-health alias. |
+| GET | `/api/health/db` | Public | `HealthEndpoints.cs` | Bounded DB probe with only safe status/reason/timestamp fields. |
+| GET | `/api/health/ready` | Public | `HealthEndpoints.cs` | Bounded dependency readiness probe with only safe status/reason/timestamp fields. |
+| GET | `/api/health/schema` | Admin (`UiTokensAdminPolicy`) | `HealthEndpoints.cs` | Admin-only migration/schema diagnostics. |
+| GET | `/health/schema` | Admin (`UiTokensAdminPolicy`) | `HealthEndpoints.cs` | Admin-only canonical schema-health alias. |
 | GET | `/api/idempotency/observability/*` | Admin | `IdempotencyObservabilityEndpoints.cs` | Safe idempotency telemetry. |
-| GET | `/api/monitoring/jobs` | Public/internal | `Program.cs` | Mock monitoring payload; protect/remove under BACKEND-TEST-026. |
+| GET | `/api/monitoring/jobs` | Admin (`UiTokensAdminPolicy`) | `Program.cs` | Admin-only mock monitoring payload. |
 | GET | `/api/monitoring/logs` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted log file read. |
 | GET | `/api/monitoring/logs-advanced` | Admin (`UiTokensAdminPolicy`) | `MonitoringLogEndpoints.cs` | Redacted bounded filtered log read. |
 | GET | `/api/logs/recent` | Admin (`UiTokensAdminPolicy`) | `LoggingEndpoints.cs` | Redacted DB log read. |

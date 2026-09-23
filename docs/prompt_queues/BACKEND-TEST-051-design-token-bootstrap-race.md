@@ -1,7 +1,7 @@
 # BACKEND-TEST-051 - Design-token bootstrap race and startup ownership
 
 Priority: P1
-Status: In progress / stale PR refresh required
+Status: Done 85% — fresh PR #37 merged as `d346a81`; residual live PostgreSQL multi-replica proof
 Run mode: design-token bootstrap investigation + startup/concurrency tests
 
 ## Problem
