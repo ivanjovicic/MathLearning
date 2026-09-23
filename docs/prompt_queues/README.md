@@ -5,6 +5,21 @@ Owner: `backend-agent-system`
 
 Current code and executed tests override old queue prose. Completed archives and main-verified run evidence override stale Ready rows.
 
+## 2026-09-23 PR reconciliation
+
+Current open implementation owners must be refreshed from current main rather than merged from their stale branches:
+
+- `BACKEND-API-DB-015`: PR #16 economy + PR #17 cosmetics; both >120 commits behind current main.
+- `BACKEND-TEST-049`: PR #19; ~115 commits behind current main.
+- `BACKEND-TEST-050`: PR #20; ~115 commits behind current main.
+- `BACKEND-TEST-051`: PR #21; ~115 commits behind current main.
+- `BACKEND-TEST-026`: PR #23; ~115 commits behind current main.
+- `BACKEND-TEST-033`: PR #24; partial cancellation slice and ~115 commits behind current main.
+- season/economy contract follow-up PR #25 is also ~115 commits behind and must be re-audited before any port.
+- `BACKEND-TEST-027`: stale PR #22 was superseded by fresh current-main PR #32; keep the queue row nonclaimable while #32 validates.
+
+Superseded PRs #13, #14 and #15 are closed because their canonical BE-PERF owners are already Done on current main. PR #31 is merged; `BACKEND-OPS-DB-IDLE-BUDGET-001` is closed at 95% with provider-workflow/live-idle residuals recorded separately.
+
 ## Start rule
 
 1. If the user assigned a bounded task, do it directly with `Queue: user-assigned`; no queue search/admission.
