@@ -41,7 +41,7 @@ Documentation impact: updated canonical queue/evidence package
 Cross-repo impact: no Flutter contract change
 
 ## Delivery
-State: done
+State: Needs validation
 Branch/PR: main; old PRs #16/#17 superseded
 Commit SHA: self
 Completion %: 85
