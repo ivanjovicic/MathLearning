@@ -1,7 +1,7 @@
 # BACKEND-TEST-049 - Question authoring snapshot truth and atomic revalidate repair
 
 Priority: P1
-Status: Prompt-ready
+Status: In progress / stale PR refresh required
 Run mode: question-authoring integrity investigation + relational failure-injection tests
 
 ## Problem
