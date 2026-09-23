@@ -435,14 +435,23 @@ public static class ServiceRegistrationExtensions
         {
             var environment = sp.GetRequiredService<IHostEnvironment>();
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PasswordResetDeliveryOptions>>().Value;
+            var backgroundWork = sp.GetRequiredService<BackgroundWorkOptions>();
 
-            if (environment.IsEnvironment("Test") || environment.IsDevelopment())
+            if (ShouldDispatchPasswordResetInline(environment, options, backgroundWork))
+            {
+                if (options.Enabled &&
+                    !environment.IsEnvironment("Test") &&
+                    !environment.IsDevelopment() &&
+                    !backgroundWork.HangfireEnabled)
+                {
+                    Log.Information(
+                        "Password-reset delivery uses inline dispatch because Hangfire is disabled by background-work profile. Profile={Profile}",
+                        backgroundWork.Profile);
+                }
+
                 return new InlinePasswordResetDeliveryDispatcher(
                     sp.GetRequiredService<IServiceScopeFactory>());
-
-            if (!options.Enabled)
-                return new InlinePasswordResetDeliveryDispatcher(
-                    sp.GetRequiredService<IServiceScopeFactory>());
+            }
 
             return new HangfirePasswordResetDeliveryDispatcher(
                 sp.GetRequiredService<Hangfire.IBackgroundJobClient>());
@@ -515,6 +524,17 @@ public static class ServiceRegistrationExtensions
                     DesignTokenSecurity.ContentAuthorRole);
             });
         });
+    }
+
+    internal static bool ShouldDispatchPasswordResetInline(
+        IHostEnvironment environment,
+        PasswordResetDeliveryOptions options,
+        BackgroundWorkOptions backgroundWork)
+    {
+        return environment.IsEnvironment("Test")
+            || environment.IsDevelopment()
+            || !options.Enabled
+            || !backgroundWork.HangfireEnabled;
     }
 
     private static string ResolveJwtSecret(WebApplicationBuilder builder)
