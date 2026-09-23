@@ -134,15 +134,50 @@ public sealed class MonitoringLogAuthorizationTests :
     }
 
     [Fact]
-    public async Task HealthAndMetrics_RemainAnonymous()
+    public async Task HealthRemainsAnonymous_MetricsRequireAdmin()
     {
         using var healthRequest = new HttpRequestMessage(HttpMethod.Get, "/health");
         healthRequest.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
         using var metricsRequest = new HttpRequestMessage(HttpMethod.Get, "/metrics");
         metricsRequest.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
+        using var jobsRequest = new HttpRequestMessage(HttpMethod.Get, "/api/monitoring/jobs");
+        jobsRequest.Headers.Add(TestAuthHandler.AnonymousHeader, "true");
 
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(healthRequest)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(metricsRequest)).StatusCode);
+
+        var metricsStatus = (await client.SendAsync(metricsRequest)).StatusCode;
+        Assert.True(
+            metricsStatus is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            $"Anonymous /metrics expected 401/403, got {(int)metricsStatus}");
+
+        var jobsStatus = (await client.SendAsync(jobsRequest)).StatusCode;
+        Assert.True(
+            jobsStatus is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            $"Anonymous /api/monitoring/jobs expected 401/403, got {(int)jobsStatus}");
+    }
+
+    [Fact]
+    public async Task Admin_CanReadMetricsAndMonitoringJobs()
+    {
+        using var metricsRequest = new HttpRequestMessage(HttpMethod.Get, "/metrics");
+        metricsRequest.Headers.Add("X-Test-UserId", "admin-user");
+        metricsRequest.Headers.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
+
+        using var jobsRequest = new HttpRequestMessage(HttpMethod.Get, "/api/monitoring/jobs");
+        jobsRequest.Headers.Add("X-Test-UserId", "admin-user");
+        jobsRequest.Headers.Add("X-Test-Roles", DesignTokenSecurity.AdminRole);
+
+        var metricsResponse = await client.SendAsync(metricsRequest);
+        Assert.Equal(HttpStatusCode.OK, metricsResponse.StatusCode);
+        using var metricsJson = JsonDocument.Parse(await metricsResponse.Content.ReadAsStringAsync());
+        Assert.True(metricsJson.RootElement.TryGetProperty("rateLimit", out _));
+        Assert.True(metricsJson.RootElement.TryGetProperty("threadCount", out _));
+
+        var jobsResponse = await client.SendAsync(jobsRequest);
+        Assert.Equal(HttpStatusCode.OK, jobsResponse.StatusCode);
+        using var jobsJson = JsonDocument.Parse(await jobsResponse.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Array, jobsJson.RootElement.ValueKind);
+        Assert.True(jobsJson.RootElement.GetArrayLength() >= 1);
     }
 
     private void WriteMonitoringLogFile(params string[] lines)
