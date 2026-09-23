@@ -54,7 +54,7 @@ Cross-repo impact: None.
 
 ## Delivery
 
-State: Done
+State: Needs validation
 Branch/PR: PR #33 merged
 Commit SHA: a6cf0430abba25bd80a96c9dd37c139369c9117b
 Completion %: 79
@@ -71,4 +71,4 @@ Completion %: 79
 
 ## Evidence budget note — 2026-09-23
 
-The delivery remains merged and the owner remains Done, but this run exceeded its declared evidence budget (`Files changed=4>3`, `Searches=3>2`). Per repository evidence policy, the run-level `Completion %` is capped at 79. This cap describes validation/evidence completeness, not rollback of the already merged runtime outcome.
+The delivery remains merged and the queue owner remains Done, while this specific evidence run remains Needs validation because it exceeded its declared evidence budget (`Files changed=4>3`, `Searches=3>2`). Per repository evidence policy, the run-level `Completion %` is capped at 79. This cap describes validation/evidence completeness, not rollback of the already merged runtime outcome.
