@@ -259,7 +259,7 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 | GET | `/api/offline/bundle/manifest` | Auth | `SyncEndpoints.cs` | Manifest-only offline bundle response with the same content/snapshot version semantics and published-question filtering. |
 | `/api/sync/*` | Auth | `SyncEndpoints.cs` | Reject payload/auth user mismatch. |
 
-`QuestionEndpoints.MapQuestionEndpoints` remains defined but unwired; decision remains BACKEND-TEST-027.
+`QuestionEndpoints.MapQuestionEndpoints` has been removed. `/api/questions/*` authoring remains owned by `QuestionAuthoringEndpoints`; learner question delivery stays on quiz/adaptive/offline surfaces.
 
 ---
 
