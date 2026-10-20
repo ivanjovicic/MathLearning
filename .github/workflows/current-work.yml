@@ -1,0 +1,51 @@
+name: Current Work Snapshot
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/current_work.py'
+      - 'scripts/test_current_work.py'
+      - '.github/workflows/current-work.yml'
+      - 'MASTER_ROADMAP.md'
+      - 'docs/ai/*PROMPT_QUEUE*.md'
+      - 'docs/prompt_queues/**'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/current_work.py'
+      - 'scripts/test_current_work.py'
+      - 'MASTER_ROADMAP.md'
+      - 'docs/ai/*PROMPT_QUEUE*.md'
+      - 'docs/prompt_queues/**'
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fail-closed parser regressions
+        run: python -m unittest -v scripts/test_current_work.py
+      - name: Capture exact-head tool validation
+        run: |
+          python - <<'PY'
+          import datetime, json, subprocess
+          sha = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          data = {'sha':sha,'command':'python -m unittest -v scripts/test_current_work.py',
+                  'result':'passed','time':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          with open('current_work_validation.json','w') as f: json.dump(data,f)
+          PY
+      - name: Generate read-only point-in-time snapshot
+        run: python scripts/current_work.py --output CURRENT_WORK.md --validation-json current_work_validation.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-work-snapshot
+          path: |
+            CURRENT_WORK.md
+            current_work_validation.json
+          retention-days: 7

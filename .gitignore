@@ -128,3 +128,7 @@ BenchmarkDotNet.Artifacts/
 
 # Runtime user uploads (avatars, etc.)
 **/uploads/
+
+# Generated local CI work snapshot, not a queue authority
+/CURRENT_WORK.md
+/current_work_validation.json
