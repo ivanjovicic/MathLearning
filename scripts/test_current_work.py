@@ -53,4 +53,19 @@ class TestCurrentWork(unittest.TestCase):
         self.assertIn("STALE",c.evidence(evidence,"b"*40))
         evidence.write_text(json.dumps({"sha":"a"*40,"command":"test","result":"passed","time":"2026-10-20T14:00:00"}))
         self.assertIn("INVALID",c.evidence(evidence,"a"*40))
+    def test_branch_validation_is_not_main_green(self):
+        self.put("docs/prompt_queues/README.md","## Current canonical priority\n| 1 | backend_active.md | x |\n")
+        self.put("docs/prompt_queues/backend_active.md","## Active prompts\n| ID | Priority | Status | Prompt | Purpose |\n|---|---|---|---|---|\n| BACKEND-API-001 | P1 | Ready | link | Fix auth |\n")
+        proof=self.root/"proof.json"
+        proof.write_text(json.dumps({"sha":"a"*40,"command":"unit tests","result":"passed","time":"2026-10-20T14:00:00Z"}))
+        def fake_git(_root,*args):
+            if args==("rev-parse","HEAD"): return "a"*40
+            if args==("rev-parse","refs/remotes/origin/main"): return "b"*40
+            if args==("symbolic-ref","--short","HEAD"): return "feature"
+            return None
+        with patch.object(c,"run_git",side_effect=fake_git):
+            snapshot=c.render(self.root,validation=proof,now=dt.datetime.now(dt.timezone.utc))
+        self.assertIn("PASSED on",snapshot)
+        self.assertIn("NOT GREEN FOR MAIN",snapshot)
+
 if __name__=="__main__": unittest.main()
