@@ -192,7 +192,7 @@ def render(root, validation=None, now=None):
            "Missing last-check date or vague condition means UNVERIFIED, not automatically unblocked.","",
            "## SHA and validation",
            "Inspected HEAD: "+str(head or "unknown")+"; "+("local main tracking ref matches" if verified else "remote main unverified"),
-           "Validation: "+evidence(validation,head),"",
+           "Validation: "+evidence(validation,head)+(" — NOT GREEN FOR MAIN (branch/remote main unverified)" if not verified else ""),"",
            "## Integrity warnings",
            "\n".join("- "+x for x in warnings) if warnings else "- None detected within this limited source projection.",
            "","## Source-of-truth and lifecycle",
