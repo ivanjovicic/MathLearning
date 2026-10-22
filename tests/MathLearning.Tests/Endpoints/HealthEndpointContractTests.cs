@@ -38,6 +38,20 @@ public sealed class HealthEndpointContractTests : IClassFixture<CustomWebApplica
         }
     }
 
+    [Fact]
+    public async Task ReadinessFailsClosedWhenSchemaHasNotBeenValidated_WhileLivenessRemainsHealthy()
+    {
+        using var livenessResponse = await _client.GetAsync("/api/health/");
+        using var readinessResponse = await _client.GetAsync("/api/health/ready");
+
+        Assert.Equal(HttpStatusCode.OK, livenessResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, readinessResponse.StatusCode);
+
+        var payload = await readinessResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("NotReady", payload.GetProperty("status").GetString());
+        Assert.Equal("SchemaNotReady", payload.GetProperty("reason").GetString());
+    }
+
     [Theory]
     [InlineData("/api/health/db")]
     [InlineData("/api/health/ready")]

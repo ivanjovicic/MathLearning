@@ -1,4 +1,5 @@
 using MathLearning.Api.Startup;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 
 namespace MathLearning.Tests.Infrastructure;
@@ -56,5 +57,19 @@ public sealed class RedisRuntimeStatusTests
         Assert.True(snapshot.Configured);
         Assert.True(snapshot.Connected);
         Assert.Null(snapshot.FailureReason);
+    }
+
+    [Fact]
+    public void RequiredRedisWithoutConnection_FailsServiceRegistration()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Test"
+        });
+        builder.Configuration["Redis:Required"] = "true";
+
+        var exception = Assert.Throws<InvalidOperationException>(builder.AddCacheAndInfrastructureServices);
+
+        Assert.Contains("Redis:Required is enabled but no Redis connection string is configured", exception.Message, StringComparison.Ordinal);
     }
 }

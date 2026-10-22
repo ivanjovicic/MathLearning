@@ -759,6 +759,9 @@ catch (Exception ex)
     }
 
     Log.Fatal(ex, "? Application terminated unexpectedly");
+    // A caught top-level exception otherwise lets the generated async Main return 0.
+    // Preserve structured logging and let finally flush it, but report process failure.
+    Environment.ExitCode = 1;
 }
 finally
 {

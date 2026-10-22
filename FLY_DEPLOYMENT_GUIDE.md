@@ -1,459 +1,61 @@
-﻿# 🚀 Fly.io Deployment Guide
+# Fly.io deployment guide
 
-## ❌ Problem
+Verified against the repository configuration on 2026-10-22.
 
-```bash
-PS C:\Users\Alex\source\repos\Mathlearning\MathLearning\src\MathLearning.Infrastructure> fly deploy
-Error: the config for your app is missing an app name, add an app field to the fly.toml file or specify with the -a flag
+## Current deployment model
+
+- `fly.toml` deploys `mathlearning-api` from `Dockerfile` to port 8080.
+- Fly stops the API machine when idle and starts it on demand. Fly checks both `/api/health/` (process liveness) and `/api/health/ready` (traffic readiness).
+- The `mathlearning_data` Fly volume is mounted at `/data` for Data Protection keys. The API database is external to Fly; repository configuration identifies Neon PostgreSQL.
+- There is no Fly `release_command` and no Postgres service attached to this Fly app.
+- Production uses `Database:StartupMode=ValidateExact`. The application fails startup when its schema guard sees pending or unknown migrations; it does not migrate production on startup.
+
+## Health, required configuration, and Redis fallback
+
+- `/api/health/` is deliberately independent of external services. It reports whether the running API process can answer HTTP requests.
+- `/api/health/ready` returns `503` unless PostgreSQL is reachable, the startup schema guard reports exact migration alignment, the cosmetic catalog is ready, and Redis is connected when `Redis:Required=true`.
+- Both Fly service checks must pass for the proxy to route traffic to the machine. Fly service checks route around an unhealthy machine but do not restart it. `fly.toml` has no explicit restart section; Fly's default is `on-failure`, so startup exceptions must exit non-zero for automatic failure retries.
+- Production requires `ConnectionStrings__Default` (Npgsql/PostgreSQL) and `JwtSettings__SecretKey`. Keep their values in Fly secrets; inspect names with `fly secrets list`, never values.
+- Data Protection requires `DataProtection__KeysPath` on durable storage plus `DataProtection__CertificatePassword` and exactly one of `DataProtection__CertificatePath` or `DataProtection__CertificateBase64`. `fly.toml` sets the key path to `/data/dataprotection-keys`; Fly currently reports the Base64 certificate and password secret names as configured.
+- `Database__StartupMode` must remain `ValidateExact` in production. Do not deploy while the schema guard reports pending or unknown migrations.
+- Redis is optional by default. With no Redis connection and `Redis__Required=false`, the API selects `DbFallback` and serves leaderboard requests from PostgreSQL. This is a supported functional mode, with more database work and less cache-backed ranking capacity under load. Set a Redis connection (`ConnectionStrings__Redis` or `Redis__ConnectionString`) and `Redis__Required=true` only when Redis availability is an operational requirement.
+- The `mathlearning_data` volume stores ASP.NET Data Protection keys; it is not a database volume or backup. PostgreSQL remains external and must be backed up through its provider.
+
+## Database and deployment order
+
+1. Follow [docs/database-migrations.md](docs/database-migrations.md) for the read-only history and data preflight, backup, disposable rehearsal, reviewed migration script, integrity checks and recovery plan.
+2. Obtain the required explicit approval before applying any production SQL. This repository guide does not authorize production migration execution.
+3. After the database is verified at the target migration, run the manual GitHub Actions workflow `Deploy to Fly.io` with `confirmDatabaseMigrated=true`. The workflow blocks deployment unless that input is true.
+4. Check `fly status -a mathlearning-api`, `fly releases -a mathlearning-api` and `fly checks list -a mathlearning-api`. When the machine is stopped by scale-to-zero, the check can say that the machine has not started; this is not a database schema result.
+5. After deployment, request `/api/health/ready` and verify the startup logs show `ValidateExact` with no pending or unknown migrations.
+
+## Deploy and rollback
+
+Run the existing manual workflow only after the database has already been verified against the deployed API migration set:
+
+```powershell
+gh workflow run "Deploy to Fly.io" --ref main -f confirmDatabaseMigrated=true
 ```
 
-**Uzrok**: Pogrešan direktorijum! Moraš biti u **root** direktorijumu gde se nalazi `fly.toml`.
+Then inspect the workflow result and verify `fly status -a mathlearning-api`, `fly checks list -a mathlearning-api`, and `fly logs -a mathlearning-api`. A request to `/api/health/ready` can wake a stopped machine; use it when an application startup/readiness check is intended.
 
----
+If the API image fails after deployment, identify the previous known-good image with `fly releases --image -a mathlearning-api`, then redeploy that image:
 
-## ✅ Rešenje
-
-### Step 1: Navigiraj do Root Direktorijuma
-```bash
-# Trenutno si ovde (POGREŠNO):
-PS C:\Users\Alex\source\repos\Mathlearning\MathLearning\src\MathLearning.Infrastructure>
-
-# Idi ovde (TAČNO):
-cd ..\..
-# Ili
-cd C:\Users\Alex\source\repos\Mathlearning\MathLearning
+```powershell
+fly deploy --remote-only -a mathlearning-api --image <previous-image-reference>
 ```
 
-### Step 2: Verifikuj fly.toml
-```bash
-# Proveri da li postoji fly.toml u trenutnom direktorijumu
-ls fly.toml
-```
+This reuses the current repository Fly configuration and changes the application image only. This application change does not alter the database schema. For releases that include a database migration, do not assume an application image rollback reverses the schema; use the reviewed forward-repair or the provider's verified restore procedure approved for that incident. Verify `/api/health/ready` and the exact schema status after recovery.
 
-**Expected output**:
-```
--a----        1/23/2026   3:00 PM            500 fly.toml
-```
+Do not run production `dotnet ef database update`, paste hand-written SQL, disable schema validation, or retrieve Fly secret values for use in shell commands. `fly secrets list` reports configured secret names but does not provide the connection string. Keep credentials in the approved secret manager or protected libpq service/password files.
 
-### Step 3: Deploy
-```bash
-fly deploy
-```
+## Safe status commands
 
----
-
-## 📋 Pre-Deployment Checklist
-
-### 1. ✅ Verifikuj Connection String
-**Lokacija**: Fly.io Secrets (ne u kodu!)
-
-```bash
-# Set connection string secret
-fly secrets set ConnectionStrings__Default="Host=ep-wispy-smoke-ag4qtxhe-pooler.c-2.eu-central-1.aws.neon.tech;Port=5432;Username=neondb_owner;Password=<NEON_PASSWORD>;Database=neondb;SSL Mode=Require;Trust Server Certificate=true;"
-```
-
-### 2. ✅ Set JWT Settings
-```bash
-fly secrets set JwtSettings__SecretKey="YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
-fly secrets set JwtSettings__Issuer="MathLearningAPI"
-fly secrets set JwtSettings__Audience="MathLearningApp"
-```
-
-### 3. ✅ Set ASPNETCORE_ENVIRONMENT
-```bash
-fly secrets set ASPNETCORE_ENVIRONMENT="Production"
-```
-
-### 4. ✅ Verifikuj Migrations
-```bash
-# Apply all pending migrations
-cd src/MathLearning.Infrastructure
-dotnet ef database update --context ApiDbContext --startup-project ../MathLearning.Api
-```
-
-**Expected migrations**:
-- ✅ `InitialCreate`
-- ✅ `AddRefreshTokens`
-- ✅ `AddHintSystem`
-- ✅ `AddUserProfilesAndCoins`
-- ✅ `AddApplicationLogging`
-- ✅ `AddPerformanceIndexes`
-
----
-
-## 🚀 Deployment Steps
-
-## Pre-production idle machine policy
-
-The API service is configured to stop an idle Fly machine and start it
-automatically when a request arrives:
-
-- `auto_stop_machines = "stop"`
-- `auto_start_machines = true`
-- `min_machines_running = 0`
-- `BackgroundWork__Profile = "PreProductionIdle"`
-
-This is intentional while the product is pre-production. The first request
-after an idle period can incur a cold-start delay; the DB-free
-`/api/health/` check remains the machine health target. When the machine is
-stopped, hosted workers are stopped with it and cannot keep polling Neon.
-While it is running, `PreProductionIdle` disables periodic maintenance,
-sync-redrive/retention and Hangfire polling, and applies adaptive Outbox
-backoff. Set `BackgroundWork__Profile=Full` before real production traffic to
-restore the full worker set.
-
-Before real production traffic, review the idle policy and explicitly change
-`min_machines_running`/auto-stop behavior if a warm instance is required.
-Validate and observe the deployment:
-
-```bash
-fly config validate -a mathlearning-api
-fly deploy -a mathlearning-api
+```powershell
 fly status -a mathlearning-api
-curl.exe --max-time 20 https://mathlearning-api.fly.dev/api/health/
+fly releases -a mathlearning-api
+fly checks list -a mathlearning-api
+fly secrets list -a mathlearning-api
 ```
 
-Do not claim cost savings until `fly status` shows the machine stopping after
-idle and the next request causes an automatic start.
-
-### Complete Deployment Command Sequence
-```bash
-# 1. Navigate to root directory
-cd C:\Users\Alex\source\repos\Mathlearning\MathLearning
-
-# 2. Verify fly.toml exists
-ls fly.toml
-
-# 3. Login to Fly.io (if not already logged in)
-fly auth login
-
-# 4. Set secrets (if not already set)
-fly secrets set ConnectionStrings__Default="..."
-fly secrets set JwtSettings__SecretKey="..."
-
-# 5. Deploy!
-fly deploy
-
-# 6. Open app in browser
-fly open
-
-# 7. Check logs
-fly logs
-```
-
----
-
-## 📊 Deployment Process
-
-### What Happens During `fly deploy`?
-
-**Step 1: Build Docker Image**
-```
-==> Building image
---> Building Dockerfile
-[+] Building 45.2s (12/12) FINISHED
- => [build 1/6] FROM mcr.microsoft.com/dotnet/sdk:8.0
- => [build 2/6] COPY src/MathLearning.Api/*.csproj src/MathLearning.Api/
- => [build 3/6] RUN dotnet restore
- => [build 4/6] COPY src/ src/
- => [build 5/6] RUN dotnet publish -c Release
- => [runtime] FROM mcr.microsoft.com/dotnet/aspnet:8.0
- => [runtime] COPY --from=build /app/publish .
-```
-
-**Step 2: Push Image to Registry**
-```
---> Pushing image to fly.io registry
---> Image: registry.fly.io/mathlearning-api:deployment-...
-```
-
-**Step 3: Deploy to VM**
-```
-==> Deploying
---> v5 deployed successfully
-```
-
-**Step 4: Health Check**
-```
---> Monitoring deployment
---> App is healthy!
-```
-
----
-
-## 🔍 Troubleshooting
-
-### Issue 1: "Error: the config for your app is missing an app name"
-**Solution**: Wrong directory. Go to root where `fly.toml` is located.
-```bash
-cd C:\Users\Alex\source\repos\Mathlearning\MathLearning
-```
-
-### Issue 2: "Build failed: dotnet restore failed"
-**Solution**: Check project references
-```bash
-# Verify projects build locally first
-dotnet build src/MathLearning.Api/MathLearning.Api.csproj
-```
-
-### Issue 3: "App is not responding to health checks"
-**Solution**: Check port configuration
-```csharp
-// Ensure Program.cs has:
-app.Urls.Add("http://+:8080");
-```
-
-### Issue 4: "Database connection failed"
-**Solution**: Verify connection string secret
-```bash
-# Check secrets
-fly secrets list
-
-# Re-set if needed
-fly secrets set ConnectionStrings__Default="..."
-```
-
-### Issue 5: "Migrations not applied"
-**Solution**: Apply migrations manually
-```bash
-cd src/MathLearning.Infrastructure
-dotnet ef database update --context ApiDbContext --startup-project ../MathLearning.Api --connection "..."
-```
-
----
-
-## 📋 fly.toml Configuration
-
-```toml
-app = "mathlearning-api"
-primary_region = "ams"
-
-[build]
-  dockerfile = "Dockerfile"
-
-[env]
-  ASPNETCORE_URLS = "http://+:8080"
-
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-```
-
-**Key Settings**:
-- `app = "mathlearning-api"` - App name (must match Fly.io dashboard)
-- `primary_region = "ams"` - Amsterdam datacenter
-- `internal_port = 8080` - Container port (matches ASPNETCORE_URLS)
-- `port = 443` - HTTPS port (auto-provisioned SSL certificate)
-
----
-
-## 🔒 Security Best Practices
-
-### 1. Never Commit Secrets
-```bash
-# ❌ DON'T do this:
-# appsettings.json
-{
-  "ConnectionStrings": {
-    "Default": "Host=...;Password=mypassword;"  // ❌ NEVER!
-  }
-}
-
-# ✅ DO this:
-fly secrets set ConnectionStrings__Default="..."
-```
-
-### 2. Use Environment Variables
-```csharp
-// Program.cs
-var connectionString = builder.Configuration.GetConnectionString("Default");
-// Fly.io injects this from secrets
-```
-
-### 3. Enable HTTPS Only
-```toml
-# fly.toml
-[[services.ports]]
-  port = 443
-  handlers = ["tls", "http"]
-```
-
----
-
-## 📊 Post-Deployment Verification
-
-### 1. Check App Status
-```bash
-fly status
-```
-
-**Expected Output**:
-```
-App
-  Name     = mathlearning-api
-  Owner    = personal
-  Hostname = mathlearning-api.fly.dev
-  Image    = mathlearning-api:deployment-...
-  Platform = machines
-
-Machines
-NAME    STATE   REGION  HEALTH CHECKS  LAST UPDATED
-app     started ams     1 total        2026-01-23T15:30:00Z
-```
-
-### 2. Test API Endpoints
-```bash
-# Test root endpoint
-curl https://mathlearning-api.fly.dev/
-
-# Test health check
-curl https://mathlearning-api.fly.dev/health
-
-# Test login
-curl -X POST https://mathlearning-api.fly.dev/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"UcimMatu!123"}'
-```
-
-### 3. Check Logs
-```bash
-# Real-time logs
-fly logs
-
-# Filter errors
-fly logs | grep "ERR"
-
-# Last 100 lines
-fly logs -n 100
-```
-
-### 4. Monitor Resource Usage
-```bash
-# VM metrics
-fly dashboard
-
-# Or visit: https://fly.io/apps/mathlearning-api/metrics
-```
-
----
-
-## 🎯 Common Deployment Scenarios
-
-### Scenario 1: First-Time Deployment
-```bash
-cd C:\Users\Alex\source\repos\Mathlearning\MathLearning
-fly launch --name mathlearning-api --region ams
-fly secrets set ConnectionStrings__Default="..."
-fly deploy
-```
-
-### Scenario 2: Update Deployment (Code Changes)
-```bash
-cd C:\Users\Alex\source\repos\Mathlearning\MathLearning
-git pull
-fly deploy
-```
-
-### Scenario 3: Update Secrets Only
-```bash
-fly secrets set JwtSettings__SecretKey="NewSecretKey123!"
-# App automatically restarts
-```
-
-### Scenario 4: Rollback to Previous Version
-```bash
-fly releases list
-fly releases rollback v4
-```
-
----
-
-## 🏆 Success Indicators
-
-After successful deployment, you should see:
-
-✅ **Build Success**:
-```
---> Image: registry.fly.io/mathlearning-api:deployment-...
---> Pushing image done
-```
-
-✅ **Deploy Success**:
-```
-==> Deploying
---> v5 deployed successfully
-```
-
-✅ **Health Check Pass**:
-```
---> Monitoring deployment
---> App is healthy!
-```
-
-✅ **API Accessible**:
-```bash
-curl https://mathlearning-api.fly.dev/
-# Response: "MathLearning API is running"
-```
-
----
-
-## 📝 Quick Reference Commands
-
-```bash
-# Deploy app
-fly deploy
-
-# Check status
-fly status
-
-# View logs
-fly logs
-
-# Open in browser
-fly open
-
-# SSH into VM
-fly ssh console
-
-# Restart app
-fly apps restart mathlearning-api
-
-# Scale VM
-fly scale vm shared-cpu-1x --memory 1024
-
-# List secrets
-fly secrets list
-
-# Set secret
-fly secrets set KEY="value"
-
-# View releases
-fly releases list
-
-# Rollback
-fly releases rollback v3
-```
-
----
-
-## 🎓 Conclusion
-
-**Correct Deployment Steps**:
-1. ✅ Navigate to **root directory** (`cd C:\Users\...\MathLearning`)
-2. ✅ Verify `fly.toml` exists (`ls fly.toml`)
-3. ✅ Set secrets (`fly secrets set ...`)
-4. ✅ Deploy (`fly deploy`)
-5. ✅ Verify (`fly status`, `fly logs`)
-
-**Common Mistake**: Running `fly deploy` from wrong directory (src/MathLearning.Infrastructure instead of root).
-
-Happy deploying! 🚀
+The health request may wake the stopped machine and connect to the database. Run it only when an application startup check is intended.
