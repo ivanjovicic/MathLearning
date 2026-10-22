@@ -10,19 +10,19 @@ Client/IDE: unknown-not-exposed
 Run mode: audit
 Token budget: high
 Started at UTC: 2026-10-22T15:48:13Z
-Completed at UTC: 2026-10-22T16:10:28Z
-Elapsed time: 22m 15s
+Completed at UTC: 2026-10-22T16:13:23Z
+Elapsed time: 25m 10s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-AUTH-001, BACKEND-MISTAKE-CI-001, BACKEND-MISTAKE-SCOPE-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-AUTH-001; apply BACKEND-MISTAKE-CI-001; apply BACKEND-MISTAKE-SCOPE-001
 Owner/hypothesis: Top-level fatal catch swallows exceptions and Fly routes using liveness only; readiness exists but is not configured as a service check.
 Files inspected: 21
 Files changed: 7
 Searches: 12
-Validation runs: 9
+Validation runs: 14
 Failed retries: 4
 
 ## Outcome
-- Startup fatal-exit behavior and Fly readiness routing stabilized locally; production remains unreconciled and undeployed.
+- Startup fatal-exit behavior and Fly readiness routing stabilized and pushed to origin/main; production remains unreconciled and undeployed.
 
 ## Changed paths
 - .ai/runs/2026-10-22-USER-20261022-PRODUCTION-STARTUP-HEALTH-evidence.md
@@ -34,11 +34,11 @@ Failed retries: 4
 - tests/MathLearning.Tests/Services/ProgramFatalStartupTests.cs
 
 ## Validation
-Validation run: Release solution build passed with 0 errors and 6 existing warnings; focused health/startup/Redis/DB-fallback tests passed 20/20; isolated previously timing-out tests passed 6/6; strict Fly config validation passed; docs health 28/28 and agent-system validation passed; diff check passed.
+Validation run: Release solution build passed with 0 errors and 6 existing warnings; focused health/startup/Redis/DB-fallback tests passed 20/20; isolated previously timing-out tests passed 6/6; strict Fly config validation passed; docs health 28/28 and agent-system validation passed; diff check passed; exact origin/main SHA verified at dede8ae8f29194041ff9a12f1386e136f2bb6563.
 Validation not run: Full test project did not complete within the guarded 300-second limit; several HttpClient 100-second test timeouts occurred under suite load, while representative affected cases passed when isolated. Live production readiness/database query skipped because the only machine is stopped and app startup may write the missing initial design-token record. No production migration or deploy was run.
 
 ## Exceptions and learning
-Mistakes observed: Initial child-process regression probe first stopped at missing production DataProtection test configuration; added ephemeral test-only certificate and reran passing. Full suite runner initially used cp1252 for UTF-8 output; rerun used Python UTF-8 mode.
+Mistakes observed: BACKEND-MISTAKE-VALIDATION-001: initial child-process regression probe first stopped at missing production DataProtection test configuration; added ephemeral test-only certificate and reran passing. BACKEND-MISTAKE-EVIDENCE-001: corrected this run's delivery state and recorded the search-budget overrun. Full suite runner initially used cp1252 for UTF-8 output; rerun used Python UTF-8 mode.
 Waste: Retried full suite after runner encoding/idle issues; isolated the timed-out endpoint cases to distinguish load contention.
 Missed: Production's current applied migration state and live readiness still require a safe operator-approved check before deployment.
 Follow-up: Before deployment, verify the production migration history using the approved read-only provider workflow; apply the reviewed migration plan only with explicit authorization, then run the existing manual Fly workflow.
@@ -47,7 +47,7 @@ Documentation impact: Updated FLY_DEPLOYMENT_GUIDE.md with liveness/readiness, r
 Cross-repo impact: no
 
 ## Delivery
-State: partial
-Branch/PR: codex/fly-startup-health; target origin/main delivery pending
+State: Needs validation
+Branch/PR: codex/fly-startup-health -> origin/main (app not deployed)
 Commit SHA: self
-Completion %: 90
+Completion %: 79
