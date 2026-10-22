@@ -170,7 +170,7 @@ public class QuestionTranslationJob
         // Find translations in targetLang where new hint fields are NULL
         var missingHints = await _db.QuestionTranslations
             .Include(t => t.Question)
-                .ThenInclude(q => q.Translations)
+                .ThenInclude(q => q!.Translations)
             .Where(t => t.Lang == targetLang &&
                        (t.HintLight == null || t.HintMedium == null || t.HintFull == null))
             .ToListAsync();
@@ -185,7 +185,7 @@ public class QuestionTranslationJob
             try
             {
                 // Get base translation for hints
-                var baseTranslation = tr.Question.Translations.FirstOrDefault(t => t.Lang == baseLang);
+                var baseTranslation = tr.Question?.Translations.FirstOrDefault(t => t.Lang == baseLang);
 
                 if (baseTranslation == null)
                 {
