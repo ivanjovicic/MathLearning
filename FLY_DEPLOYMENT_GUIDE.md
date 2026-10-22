@@ -23,7 +23,7 @@ Verified against the repository configuration on 2026-10-22.
 
 ## Database and deployment order
 
-1. Follow [docs/database-migrations.md](docs/database-migrations.md) for the read-only history and data preflight, backup, disposable rehearsal, reviewed migration script, integrity checks and recovery plan.
+1. Use [docs/database-migrations.md](docs/database-migrations.md) for environment rules, migration-script generation and schema validation. Before any production SQL, separately complete the read-only history/data preflight, provider backup, disposable rehearsal, integrity checks and recovery preparation through the approved operator procedure.
 2. Obtain the required explicit approval before applying any production SQL. This repository guide does not authorize production migration execution.
 3. After the database is verified at the target migration, run the manual GitHub Actions workflow `Deploy to Fly.io` with `confirmDatabaseMigrated=true`. The workflow blocks deployment unless that input is true.
 4. Check `fly status -a mathlearning-api`, `fly releases -a mathlearning-api` and `fly checks list -a mathlearning-api`. When the machine is stopped by scale-to-zero, the check can say that the machine has not started; this is not a database schema result.
