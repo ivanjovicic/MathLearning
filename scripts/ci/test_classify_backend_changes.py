@@ -16,10 +16,16 @@ class ClassifyBackendChangesTests(unittest.TestCase):
             "docs/AGENT_RUN_LOG_ENFORCEMENT.md",
             ".ai/RUN_LOG_TEMPLATE.md",
             "scripts/agent_run.py",
-            ".github/workflows/database-validation.yml",
         ])
         self.assertFalse(required)
         self.assertEqual([], matched)
+
+    def test_database_validation_workflow_change_requires_full_suite(self) -> None:
+        required, matched = classifier.requires_database_validation([
+            ".github/workflows/database-validation.yml",
+        ])
+        self.assertTrue(required)
+        self.assertEqual([".github/workflows/database-validation.yml"], matched)
 
     def test_runtime_source_requires_database_suite(self) -> None:
         required, matched = classifier.requires_database_validation(["src/MathLearning.Api/Program.cs"])
