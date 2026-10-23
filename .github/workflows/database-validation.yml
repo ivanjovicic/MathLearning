@@ -37,6 +37,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Test validation scope classifier
+        run: python -m unittest scripts/ci/test_classify_backend_changes.py
+
       - name: Classify validation scope
         id: classify
         shell: bash
