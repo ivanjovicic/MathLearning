@@ -304,7 +304,7 @@ WHERE "UserId" = '1';
 
         try
         {
-            await db.Database.ExecuteSqlRawAsync($"""
+            await db.Database.ExecuteSqlAsync($"""
 INSERT INTO "AspNetUsers" ("Id", "UserName", "NormalizedUserName", "Email", "NormalizedEmail", "EmailConfirmed", "PasswordHash", "SecurityStamp", "ConcurrencyStamp", "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnabled", "AccessFailedCount")
 SELECT uid::text,
        'user-' || uid::text,
