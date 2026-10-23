@@ -211,3 +211,26 @@ Done candidate = focused proof + commit on origin/main + recorded SHA + synchron
 ```
 
 Final response includes run log, mistakes, branch/PR/commit/merge SHA, files changed, validation executed/skipped, CI status (pending/pass/fail with link), exact `origin/main` SHA verification, completion state and residual owner. Do not claim Done/100% with failed focused proof, missing push to `main`, or material residual work.
+
+## 14. Čišćenje diska (Windows radna mašina)
+
+Okidači: (a) slobodno na `C:` < 10 GB pre ili posle zadatka (`Get-PSDrive C` ili `Get-CimInstance Win32_LogicalDisk`), ili (b) posle zadataka koji prave mnogo keša: build/test serije, `dotnet build/test`, Docker/Testcontainers runovi, pravljenje worktree-a.
+
+Bezbedno za brisanje bez pitanja (regeneriše se):
+- sadržaj `%TEMP%` stariji od 1 dana;
+- NuGet HTTP/temp keš (`dotnet nuget locals http-cache --clear`, `dotnet nuget locals temp --clear`);
+- Chrome/Edge/Brave cache folderi (ne profili ni kolačići);
+- stare verzije u `%USERPROFILE%\.cache\puppeteer` i `ms-playwright` (najnovija ostaje);
+- `bin/` i `obj/` u napuštenim worktree-ima i temp build folderima koje je agent sam napravio;
+- Stremio keš i preuzeti ostaci instalera (npr. `chrome.7z`);
+- Docker: samo `docker system prune` (bez `--volumes`); nikad ručno brisanje `.vhdx`.
+
+Samo uz Ivanovo odobrenje: stare `codex-runtimes` verzije (najnovija ostaje), Android emulator slike, Office instalacija i fajlovi u `Documents`, worktree-i koji nisu agentovi ili imaju necommitovane izmene, Docker volumes.
+
+Nikad: `Documents\Codex`, Cursor/Codex podešavanja, glavne radne kopije u `source\repos` i njihove necommitovane izmene, WSL, sistemski fajlovi Windowsa, git objekti i refs (bez `git gc --prune=now` na tuđim repo-ima).
+
+Postupak:
+- izmeri slobodan prostor pre i posle, briši samo putanje sa liste;
+- ne prekidaj druge agente i ne briši keš procesa koji upravo radi;
+- u izveštaju navedi koliko je prostora oslobođeno;
+- ako disk pukne usred zadatka (`ENOSPC`, `No space left on device`), prvo očisti bezbednu listu pa ponovi korak; nikad ne menjaj glavno radno stablo kao zaobilaznicu.
