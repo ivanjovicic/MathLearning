@@ -30,7 +30,10 @@ RUNTIME_PATTERNS = (
 
 
 def normalize(path: str) -> str:
-    return path.strip().replace("\\", "/").lstrip("./")
+    normalized = path.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
 
 
 def matches(path: str, pattern: str) -> bool:
