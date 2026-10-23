@@ -37,6 +37,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Test validation scope classifier
+        run: python -m unittest scripts/ci/test_classify_backend_changes.py
+
       - name: Classify validation scope
         id: classify
         shell: bash
@@ -165,18 +168,24 @@ jobs:
             --output artifacts/migrations/api-idempotent.sql
 
       - name: Smoke startup schema guard
-        # This is a schema/startup smoke, not a production-secret smoke.
-        # Production DataProtection fail-fast is covered separately and must keep requiring durable keys + certificate secrets.
+        # The application binds development URLs explicitly; PORT is its supported override.
+        # ValidateExact proves schema alignment before HTTP startup without mutating the CI database.
+        # /health/schema is admin-only; this smoke uses public process liveness instead.
+        # Cosmetic catalog setup is not part of schema-from-zero, so readiness may still be 503.
+        # Production DataProtection fail-fast has separate coverage.
         env:
           ASPNETCORE_ENVIRONMENT: Development
           DOTNET_ENVIRONMENT: Development
+          PORT: "5087"
+          Database__StartupMode: ValidateExact
           ConnectionStrings__Default: Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=mathlearning_ci_validation;Pooling=true;
         run: |
-          dotnet run --project src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5087 > api.log 2>&1 &
+          dotnet run --project src/MathLearning.Api/MathLearning.Api.csproj -c Release --no-build --no-launch-profile > api.log 2>&1 &
           API_PID=$!
-          trap "kill $API_PID || true" EXIT
+          trap "kill $API_PID 2>/dev/null || true" EXIT
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:5087/health/schema; then exit 0; fi
+            if curl -fsS http://127.0.0.1:5087/api/health/; then exit 0; fi
+            if ! kill -0 "$API_PID" 2>/dev/null; then break; fi
             sleep 2
           done
           cat api.log
