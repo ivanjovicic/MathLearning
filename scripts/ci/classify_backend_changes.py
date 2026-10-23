@@ -13,6 +13,7 @@ RUNTIME_PATTERNS = (
     "src/**",
     "tests/**",
     "scripts/db/**",
+    ".github/workflows/database-validation.yml",
     "*.sln",
     "*.slnx",
     "*.csproj",
