@@ -37,6 +37,8 @@ python scripts/check_documentation_health.py --context <path>
 | Resource | Use |
 |---|---|
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | Startup, projects, persistence and jobs |
+| [`database-migrations.md`](database-migrations.md) | EF migration workflow, production preflight, backup, reviewed SQL and recovery |
+| [`../FLY_DEPLOYMENT_GUIDE.md`](../FLY_DEPLOYMENT_GUIDE.md) | Current Fly config, health checks and gated application deployment |
 | [`API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | Route/auth/compatibility inventory |
 | [`mobile_api_contract.md`](mobile_api_contract.md) | Mobile request/response contract |
 | [`mobile_contract_idempotency_handoff.md`](mobile_contract_idempotency_handoff.md) | Retryable mutation operation identity |
