@@ -76,7 +76,7 @@ public sealed class AuthRefreshPostgresConcurrencyTests
             .ToListAsync();
 
         Assert.Equal(2, tokens.Count);
-        Assert.Single(tokens.Where(x => x.RevokedAt is null));
+        Assert.Single(tokens, x => x.RevokedAt is null);
         Assert.Contains(tokens, x => x.Token == originalRefreshToken && x.RevokedAt is not null);
         Assert.DoesNotContain(tokens, x => x.Token == originalRefreshToken && x.RevokedAt is null);
     }
