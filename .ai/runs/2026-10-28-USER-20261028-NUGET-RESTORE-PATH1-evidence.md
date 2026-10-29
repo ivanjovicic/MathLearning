@@ -30,7 +30,8 @@ Failed retries: 2
 
 ## Validation
 Validation run: SDK 8.0.422 dotnet restore MathLearning.Tests.csproj: pass; run_guarded HangfireOutboxIsolationTests: 3/3 pass; run_guarded Release API build: pass, 0 warnings/errors; docs health: 28 documents, 0 failures; agent-system validation: 0 failures; git diff --check: pass.
-Validation not run: Broad Hangfire filter hit run_guarded wall timeout at 187.203s; Outbox provider filter: 4 failed, 1 passed because local PostgreSQL rejected default postgres password (28P01) before temporary DB creation; live Neon/Fly starvation probe not run; CI for this evidence commit not yet started.
+Validation not run: Broad Hangfire filter hit run_guarded wall timeout at 187.203s; Outbox provider filter: 4 failed, 1 passed because local PostgreSQL rejected default postgres password (28P01) before temporary DB creation; live Neon/Fly starvation probe not run.
+Post-delivery CI check — 2026-10-29 06:56 UTC: all three workflows passed. [Current Work Snapshot #7](https://github.com/ivanjovicic/MathLearning/actions/runs/40773124504), [Backend Agent System Validation #198](https://github.com/ivanjovicic/MathLearning/actions/runs/40773124528), and [Database Validation #572](https://github.com/ivanjovicic/MathLearning/actions/runs/40773124447); `database-suite` was skipped because this commit changed docs/evidence only.
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-VALIDATION-001: Do not infer provider proof from compilation; keep both owners Needs validation. BACKEND-MISTAKE-PROCESS-001: broad Hangfire filter and search volume exceeded the low budget.
