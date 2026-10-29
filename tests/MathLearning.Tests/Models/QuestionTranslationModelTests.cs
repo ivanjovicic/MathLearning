@@ -34,7 +34,7 @@ public class QuestionTranslationModelTests
     }
 
     [Fact]
-    public async Task QuestionTranslation_DefaultValues()
+    public void QuestionTranslation_DefaultValues()
     {
         var translation = new QuestionTranslation(1, "en", "What is 2 + 2?");
 

@@ -205,7 +205,7 @@ public sealed class AuthPasswordResetAtomicityTests
         using var scope = factory.Services.CreateScope();
         var delivery = Assert.IsType<InMemoryPasswordResetDelivery>(
             scope.ServiceProvider.GetRequiredService<IPasswordResetDelivery>());
-        return Assert.Single(delivery.Messages.Where(message => message.RecipientEmail == email)).ResetToken;
+        return Assert.Single(delivery.Messages, message => message.RecipientEmail == email).ResetToken;
     }
 }
 

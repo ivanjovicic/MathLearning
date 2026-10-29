@@ -81,12 +81,12 @@ public sealed class IdempotencyObservabilityAuthorizationTests :
     {
         _ = client;
         var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
-        var endpoint = Assert.Single(dataSource.Endpoints
-            .OfType<RouteEndpoint>()
-            .Where(candidate => string.Equals(
+        var endpoint = Assert.Single(
+            dataSource.Endpoints.OfType<RouteEndpoint>(),
+            candidate => string.Equals(
                 candidate.RoutePattern.RawText?.TrimEnd('/'),
                 Path,
-                StringComparison.OrdinalIgnoreCase)));
+                StringComparison.OrdinalIgnoreCase));
 
         var authorization = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
         Assert.Contains(authorization, item =>

@@ -54,7 +54,7 @@ public sealed class AuthRefreshConcurrencyTests
             .ToListAsync();
 
         Assert.Equal(2, tokens.Count);
-        Assert.Single(tokens.Where(t => t.RevokedAt is null));
+        Assert.Single(tokens, t => t.RevokedAt is null);
         Assert.Contains(tokens, t => t.Token == initialToken.Token && t.RevokedAt is not null);
     }
 
@@ -92,7 +92,7 @@ public sealed class AuthRefreshConcurrencyTests
             .ToListAsync();
 
         Assert.Equal(2, tokens.Count);
-        Assert.Single(tokens.Where(t => t.RevokedAt is null));
+        Assert.Single(tokens, t => t.RevokedAt is null);
         Assert.Contains(tokens, t => t.Token == initialToken.Token && t.RevokedAt is not null);
     }
 
@@ -125,7 +125,7 @@ public sealed class AuthRefreshConcurrencyTests
             .ToListAsync();
 
         Assert.Equal(2, tokens.Count);
-        Assert.Single(tokens.Where(t => t.RevokedAt is null));
+        Assert.Single(tokens, t => t.RevokedAt is null);
         Assert.Contains(tokens, t => t.Token == initialToken.Token && t.RevokedAt is not null);
     }
 
@@ -251,7 +251,7 @@ public sealed class AuthRefreshEndpointRegressionTests :
         var tokens = await db.RefreshTokens.Where(t => t.UserId == userId).ToListAsync();
 
         Assert.Equal(2, tokens.Count);
-        Assert.Single(tokens.Where(t => t.RevokedAt is null));
+        Assert.Single(tokens, t => t.RevokedAt is null);
         Assert.Contains(tokens, t => t.Token == refreshToken && t.RevokedAt is not null);
     }
 

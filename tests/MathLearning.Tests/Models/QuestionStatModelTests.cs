@@ -73,7 +73,7 @@ public class QuestionStatModelTests
     }
 
     [Fact]
-    public async Task QuestionStat_DefaultValues()
+    public void QuestionStat_DefaultValues()
     {
         var stat = new QuestionStat();
 

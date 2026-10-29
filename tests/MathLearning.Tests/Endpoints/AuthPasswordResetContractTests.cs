@@ -106,7 +106,7 @@ public sealed class AuthPasswordResetContractTests : IClassFixture<RealJwtWebApp
         using var deliveryScope = factory.Services.CreateScope();
         var delivery = Assert.IsType<InMemoryPasswordResetDelivery>(
             deliveryScope.ServiceProvider.GetRequiredService<IPasswordResetDelivery>());
-        var message = Assert.Single(delivery.Messages.Where(item => item.RecipientEmail == email));
+        var message = Assert.Single(delivery.Messages, item => item.RecipientEmail == email);
 
         var reset = await client.PostAsJsonAsync(
             "/auth/password/reset",

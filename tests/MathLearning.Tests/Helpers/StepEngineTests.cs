@@ -156,7 +156,7 @@ public sealed class StepEngineTests
     {
         var steps = StepEngine.GetSteps(NewQuestion(text), language);
 
-        var solution = Assert.Single(steps.Where(step => step.Highlight));
+        var solution = Assert.Single(steps, step => step.Highlight);
         Assert.Equal(expectedSolution, solution.Text);
     }
 
