@@ -13,14 +13,18 @@ public class ProgressDataTests
 
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "1", QuestionId = 1,
-            Attempts = 10, CorrectAttempts = 7,
+            UserId = "1",
+            QuestionId = 1,
+            Attempts = 10,
+            CorrectAttempts = 7,
             LastAttemptAt = DateTime.UtcNow
         });
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "1", QuestionId = 2,
-            Attempts = 5, CorrectAttempts = 3,
+            UserId = "1",
+            QuestionId = 2,
+            Attempts = 5,
+            CorrectAttempts = 3,
             LastAttemptAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
@@ -67,7 +71,7 @@ public class ProgressDataTests
     }
 
     [Fact]
-    public async Task TopicProgress_UnlockLogic_SecondTopicNeedsAccuracy60()
+    public void TopicProgress_UnlockLogic_SecondTopicNeedsAccuracy60()
     {
         // Simulates unlock logic: topic N+1 unlocked if topic N accuracy >= 60%
         double prevAccuracy = 72.5;
