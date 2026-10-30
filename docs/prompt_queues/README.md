@@ -18,7 +18,7 @@ The 2026-09-23 refresh package re-audited current `main`, ported only residuals 
 - season/economy contract PR #25 superseded by fresh PR #39, merged to `main`.
 - `BACKEND-TEST-027`: Done 95% via PR #33 / `a6cf0430`; dead endpoint removed and scoped validation clean. The repository-wide 12-test Database Validation baseline is tracked separately and must not reopen this owner.
 
-Superseded PRs #13, #14 and #15 are closed because their canonical BE-PERF owners are already Done on current main. PR #31 is merged; `BACKEND-OPS-DB-IDLE-BUDGET-001` is closed at 95% with provider-workflow/live-idle residuals recorded separately.
+Superseded PRs #13, #14 and #15 are closed because their canonical BE-PERF owners are already Done on current main. PR #31 is merged; Database Validation passed on current main SHA `7583502` (run `40838928486`); `BACKEND-OPS-DB-IDLE-BUDGET-001` remains at 95% until the live Fly/Neon idle-window observation is recorded.
 
 ## Start rule
 
