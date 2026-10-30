@@ -38,7 +38,7 @@ Owner boundary:
 
 Queue placement: second active row in `backend_registration_ops_residuals_2026_09_09.md`.
 
-Claim: Needs validation — claimed 2026-09-19 on `agent/BACKEND-OPS-HANGFIRE-NEON-001`; repository implementation delivered, PostgreSQL/deployed starvation proof remains.
+Claim: Done 95% — implementation delivered on main; PR merge database-suite passed 1264/1264 with PostgreSQL 16; current main `7583502` Database Validation passed; live Neon/Fly starvation observation remains operator follow-up.
 
 Task: Prevent Hangfire/outbox/background Neon timeouts from exhausting the ASP.NET request thread pool or DB connection pool.
 
