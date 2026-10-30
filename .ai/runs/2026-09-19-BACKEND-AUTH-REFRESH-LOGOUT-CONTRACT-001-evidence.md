@@ -34,7 +34,9 @@ Failed retries: 0
 
 ## Validation
 Validation run: pre-change regression recorded the expected legacy-contract mismatches; focused `FullyQualifiedName~AuthRefresh` passed 10/10; `AuthSafeErrorResponseTests` passed 4/4; Release API build passed with 0 errors; documentation health passed with 25 documents and 0 issues; agent evidence/system checks passed with 0 issues.
-Validation not run: PostgreSQL/deployed-provider proof was not required for this response-shape-only change; CI remains asynchronous.
+Validation not run: PostgreSQL/deployed-provider proof was not required for this response-shape-only change.
+
+CI follow-up (2026-10-30): the initial owner SHA `143090139879cf72ba1a6c513a9d75b62625d11f` failed `Validate changed evidence only`; its Database Validation suite was cancelled. Evidence closure SHA `31ac56d3d4d902cf6b55a4c96e9967a05945760d` passed Backend Agent System Validation run `35425166057`, including changed-evidence validation. Full Database Validation run `40838873784` passed on descendant SHA `fda6ad0081cf3f16cd35e8e4644e75adf4c129da`; the PostgreSQL suite passed 1264/1264. `AuthEndpoints.cs` is unchanged between the owner SHA and the full-suite SHA. Current `origin/main` SHA `6c5aa54da2a2a10a3ee08304714e7fc3fd8b7dc3` also has passing Backend Agent System Validation (`40980562978`) and Database Validation gate (`40980562969`; full suite skipped for docs-only changes).
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-VALIDATION-001 — initial rate-limit regression fixture also rejected the global sliding-window middleware; the fixture was narrowed to refresh-purpose keys and the focused suite passed.
