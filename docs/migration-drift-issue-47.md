@@ -39,6 +39,7 @@ dotnet ef migrations script 20260923145307_AddDesignTokenDraftUniqueness 2026110
   -o artifacts/migrations/issue-47-repair-idempotent.sql
 ```
 - Generation exit code: 0. The file has 93 lines, SHA256 `1D9F8C9F72BD7AAEFB3FBACBB3F247A5671166A5C958315791184929E5A7D78C`. Structure: `START TRANSACTION`, then `DO $EF$` (guarded repair, which contains `SET LOCAL` timeouts and a nested `DO $repair$`), then `DO $EF$` (history insert, 8.0.32), then `COMMIT`.
+- Line endings: git stores the file with LF (`core.autocrlf`). The LF blob from git has SHA256 `6E8EDF3176C464E28F92D9BCF53E0E65FF26205DCE6C0E2078AF8AE53FFEA4FE`. The Windows CRLF checkout (the copy that was executed) has `1D9F8C9F…D78C`. The content is identical; only CR/LF differ.
 - Before applying it to prod, verify the hash: `Get-FileHash artifacts/migrations/issue-47-repair-idempotent.sql` or `sha256sum …`.
 
 ### Execution evidence (the exact file, applied twice)
