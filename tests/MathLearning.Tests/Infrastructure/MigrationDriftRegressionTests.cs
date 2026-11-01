@@ -2,6 +2,7 @@
 using MathLearning.Api.Services;
 using MathLearning.Infrastructure.Migrations.Api;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -144,5 +145,122 @@ public sealed class MigrationDriftRegressionTests
         }
 
         Assert.Empty(missingModelColumns);
+    }
+
+    private static DatabaseSchemaVersionGuard.CriticalIndexCatalogRow HealthyRow(DatabaseSchemaVersionGuard.CriticalIndexSpec spec) => new()
+    {
+        IndexName = spec.Name, TableName = spec.Table, IsUnique = spec.Unique, IsValid = true, IsReady = true,
+        HasExpressions = false, Columns = spec.Columns, Predicate = spec.Predicate,
+    };
+
+    private const string FirstCorrectUx = "UX_UserAnswerAudits_FirstCorrect_PerQuestion";
+
+    private static string[] EvaluateWithMutatedUx(Action<DatabaseSchemaVersionGuard.CriticalIndexCatalogRow> mutate)
+    {
+        var rows = DatabaseSchemaVersionGuard.CriticalIndexSpecs.Select(HealthyRow).ToList();
+        mutate(rows.Single(r => r.IndexName == FirstCorrectUx));
+        return DatabaseSchemaVersionGuard.EvaluateCriticalIndexes(rows).ToArray();
+    }
+
+    [Fact]
+    public void CriticalIndexEvaluation_AcceptsExactDefinitions()
+    {
+        var rows = DatabaseSchemaVersionGuard.CriticalIndexSpecs.Select(HealthyRow);
+        Assert.Empty(DatabaseSchemaVersionGuard.EvaluateCriticalIndexes(rows));
+    }
+
+    [Fact]
+    public void CriticalIndexEvaluation_ReportsMissingIndex()
+    {
+        var rows = DatabaseSchemaVersionGuard.CriticalIndexSpecs.Select(HealthyRow).Where(r => r.IndexName != FirstCorrectUx);
+        Assert.Equal(new[] { $"index:{FirstCorrectUx}" }, DatabaseSchemaVersionGuard.EvaluateCriticalIndexes(rows));
+    }
+
+    [Theory]
+    [InlineData("invalid", "indisvalid=false")]
+    [InlineData("notready", "indisready=false")]
+    [InlineData("nonunique", "unique=false")]
+    [InlineData("nopredicate", "predicate=<none>")]
+    [InlineData("wrongpredicate", "predicate=(\"IsFirstTimeCorrect\" = false)")]
+    [InlineData("wrongcolumns", "columns=UserId,QuestionId")]
+    [InlineData("expression", "expression keys")]
+    [InlineData("wrongtable", "table=UserAnswers")]
+    public void CriticalIndexEvaluation_RejectsSameNameButWrongIndex(string scenario, string expectedDefect)
+    {
+        var problems = EvaluateWithMutatedUx(row =>
+        {
+            switch (scenario)
+            {
+                case "invalid": row.IsValid = false; break;
+                case "notready": row.IsReady = false; break;
+                case "nonunique": row.IsUnique = false; break;
+                case "nopredicate": row.Predicate = null; break;
+                case "wrongpredicate": row.Predicate = "(\"IsFirstTimeCorrect\" = false)"; break;
+                case "wrongcolumns": row.Columns = "UserId,QuestionId"; break;
+                case "expression": row.HasExpressions = true; break;
+                case "wrongtable": row.TableName = "UserAnswers"; break;
+            }
+        });
+
+        var problem = Assert.Single(problems);
+        Assert.StartsWith($"index:{FirstCorrectUx}[", problem, StringComparison.Ordinal);
+        Assert.Contains(expectedDefect, problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CriticalIndexSpecsMatchCompiledModel()
+    {
+        using var db = CreateOfflineContext();
+        var model = db.GetService<IDesignTimeModel>().Model;
+        foreach (var spec in DatabaseSchemaVersionGuard.CriticalIndexSpecs)
+        {
+            var match = model.GetEntityTypes()
+                .Where(e => e.GetTableName() == spec.Table)
+                .SelectMany(e => e.GetIndexes().Select(i => (Entity: e, Index: i)))
+                .Single(x => x.Index.GetDatabaseName() == spec.Name);
+            var so = Microsoft.EntityFrameworkCore.Metadata.StoreObjectIdentifier.Table(spec.Table, match.Entity.GetSchema());
+            Assert.Equal(spec.Unique, match.Index.IsUnique);
+            Assert.Equal(spec.Columns, string.Join(",", match.Index.Properties.Select(p => p.GetColumnName(so))));
+            Assert.Equal(spec.Predicate is null, match.Index.GetFilter() is null);
+        }
+    }
+
+    /// <summary>
+    /// Real Postgres: a same-name UX index that is INVALID (left behind by a failed CREATE UNIQUE INDEX CONCURRENTLY)
+    /// or wrongly defined must NOT satisfy the readiness guard. Gated like the other provider tests.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "PostgresProvider")]
+    public async Task Guard_RejectsInvalidOrWronglyDefinedCriticalUniqueIndex_OnRealPostgres()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_VALIDATION_REQUIRED"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await using var db = new ApiDbContext(database.CreateApiOptions());
+
+        Assert.Empty(await DatabaseSchemaVersionGuard.FindMissingCriticalObjectsAsync(db, CancellationToken.None));
+
+        // (a) wrong definition, same name: non-unique, no predicate.
+        await db.Database.ExecuteSqlRawAsync($"DROP INDEX \"{FirstCorrectUx}\"");
+        await db.Database.ExecuteSqlRawAsync($"CREATE INDEX \"{FirstCorrectUx}\" ON \"UserAnswerAudits\" (\"UserId\", \"QuestionId\", \"IsFirstTimeCorrect\")");
+        var wrong = Assert.Single(await DatabaseSchemaVersionGuard.FindMissingCriticalObjectsAsync(db, CancellationToken.None));
+        Assert.Contains("unique=false", wrong, StringComparison.Ordinal);
+        Assert.Contains("predicate=<none>", wrong, StringComparison.Ordinal);
+
+        // (b) invalid index, correct name AND definition: failed CONCURRENTLY build over duplicate first-correct rows.
+        await db.Database.ExecuteSqlRawAsync($"DROP INDEX \"{FirstCorrectUx}\"");
+        await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO \"UserAnswerAudits\" (\"UserId\", \"QuestionId\", \"Answer\", \"IsCorrect\", \"AwardedXp\", \"AnsweredAt\", \"IsFirstTimeCorrect\") " +
+            "VALUES ('dup-user', 1, 'a', true, 0, now(), true), ('dup-user', 1, 'a', true, 0, now(), true)");
+        await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlRawAsync(
+            $"CREATE UNIQUE INDEX CONCURRENTLY \"{FirstCorrectUx}\" ON \"UserAnswerAudits\" (\"UserId\", \"QuestionId\", \"IsFirstTimeCorrect\") WHERE \"IsFirstTimeCorrect\" = true"));
+        var invalid = Assert.Single(await DatabaseSchemaVersionGuard.FindMissingCriticalObjectsAsync(db, CancellationToken.None));
+        Assert.Contains("indisvalid=false", invalid, StringComparison.Ordinal);
+        Assert.DoesNotContain("unique=", invalid, StringComparison.Ordinal);
+        Assert.DoesNotContain("predicate=", invalid, StringComparison.Ordinal);
     }
 }

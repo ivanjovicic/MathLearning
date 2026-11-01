@@ -163,18 +163,98 @@ public sealed class DatabaseSchemaVersionGuard
         "index:UX_economy_transactions_user_type_operation",
     };
 
+    /// <summary>
+    /// Semantic definition of each critical index. A same-name index is only accepted when it is
+    /// valid + ready (pg_index.indisvalid / indisready), has the expected uniqueness, the exact ordered
+    /// key columns, no expression keys, and the expected partial predicate (pg_get_expr normalised form).
+    /// </summary>
+    internal sealed record CriticalIndexSpec(string Name, string Table, bool Unique, string Columns, string? Predicate);
+
+    internal static readonly IReadOnlyList<CriticalIndexSpec> CriticalIndexSpecs = new[]
+    {
+        new CriticalIndexSpec("UX_UserAnswerAudits_FirstCorrect_PerQuestion", "UserAnswerAudits", true,
+            "UserId,QuestionId,IsFirstTimeCorrect", "(\"IsFirstTimeCorrect\" = true)"),
+        new CriticalIndexSpec("IX_UserAnswerAudits_User_Question_CreatedAt", "UserAnswerAudits", false,
+            "UserId,QuestionId,CreatedAt", null),
+        new CriticalIndexSpec("UX_economy_transactions_user_type_operation", "economy_transactions", true,
+            "UserId,TransactionType,OperationId", "(\"OperationId\" IS NOT NULL)"),
+    };
+
+    /// <summary>Catalog facts for one index (pg_index/pg_class), as returned by <see cref="FindMissingCriticalObjectsAsync"/>.</summary>
+    internal sealed class CriticalIndexCatalogRow
+    {
+        public string IndexName { get; set; } = string.Empty;
+        public string TableName { get; set; } = string.Empty;
+        public bool IsUnique { get; set; }
+        public bool IsValid { get; set; }
+        public bool IsReady { get; set; }
+        public bool HasExpressions { get; set; }
+        public string? Columns { get; set; }
+        public string? Predicate { get; set; }
+    }
+
     internal static async Task<string[]> FindMissingCriticalObjectsAsync(ApiDbContext db, CancellationToken cancellationToken)
     {
-        var present = await db.Database.SqlQueryRaw<string>(
+        var presentColumns = await db.Database.SqlQueryRaw<string>(
                 """
                 SELECT 'column:' || table_name || '.' || column_name AS "Value"
                 FROM information_schema.columns WHERE table_schema = current_schema()
-                UNION ALL
-                SELECT 'index:' || indexname FROM pg_indexes WHERE schemaname = current_schema()
                 """)
             .ToListAsync(cancellationToken);
-        var presentSet = present.ToHashSet(StringComparer.Ordinal);
-        return CriticalPhysicalObjects.Where(o => !presentSet.Contains(o)).ToArray();
+        var presentSet = presentColumns.ToHashSet(StringComparer.Ordinal);
+
+        // Names are compile-time constants (no user input); inlined because a string[] would be expanded into params.
+        var nameList = string.Join(", ", CriticalIndexSpecs.Select(s => "'" + s.Name.Replace("'", "''") + "'"));
+#pragma warning disable EF1002 // nameList is built only from compile-time constants above
+        var indexRows = await db.Database.SqlQueryRaw<CriticalIndexCatalogRow>(
+                $$"""
+                SELECT ic.relname AS "IndexName", tc.relname AS "TableName",
+                       i.indisunique AS "IsUnique", i.indisvalid AS "IsValid", i.indisready AS "IsReady",
+                       (i.indexprs IS NOT NULL) AS "HasExpressions",
+                       (SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+                        FROM unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+                        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum) AS "Columns",
+                       pg_get_expr(i.indpred, i.indrelid) AS "Predicate"
+                FROM pg_index i
+                JOIN pg_class ic ON ic.oid = i.indexrelid
+                JOIN pg_class tc ON tc.oid = i.indrelid
+                JOIN pg_namespace n ON n.oid = ic.relnamespace
+                WHERE n.nspname = current_schema() AND ic.relname IN ({{nameList}})
+                """)
+            .ToListAsync(cancellationToken);
+#pragma warning restore EF1002
+
+        var columnProblems = CriticalPhysicalObjects
+            .Where(o => o.StartsWith("column:", StringComparison.Ordinal) && !presentSet.Contains(o));
+        return columnProblems.Concat(EvaluateCriticalIndexes(indexRows)).ToArray();
+    }
+
+    /// <summary>Pure evaluation of catalog rows against <see cref="CriticalIndexSpecs"/>; returns one entry per defective index.</summary>
+    internal static IEnumerable<string> EvaluateCriticalIndexes(IEnumerable<CriticalIndexCatalogRow> rows)
+    {
+        var byName = rows.ToDictionary(r => r.IndexName, StringComparer.Ordinal);
+        foreach (var spec in CriticalIndexSpecs)
+        {
+            if (!byName.TryGetValue(spec.Name, out var row))
+            {
+                yield return $"index:{spec.Name}";
+                continue;
+            }
+
+            var defects = new List<string>();
+            if (!row.IsValid) defects.Add("indisvalid=false");
+            if (!row.IsReady) defects.Add("indisready=false");
+            if (!string.Equals(row.TableName, spec.Table, StringComparison.Ordinal)) defects.Add($"table={row.TableName}");
+            if (row.IsUnique != spec.Unique) defects.Add($"unique={row.IsUnique.ToString().ToLowerInvariant()}");
+            if (row.HasExpressions) defects.Add("expression keys");
+            if (!string.Equals(row.Columns, spec.Columns, StringComparison.Ordinal)) defects.Add($"columns={row.Columns ?? "<none>"}");
+            if (!string.Equals(row.Predicate, spec.Predicate, StringComparison.Ordinal)) defects.Add($"predicate={row.Predicate ?? "<none>"}");
+
+            if (defects.Count > 0)
+            {
+                yield return $"index:{spec.Name}[{string.Join("; ", defects)}]";
+            }
+        }
     }
 
     internal static string[] FilterUnknownAppliedMigrations(
