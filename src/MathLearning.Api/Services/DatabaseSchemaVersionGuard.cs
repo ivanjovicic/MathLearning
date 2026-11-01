@@ -1,4 +1,4 @@
-using MathLearning.Infrastructure.Persistance;
+﻿using MathLearning.Infrastructure.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -106,7 +106,14 @@ public sealed class DatabaseSchemaVersionGuard
         var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray();
         var pendingMigrations = codeMigrations.Except(appliedMigrations, StringComparer.Ordinal).ToArray();
         var unknownAppliedMigrations = FilterUnknownAppliedMigrations(appliedMigrations, codeMigrations);
-        var isSchemaReady = pendingMigrations.Length == 0 && unknownAppliedMigrations.Length == 0;
+        var historyReady = pendingMigrations.Length == 0 && unknownAppliedMigrations.Length == 0;
+
+        // Issue #47: migration history alone is not proof of physical schema (unregistered migration
+        // classes were silently skipped). Verify critical quiz-settlement objects physically exist.
+        var missingCriticalObjects = historyReady && db.Database.IsNpgsql()
+            ? await FindMissingCriticalObjectsAsync(db, cancellationToken)
+            : Array.Empty<string>();
+        var isSchemaReady = historyReady && missingCriticalObjects.Length == 0;
 
         var status = new DatabaseSchemaStatus(
             Status: isSchemaReady ? "Ready" : "Mismatch",
@@ -115,7 +122,7 @@ public sealed class DatabaseSchemaVersionGuard
             LatestAppliedMigration: appliedMigrations.LastOrDefault(),
             PendingMigrations: pendingMigrations,
             UnknownAppliedMigrations: unknownAppliedMigrations,
-            FailureMessage: isSchemaReady ? null : BuildMismatchSummary(pendingMigrations, unknownAppliedMigrations),
+            FailureMessage: isSchemaReady ? null : BuildMismatchSummary(pendingMigrations, unknownAppliedMigrations, missingCriticalObjects),
             CheckedAtUtc: DateTime.UtcNow);
 
         logger.LogInformation(
@@ -135,6 +142,39 @@ public sealed class DatabaseSchemaVersionGuard
         }
 
         return status;
+    }
+
+    /// <summary>
+    /// Physical objects without which quiz answer settlement fails (42703 / missing ON CONFLICT target).
+    /// Format: "column:Table.Column" or "index:IndexName".
+    /// </summary>
+    internal static readonly IReadOnlyList<string> CriticalPhysicalObjects = new[]
+    {
+        "column:UserAnswerAudits.ClientId",
+        "column:UserAnswerAudits.CreatedAt",
+        "column:UserAnswerAudits.IsFirstTimeCorrect",
+        "column:UserAnswerAudits.IsOffline",
+        "column:UserAnswerAudits.Reason",
+        "column:UserAnswerAudits.Source",
+        "column:UserAnswerAudits.TotalXpAfterAward",
+        "index:UX_UserAnswerAudits_FirstCorrect_PerQuestion",
+        "index:IX_UserAnswerAudits_User_Question_CreatedAt",
+        "column:economy_transactions.OperationId",
+        "index:UX_economy_transactions_user_type_operation",
+    };
+
+    internal static async Task<string[]> FindMissingCriticalObjectsAsync(ApiDbContext db, CancellationToken cancellationToken)
+    {
+        var present = await db.Database.SqlQueryRaw<string>(
+                """
+                SELECT 'column:' || table_name || '.' || column_name AS "Value"
+                FROM information_schema.columns WHERE table_schema = current_schema()
+                UNION ALL
+                SELECT 'index:' || indexname FROM pg_indexes WHERE schemaname = current_schema()
+                """)
+            .ToListAsync(cancellationToken);
+        var presentSet = present.ToHashSet(StringComparer.Ordinal);
+        return CriticalPhysicalObjects.Where(o => !presentSet.Contains(o)).ToArray();
     }
 
     internal static string[] FilterUnknownAppliedMigrations(
@@ -179,9 +219,15 @@ public sealed class DatabaseSchemaVersionGuard
 
     private static string BuildMismatchSummary(
         IReadOnlyCollection<string> pendingMigrations,
-        IReadOnlyCollection<string> unknownAppliedMigrations)
+        IReadOnlyCollection<string> unknownAppliedMigrations,
+        IReadOnlyCollection<string>? missingCriticalObjects = null)
     {
         var parts = new List<string>();
+
+        if (missingCriticalObjects is { Count: > 0 })
+        {
+            parts.Add($"MissingCriticalObjects: {string.Join(", ", missingCriticalObjects)}");
+        }
 
         if (pendingMigrations.Count > 0)
         {
