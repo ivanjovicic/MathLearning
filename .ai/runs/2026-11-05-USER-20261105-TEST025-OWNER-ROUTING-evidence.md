@@ -29,7 +29,7 @@ Failed retries: 0
 - .ai/runs/2026-11-05-USER-20261105-TEST025-OWNER-ROUTING-evidence.md
 
 ## Validation
-Validation run: git diff --check: pass; python -B scripts/check_documentation_health.py --full-links: pass (28 docs, 0 issues); python -B scripts/validate_agent_prompt.py --changed-from e0d1248833b4dfc943d1a30137c7a8321828b583: pass (0 active prompts changed); python -B scripts/validate_agent_system.py: pass (0 issues).
+Validation run: git diff --check: pass; python -B scripts/check_documentation_health.py --full-links: pass (28 docs, 0 issues); python -B scripts/validate_agent_prompt.py --changed-from e0d1248833b4dfc943d1a30137c7a8321828b583: pass (0 active prompts changed); python -B scripts/validate_agent_system.py: pass (0 issues); CI on e0b2c443: Backend Agent System Validation passed (https://github.com/ivanjovicic/MathLearning/actions/runs/42091922628); Database Validation passed with database-suite skipped for docs-only diff (https://github.com/ivanjovicic/MathLearning/actions/runs/42091922778).
 Validation not run: Runtime tests: not run; queue/docs-only ownership correction.
 
 ## Exceptions and learning
