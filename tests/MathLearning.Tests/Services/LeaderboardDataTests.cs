@@ -99,10 +99,11 @@ public class LeaderboardDataTests
     public async Task Leaderboard_WeeklyXp_OnlyCountsThisWeek()
     {
         var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var now = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
 
         var session = new QuizSession
         {
-            Id = Guid.NewGuid(), UserId = "1", StartedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = "1", StartedAt = now
         };
         db.QuizSessions.Add(session);
 
@@ -111,7 +112,7 @@ public class LeaderboardDataTests
         {
             UserId = "1", QuestionId = 1, QuizSessionId = session.Id,
             Answer = "2", IsCorrect = true, TimeSpentSeconds = 5,
-            AnsweredAt = DateTime.UtcNow
+            AnsweredAt = now
         });
 
         // Answer last month
@@ -119,11 +120,13 @@ public class LeaderboardDataTests
         {
             UserId = "1", QuestionId = 2, QuizSessionId = session.Id,
             Answer = "4", IsCorrect = true, TimeSpentSeconds = 5,
-            AnsweredAt = DateTime.UtcNow.AddDays(-30)
+            AnsweredAt = now.AddDays(-30)
         });
         await db.SaveChangesAsync();
 
-        DateTime weekStart = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.Date.DayOfWeek + 1);
+        var dayOfWeek = (int)now.DayOfWeek;
+        var daysToSubtract = dayOfWeek == 0 ? 6 : dayOfWeek - 1;
+        DateTime weekStart = now.Date.AddDays(-daysToSubtract);
 
         var weeklyCorrect = await db.UserAnswers
             .Where(a => a.AnsweredAt >= weekStart && a.UserId == "1" && a.IsCorrect)
