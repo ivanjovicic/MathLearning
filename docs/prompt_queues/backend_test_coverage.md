@@ -91,7 +91,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-TEST-022 | Runtime-fixed / Needs schema validation | Quiz/offline settlement now enqueues durable outbox ingest commands inside the authoritative transaction, keeps client success independent from async analytics delivery, and deduplicates ingest by stable `AttemptKey`; focused tests passed but `scripts/db/validate-schema.ps1` still needs a reachable local PostgreSQL instance. Run log: `.ai/runs/2026-07-14-BACKEND-TEST-022-evidence.md` |
 | BACKEND-TEST-023 | Done 100% — Run log: `.ai/runs/2026-08-02-BACKEND-TEST-023-evidence.md`; Validation: `python scripts/run_guarded.py --timeout-seconds 240 -- dotnet test tests\MathLearning.Tests\MathLearning.Tests.csproj --filter "FullyQualifiedName~OutboxBatchProcessorTests" --no-restore` passed `5/5`; Residual risk: none observed in the focused claim/lease/backoff coverage; Commit: self. | Canonical runtime owner now uses `FOR UPDATE SKIP LOCKED`, bounded retry/dead-letter state, redacted persisted errors and hosted-service wiring; PostgreSQL proof is now executable locally and linked BE-PERF-016 is validated. |
 | BACKEND-TEST-024 | Runtime-fixed / Needs validation | Injectable shared maintenance service, read-only GET stats, cancellation, local non-overlap and positive admin tests. |
-| BACKEND-TEST-025 | P1 / Prompt-ready | Bug-report input/screenshot validation and orphan-storage compensation; private read/durable storage runtime ownership is BACKEND-API-DB-016. |
+| BACKEND-TEST-025 | P1 / Prompt-ready | General bug-report field/image validation and upload-compensation tests; supports the delivered private-read contract in BACKEND-API-DB-020 and the blocked durable-provider follow-up in BACKEND-API-DB-021. |
 | BACKEND-TEST-026 | Done — fresh PR #38 merged as `2eefbf5`; old PR #23 superseded. Run log: `.ai/runs/2026-09-23-BACKEND-TEST-026-evidence.md`; Validation: Health/Metrics/Monitoring 28/28; CI pending. | Minimize public health/metrics/schema/job information. |
 | BACKEND-TEST-027 | Done — PR #33 merged as `a6cf0430`. Run log: `.ai/runs/2026-09-23-BACKEND-TEST-027-final-refresh-evidence.md`; Validation: Agent System, Release build and schema-from-zero passed; scoped QuestionEndpoints/authoring failures=0; Residual risk: evidence-budget completion is capped at 79 and the unrelated repository-wide validation baseline is tracked separately. | Dead unwired `QuestionEndpoints` removed; absence/route regression coverage prevents reintroduction. |
 | BACKEND-TEST-028 | Runtime-fixed / Needs validation | Shared checked pagination bounds, analytics/bug migration and extreme-value tests. |
@@ -127,7 +127,7 @@ These are the biggest unresolved queue items on current `main`:
 | BACKEND-API-DB-013 | P1 / Done 75% — Run log: `.ai/runs/2026-08-01-BACKEND-API-DB-013-evidence.md`; Validation: focused AuthIncompleteAccount + AuthMobileRegistrationAtomicity; Residual risk: historical orphan backfill/Flutter SHA sync deferred; Commit: self | One `IAccountProvisioningService` owner; legacy register + login incomplete deny; scan helper. |
 | BACKEND-API-DB-014 | P1 / Prompt-ready | Retire or rebuild legacy photo avatars with string/self routes, durable storage and compensation. |
 | BACKEND-API-DB-015 | P0/P1 / Done 85% — Run log: `.ai/runs/2026-11-05-BACKEND-API-DB-015-postgres-unblock-evidence.md`; Validation: lease/takeover implementation delivered, old PRs #16/#17 superseded, prior focused 32/32 passed; local provider check blocked because Docker/maintenance connection is unavailable, and PR #48 CI does not cover this takeover matrix; Residual risk: PostgreSQL concurrent takeover proof remains unexecuted; Commit: self. | Recover stale pending economy/cosmetics operations without allowing dual settlement. |
-| BACKEND-API-DB-016 | P0/P1 / Prompt-ready; extends BACKEND-TEST-025 | Make bug-report screenshots private, reporter/admin-authorized, durable and lifecycle-safe. |
+| BACKEND-API-DB-016 | Superseded by BACKEND-API-DB-020 | Its private-read scope moved to delivered BACKEND-API-DB-020; durable provider/deployment work remains with blocked BACKEND-API-DB-021. |
 | BACKEND-API-DB-017 | P0/P1 / Prompt-ready; integrates with BE-PERF-011 and BACKEND-API-DB-013 | Add lockout-aware credential validation, auth-specific abuse controls, enumeration-safe responses and explicit account verification. |
 | BACKEND-API-DB-018 | P1 / Ready after BACKEND-API-DB-017; linked to BACKEND-API-DB-007/BACKEND-TEST-015 | Make logout-all/account/role changes invalidate existing access tokens within a documented provider-proven bound. |
 | BACKEND-API-DB-019 | P1 / Prompt-ready; depends on migration/catalog collision checks | Replace silent startup catalog mutation with versioned, auditable and readiness-enforced cosmetics catalog ownership. |
@@ -139,7 +139,7 @@ IDs 037–041 are reserved/occupied by parallel coverage work and are not reused
 | Test prompt | Canonical performance/runtime owner | Scope note |
 |---|---|---|
 | BACKEND-TEST-023 | BE-PERF-016 | Outbox claim, duplicate-publish defense and poison-message lifecycle are owned on the performance side; this test row keeps the contract and regression coverage. |
-| BACKEND-TEST-025 | BACKEND-API-DB-016 | Field/image bounds and upload compensation remain test-side; private screenshot reads, durable provider and attachment lifecycle are owned by 016. |
+| BACKEND-TEST-025 | BACKEND-API-DB-020 (delivered), BACKEND-API-DB-021 (blocked) | TEST-025 retains general bug-report validation/compensation coverage; 020 owns the delivered private-read contract and 021 owns durable provider/deployment work. |
 | BACKEND-TEST-031 | BE-PERF-009 | Weakness scheduling owns the bounded queue and deduplication behavior; keep the test row aligned to the scheduler contract. |
 | BACKEND-TEST-032 | BE-PERF-012, BE-PERF-015, BE-PERF-016 | PostgreSQL provider proof sits behind the adaptive/practice/outbox lanes and should not be re-implemented separately. |
 | BACKEND-TEST-033 | BE-PERF-012 and BE-PERF-015 | Cancellation/rollback proof belongs to the canonical P0 mutation lanes. |
@@ -222,7 +222,7 @@ The first successful ReportGenerator artifact must be reviewed before setting li
 5. Run BACKEND-API-DB-001 to remove answer/solution disclosure from pre-answer online contracts.
 6. Run BACKEND-API-DB-002 to establish quiz-session/question authority.
 7. Run BACKEND-API-DB-003 to replace client-authoritative progress completion.
-8. Run BACKEND-API-DB-016 for private/durable bug-report screenshots and shared BACKEND-TEST-025 validation.
+8. Keep BACKEND-TEST-025 limited to general bug-report validation/compensation coverage; private reads are delivered by BACKEND-API-DB-020 and provider/deployment durability remains blocked in BACKEND-API-DB-021 pending platform/provider authority.
 9. Run BACKEND-API-DB-017 for credential abuse protection; preserve BE-PERF-011 distributed limiter ownership.
 10. Run BACKEND-API-DB-018 only after 017 is main-verified.
 11. Run BACKEND-API-DB-019 after migration/catalog collision checks; it may run parallel to auth/screenshot work on disjoint paths.
