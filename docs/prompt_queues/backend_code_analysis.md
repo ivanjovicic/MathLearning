@@ -6,6 +6,6 @@ Canonical process: [`BACKEND_CODE_ANALYSIS_PLAYBOOK.md`](../BACKEND_CODE_ANALYSI
 
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
-| `BACKEND-ANALYSIS-001` | P1 | Needs validation 79% — Run log: `.ai/runs/2026-10-28-BACKEND-ANALYSIS-001-evidence.md`; Validation: static idempotency review only; .NET restore/build/advisory proof blocked, format timed out; Residual risk: package inventory and PostgreSQL takeover proof remain unavailable; Commit: self | [Periodic backend code analysis and prompt triage](BACKEND-ANALYSIS-001-periodic-code-analysis.md) | Run one bounded focus rotation, classify analyzer/risk findings and route only unique repair prompts. |
+| `BACKEND-ANALYSIS-001` | P1 | Needs validation 79% — Run log: `.ai/runs/2026-11-05-BACKEND-ANALYSIS-001-validation-evidence.md`; Validation: restore + Release analyzer build (0 warnings/errors) + vulnerable-package inventory (none) passed; format verification timed out with WHITESPACE diagnostics; PR #48 PostgreSQL suite passed on head `a42269d`; Residual risk: format baseline and PostgreSQL takeover proof remain under `BACKEND-API-DB-015`; Commit: self | [Periodic backend code analysis and prompt triage](BACKEND-ANALYSIS-001-periodic-code-analysis.md) | Run one bounded focus rotation, classify analyzer/risk findings and route only unique repair prompts. |
 
 Do not treat this queue as runtime-fix evidence. Each routed prompt needs its own owner, regression proof and run log.
