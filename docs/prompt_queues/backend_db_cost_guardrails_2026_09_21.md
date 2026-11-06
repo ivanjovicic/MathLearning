@@ -11,7 +11,7 @@ Purpose: prevent the pre-production API from consuming a serverless PostgreSQL q
 | ID | Priority | Status | Prompt | Purpose |
 |---|---:|---|---|---|
 | `BACKEND-OPS-FLY-AUTOSTOP-001` | P0 cost/reliability | Done 100% — Run log: `.ai/runs/2026-09-21-BACKEND-OPS-FLY-AUTOSTOP-001-evidence.md`; Validation: TOML assertions + diff check + documentation health; Residual risk: Fly deploy/idle observation remains operator follow-up; Commit: self | [Open](backend_db_cost_guardrails_2026_09_21/BACKEND-OPS-FLY-AUTOSTOP-001.md) | Stop the idle Fly machine and auto-start it on demand before real production traffic. |
-| `BACKEND-OPS-DB-IDLE-BUDGET-001` | P0 cost/reliability | Done 95% — Run log: `.ai/runs/2026-10-30-BACKEND-OPS-DB-IDLE-BUDGET-CI-VERIFY-20261030-evidence.md`; Validation: current-main Database Validation run `40838928486` passed on `7583502` (database-suite and validate-database); Residual risk: live Fly/Neon idle-window observation remains operator follow-up; Commit: self | [Open](backend_db_cost_guardrails_2026_09_21/BACKEND-OPS-DB-IDLE-BUDGET-001.md) | Add an explicit PreProductionIdle background-work profile and remove continuous DB wake-up polling. |
+| `BACKEND-OPS-DB-IDLE-BUDGET-001` | P0 cost/reliability | Done 95% — Run log: `.ai/runs/2026-11-06-USER-20261106-DB-IDLE-OBSERVATION-evidence.md`; Validation: read-only Fly status reported app suspended and machine stopped; Residual risk: Neon compute-idle proof still needs read-only metrics access and an idle-window sample; Commit: self | [Open](backend_db_cost_guardrails_2026_09_21/BACKEND-OPS-DB-IDLE-BUDGET-001.md) | Add an explicit PreProductionIdle background-work profile and remove continuous DB wake-up polling. |
 
 ## Current evidence
 
@@ -20,7 +20,7 @@ Purpose: prevent the pre-production API from consuming a serverless PostgreSQL q
 - Hangfire PostgreSQL queue polling is 15 seconds;
 - sync dead-letter polling is 60 seconds and enabled by default;
 - several hourly/daily DB-backed hosted services are registered;
-- Fly service is configured for auto-stop/auto-start with zero warm machines; live idle observation remains pending.
+- On 2026-11-06, read-only Fly status reported `mathlearning-api` suspended with its `ams` machine stopped (last machine update: 2026-11-04 13:10:46 UTC). This confirms Fly auto-stop state but does not prove Neon compute suspension; Neon read-only metrics access was unavailable, so the idle-window observation remains pending.
 
 ## Ordering
 
