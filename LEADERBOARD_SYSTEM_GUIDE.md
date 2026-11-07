@@ -24,7 +24,7 @@ This document describes the enhanced leaderboard system implementation for MathL
 
 ### 4. **Automatic XP Reset**
 - Background service automatically resets time-based XP counters
-- Runs every hour
+- Sleeps until the next UTC midnight via GetDelayUntilNextUtcBoundary (not an hourly poll)
 - Daily XP resets at midnight
 - Weekly XP resets on Monday
 - Monthly XP resets on the 1st of each month
@@ -54,7 +54,7 @@ This document describes the enhanced leaderboard system implementation for MathL
    
    - `XpResetBackgroundService` ([XpResetBackgroundService.cs](src/MathLearning.Api/Services/XpResetBackgroundService.cs))
      - Background worker that periodically resets XP counters
-     - Runs every hour
+     - Sleeps until the next UTC midnight via GetDelayUntilNextUtcBoundary (not an hourly poll)
 
 4. **Endpoints** ([LeaderboardEndpoints.cs](src/MathLearning.Api/Endpoints/LeaderboardEndpoints.cs))
    - `GET /api/leaderboard` - New enhanced endpoint
