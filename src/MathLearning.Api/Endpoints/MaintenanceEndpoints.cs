@@ -16,19 +16,21 @@ public static class MaintenanceEndpoints
             ILogger<IndexMaintenanceService> logger,
             CancellationToken cancellationToken) =>
         {
-            logger.LogInformation("Manual index rebuild triggered");
+            logger.LogInformation("Manual index statistics update triggered; automatic REINDEX disabled");
             var report = await service.RebuildCorruptedIndexesAsync(cancellationToken);
 
             logger.LogInformation(
-                "Manual index rebuild completed. Rebuilt={RebuiltIndexesCount} Errors={ErrorCount}",
+                "Index statistics update completed. Rebuilt={RebuiltIndexesCount} Errors={ErrorCount}",
                 report.RebuiltIndexes.Count,
                 report.Errors.Count);
 
             return Results.Ok(new
             {
                 success = report.Errors.Count == 0,
-                message = $"Rebuilt {report.RebuiltIndexes.Count} indexes",
-                bloatedIndexes = report.BloatedIndexes.Count,
+                message = "ANALYZE completed; index bloat is UNKNOWN and no indexes were rebuilt",
+                bloatedIndexes = 0,
+                unknownBloatIndexes = report.BloatedIndexes.Count,
+                automaticReindexEnabled = false,
                 unusedIndexes = report.UnusedIndexes.Count,
                 rebuiltIndexes = report.RebuiltIndexes,
                 errors = report.Errors,
@@ -36,7 +38,7 @@ public static class MaintenanceEndpoints
             });
         })
         .WithName("RebuildIndexes")
-        .WithDescription("Manually trigger index rebuild for bloated/corrupted indexes");
+        .WithDescription("Legacy route: update table statistics with ANALYZE; automatic index rebuild is disabled");
 
         group.MapGet("/index-health", async (
             IIndexMaintenanceService service,
@@ -47,13 +49,14 @@ public static class MaintenanceEndpoints
             {
                 totalIndexes = healthInfo.Count,
                 healthyIndexes = healthInfo.Count(i => i.Status == "HEALTHY"),
-                unusedIndexes = healthInfo.Count(i => i.Status == "UNUSED"),
-                lowUsageIndexes = healthInfo.Count(i => i.Status == "LOW_USAGE"),
+                unknownIndexes = healthInfo.Count(i => i.Status == "UNKNOWN"),
+                unusedIndexes = healthInfo.Count(i => i.UsageStatus == "UNUSED"),
+                lowUsageIndexes = healthInfo.Count(i => i.UsageStatus == "LOW_USAGE"),
                 indexes = healthInfo
             });
         })
         .WithName("CheckIndexHealth")
-        .WithDescription("Check health status of all database indexes");
+        .WithDescription("Read index size and usage; physical index health is UNKNOWN without a verified measurement");
 
         group.MapGet("/index-stats", async (
             IIndexMaintenanceService service,
@@ -69,13 +72,12 @@ public static class MaintenanceEndpoints
                     i.Size,
                     i.BloatPercentage,
                     i.Scans,
-                    status = i.BloatPercentage > 30 ? "NEEDS_REBUILD" :
-                             i.BloatPercentage > 15 ? "WATCH" : "HEALTHY"
+                    i.Status
                 }),
                 unusedIndexes = report.UnusedIndexes
             });
         })
         .WithName("GetIndexStatistics")
-        .WithDescription("Get read-only statistics about index bloat and usage");
+        .WithDescription("Get read-only index size and usage; bloat percentage is UNKNOWN without verified measurement");
     }
 }

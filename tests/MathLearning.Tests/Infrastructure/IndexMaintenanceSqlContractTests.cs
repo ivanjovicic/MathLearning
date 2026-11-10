@@ -17,6 +17,9 @@ public sealed class IndexMaintenanceSqlContractTests
         Assert.Equal(2, CountOccurrences(source, "indexrelname AS indexname"));
         Assert.DoesNotContain("i.tablename", source, StringComparison.Ordinal);
         Assert.DoesNotContain("i.indexname", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("REINDEX INDEX", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CREATE EXTENSION", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("0::numeric as bloat_percentage", source, StringComparison.Ordinal);
     }
 
     private static int CountOccurrences(string value, string search)
