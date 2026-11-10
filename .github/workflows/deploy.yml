@@ -26,24 +26,21 @@ jobs:
     concurrency: deploy-group
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Ensure secret is set
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          if [ -z "${{ secrets.FLY_API_TOKEN }}" ]; then
+          if [ -z "$FLY_API_TOKEN" ]; then
             echo "ERROR: Repository secret 'FLY_API_TOKEN' is not set."
             echo "Add it in Settings -> Secrets -> Actions and retry."
             exit 1
           fi
 
-      - name: Debug env
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: |
-          echo "Token preview: ${FLY_API_TOKEN:0:4}..."
 
       - name: Install Flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # 1.5
 
       - name: Deploy to Fly.io
         env:
