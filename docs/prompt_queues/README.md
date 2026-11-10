@@ -41,7 +41,8 @@ Superseded PRs #13, #14 and #15 are closed because their canonical BE-PERF owner
 | 7 | `backend_test_coverage.md` | Provider/cancellation/regression proof that supports canonical runtime owners without reimplementing them; top unresolved bugs are `BACKEND-API-DB-015`, `BACKEND-TEST-033` and the newly surfaced `BACKEND-TEST-049`/`BACKEND-TEST-050`/`BACKEND-TEST-051`. `BACKEND-API-DB-013` runtime slice delivered (historical orphan backfill deferred). |
 | 8 | `backend_code_analysis.md` | Scheduled/manual free analyzer, dependency and risk-pattern audit; route unique findings through `BACKEND-ANALYSIS-001`. |
 | 9 | `backend_api_db_residuals_pass3_2026_07_16.md` | Historical pass-3 evidence; `016` is superseded by `020`, `017..019` are delivered/nonclaimable. |
-| 10 | `backend_failing_test_followups_2026_07_11.md` | Historical migration repair; no active row after `BACKEND-MIGRATION-001` delivery. |
+| 10 | `backend_migration_shape_guard.md` | Active bounded PostgreSQL guard follow-up: verify semantic shape of critical audit columns after migration history is current. |
+| 11 | `backend_failing_test_followups_2026_07_11.md` | Historical migration repair; `BACKEND-MIGRATION-001` is delivered and archived. |
 
 `backend_critical_risk_prevention.md` and earlier pass queues are historical evidence. Their completed rows are not active selection sources.
 
