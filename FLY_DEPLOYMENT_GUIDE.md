@@ -31,6 +31,8 @@ Verified against the repository configuration on 2026-10-22.
 
 ## Deploy and rollback
 
+The manual `Fly recovery image build only` workflow builds its pinned application revision and checks its compiled API migrations without deploying. It records the workflow revision, image metadata and exported archive checksum; verify any registry manifest digest independently before selecting an image for deployment. GitHub must have the workflow on the default branch before it can be dispatched.
+
 Run the existing manual workflow only after the database has already been verified against the deployed API migration set:
 
 ```powershell
