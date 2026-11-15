@@ -1,4 +1,5 @@
 ﻿using MathLearning.Domain.Entities;
+using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Tests.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -115,6 +116,22 @@ public class LeaderboardDataTests
             AnsweredAt = now
         });
 
+        var weekStart = SchoolLeaderboardPeriods.StartOfWeekUtc(now);
+        db.UserAnswers.Add(new UserAnswer
+        {
+            UserId = "1", QuestionId = 3, QuizSessionId = session.Id,
+            Answer = "6", IsCorrect = true, TimeSpentSeconds = 5,
+            AnsweredAt = weekStart
+        });
+
+        // The previous Sunday is outside the Monday-start UTC week.
+        db.UserAnswers.Add(new UserAnswer
+        {
+            UserId = "1", QuestionId = 4, QuizSessionId = session.Id,
+            Answer = "8", IsCorrect = true, TimeSpentSeconds = 5,
+            AnsweredAt = weekStart.AddTicks(-1)
+        });
+
         // Answer last month
         db.UserAnswers.Add(new UserAnswer
         {
@@ -124,14 +141,10 @@ public class LeaderboardDataTests
         });
         await db.SaveChangesAsync();
 
-        var dayOfWeek = (int)now.DayOfWeek;
-        var daysToSubtract = dayOfWeek == 0 ? 6 : dayOfWeek - 1;
-        DateTime weekStart = now.Date.AddDays(-daysToSubtract);
-
         var weeklyCorrect = await db.UserAnswers
             .Where(a => a.AnsweredAt >= weekStart && a.UserId == "1" && a.IsCorrect)
             .CountAsync();
 
-        Assert.Equal(1, weeklyCorrect);
+        Assert.Equal(2, weeklyCorrect);
     }
 }

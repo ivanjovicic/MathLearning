@@ -57,6 +57,22 @@ public sealed class XpResetProcessorTests
         Assert.True(window.ResetMonthly);
     }
 
+    [Theory]
+    [InlineData("2026-12-27T23:59:59Z", "2027-01-03T12:00:00Z", true)]
+    [InlineData("2026-12-28T00:00:00Z", "2027-01-03T12:00:00Z", false)]
+    [InlineData("2027-01-03T23:59:59Z", "2027-01-04T00:00:00Z", true)]
+    public void Create_WeeklyResetUsesUtcMondayBoundaryAcrossYearTransition(
+        string lastReset,
+        string now,
+        bool expectedWeekly)
+    {
+        var window = XpResetWindow.Create(
+            DateTime.Parse(now, null, System.Globalization.DateTimeStyles.AdjustToUniversal),
+            DateTime.Parse(lastReset, null, System.Globalization.DateTimeStyles.AdjustToUniversal));
+
+        Assert.Equal(expectedWeekly, window.ResetWeekly);
+    }
+
     [Fact]
     public async Task RunOnceAsync_SkipsWhenSchemaIsNotReadyWithoutTouchingProfiles()
     {
