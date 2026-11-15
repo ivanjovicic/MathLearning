@@ -86,3 +86,43 @@ Because the repair is additive (new columns and indexes), the preferred response
 
 ## Deferred
 Perf indexes (CONCURRENTLY, outside any transaction; `user_cosmetic_inventory` is missing), UserQuestionAttempts indexes, AddOptionOrder (root context), and the weekly-XP test flake (Sunday week-start bug in the test, see above).
+
+## B2-OPS production identity and settlement audit (2026-11-15)
+
+**Status: `BLOCKED_EXTERNAL_EVIDENCE`; deployment: NO-GO.** This section records a read-only evidence audit, not a production schema or settlement verification. The [issue #47 operator comments](https://github.com/ivanjovicic/MathLearning/issues/47) establish the historical `42703` root cause at 13:42–13:43 UTC on November 1. They do not identify the current Fly database endpoint or prove durable rows for either request.
+
+### Source and artifact evidence
+
+- `origin/main` was `59dc54d831270d751d3b7d98c8a8a3fb88a44088` at this audit. The approved application commit `d945f51446e4d6e853bbc136134915b4c183aaf4` contains the attributed `20261101185317_RepairUserAnswerAuditXpSchema` migration and `DatabaseSchemaVersionGuard`; these files and `Dockerfile` have no diff between that commit and this main. The build-only workflow on main still checks out that exact application commit. Source presence does **not** prove deployment or execution.
+- The public [build-only workflow history](https://github.com/ivanjovicic/MathLearning/actions/workflows/fly-recovery-build-only.yml) contains one run, [43711363732](https://github.com/ivanjovicic/MathLearning/actions/runs/43711363732), failed at image identity verification on the older `53a56ba` workflow revision and published no artifact. That run reported local Buildx manifest `sha256:53fcaf20cbe9bf50fbd6e8b36ee82d5e67ee85450a7f674986c43dcb8a367ba3` and config `sha256:9b639d46a5569aa4e260836e1eb92599af91ad8ba945a6872f33b7057adad498`; neither identifies the Fly image or a registry-published digest. The corrected workflow at `59dc54d` has no observed run, image archive, or registry digest. `Deploy to Fly.io` builds separately and does not consume a build-only artifact.
+- The local Fly CLI did not return, even for `version`; a direct authenticated read-only Machines API request returned HTTP 403. No protected libpq profile was configured at the standard locations or through `PGSERVICEFILE`/`PGPASSFILE`, and no Neon API credential was configured in the environment. No Fly application secret or connection string was read or output; no machine, database, or production SQL was read. The documented October release v136 is historical, not proof of today's running image.
+- The earlier issue #47 investigation passed 53/53 focused local tests, including isolated PostgreSQL settlement and schema-guard checks. They were not rerun for this operations audit.
+
+### Durable outcome classification
+
+| Historical request | Exception/transaction evidence | Durable outcome |
+|---|---|---|
+| `ml-hnr95hys2g-n` | `DbUpdateException` / PostgreSQL `42703` at `IdempotencyLedgerService.CompleteAsync` before the keyed transaction's explicit commit; rollback is the expected path. | **UNKNOWN** until an account/session/operation-anchored production read confirms the ledger, answer, audit, XP and stat state. |
+| `ml-hnr966knvv-o` | Same `42703`; application telemetry also says `rolled_back`. This supports but does not independently prove persistence. | **UNKNOWN** for the same reason. |
+
+The earlier account-scoped four-hour zero counts were not tied to either operation identity. Correlation IDs are not database keys. `UserQuestionStats` is an aggregate without a per-attempt row or creation time, so compare its state to an authorized earlier snapshot or corroborating answer/XP records; a current count alone cannot prove a historical rollback.
+
+### Release-readiness matrix
+
+| Gate | Evidence at audit | State |
+|---|---|---|
+| Repository source | Main `59dc54d`; approved app `d945f...` has the registered repair and guard. | Source verified; deployment unverified. |
+| Application image | No successful corrected build-only run or image archive; Fly machine image digest, OCI revision label, compiled migration set and startup guard log unavailable. | **BLOCKED** |
+| Database identity | Intended Neon project `silent-salad-97245148`, branch `br-fragrant-hat-agwg4cyi` from the earlier issue report; Fly's effective endpoint ID and database name unavailable. | **BLOCKED** |
+| Physical schema | Expected 63 history rows (62 API plus one documented legacy Admin row), repair migration present, 14 audit columns, and six audit indexes including the PK; no current production catalog read. | **BLOCKED** |
+| Settlement | No operation-anchored production query for either request. | **BLOCKED** |
+| Backup/recovery | No recent independent restore, approved encrypted destination/retention, or role/RLS completeness proof recorded. | **BLOCKED** |
+| Authorization | No new hosted build, production SQL write, migration, Fly deploy, or database restore authorized by this task. | **NO-GO** |
+
+### Exact operator evidence needed
+
+1. A Fly operator with read-only access records the current machine image digest, immutable revision label, and startup schema-guard evidence, and derives only the effective database **endpoint ID** and database name from the runtime connection setting in a protected session. Do not publish the connection string, host credentials, or secret value. A stopped machine must not be started merely for this audit without a separate operational decision.
+2. A Neon operator lists the endpoint-to-branch mapping for project `silent-salad-97245148` and verifies that the Fly endpoint ID belongs to branch `br-fragrant-hat-agwg4cyi` and the expected database. Recheck the current branch ID immediately before any release because branch identity can change after restore.
+3. Using the approved protected read-only profile against that verified endpoint, first inspect `information_schema.columns`, `pg_index`/`pg_class`/`pg_attribute`, and `__EFMigrationsHistory`. Compare all seven critical audit column types, lengths and nullability, all six audit indexes (including `indisvalid`, `indisready`, ordered keys, uniqueness and partial predicate), the repair migration row and complete expected history. History presence alone is insufficient.
+4. Only after checking the actual table/column shapes, use the authorized account and issued quiz session, exact UTC request windows and original operation identities to inspect status/timestamps in `idempotency_ledger`, rows in `UserAnswers` and `UserAnswerAudits`, source-linked rows in `user_xp_events`, and `UserQuestionStats` against a historical baseline. Keep IDs, keys, answers and PII out of shared output. Classify each request only when its own persisted records or a suitable historical snapshot support the conclusion.
+5. Before deployment, approve and verify a complete protected backup plus isolated restore rehearsal, including checksum, migration history and representative data checks. Post the redacted identity/parity/settlement result to issue #47; do not mark either attempt rolled back solely from HTTP 500, a rollback log or unanchored counts.
