@@ -163,6 +163,35 @@ public sealed class DatabaseSchemaVersionGuard
         "index:UX_economy_transactions_user_type_operation",
     };
 
+    /// <summary>Expected PostgreSQL shape for the critical audit columns whose drift can break quiz settlement.</summary>
+    internal sealed record CriticalColumnSpec(
+        string Table,
+        string Name,
+        string DataType,
+        int? CharacterMaximumLength,
+        bool Nullable);
+
+    internal static readonly IReadOnlyList<CriticalColumnSpec> CriticalColumnSpecs = new[]
+    {
+        new CriticalColumnSpec("UserAnswerAudits", "ClientId", "character varying", 128, true),
+        new CriticalColumnSpec("UserAnswerAudits", "CreatedAt", "timestamp with time zone", null, false),
+        new CriticalColumnSpec("UserAnswerAudits", "IsFirstTimeCorrect", "boolean", null, false),
+        new CriticalColumnSpec("UserAnswerAudits", "IsOffline", "boolean", null, false),
+        new CriticalColumnSpec("UserAnswerAudits", "Reason", "character varying", 64, false),
+        new CriticalColumnSpec("UserAnswerAudits", "Source", "character varying", 50, false),
+        new CriticalColumnSpec("UserAnswerAudits", "TotalXpAfterAward", "integer", null, false),
+    };
+
+    /// <summary>Catalog facts for one critical column, as returned by <see cref="FindMissingCriticalObjectsAsync"/>.</summary>
+    internal sealed class CriticalColumnCatalogRow
+    {
+        public string TableName { get; set; } = string.Empty;
+        public string ColumnName { get; set; } = string.Empty;
+        public string DataType { get; set; } = string.Empty;
+        public int? CharacterMaximumLength { get; set; }
+        public bool IsNullable { get; set; }
+    }
+
     /// <summary>
     /// Semantic definition of each critical index. A same-name index is only accepted when it is
     /// valid + ready (pg_index.indisvalid / indisready), has the expected uniqueness, the exact ordered
@@ -195,13 +224,19 @@ public sealed class DatabaseSchemaVersionGuard
 
     internal static async Task<string[]> FindMissingCriticalObjectsAsync(ApiDbContext db, CancellationToken cancellationToken)
     {
-        var presentColumns = await db.Database.SqlQueryRaw<string>(
+        var columns = await db.Database.SqlQueryRaw<CriticalColumnCatalogRow>(
                 """
-                SELECT 'column:' || table_name || '.' || column_name AS "Value"
+                SELECT table_name AS "TableName",
+                       column_name AS "ColumnName",
+                       data_type AS "DataType",
+                       character_maximum_length::integer AS "CharacterMaximumLength",
+                       is_nullable = 'YES' AS "IsNullable"
                 FROM information_schema.columns WHERE table_schema = current_schema()
                 """)
             .ToListAsync(cancellationToken);
-        var presentSet = presentColumns.ToHashSet(StringComparer.Ordinal);
+        var presentSet = columns
+            .Select(column => $"column:{column.TableName}.{column.ColumnName}")
+            .ToHashSet(StringComparer.Ordinal);
 
         // Names are compile-time constants (no user input); inlined because a string[] would be expanded into params.
         var nameList = string.Join(", ", CriticalIndexSpecs.Select(s => "'" + s.Name.Replace("'", "''") + "'"));
@@ -224,9 +259,53 @@ public sealed class DatabaseSchemaVersionGuard
             .ToListAsync(cancellationToken);
 #pragma warning restore EF1002
 
-        var columnProblems = CriticalPhysicalObjects
-            .Where(o => o.StartsWith("column:", StringComparison.Ordinal) && !presentSet.Contains(o));
-        return columnProblems.Concat(EvaluateCriticalIndexes(indexRows)).ToArray();
+        var shapedColumnNames = CriticalColumnSpecs
+            .Select(spec => $"column:{spec.Table}.{spec.Name}")
+            .ToHashSet(StringComparer.Ordinal);
+        var missingUnshapedColumns = CriticalPhysicalObjects
+            .Where(o => o.StartsWith("column:", StringComparison.Ordinal)
+                && !shapedColumnNames.Contains(o)
+                && !presentSet.Contains(o));
+
+        return EvaluateCriticalColumns(columns)
+            .Concat(missingUnshapedColumns)
+            .Concat(EvaluateCriticalIndexes(indexRows))
+            .ToArray();
+    }
+
+    /// <summary>Pure evaluation of critical column catalog rows; returns one entry per missing or wrong-shaped column.</summary>
+    internal static IEnumerable<string> EvaluateCriticalColumns(IEnumerable<CriticalColumnCatalogRow> rows)
+    {
+        var byColumn = rows.ToDictionary(row => (row.TableName, row.ColumnName));
+        foreach (var spec in CriticalColumnSpecs)
+        {
+            if (!byColumn.TryGetValue((spec.Table, spec.Name), out var row))
+            {
+                yield return $"column:{spec.Table}.{spec.Name}[missing]";
+                continue;
+            }
+
+            var defects = new List<string>();
+            if (!string.Equals(row.DataType, spec.DataType, StringComparison.Ordinal))
+            {
+                defects.Add($"type={row.DataType}; expectedType={spec.DataType}");
+            }
+
+            if (row.CharacterMaximumLength != spec.CharacterMaximumLength)
+            {
+                defects.Add($"length={row.CharacterMaximumLength?.ToString() ?? "unbounded"}; expectedLength={spec.CharacterMaximumLength?.ToString() ?? "unbounded"}");
+            }
+
+            if (row.IsNullable != spec.Nullable)
+            {
+                defects.Add($"nullable={row.IsNullable.ToString().ToLowerInvariant()}; expectedNullable={spec.Nullable.ToString().ToLowerInvariant()}");
+            }
+
+            if (defects.Count > 0)
+            {
+                yield return $"column:{spec.Table}.{spec.Name}[{string.Join("; ", defects)}]";
+            }
+        }
     }
 
     /// <summary>Pure evaluation of catalog rows against <see cref="CriticalIndexSpecs"/>; returns one entry per defective index.</summary>

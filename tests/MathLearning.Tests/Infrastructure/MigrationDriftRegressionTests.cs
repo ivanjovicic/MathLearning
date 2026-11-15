@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MathLearning.Tests.Database;
 
@@ -110,6 +112,27 @@ public sealed class MigrationDriftRegressionTests
 
         var notInModel = DatabaseSchemaVersionGuard.CriticalPhysicalObjects.Where(o => !modelObjects.Contains(o)).ToArray();
         Assert.Empty(notInModel);
+    }
+
+    [Fact]
+    public void CriticalColumnSpecsMatchCompiledModel()
+    {
+        using var db = CreateOfflineContext();
+        var model = db.GetService<IDesignTimeModel>().Model;
+
+        foreach (var spec in DatabaseSchemaVersionGuard.CriticalColumnSpecs)
+        {
+            var match = model.GetEntityTypes()
+                .Where(entity => entity.GetTableName() == spec.Table)
+                .SelectMany(entity => entity.GetProperties().Select(property => (Entity: entity, Property: property)))
+                .Single(x => x.Property.GetColumnName(
+                    StoreObjectIdentifier.Table(spec.Table, x.Entity.GetSchema())) == spec.Name);
+            var storeType = match.Property.GetRelationalTypeMapping().StoreType.Split('(')[0];
+
+            Assert.Equal(spec.DataType, storeType);
+            Assert.Equal(spec.CharacterMaximumLength, match.Property.GetMaxLength());
+            Assert.Equal(spec.Nullable, match.Property.IsNullable);
+        }
     }
 
     [Fact]
@@ -233,7 +256,7 @@ public sealed class MigrationDriftRegressionTests
     [Trait("Category", "PostgresProvider")]
     public async Task Guard_RejectsInvalidOrWronglyDefinedCriticalUniqueIndex_OnRealPostgres()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_VALIDATION_REQUIRED"), "1", StringComparison.Ordinal))
+        if (!string.Equals(Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_TESTS_REQUIRED"), "1", StringComparison.Ordinal))
         {
             return;
         }
@@ -262,5 +285,80 @@ public sealed class MigrationDriftRegressionTests
         Assert.Contains("indisvalid=false", invalid, StringComparison.Ordinal);
         Assert.DoesNotContain("unique=", invalid, StringComparison.Ordinal);
         Assert.DoesNotContain("predicate=", invalid, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "PostgresProvider")]
+    public async Task Guard_RejectsColumnShapeDrift_WrongType_OnRealPostgres()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_TESTS_REQUIRED"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await using var db = new ApiDbContext(database.CreateApiOptions());
+        var guard = new DatabaseSchemaVersionGuard(NullLogger<DatabaseSchemaVersionGuard>.Instance);
+
+        var ready = await guard.CheckAsync(db);
+        Assert.True(ready.IsSchemaReady, ready.FailureMessage);
+        await db.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"UserAnswerAudits\" ALTER COLUMN \"ClientId\" TYPE text USING \"ClientId\"::text");
+
+        var mismatch = await guard.CheckAsync(db);
+
+        Assert.False(mismatch.IsSchemaReady, mismatch.FailureMessage);
+        Assert.Contains("column:UserAnswerAudits.ClientId[", mismatch.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "PostgresProvider")]
+    public async Task Guard_RejectsColumnShapeDrift_RequiredNullable_OnRealPostgres()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_TESTS_REQUIRED"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await using var db = new ApiDbContext(database.CreateApiOptions());
+        var guard = new DatabaseSchemaVersionGuard(NullLogger<DatabaseSchemaVersionGuard>.Instance);
+
+        var ready = await guard.CheckAsync(db);
+        Assert.True(ready.IsSchemaReady, ready.FailureMessage);
+        await db.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"UserAnswerAudits\" ALTER COLUMN \"IsOffline\" DROP NOT NULL");
+
+        var mismatch = await guard.CheckAsync(db);
+
+        Assert.False(mismatch.IsSchemaReady, mismatch.FailureMessage);
+        Assert.Contains("column:UserAnswerAudits.IsOffline[", mismatch.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "PostgresProvider")]
+    public async Task Guard_RejectsColumnShapeDrift_WrongLength_OnRealPostgres()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("POSTGRES_PROVIDER_TESTS_REQUIRED"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await database.MigrateApiAsync();
+        await using var db = new ApiDbContext(database.CreateApiOptions());
+        var guard = new DatabaseSchemaVersionGuard(NullLogger<DatabaseSchemaVersionGuard>.Instance);
+
+        var ready = await guard.CheckAsync(db);
+        Assert.True(ready.IsSchemaReady, ready.FailureMessage);
+        await db.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"UserAnswerAudits\" ALTER COLUMN \"Reason\" TYPE character varying(63)");
+
+        var mismatch = await guard.CheckAsync(db);
+
+        Assert.False(mismatch.IsSchemaReady, mismatch.FailureMessage);
+        Assert.Contains("column:UserAnswerAudits.Reason[", mismatch.FailureMessage, StringComparison.Ordinal);
     }
 }
