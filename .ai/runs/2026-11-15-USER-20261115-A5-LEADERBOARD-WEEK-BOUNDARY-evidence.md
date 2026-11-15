@@ -39,13 +39,13 @@ Validation not run: PostgreSQL suite/provider validation not applicable: the rep
 Mistakes observed: none
 Waste: Initial formatter invocations were read-only; no unnecessary builds or hosted runs.
 Missed: Initial low-budget investigation exceeded its inspection/search/change-path limits; preserved as an incomplete run rather than masking the overrun.
-Follow-up: Continue only the already-validated change through a separate bounded delivery run; no additional source scope.
+Follow-up: Delivery completed in the bounded validation-only continuation recorded at `.ai/runs/2026-11-15-USER-20261115-A5-LEADERBOARD-WEEK-BOUNDARY-DELIVERY-evidence.md`; no additional source scope.
 Residual risk: The two historical `Leaderboard_WeeklyXp_OnlyCountsThisWeek` tests are in-memory fixture arithmetic rather than direct assertions of the production XP ranking query; production uses `WeeklyXp` profile values and was reviewed without runtime changes.
 Documentation impact: No durable documentation change; run log records test-only evidence.
 Cross-repo impact: none
 
 ## Delivery
-State: In progress
-Branch/PR: codex/a5-leaderboard-week-boundary; PR pending
+State: Needs evidence sync
+Branch/PR: codex/a5-leaderboard-week-boundary; PR #59 merged
 Commit SHA: self
 Completion %: 79
