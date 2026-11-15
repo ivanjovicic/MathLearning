@@ -33,6 +33,8 @@ Verified against the repository configuration on 2026-10-22.
 
 The manual `Fly recovery image build only` workflow builds its pinned application revision and checks its compiled API migrations without deploying. It records the workflow revision, image metadata and exported archive checksum; verify any registry manifest digest independently before selecting an image for deployment. GitHub must have the workflow on the default branch before it can be dispatched.
 
+Buildx records separate manifest and config digests. Docker Engine's `image inspect` ID is store-dependent: the classic image store reports the config digest, while the containerd image store reports the image target descriptor digest. The verifier binds the loaded ID to the matching Buildx digest, verifies the exported archive's config bytes against the Buildx config digest, and records the archive SHA-256 separately. This build-only workflow does not push an image, so it produces no registry-verified digest. See [Buildx metadata and `--load`](https://github.com/docker/buildx/blob/master/docs/reference/buildx_build.md#load-the-single-platform-build-result-to-docker-images---load) and [Moby's containerd image inspect implementation](https://github.com/moby/moby/blob/master/daemon/containerd/image_inspect.go#L692-L700).
+
 The existing `Deploy to Fly.io` workflow does not consume the build-only image artifact or its local manifest digest; it checks out source and runs `flyctl deploy --remote-only`.
 
 Run the existing manual workflow only after the database has already been verified against the deployed API migration set:

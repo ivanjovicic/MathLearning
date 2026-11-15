@@ -21,6 +21,13 @@ jobs:
           path: application
           persist-credentials: false
 
+      - name: Check out verifier at workflow revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow
+          persist-credentials: false
+
       - name: Verify source and record workflow identity
         shell: bash
         env:
@@ -32,9 +39,12 @@ jobs:
           actual=$(git -C application rev-parse HEAD)
           test "$actual" = "$APPROVED_SOURCE_SHA"
           test -z "$(git -C application status --porcelain)"
+          workflow_actual=$(git -C workflow rev-parse HEAD)
+          test "$workflow_actual" = "$WORKFLOW_SHA"
           {
             echo "Application source SHA: $actual"
             echo "Workflow SHA: $WORKFLOW_SHA"
+            echo "Verifier source SHA: $workflow_actual"
             echo "Workflow run: $RUN_ID; attempt: $RUN_ATTEMPT"
           } | tee "$RUNNER_TEMP/recovery-evidence.txt" >> "$GITHUB_STEP_SUMMARY"
 
@@ -42,6 +52,9 @@ jobs:
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
+
+      - name: Test image identity verifier
+        run: python3 -m unittest discover -s workflow/.github/scripts -p 'test_fly_recovery_image_identity.py' -v
 
       - name: Build and load image without deploying
         shell: bash
@@ -61,24 +74,11 @@ jobs:
             --label "org.opencontainers.image.revision=$APPROVED_SOURCE_SHA" \
             --metadata-file "$RUNNER_TEMP/build-metadata.json" \
             --tag "$IMAGE_NAME" application
-          test "$(docker image inspect "$IMAGE_NAME" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$APPROVED_SOURCE_SHA"
-          python3 - "$RUNNER_TEMP/build-metadata.json" "$IMAGE_NAME" <<'PY'
-          import json, re, subprocess, sys
-          with open(sys.argv[1], encoding='utf-8') as f:
-              metadata = json.load(f)
-          digest = metadata.get('containerimage.digest', '')
-          config = metadata.get('containerimage.config.digest', '')
-          if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
-              raise SystemExit('Missing image manifest digest in Buildx metadata')
-          image_id = subprocess.check_output(['docker', 'image', 'inspect', sys.argv[2], '--format', '{{.Id}}'], text=True).strip()
-          if config != image_id:
-              raise SystemExit('Loaded image config does not match build metadata')
-          entrypoint = json.loads(subprocess.check_output(['docker', 'image', 'inspect', sys.argv[2], '--format', '{{json .Config.Entrypoint}}'], text=True))
-          if entrypoint != ['dotnet', 'MathLearning.Api.dll']:
-              raise SystemExit('Unexpected API image entrypoint')
-          print('Buildx local manifest digest (not registry-verified):', digest)
-          print('Local image config digest (image ID):', config)
-          PY
+          python3 workflow/.github/scripts/fly_recovery_image_identity.py loaded \
+            --metadata-file "$RUNNER_TEMP/build-metadata.json" \
+            --image-name "$IMAGE_NAME" \
+            --source-sha "$APPROVED_SOURCE_SHA" \
+            | tee -a "$RUNNER_TEMP/recovery-evidence.txt" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Extract and verify published API binaries
         shell: bash
@@ -148,17 +148,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - "$RUNNER_TEMP/build-metadata.json" >> "$RUNNER_TEMP/recovery-evidence.txt" <<'PY'
-          import json, sys
-          with open(sys.argv[1], encoding='utf-8') as f:
-              metadata = json.load(f)
-          print('Buildx local manifest digest (not registry-verified):', metadata['containerimage.digest'])
-          print('Local image config digest (image ID):', metadata['containerimage.config.digest'])
-          PY
-          cat "$RUNNER_TEMP/recovery-evidence.txt" >> "$GITHUB_STEP_SUMMARY"
           docker save "$IMAGE_NAME" --output "$RUNNER_TEMP/recovery-image.tar"
-          archive_sha=$(sha256sum "$RUNNER_TEMP/recovery-image.tar" | cut -d ' ' -f 1)
-          echo "Exported archive SHA-256: $archive_sha" | tee -a "$RUNNER_TEMP/recovery-evidence.txt" >> "$GITHUB_STEP_SUMMARY"
+          python3 workflow/.github/scripts/fly_recovery_image_identity.py archive \
+            --metadata-file "$RUNNER_TEMP/build-metadata.json" \
+            --archive "$RUNNER_TEMP/recovery-image.tar" \
+            --image-name "$IMAGE_NAME" \
+            --source-sha "$APPROVED_SOURCE_SHA" \
+            | tee -a "$RUNNER_TEMP/recovery-evidence.txt" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload image and evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
