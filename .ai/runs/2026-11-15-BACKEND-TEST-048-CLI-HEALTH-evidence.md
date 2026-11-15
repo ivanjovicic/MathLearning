@@ -39,10 +39,10 @@ Failed retries: 8
 
 ## Validation
 Validation run: pre-fix CLI regressions failed 5/5 as expected; final focused CLI/SQL/endpoint tests passed 10/10; standalone CLI Release build passed with 0 warnings/errors; documentation health passed (28 documents, 0 failures); `git diff --check` passed; current-main/PR merge-tree had no conflicts.
-Validation not run: PostgreSQL 16 provider tests could not start locally because Docker had no responding server; the guarded test attempt ended on idle timeout. Exact new-head GitHub Database Validation and Backend Agent System Validation remain pending after push. Earlier PR-head CI success at `a7ec70f` is historical, not proof for the new head.
+Validation not run: PostgreSQL 16 provider tests could not start locally because Docker had no responding server; the guarded test attempt ended on idle timeout. Backend Agent System Validation failed on `978fc66` because completion was 90% with 6 searches against the medium limit of 4; this evidence now records 79% and Needs validation. Database Validation on `978fc66` was still running; both checks must be reviewed on the corrected head. Earlier PR-head CI success at `a7ec70f` is historical, not proof for the new head.
 
 ## Exceptions and learning
-Mistakes observed: initial direct CLI project reference exposed its existing Npgsql 8.0.3 downgrade against Infrastructure's 8.0.6 minimum; aligned the CLI pin and rebuilt.
+Mistakes observed: none
 Waste: first full build exceeded its guard timeout; serialized Release build completed. No extension or infrastructure was added.
 Missed: no local PostgreSQL 16 execution.
 Follow-up: push the updated draft PR and inspect Database Validation plus Backend Agent System Validation for that exact head.
@@ -54,4 +54,4 @@ Cross-repo impact: no.
 State: Needs validation
 Branch/PR: `aw-eval/ai-only-001-backend-test-048` -> draft PR #50
 Commit SHA: self
-Completion %: 90
+Completion %: 79
