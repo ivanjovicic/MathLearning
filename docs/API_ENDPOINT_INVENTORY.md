@@ -267,7 +267,7 @@ Legacy avatar routes remain compatibility-only. Do not expand them for new mobil
 
 | Method | Route | Auth | Owner | Notes |
 |---|---|---|---|---|
-| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Injected shared service, cancellation and in-process non-overlap. Distributed lock/audit remains BACKEND-TEST-042. |
+| POST | `/api/maintenance/rebuild-indexes` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Legacy route retained; runs `ANALYZE` only and automatic `REINDEX` is disabled. Injected shared service, cancellation and in-process non-overlap; distributed lock/audit remains BACKEND-TEST-042. |
 | GET | `/api/maintenance/index-health` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Read-only injected health query; positive admin contract tested. |
 | GET | `/api/maintenance/index-stats` | Admin (`UiTokensAdminPolicy`) | `MaintenanceEndpoints.cs` | Read-only; no longer invokes rebuild or `ANALYZE`. Contract verifies zero rebuild calls. |
 
