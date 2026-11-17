@@ -33,7 +33,7 @@ public sealed class MaintenanceEndpointContractTests :
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Admin_IndexStats_IsReadOnlyAndNeverInvokesRebuild()
+    public async Task IndexMaintenance_Admin_IndexStats_IsReadOnlyAndNeverInvokesRebuild()
     {
         factory.Service.StatisticsReport = new IndexMaintenanceReport
         {
@@ -44,7 +44,6 @@ public sealed class MaintenanceEndpointContractTests :
                     IndexName = "IX_Questions_SubtopicId",
                     TableName = "Questions",
                     Size = "2 MB",
-                    BloatPercentage = 35m,
                     Scans = 9
                 },
                 new IndexBloatInfo
@@ -52,7 +51,6 @@ public sealed class MaintenanceEndpointContractTests :
                     IndexName = "IX_UserAnswers_UserId",
                     TableName = "UserAnswers",
                     Size = "1 MB",
-                    BloatPercentage = 20m,
                     Scans = 100
                 }
             },
@@ -71,20 +69,21 @@ public sealed class MaintenanceEndpointContractTests :
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var rows = json.RootElement.GetProperty("bloatedIndexes");
         Assert.Equal(2, rows.GetArrayLength());
-        Assert.Equal("NEEDS_REBUILD", rows[0].GetProperty("status").GetString());
-        Assert.Equal("WATCH", rows[1].GetProperty("status").GetString());
+        Assert.Equal("UNKNOWN", rows[0].GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, rows[0].GetProperty("bloatPercentage").ValueKind);
+        Assert.Equal("UNKNOWN", rows[1].GetProperty("status").GetString());
         Assert.Equal("public.IX_Unused", json.RootElement.GetProperty("unusedIndexes")[0].GetString());
     }
 
     [Fact]
-    public async Task Admin_IndexHealth_ReturnsStableCountsAndCallsOnlyHealthRead()
+    public async Task IndexMaintenance_Admin_IndexHealth_ReturnsUnknownPhysicalHealthAndUsageCounts()
     {
         factory.Service.HealthRows = new List<IndexHealthInfo>
         {
-            new() { IndexName = "healthy", Status = "HEALTHY" },
-            new() { IndexName = "unused", Status = "UNUSED" },
-            new() { IndexName = "low", Status = "LOW_USAGE" },
-            new() { IndexName = "healthy-2", Status = "HEALTHY" }
+            new() { IndexName = "used", Status = "UNKNOWN", UsageStatus = "USED" },
+            new() { IndexName = "unused", Status = "UNKNOWN", UsageStatus = "UNUSED" },
+            new() { IndexName = "low", Status = "UNKNOWN", UsageStatus = "LOW_USAGE" },
+            new() { IndexName = "used-2", Status = "UNKNOWN", UsageStatus = "USED" }
         };
 
         using var request = AdminRequest(HttpMethod.Get, "/api/maintenance/index-health");
@@ -97,19 +96,21 @@ public sealed class MaintenanceEndpointContractTests :
 
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(4, json.RootElement.GetProperty("totalIndexes").GetInt32());
-        Assert.Equal(2, json.RootElement.GetProperty("healthyIndexes").GetInt32());
+        Assert.Equal(0, json.RootElement.GetProperty("healthyIndexes").GetInt32());
+        Assert.Equal(4, json.RootElement.GetProperty("unknownIndexes").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("unusedIndexes").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("lowUsageIndexes").GetInt32());
+        Assert.Equal("UNKNOWN", json.RootElement.GetProperty("indexes")[0].GetProperty("status").GetString());
+        Assert.Equal("USED", json.RootElement.GetProperty("indexes")[0].GetProperty("usageStatus").GetString());
     }
 
     [Fact]
-    public async Task Admin_Rebuild_InvokesMutationExactlyOnceAndReturnsReport()
+    public async Task IndexMaintenance_Admin_LegacyRebuildRoute_InvokesServiceOnceAndDisclosesNoRebuild()
     {
         factory.Service.RebuildReport = new IndexMaintenanceReport
         {
             BloatedIndexes = { new IndexBloatInfo { IndexName = "IX_Bloated" } },
             UnusedIndexes = { "public.IX_Unused" },
-            RebuiltIndexes = { "IX_Bloated" }
         };
 
         using var request = AdminRequest(HttpMethod.Post, "/api/maintenance/rebuild-indexes");
@@ -122,12 +123,15 @@ public sealed class MaintenanceEndpointContractTests :
 
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
-        Assert.Equal("Rebuilt 1 indexes", json.RootElement.GetProperty("message").GetString());
-        Assert.Equal("IX_Bloated", json.RootElement.GetProperty("rebuiltIndexes")[0].GetString());
+        Assert.Contains("ANALYZE", json.RootElement.GetProperty("message").GetString());
+        Assert.Equal(0, json.RootElement.GetProperty("bloatedIndexes").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("unknownBloatIndexes").GetInt32());
+        Assert.False(json.RootElement.GetProperty("automaticReindexEnabled").GetBoolean());
+        Assert.Equal(0, json.RootElement.GetProperty("rebuiltIndexes").GetArrayLength());
     }
 
     [Fact]
-    public async Task Admin_Rebuild_WithItemErrors_ReturnsCompletedReportButSuccessFalse()
+    public async Task IndexMaintenance_Admin_Rebuild_WithItemErrors_ReturnsCompletedReportButSuccessFalse()
     {
         factory.Service.RebuildReport = new IndexMaintenanceReport
         {

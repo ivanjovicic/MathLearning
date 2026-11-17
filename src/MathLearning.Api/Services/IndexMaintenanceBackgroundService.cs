@@ -28,10 +28,10 @@ public sealed class IndexMaintenanceBackgroundService : BackgroundService
                 if (stoppingToken.IsCancellationRequested)
                     break;
 
-                logger.LogInformation("Running index maintenance");
+                logger.LogInformation("Running ANALYZE statistics update; automatic REINDEX disabled");
                 var report = await maintenanceService.RebuildCorruptedIndexesAsync(stoppingToken);
                 LogMaintenanceReport(report);
-                logger.LogInformation("Index maintenance completed");
+                logger.LogInformation("ANALYZE statistics update completed; index bloat remains UNKNOWN");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -66,14 +66,11 @@ public sealed class IndexMaintenanceBackgroundService : BackgroundService
     private void LogMaintenanceReport(IndexMaintenanceReport report)
     {
         logger.LogInformation(
-            "Index maintenance report. Bloated={BloatedCount} Unused={UnusedCount} Rebuilt={RebuiltCount} Errors={ErrorCount}",
+            "Index maintenance report. UnknownBloat={UnknownBloatCount} Unused={UnusedCount} Rebuilt={RebuiltCount} Errors={ErrorCount}",
             report.BloatedIndexes.Count,
             report.UnusedIndexes.Count,
             report.RebuiltIndexes.Count,
             report.Errors.Count);
-
-        foreach (var index in report.RebuiltIndexes)
-            logger.LogInformation("Rebuilt index {IndexName}", index);
 
         foreach (var index in report.UnusedIndexes.Take(5))
             logger.LogWarning("Unused index {IndexName}", index);

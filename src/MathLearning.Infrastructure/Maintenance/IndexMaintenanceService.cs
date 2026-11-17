@@ -14,7 +14,7 @@ public interface IIndexMaintenanceService
 public sealed class IndexMaintenanceService : IIndexMaintenanceService
 {
     private readonly string connectionString;
-    private readonly SemaphoreSlim rebuildGate = new(1, 1);
+    private readonly SemaphoreSlim maintenanceGate = new(1, 1);
 
     public IndexMaintenanceService(string connectionString)
     {
@@ -24,36 +24,20 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
     public async Task<IndexMaintenanceReport> RebuildCorruptedIndexesAsync(
         CancellationToken cancellationToken = default)
     {
-        await rebuildGate.WaitAsync(cancellationToken);
+        await maintenanceGate.WaitAsync(cancellationToken);
         try
         {
             var report = await GetIndexStatisticsCoreAsync(cancellationToken);
             await using var connection = await OpenConnectionAsync(cancellationToken);
 
-            foreach (var index in report.BloatedIndexes.Where(i => i.BloatPercentage > 30))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    await ReindexAsync(connection, index.IndexName, cancellationToken);
-                    report.RebuiltIndexes.Add(index.IndexName);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    report.Errors.Add($"Failed to rebuild {index.IndexName}: {ex.Message}");
-                }
-            }
-
+            // Legacy method name: automatic rebuilding is disabled until physical
+            // bloat has a verified source. Keep the separately guided ANALYZE pass.
             await UpdateStatisticsAsync(connection, cancellationToken);
             return report;
         }
         finally
         {
-            rebuildGate.Release();
+            maintenanceGate.Release();
         }
     }
 
@@ -80,8 +64,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
                 CASE
                     WHEN i.idx_scan = 0 THEN 'UNUSED'
                     WHEN i.idx_scan < 100 THEN 'LOW_USAGE'
-                    ELSE 'HEALTHY'
-                END as status
+                    ELSE 'USED'
+                END as usage_status
             FROM pg_stat_user_indexes i
             WHERE i.schemaname = 'public'
             ORDER BY pg_relation_size(i.indexrelid) DESC;
@@ -101,7 +85,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
                 Scans = reader.GetInt64(4),
                 TuplesRead = reader.GetInt64(5),
                 TuplesFetched = reader.GetInt64(6),
-                Status = reader.GetString(7)
+                UsageStatus = reader.GetString(7),
+                Status = "UNKNOWN"
             });
         }
 
@@ -144,7 +129,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
         CancellationToken cancellationToken)
     {
         // pg_stat_user_indexes exposes relname/indexrelname (not tablename/indexname).
-        // Exact index bloat needs pgstattuple; without it report 0 rather than a false fork delta.
+        // Catalog size and scan counts do not prove physical bloat. Report no
+        // percentage until a verified measurement source is implemented.
         const string query = """
             SELECT
                 schemaname,
@@ -153,8 +139,7 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
                 pg_size_pretty(pg_relation_size(indexrelid)) as size,
                 idx_scan as scans,
                 idx_tup_read as tuples_read,
-                idx_tup_fetch as tuples_fetched,
-                0::numeric as bloat_percentage
+                idx_tup_fetch as tuples_fetched
             FROM pg_stat_user_indexes
             WHERE schemaname = 'public'
               AND pg_relation_size(indexrelid) > 1048576
@@ -176,7 +161,8 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
                 Scans = reader.GetInt64(4),
                 TuplesRead = reader.GetInt64(5),
                 TuplesFetched = reader.GetInt64(6),
-                BloatPercentage = reader.GetDecimal(7)
+                BloatPercentage = null,
+                Status = "UNKNOWN"
             });
         }
 
@@ -208,21 +194,6 @@ public sealed class IndexMaintenanceService : IIndexMaintenanceService
         }
 
         return unusedIndexes;
-    }
-
-    private static async Task ReindexAsync(
-        NpgsqlConnection connection,
-        string indexName,
-        CancellationToken cancellationToken)
-    {
-        var quotedIndexName = new NpgsqlCommandBuilder().QuoteIdentifier(indexName);
-        var reindexQuery = $"REINDEX INDEX CONCURRENTLY {quotedIndexName};";
-
-        await using var command = new NpgsqlCommand(reindexQuery, connection)
-        {
-            CommandTimeout = 300
-        };
-        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task UpdateStatisticsAsync(
@@ -268,7 +239,8 @@ public class IndexBloatInfo
     public long Scans { get; set; }
     public long TuplesRead { get; set; }
     public long TuplesFetched { get; set; }
-    public decimal BloatPercentage { get; set; }
+    public decimal? BloatPercentage { get; set; }
+    public string Status { get; set; } = "UNKNOWN";
 }
 
 public class IndexHealthInfo
@@ -280,5 +252,6 @@ public class IndexHealthInfo
     public long Scans { get; set; }
     public long TuplesRead { get; set; }
     public long TuplesFetched { get; set; }
-    public string Status { get; set; } = string.Empty;
+    public string Status { get; set; } = "UNKNOWN";
+    public string UsageStatus { get; set; } = string.Empty;
 }

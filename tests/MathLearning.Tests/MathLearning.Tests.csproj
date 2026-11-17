@@ -34,6 +34,7 @@
     <ProjectReference Include="..\..\src\MathLearning.Application\MathLearning.Application.csproj" />
     <ProjectReference Include="..\..\src\MathLearning.Infrastructure\MathLearning.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\MathLearning.Api\MathLearning.Api.csproj" />
+    <ProjectReference Include="..\..\IndexMaintenanceTool\IndexMaintenanceTool.csproj" />
   </ItemGroup>
 
 </Project>
