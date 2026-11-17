@@ -45,6 +45,30 @@ local edit / commit / pushed branch / open PR != Done
 focused proof + delivered commit + exact target verification + synchronized evidence = Done candidate
 ```
 
+## 2A. Actionable blocker recovery and delivery
+
+**Core rule:** Continue repairing actionable problems within the assigned owner/scope until the result is proved and delivered, or an actual external authority, required-proof, ownership or safety boundary prevents further work. Do not treat a failing command as permission to return only an analysis. Respect section 2's bounded hypothesis limits and `docs/AGENT_COMMAND_PLAYBOOK.md` timeouts/retry policy.
+
+**First actions:** Inspect current remote `main`, existing PR/branch, worktree, unpublished edits and live claim ownership; resume the existing work before opening anything new. State one acceptance outcome, owned paths, falsifiable hypothesis and smallest executable proof.
+
+Record **exact command, tested SHA, exit/timeout and failing assertion/log**; classify the blocker before editing:
+
+| Cause | Required action |
+| --- | --- |
+| `PRODUCT` | Reproduce the owned defect and counterexample; fix minimally and rerun focused proof. |
+| `TEST` | Prove a fixture/clock/provider/expectation defect; correct it without weakening valid assertions. |
+| `FORMAT` | Format changed paths and rerun the format gate. |
+| `DOCS` / `EVIDENCE` | Repair mapped documentation/metadata/v2 evidence against the existing validator; never fabricate results. |
+| `CI` | Inspect exact-head run/job/step; distinguish advisory follow-up CI from hard branch requirements in section 13. |
+| `TOOLCHAIN` | Fix an authorised project-local version/dependency/environment problem without bypassing security. |
+| `OWNERSHIP` | Use the canonical remote claim and lease process, preserving existing work; no invented owner/takeover. |
+| `REVIEW` | Resolve actionable feedback and respect required independent review; same-account AI COMMENT is not external approval. |
+| `EXTERNAL` | Complete independent permitted work and preserve the existing branch/PR with exact missing proof/access, owner and next action. |
+
+**Continue the bounded delivery:** repro → regression/negative proof → docs/evidence validation → commit → existing PR or authorised direct-main path → permitted merge/push → fresh-main SHA verification → synchronized evidence. Do not create a duplicate PR for a stale base, conflict, failed CI or malformed run log. Change the cause before retrying a timed-out command; a second independent subsystem requires a named handoff, not scope drift.
+
+**Final response:** list actual files and PR/SHA, exact executed tests and pass/fail counts, skipped proof, exact-head CI, review, merge/main verification and evidence synchronization, plus one named external blocker if any. Green PR ≠ verified `main`. Never claim production, database, test or delivery proof that was not obtained.
+
 ## 3. Canonical workflow owners
 
 | Area | Owner |
@@ -182,7 +206,7 @@ Use a bounded branch/PR for broad tooling/workflow/migration/high-risk runtime c
 
 ### Main delivery is mandatory; CI is not a delivery gate
 
-Agents must **deliver to `origin/main` in the same run** when the bounded task is complete. Delivery means the target changes are **committed and pushed to `main`** (direct push or merge of the task branch into `main` followed by push). Do **not** end the run waiting for GitHub Actions, `Database Validation`, or the full PostgreSQL suite to finish.
+Agents must **deliver to `origin/main` in the same run when focused proof, authority and branch protections permit**. Delivery means changes are committed and pushed to main directly or through a permitted merge. **Advisory** GitHub Actions and PostgreSQL CI may complete asynchronously; required checks, explicit no-merge restrictions and mandatory review remain hard gates.
 
 ```text
 focused local proof passes
@@ -195,12 +219,12 @@ focused local proof passes
 
 Rules:
 
-1. **Never block delivery on CI.** Green CI is follow-up verification, not a prerequisite to push or to claim that code reached `main`.
-2. **Never leave completed work only on a local branch, feature branch, or “ready after CI” state.** If focused proof passed and the task owner is satisfied, merge/push to `main` before closing.
+1. **Do not wait for advisory CI when delivery is otherwise permitted.** Never bypass required status checks, branch protection, explicit no-merge decisions, security review or missing focused proof. Green CI alone does not establish main delivery.
+2. **Never abandon completed work on a local branch or an unowned handoff.** If focused proof and authorization permit, merge/push to main; otherwise preserve the existing remote PR and exact non-Done external gate.
 3. **Still run focused proof before push.** Local/unit/integration proof required by [`.ai/VALIDATION_SELECTOR.md`](.ai/VALIDATION_SELECTOR.md) is mandatory; skipping proof is not allowed just because CI will run later.
 4. **Record CI honestly.** In the run log and final response, state `Validation: focused … pass; CI: pending|<url>|failure-<reason>`. Do not claim CI passed unless it did.
 5. **CI failure after delivery** opens a new bounded fix owner; it does not undo the fact that the change is already on `main`.
-6. **Cloud/user-assigned tasks:** open or update the PR for traceability, but **do not wait for PR checks** before merging/pushing to `main` when the bounded fix is ready.
+6. **Cloud/user-assigned tasks:** reuse/open the scoped PR for traceability. Do not wait for *optional* PR checks when delivery is permitted; respect *required* checks, reviews and owner authorization.
 
 Forbidden closure patterns:
 
