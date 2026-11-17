@@ -10,8 +10,8 @@ Client/IDE: unknown-not-exposed
 Run mode: known-fix
 Token budget: medium
 Started at UTC: 2026-11-17T21:44:22Z
-Completed at UTC: 2026-11-17T22:18:32Z
-Elapsed time: 34m 10s
+Completed at UTC: 2026-11-17T22:30:49Z
+Elapsed time: 46m 27s
 Relevant prior mistakes read: BACKEND-MISTAKE-EVIDENCE-001, BACKEND-MISTAKE-VALIDATION-001, BACKEND-MISTAKE-CI-001, BACKEND-MISTAKE-PROCESS-001
 How this run avoids prior mistakes: apply BACKEND-MISTAKE-EVIDENCE-001; apply BACKEND-MISTAKE-VALIDATION-001; apply BACKEND-MISTAKE-CI-001; apply BACKEND-MISTAKE-PROCESS-001
 Owner/hypothesis: backend-quality owns the formatting gate; hypothesis was that the four assigned files contained whitespace-only drift that `dotnet format --include` would remove without semantic changes.
@@ -22,7 +22,7 @@ Validation runs: 17
 Failed retries: 5
 
 ## Outcome
-- Applied formatting-only fixes to the four assigned service tests: 126 diagnostics fixed; historical run had 365 across 33 files. Remaining 239 in 29 files handed to backend-quality issue #62.
+- PR #63 merged at 00b4066c941f2ed18781bb6a17b21b89c1419de2. Four assigned files are whitespace-only; 126 diagnostics fixed. Remaining 239 in 29 files remain with backend-quality issue #62.
 
 ## Changed paths
 - tests/MathLearning.Tests/Services/FriendSystemTests.cs
@@ -33,27 +33,26 @@ Failed retries: 5
 
 ## Validation
 Validation run:
-- `gh run view 43904254530 --log-failed` — exit 0; 365 `WHITESPACE` diagnostics across 33 files; target total 126.
-- `python scripts/run_guarded.py --timeout-seconds 300 --idle-timeout-seconds 120 -- dotnet format MathLearning.slnx --verify-no-changes --severity warn --no-restore` — guard exit 125 after emitting 365 diagnostics; hosted run conclusion is failure.
-- `python scripts/run_guarded.py --timeout-seconds 180 --idle-timeout-seconds 120 -- dotnet format MathLearning.slnx --include tests/MathLearning.Tests/Services/FriendSystemTests.cs tests/MathLearning.Tests/Services/LeaderboardDataTests.cs tests/MathLearning.Tests/Services/OfflineAnswerTimestampPolicyTests.cs tests/MathLearning.Tests/Services/SrsServiceTests.cs --severity warn --no-restore` — exit 0.
-- `python scripts/run_guarded.py --timeout-seconds 300 --idle-timeout-seconds 120 -- dotnet format MathLearning.slnx --verify-no-changes --include tests/MathLearning.Tests/Services/FriendSystemTests.cs tests/MathLearning.Tests/Services/LeaderboardDataTests.cs tests/MathLearning.Tests/Services/OfflineAnswerTimestampPolicyTests.cs tests/MathLearning.Tests/Services/SrsServiceTests.cs --severity warn --no-restore` — guard exit 125; then project-scoped check below passed.
-- `python scripts/run_guarded.py --timeout-seconds 180 --idle-timeout-seconds 120 -- dotnet format tests/MathLearning.Tests/MathLearning.Tests.csproj --verify-no-changes --include tests/MathLearning.Tests/Services/FriendSystemTests.cs tests/MathLearning.Tests/Services/LeaderboardDataTests.cs tests/MathLearning.Tests/Services/OfflineAnswerTimestampPolicyTests.cs tests/MathLearning.Tests/Services/SrsServiceTests.cs --severity warn --no-restore` — exit 0.
-- `python scripts/run_guarded.py --timeout-seconds 300 --idle-timeout-seconds 120 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~FriendSystemTests|FullyQualifiedName~LeaderboardDataTests|FullyQualifiedName~OfflineAnswerTimestampPolicyTests|FullyQualifiedName~SrsServiceTests"` — exit 0; 30 passed, 0 failed/skipped.
-- Analyzer Release build first returned `NETSDK1004` because TranslationJob assets were absent; `python scripts/run_guarded.py --timeout-seconds 300 --idle-timeout-seconds 120 -- dotnet restore MathLearning.slnx` — exit 0; rerun `dotnet build MathLearning.slnx -c Release --no-restore -p:RunAnalyzers=true -p:EnforceCodeStyleInBuild=true -warnaserror` — exit 0, 0 warnings/errors.
-- Whitespace-stripped comparison of each target file to `HEAD` plus `git diff --check` — exit 0. `python scripts/check_documentation_health.py --full-links`, `python scripts/validate_agent_system.py`, and `python scripts/analyze_agent_runs.py --changed-from 9f4e033d4f4a4d8a199caf3d8d59220e417f992d --fail-on-regression` — exit 0.
-Validation not run: Full scheduled formatter not green; full PostgreSQL suite delegated to exact-head Database Validation CI.
+- Run `43904254530` log: 365 diagnostics in 33 files; target files account for 126. Full local solution verify emitted these then hit guard timeout 125.
+- `dotnet format MathLearning.slnx --include tests/MathLearning.Tests/Services/FriendSystemTests.cs tests/MathLearning.Tests/Services/LeaderboardDataTests.cs tests/MathLearning.Tests/Services/OfflineAnswerTimestampPolicyTests.cs tests/MathLearning.Tests/Services/SrsServiceTests.cs --severity warn --no-restore` — exit 0.
+- `dotnet format tests/MathLearning.Tests/MathLearning.Tests.csproj --verify-no-changes --include tests/MathLearning.Tests/Services/FriendSystemTests.cs tests/MathLearning.Tests/Services/LeaderboardDataTests.cs tests/MathLearning.Tests/Services/OfflineAnswerTimestampPolicyTests.cs tests/MathLearning.Tests/Services/SrsServiceTests.cs --severity warn --no-restore` — exit 0.
+- `dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~FriendSystemTests|FullyQualifiedName~LeaderboardDataTests|FullyQualifiedName~OfflineAnswerTimestampPolicyTests|FullyQualifiedName~SrsServiceTests"` — exit 0; 30 passed.
+- `dotnet restore MathLearning.slnx` — exit 0; exact Release analyzer/style build from `backend-code-analysis.yml` — exit 0; 0 warnings/errors.
+- Whitespace-stripped comparison of each target against `HEAD` and `git diff --check` — exit 0; full-links documentation health, agent-system, changed evidence, and run analysis — exit 0.
+- Exact-head PR #63 checks at `b78a8b268e9f2351a345ec060dee46e7c1c2ab88`: `validate-agent-system`, `classify-changes`, `database-suite` (schema-from-zero, full PostgreSQL tests, coverage and artifacts), `validate-database` — all pass. [Run 44189168653](https://github.com/ivanjovicic/MathLearning/actions/runs/44189168653); [run 44189168705](https://github.com/ivanjovicic/MathLearning/actions/runs/44189168705).
+Validation not run: A green full-solution formatter result is not available because 239 out-of-scope diagnostics remain; these are handed to backend-quality in issue #62.
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-EVIDENCE-001; BACKEND-MISTAKE-VALIDATION-001; BACKEND-MISTAKE-CI-001; BACKEND-MISTAKE-PROCESS-001
-Waste: Full solution dotnet format on Windows exceeded the guard's idle-output limit, so verification was narrowed to the test project.
-Missed: Task description's 365-in-four-files count was inaccurate: actual log is 365 in 33 files; the four target files contained 126.
-Follow-up: Issue #62 routes 239 residual diagnostics across 29 files to backend-quality via BACKEND-ANALYSIS-001; review PR and merge after exact-head checks.
+Waste: Full solution dotnet format on Windows exceeded the local idle limit; target project verification passed.
+Missed: Task description's 365-in-four-files count was inaccurate: actual log is 365 in 33 files; four targets contained 126.
+Follow-up: Issue #62 tracks the exact residual list for backend-quality via BACKEND-ANALYSIS-001; PR #63 is merged.
 Residual risk: Scheduled global formatter gate remains red until issue #62 is resolved; no business logic changed.
-Documentation impact: none - test-only whitespace and evidence log; no API/behavior documentation changed.
+Documentation impact: none - test-only whitespace and evidence log; no API or behavior documentation changed.
 Cross-repo impact: no
 
 ## Delivery
 State: Needs validation
-Branch/PR: codex/a1-format-backend-analysis-20261117
+Branch/PR: PR #63 merged; main merge commit 00b4066c941f2ed18781bb6a17b21b89c1419de2
 Commit SHA: self
 Completion %: 79
