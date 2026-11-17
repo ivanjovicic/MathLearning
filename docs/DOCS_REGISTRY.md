@@ -12,6 +12,7 @@ Generated from [`DOCS_MANIFEST.json`](DOCS_MANIFEST.json). Do not edit by hand.
 | [`.ai/VALIDATION_SELECTOR.md`](../.ai/VALIDATION_SELECTOR.md) | validation-policy | `backend-agent-system` | required | 2026-07-31 | Select the narrowest sufficient executable proof. |
 | [`AGENTS.md`](../AGENTS.md) | agent-rulebook | `backend-agent-system` | advisory | 2026-07-31 | Backend engineering invariants and agent completion rules. |
 | [`APPLY_MIGRATION_FLYIO.md`](../APPLY_MIGRATION_FLYIO.md) | migration-redirect | `backend-architecture` | required | 2026-10-22 | Redirect operators from historical Fly migration advice to the current reviewed database runbook. |
+| [`AUTOMATIC_INDEX_MAINTENANCE.md`](../AUTOMATIC_INDEX_MAINTENANCE.md) | performance-contract | `backend-performance` | required | 2026-11-17 | Current index size and usage observations, unknown physical bloat, and ANALYZE-only maintenance behavior. |
 | [`docs/AGENT_COMMAND_PLAYBOOK.md`](AGENT_COMMAND_PLAYBOOK.md) | command-policy | `backend-agent-system` | required | 2026-07-16 | Guarded command shape, timeouts and shell safety. |
 | [`docs/AGENT_RUN_LOG_ENFORCEMENT.md`](AGENT_RUN_LOG_ENFORCEMENT.md) | evidence-policy | `backend-agent-system` | required | 2026-07-31 | Evidence validation, completion caps and self-SHA rules. |
 | [`docs/API_ENDPOINT_INVENTORY.md`](API_ENDPOINT_INVENTORY.md) | api-contract | `backend-api-contract` | required | 2026-07-16 | Route, authorization and compatibility ownership. |
@@ -32,3 +33,4 @@ Generated from [`DOCS_MANIFEST.json`](DOCS_MANIFEST.json). Do not edit by hand.
 | [`docs/prompt_queues/README.md`](prompt_queues/README.md) | queue-router | `backend-agent-system` | required | 2026-07-17 | Current active order, archive and collision routing. |
 | [`docs/REFRESH_TOKEN_SYSTEM.md`](REFRESH_TOKEN_SYSTEM.md) | security-contract | `backend-auth` | required | 2026-07-16 | Refresh-token rotation and access-token invalidation behavior. |
 | [`FLY_DEPLOYMENT_GUIDE.md`](../FLY_DEPLOYMENT_GUIDE.md) | deployment-guide | `backend-architecture` | required | 2026-10-22 | Document current Fly app configuration, health checks and gated deployment order. |
+| [`openapi.yaml`](../openapi.yaml) | api-contract | `backend-api-contract` | required | 2026-11-17 | Static API routes and operation summaries, including the admin index-maintenance compatibility route. |
