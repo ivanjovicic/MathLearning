@@ -37,7 +37,7 @@ tags:
   - name: Leaderboard
     description: Leaderboard and school rankings
   - name: Maintenance
-    description: Admin maintenance actions
+    description: Admin index maintenance and read-only observations; physical bloat is UNKNOWN and the legacy maintenance route runs ANALYZE only.
   - name: Powerups
     description: Powerups and purchases
   - name: Practice
@@ -2550,10 +2550,11 @@ paths:
   /api/maintenance/rebuild-indexes:
     post:
       tags: [Maintenance]
-      summary: Rebuild DB indexes (admin)
+      summary: Update table statistics with ANALYZE (admin)
+      description: Legacy compatibility route. Runs ANALYZE on the fixed table list and completes synchronously; it does not rebuild indexes, and physical bloat remains UNKNOWN.
       responses:
         '200':
-          description: Started
+          description: ANALYZE completed without rebuilding indexes. The legacy response reports unknown bloat and automaticReindexEnabled false.
 
   /api/powerups/streak-freeze/buy:
     post:
