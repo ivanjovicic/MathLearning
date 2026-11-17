@@ -15,9 +15,15 @@ public class FriendSystemTests
         db.Users.Add(new IdentityUser { Id = "2", UserName = "friend1", Email = "friend1@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "2", Username = "friend1", DisplayName = "Friend One",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "2",
+            Username = "friend1",
+            DisplayName = "Friend One",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
 
         db.UserFriends.Add(new UserFriend { UserId = "1", FriendId = "2" });
@@ -41,16 +47,28 @@ public class FriendSystemTests
         db.Users.Add(new IdentityUser { Id = "2", UserName = "friend1", Email = "friend1@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "2", Username = "friend1", DisplayName = "Friend One",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "2",
+            Username = "friend1",
+            DisplayName = "Friend One",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
         db.Users.Add(new IdentityUser { Id = "3", UserName = "stranger", Email = "stranger@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "3", Username = "stranger", DisplayName = "Stranger",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "3",
+            Username = "stranger",
+            DisplayName = "Stranger",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
 
         // User 1 is friends with user 2, but NOT user 3
@@ -88,9 +106,15 @@ public class FriendSystemTests
         db.Users.Add(new IdentityUser { Id = "2", UserName = "marko123", Email = "marko123@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "2", Username = "marko123", DisplayName = "Marko",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "2",
+            Username = "marko123",
+            DisplayName = "Marko",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 
@@ -111,9 +135,15 @@ public class FriendSystemTests
         db.Users.Add(new IdentityUser { Id = "2", UserName = "user2", Email = "user2@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "2", Username = "user2", DisplayName = "Jelena Petrovic",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "2",
+            Username = "user2",
+            DisplayName = "Jelena Petrovic",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 

@@ -15,11 +15,17 @@ public class LeaderboardDataTests
 
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "1", QuestionId = 1, Attempts = 5, CorrectAttempts = 3
+            UserId = "1",
+            QuestionId = 1,
+            Attempts = 5,
+            CorrectAttempts = 3
         });
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "1", QuestionId = 2, Attempts = 3, CorrectAttempts = 2
+            UserId = "1",
+            QuestionId = 2,
+            Attempts = 3,
+            CorrectAttempts = 2
         });
         await db.SaveChangesAsync();
 
@@ -39,7 +45,10 @@ public class LeaderboardDataTests
 
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "1", QuestionId = 1, Attempts = 15, CorrectAttempts = 15
+            UserId = "1",
+            QuestionId = 1,
+            Attempts = 15,
+            CorrectAttempts = 15
         });
         await db.SaveChangesAsync();
 
@@ -63,20 +72,32 @@ public class LeaderboardDataTests
         db.Users.Add(new IdentityUser { Id = "2", UserName = "user2", Email = "user2@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "2", Username = "user2", DisplayName = "User Two",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "2",
+            Username = "user2",
+            DisplayName = "User Two",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
 
         // User 1: 3 correct
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "1", QuestionId = 1, Attempts = 3, CorrectAttempts = 3
+            UserId = "1",
+            QuestionId = 1,
+            Attempts = 3,
+            CorrectAttempts = 3
         });
         // User 2: 10 correct
         db.UserQuestionStats.Add(new UserQuestionStat
         {
-            UserId = "2", QuestionId = 1, Attempts = 10, CorrectAttempts = 10
+            UserId = "2",
+            QuestionId = 1,
+            Attempts = 10,
+            CorrectAttempts = 10
         });
         await db.SaveChangesAsync();
 
@@ -104,39 +125,57 @@ public class LeaderboardDataTests
 
         var session = new QuizSession
         {
-            Id = Guid.NewGuid(), UserId = "1", StartedAt = now
+            Id = Guid.NewGuid(),
+            UserId = "1",
+            StartedAt = now
         };
         db.QuizSessions.Add(session);
 
         // Answer this week
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = "1", QuestionId = 1, QuizSessionId = session.Id,
-            Answer = "2", IsCorrect = true, TimeSpentSeconds = 5,
+            UserId = "1",
+            QuestionId = 1,
+            QuizSessionId = session.Id,
+            Answer = "2",
+            IsCorrect = true,
+            TimeSpentSeconds = 5,
             AnsweredAt = now
         });
 
         var weekStart = SchoolLeaderboardPeriods.StartOfWeekUtc(now);
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = "1", QuestionId = 3, QuizSessionId = session.Id,
-            Answer = "6", IsCorrect = true, TimeSpentSeconds = 5,
+            UserId = "1",
+            QuestionId = 3,
+            QuizSessionId = session.Id,
+            Answer = "6",
+            IsCorrect = true,
+            TimeSpentSeconds = 5,
             AnsweredAt = weekStart
         });
 
         // The previous Sunday is outside the Monday-start UTC week.
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = "1", QuestionId = 4, QuizSessionId = session.Id,
-            Answer = "8", IsCorrect = true, TimeSpentSeconds = 5,
+            UserId = "1",
+            QuestionId = 4,
+            QuizSessionId = session.Id,
+            Answer = "8",
+            IsCorrect = true,
+            TimeSpentSeconds = 5,
             AnsweredAt = weekStart.AddTicks(-1)
         });
 
         // Answer last month
         db.UserAnswers.Add(new UserAnswer
         {
-            UserId = "1", QuestionId = 2, QuizSessionId = session.Id,
-            Answer = "4", IsCorrect = true, TimeSpentSeconds = 5,
+            UserId = "1",
+            QuestionId = 2,
+            QuizSessionId = session.Id,
+            Answer = "4",
+            IsCorrect = true,
+            TimeSpentSeconds = 5,
             AnsweredAt = now.AddDays(-30)
         });
         await db.SaveChangesAsync();

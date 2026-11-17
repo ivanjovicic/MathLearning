@@ -238,9 +238,15 @@ public class SrsServiceTests
         db.Users.Add(new IdentityUser { Id = "2", UserName = "user2", Email = "user2@example.com" });
         db.UserProfiles.Add(new UserProfile
         {
-            UserId = "2", Username = "user2", DisplayName = "User Two",
-            Coins = 100, Level = 1, Xp = 0, Streak = 0,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+            UserId = "2",
+            Username = "user2",
+            DisplayName = "User Two",
+            Coins = 100,
+            Level = 1,
+            Xp = 0,
+            Streak = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
 
