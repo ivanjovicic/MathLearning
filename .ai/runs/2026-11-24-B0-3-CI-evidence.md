@@ -32,7 +32,7 @@ Failed retries: 0
 - tests/MathLearning.Tests/Services/ExplanationCacheServiceTests.cs
 
 ## Validation
-Validation run: `python scripts/validate_agent_evidence.py --changed-from de381a00d6cd9610f42f8afb6ebcf792292d6c7c --verify-git` → 0 failures
+Validation run: `python scripts/validate_agent_evidence.py --changed-from de381a00d6cd9610f42f8afb6ebcf792292d6c7c --verify-git` → 0 findings
 Validation run: `dotnet test ... --filter FullyQualifiedName~WaitingCancellationDoesNotCancelSharedGeneration` → 1/1 pass
 Validation not run: none
 CI: pending
