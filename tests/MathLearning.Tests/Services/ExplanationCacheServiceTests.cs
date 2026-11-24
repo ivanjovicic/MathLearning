@@ -132,12 +132,13 @@ public sealed class ExplanationCacheServiceTests
         await started.Task;
 
         var waiterTask = cache.GetOrCreateExplanationAsync("hash-cancel", 7, "easy", "en", false, Factory, waiterCts.Token);
+        // Cancel the waiter while it is blocked on the single-flight gate, before the
+        // shared generation finishes. Releasing first races and can return a success.
         waiterCts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => waiterTask);
 
         release.SetResult();
-
         var owner = await ownerTask;
-        await Assert.ThrowsAsync<OperationCanceledException>(() => waiterTask);
 
         Assert.Equal(1, calls);
         Assert.Equal("cancel-shared", owner.ProblemHash);
