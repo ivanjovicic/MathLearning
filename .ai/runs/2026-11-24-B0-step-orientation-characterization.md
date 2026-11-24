@@ -38,7 +38,7 @@ Validation not run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotn
 ## Exceptions and learning
 Mistakes observed: none
 Waste: none
-Missed: exact-head .NET execution, publishing guard and issued-version replay proof.
+Missed: the original local .NET execution (dotnet unavailable); new-head CI after review correction is pending. Publishing guard and issued-version replay proof remain separate issue #64 work.
 Follow-up: backend B0 owner needs .NET execution; issue #64 B1 owns versioned contract with teacher review.
 Residual risk: characterization preserves legacy behavior; approved pack must not use it as a reviewed visual explanation.
 Documentation impact: updated this run log only; no runtime contract or behavior changed.
@@ -46,6 +46,15 @@ Cross-repo impact: yes - mobile design PR #1014 remains draft and proposes seven
 
 ## Delivery
 State: Needs validation
-Branch/PR: draft pending
+Branch/PR: #65, draft; review correction pushed; new-head CI and exact-head validators pending
 Commit SHA: self
-Completion %: 45
+Completion %: 85
+
+## Review follow-up and CI provenance (2026-11-24)
+- Original characterization head: `c842fd547532ae3269b85510a7d599bd772a514b`.
+- Exact-head CI on that **original** head: Database Validation run `45417131124` passed (1302 .NET tests, 0 failed, 0 skipped; schema-from-zero 7/7). Backend Agent System Validation `45417131080` also passed. This was not local execution.
+- Independent same-account review on PR #65 found that the authored-steps test covered only sentence -> legacy fallback. Because `StepEngine.GetSteps` also honors stored steps, the test could pass if the adapter's `question.Steps.Count > 0` guard were removed.
+- Test now covers **both** `Koliko je 7 × 8?` and bare `7 × 8` via `[Theory]` rows. The bare expression uses the graph route, so loss of the adapter guard would return graph-generated rather than authored steps. This is a source-reviewed assertion, **not** a completed mutation-test run.
+- The new test commit `0647407ebc7fed3afef98684d1f81b1cd17f086b` changes only `LegacyStepExplanationAdapterTests.cs`. This follow-up log change is a subsequent docs commit.
+- **Not yet executed on the new head:** .NET tests and the repo evidence/docs validators. No green result is inferred from the old head. Mark ready/merge only after the scoped owner obtains required new-head proof and review requirements.
+- Scope unchanged: characterization only; pedagogical approval, publishing guard and issued-version binding belong to #64. No global StepEngine runtime change or migration.
