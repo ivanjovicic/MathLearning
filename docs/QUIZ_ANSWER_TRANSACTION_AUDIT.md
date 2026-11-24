@@ -26,19 +26,19 @@ First-correct XP is still guarded by in-transaction stat checks plus the unique 
 2.   idempotency_ledger BeginOrGetExisting (quiz_answer)
 3.   If replay -> return stored JSON (alreadyProcessed)
 4.   If pending/conflict -> short-circuit before question/lang load
-5.   Load question graph only for fresh processing
-6.   Validate user-owned active session and issued-question membership
+5.   Validate user-owned active session and issued-question membership
+6.   Load question graph and apply issued content snapshot when present
 7.   Resolve user language only for fresh processing
-8.   ProcessAnswerAttemptWithinTransactionAsync
-9.   BuildSubmitAnswerResponseAsync
+8.   ProcessAnswerAttemptWithinTransactionAsync (grades against issued snapshot)
+9.   BuildSubmitAnswerResponse from the same issued question (not a live reload)
 10.  idempotency_ledger CompleteAsync with response body
 11.  SaveChanges + COMMIT
 12. [OUTSIDE TX] ingestService.IngestAttemptsAsync when a new row was imported
 ```
 
-Legacy path without idempotency keys keeps the same domain mutation, loads the
-question before the retry block, and validates session ownership, activity,
-completion, and issued-question membership inside the serializable retry block.
+Legacy path without idempotency keys keeps the same domain mutation and validates
+session ownership, activity, completion, and issued-question membership inside
+the serializable retry block before loading/applying the issued snapshot.
 
 ### DB call classification
 
@@ -47,7 +47,8 @@ completion, and issued-question membership inside the serializable retry block.
 | `idempotency_ledger` begin/complete | Yes | Yes | Must commit or roll back with the mutation |
 | Question load for fresh idempotent processing | Yes | Yes | Needed only when the request is not a replay |
 | `UserSettings` load | Yes | Yes | Needed only when a fresh response body must be built |
-| `QuizSessions` ownership/membership/activity check | Yes | Yes | Persisted `IssuedQuestionIdsJson`; unknown, foreign, expired, completed, or non-issued sessions return stable `QUIZ_SESSION_NOT_FOUND` |
+| `QuizSessions` ownership/membership/activity check | Yes | Yes | Persisted `IssuedQuestionIdsJson` (id list or issued content manifest); unknown, foreign, expired, completed, or non-issued sessions return stable `QUIZ_SESSION_NOT_FOUND` |
+| Issued snapshot apply for grading/feedback | Yes | Yes when present | New starts freeze version/options/explanation/steps; missing snapshot falls back to live row |
 | `UserAnswers` duplicate check | Yes | Yes | Replay guard on `(userId, questionId, answeredAt)` |
 | `UserAnswerAudits` replay lookup | Yes | Yes | Restores settled duplicate response |
 | `UserQuestionStats` `FOR UPDATE` | Yes | Yes | Attempt counting and first-correct detection |

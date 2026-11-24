@@ -231,13 +231,17 @@ answer, preserving the existing feedback rule.
 malformed session ids return `400 QUIZ_SESSION_ID_REQUIRED`; the server never
 creates a replacement session during answer settlement. The session must be
 owned by the authenticated user and the question must be present in the
-persisted `IssuedQuestionIdsJson` membership captured at quiz start. Unknown,
-foreign, expired (24 hours after start), completed, or non-issued sessions
-return the stable `404 QUIZ_SESSION_NOT_FOUND` contract without reward or
-analytics writes. A classic session permits repeated attempts while it remains
-active; after every issued question has one settled answer, the session is
-treated as completed. Idempotent requests replay the original settled body
-before the completed-session check.
+persisted `IssuedQuestionIdsJson` membership captured at quiz start. New quiz
+starts also freeze the issued question version, options, explanation and steps
+inside that manifest so a later publish cannot change grading, XP or feedback
+for an already-issued session. Legacy id-only manifests still authorize
+membership but grade against the live question row. Unknown, foreign, expired
+(24 hours after start), completed, or non-issued sessions return the stable
+`404 QUIZ_SESSION_NOT_FOUND` contract without reward or analytics writes. A
+classic session permits repeated attempts while it remains active; after every
+issued question has one settled answer, the session is treated as completed.
+Idempotent requests replay the original settled body before the
+completed-session check.
 
 ### `GET /api/progress/topics` and `GET /api/progress/topics/{topicId}/subtopics`
 

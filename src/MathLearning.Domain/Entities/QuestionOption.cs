@@ -39,6 +39,21 @@ namespace MathLearning.Domain.Entities
             SemanticsAltText = semanticsAltText;
         }
 
+        public void AssignPersistentId(int id)
+        {
+            if (id <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(id), "Option id must be positive.");
+            }
+
+            if (Id != 0 && Id != id)
+            {
+                throw new InvalidOperationException($"Option id is already assigned to {Id}.");
+            }
+
+            Id = id;
+        }
+
         public void Update(string text, bool isCorrect, int order = 0)
         {
             Text = string.IsNullOrWhiteSpace(text) ? throw new ArgumentException("Option text is required") : text;
