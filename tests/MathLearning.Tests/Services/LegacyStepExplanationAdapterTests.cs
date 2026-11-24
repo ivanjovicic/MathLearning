@@ -61,10 +61,14 @@ public class LegacyStepExplanationAdapterTests
         Assert.Contains(steps, step => step.Text.Contains("56", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void GetSteps_AuthoredStepsTakePriorityOverBothGeneratedPaths()
+    // Regression guard: the bare expression uses the graph route, which must
+    // never bypass teacher-authored steps. The sentence exercises the fallback.
+    [Theory]
+    [InlineData("Koliko je 7 × 8?")]
+    [InlineData("7 × 8")]
+    public void GetSteps_AuthoredStepsTakePriorityOverBothGeneratedPaths(string text)
     {
-        var question = new Question("Koliko je 7 × 8?", 1, 1);
+        var question = new Question(text, 1, 1);
         question.ReplaceSteps([new QuestionStep(0, 1, "Odobreni korak", null, true)]);
         var adapter = new LegacyStepExplanationAdapter(
             new MathReasoningGraphEngine(),
