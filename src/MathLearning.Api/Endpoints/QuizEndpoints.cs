@@ -69,8 +69,8 @@ public static class QuizEndpoints
             };
 
             db.QuizSessions.Add(quiz);
-            quiz.SetIssuedQuestionIds(questionIds);
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
+            quiz.SetIssuedQuestions(questions);
 
             var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
 
@@ -273,13 +273,6 @@ public static class QuizEndpoints
                                     QuizEndpointHelpers.HandleIdempotentDecision(begin)!);
                             }
 
-                            var question = await LoadQuestionForAnswerAsync(db, questionId, ctx.RequestAborted);
-                            if (question == null)
-                            {
-                                throw new IdempotentQuizAnswerEarlyReturnException(
-                                    Results.NotFound("Question not found"));
-                            }
-
                             var issuedSession = await LoadIssuedQuizSessionAsync(
                                 db,
                                 userId,
@@ -290,6 +283,17 @@ public static class QuizEndpoints
                             {
                                 throw new IdempotentQuizAnswerEarlyReturnException(
                                     QuizSessionNotFoundResult());
+                            }
+
+                            var question = await LoadQuestionForAnswerAsync(
+                                db,
+                                issuedSession,
+                                questionId,
+                                ctx.RequestAborted);
+                            if (question == null)
+                            {
+                                throw new IdempotentQuizAnswerEarlyReturnException(
+                                    Results.NotFound("Question not found"));
                             }
 
                             var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
@@ -312,13 +316,11 @@ public static class QuizEndpoints
                                 xpTrackingOptions.Value.EnableAntiCheat,
                                 ctx.RequestAborted);
 
-                            var responseBody = await BuildSubmitAnswerResponseAsync(
-                                db,
+                            var responseBody = BuildSubmitAnswerResponse(
                                 stepAdapter,
                                 lang,
-                                questionId,
-                                attemptResult,
-                                ctx.RequestAborted);
+                                question,
+                                attemptResult);
 
                             await idempotencyService.CompleteAsync(
                                 begin.LedgerId,
@@ -358,10 +360,6 @@ public static class QuizEndpoints
                 return Results.Ok(processingResult.ResponseBody!);
             }
 
-            var question = await LoadQuestionForAnswerAsync(db, questionId, ctx.RequestAborted);
-            if (question == null)
-                return Results.NotFound("Question not found");
-
             var legacyProcessingResult = await ApiDbTransactionHelpers.ExecuteWithSerializableRetryAsync(
                 db,
                 logger,
@@ -375,6 +373,14 @@ public static class QuizEndpoints
                         ctx.RequestAborted);
                     if (issuedSession is null)
                         return null;
+
+                    var question = await LoadQuestionForAnswerAsync(
+                        db,
+                        issuedSession,
+                        questionId,
+                        ctx.RequestAborted);
+                    if (question is null)
+                        return new SingleAnswerTransactionResult(null, null, QuestionMissing: true);
 
                     var attemptInput = new AnswerAttemptInput(
                         Question: question,
@@ -396,7 +402,7 @@ public static class QuizEndpoints
                         xpTrackingOptions.Value.EnableAntiCheat,
                         ctx.RequestAborted);
 
-                    return new SingleAnswerTransactionResult(result);
+                    return new SingleAnswerTransactionResult(result, question, QuestionMissing: false);
                 },
                 ctx.RequestAborted,
                 uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
@@ -404,14 +410,19 @@ public static class QuizEndpoints
             if (legacyProcessingResult is null)
                 return QuizSessionNotFoundResult();
 
+            if (legacyProcessingResult.QuestionMissing ||
+                legacyProcessingResult.Question is null ||
+                legacyProcessingResult.AttemptResult is null)
+            {
+                return Results.NotFound("Question not found");
+            }
+
             var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
-            var legacyResponse = await BuildSubmitAnswerResponseAsync(
-                db,
+            var legacyResponse = BuildSubmitAnswerResponse(
                 stepAdapter,
                 lang,
-                questionId,
-                legacyProcessingResult.AttemptResult,
-                ctx.RequestAborted);
+                legacyProcessingResult.Question,
+                legacyProcessingResult.AttemptResult);
 
             return Results.Ok(legacyResponse);
         });
@@ -505,30 +516,19 @@ public static class QuizEndpoints
 
     }
 
-    private static async Task<SubmitAnswerResponse> BuildSubmitAnswerResponseAsync(
-        ApiDbContext db,
+    private static SubmitAnswerResponse BuildSubmitAnswerResponse(
         MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
         string lang,
-        int questionId,
-        AnswerAttemptResult attemptResult,
-        CancellationToken cancellationToken)
+        Question questionForFeedback,
+        AnswerAttemptResult attemptResult)
     {
         string? explanation = null;
         List<StepExplanationDto>? steps = null;
         if (!attemptResult.IsCorrect)
         {
-            var questionForFeedback = await db.Questions
-                .AsNoTracking()
-                .Include(q => q.Translations)
-                .Include(q => q.Steps).ThenInclude(s => s.Translations)
-                .FirstOrDefaultAsync(q => q.Id == questionId, cancellationToken);
-
-            if (questionForFeedback != null)
-            {
-                explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
-                    TranslationHelper.GetExplanation(questionForFeedback, lang));
-                steps = NormalizeStepsForResponse(stepAdapter.GetSteps(questionForFeedback, lang));
-            }
+            explanation = InlineLatexFormatter.NormalizeMixedInlineMath(
+                TranslationHelper.GetExplanation(questionForFeedback, lang));
+            steps = NormalizeStepsForResponse(stepAdapter.GetSteps(questionForFeedback, lang));
         }
 
         return new SubmitAnswerResponse(
@@ -670,7 +670,7 @@ public static class QuizEndpoints
             UserId = userId,
             StartedAt = DateTime.UtcNow
         };
-        quizSession.SetIssuedQuestionIds(questionIds);
+        quizSession.SetIssuedQuestions(questions);
         db.QuizSessions.Add(quizSession);
         await db.SaveChangesAsync();
 
@@ -681,13 +681,25 @@ public static class QuizEndpoints
 
     private static async Task<Question?> LoadQuestionForAnswerAsync(
         ApiDbContext db,
+        QuizSession issuedSession,
         int questionId,
         CancellationToken ct)
     {
-        return await db.Questions
+        var question = await db.Questions
             .AsNoTracking()
             .Include(q => q.Options)
+            .Include(q => q.Translations)
+            .Include(q => q.Steps).ThenInclude(s => s.Translations)
             .FirstOrDefaultAsync(q => q.Id == questionId, ct);
+
+        if (question is null)
+        {
+            return null;
+        }
+
+        var issuedSnapshot = issuedSession.GetIssuedQuestionSnapshot(questionId);
+        issuedSnapshot?.ApplyTo(question);
+        return question;
     }
 
     // Load full question graph in a deterministic order by pre-selected IDs.
@@ -1417,7 +1429,10 @@ public static class QuizEndpoints
         int TotalXpAfterAward,
         QuizAttemptIngestItem? IngestItem);
 
-    private sealed record SingleAnswerTransactionResult(AnswerAttemptResult AttemptResult);
+    private sealed record SingleAnswerTransactionResult(
+        AnswerAttemptResult? AttemptResult,
+        Question? Question,
+        bool QuestionMissing = false);
 
     private sealed record IdempotentQuizAnswerResult(
         AnswerAttemptResult? AttemptResult,
