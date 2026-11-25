@@ -33,7 +33,8 @@ public static class QuizEndpoints
         group.MapPost("/start", async (
             StartQuizRequest request,
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            IssuedMathVisualService visualService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
@@ -70,9 +71,11 @@ public static class QuizEndpoints
 
             db.QuizSessions.Add(quiz);
             var questions = await LoadQuestionsWithDetailsByIds(db, questionIds, ctx.RequestAborted);
-            quiz.SetIssuedQuestions(questions);
+            quiz.SetIssuedQuestions(questions, await visualService.BuildAsync(
+                questions, lang, quiz.Id, userId, ctx.RequestAborted));
 
-            var questionDtos = questions.Select(q => MapQuestionDto(q, lang)).ToList();
+            var questionDtos = questions.Select(q => MapQuestionDto(
+                q, visualService.ResolveLocale(q, lang), visualService.IsDesignatedPackSubtopic(q))).ToList();
 
             await db.SaveChangesAsync();
 
@@ -83,6 +86,7 @@ public static class QuizEndpoints
         group.MapGet("/questions", async (
             ApiDbContext db,
             HttpContext ctx,
+            IssuedMathVisualService visualService,
             string? topic,
             int? subtopicId,
             int count = DefaultQuizQuestionCount) =>
@@ -100,13 +104,15 @@ public static class QuizEndpoints
                 ctx,
                 count,
                 subtopicId is > 0 ? subtopicId : null,
-                topicId);
+                topicId,
+                visualService);
         });
 
         group.MapPost("/questions", async (
             JsonElement payload,
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            IssuedMathVisualService visualService) =>
         {
             int count = DefaultQuizQuestionCount;
             if (TryGetInt(payload, "count", out var countValue))
@@ -128,14 +134,15 @@ public static class QuizEndpoints
             if (!subtopicId.HasValue && !topicId.HasValue)
                 return Results.BadRequest(new { errorCode = "MISSING_CONTENT_ID", message = "A subtopicId or topic key is required." });
 
-            return await BuildLegacyQuestionsResponse(db, ctx, count, subtopicId, topicId);
+            return await BuildLegacyQuestionsResponse(db, ctx, count, subtopicId, topicId, visualService);
         });
 
         // ?? NEXT QUESTION (adaptive learning)
         group.MapPost("/next-question", async (
             NextQuestionRequest request,
             ApiDbContext db,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            IssuedMathVisualService visualService) =>
         {
             string userId = ctx.User.FindFirst("userId")!.Value;
             string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
@@ -165,14 +172,16 @@ public static class QuizEndpoints
                     message = "No playable questions are published for this topic."
                 });
 
+            lang = visualService.ResolveLocale(question, lang);
             var questionText = InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(question, lang)) ?? string.Empty;
+            var designatedPack = visualService.IsDesignatedPackSubtopic(question);
             var options = question.Options
                 .Select(o => new OptionDto(
                     o.Id,
                     InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty,
                     o.TextFormat,
                     o.RenderMode,
-                    TranslationHelper.GetOptionSemanticsAltText(o, lang)))
+                    designatedPack ? null : TranslationHelper.GetOptionSemanticsAltText(o, lang)))
                 .ToList();
 
             return Results.Ok(new QuizQuestionDto(
@@ -181,13 +190,13 @@ public static class QuizEndpoints
                 questionText,
                 options,
                 question.Difficulty,
-                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(question, lang)),
-                InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, lang)),
+                designatedPack ? null : InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(question, lang)),
+                designatedPack ? null : InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(question, lang)),
                 question.TextFormat,
                 question.HintFormat,
                 question.TextRenderMode,
                 question.HintRenderMode,
-                TranslationHelper.GetQuestionSemanticsAltText(question, lang)
+                designatedPack ? null : TranslationHelper.GetQuestionSemanticsAltText(question, lang)
             ));
         });
 
@@ -197,6 +206,7 @@ public static class QuizEndpoints
             ApiDbContext db,
             HttpContext ctx,
             MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
+            IssuedMathVisualService visualService,
             XpTrackingService xpTrackingService,
             IOptions<XpTrackingOptions> xpTrackingOptions,
             IIdempotencyLedgerService idempotencyService,
@@ -316,11 +326,17 @@ public static class QuizEndpoints
                                 xpTrackingOptions.Value.EnableAntiCheat,
                                 ctx.RequestAborted);
 
+                            var issuedSnapshot = issuedSession.GetIssuedQuestionSnapshot(questionId);
+                            var candidateLocale = issuedSnapshot?.MathVisual?.Locale ?? visualService.ResolveLocale(question, lang);
+                            var validatedVisual = visualService.ValidateForResponse(
+                                issuedSnapshot, candidateLocale, quizSessionId, userId);
+                            var responseLocale = validatedVisual?.Locale ?? visualService.ResolveLocale(question, lang);
                             var responseBody = BuildSubmitAnswerResponse(
                                 stepAdapter,
-                                lang,
+                                responseLocale,
                                 question,
-                                attemptResult);
+                                attemptResult,
+                                validatedVisual);
 
                             await idempotencyService.CompleteAsync(
                                 begin.LedgerId,
@@ -402,7 +418,19 @@ public static class QuizEndpoints
                         xpTrackingOptions.Value.EnableAntiCheat,
                         ctx.RequestAborted);
 
-                    return new SingleAnswerTransactionResult(result, question, QuestionMissing: false);
+                    var issuedSnapshot = issuedSession.GetIssuedQuestionSnapshot(questionId);
+                    var requestedLocale = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
+                    var candidateLocale = issuedSnapshot?.MathVisual?.Locale ??
+                        visualService.ResolveLocale(question, requestedLocale);
+                    var validatedVisual = visualService.ValidateForResponse(
+                        issuedSnapshot, candidateLocale, quizSessionId, userId);
+                    var responseLocale = validatedVisual?.Locale ?? visualService.ResolveLocale(question, requestedLocale);
+                    return new SingleAnswerTransactionResult(
+                        result,
+                        question,
+                        QuestionMissing: false,
+                        ResponseLocale: responseLocale,
+                        MathVisual: validatedVisual);
                 },
                 ctx.RequestAborted,
                 uniqueViolationConstraintName: "UX_UserAnswerAudits_FirstCorrect_PerQuestion");
@@ -417,12 +445,14 @@ public static class QuizEndpoints
                 return Results.NotFound("Question not found");
             }
 
-            var lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
+            var lang = legacyProcessingResult.ResponseLocale ??
+                await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
             var legacyResponse = BuildSubmitAnswerResponse(
                 stepAdapter,
                 lang,
                 legacyProcessingResult.Question,
-                legacyProcessingResult.AttemptResult);
+                legacyProcessingResult.AttemptResult,
+                legacyProcessingResult.MathVisual);
 
             return Results.Ok(legacyResponse);
         });
@@ -520,7 +550,8 @@ public static class QuizEndpoints
         MathLearning.Api.Services.LegacyStepExplanationAdapter stepAdapter,
         string lang,
         Question questionForFeedback,
-        AnswerAttemptResult attemptResult)
+        AnswerAttemptResult attemptResult,
+        IssuedMathVisualSnapshot? mathVisual)
     {
         string? explanation = null;
         List<StepExplanationDto>? steps = null;
@@ -537,10 +568,27 @@ public static class QuizEndpoints
             steps,
             attemptResult.IsFirstTimeCorrect,
             attemptResult.AwardedXp,
-            attemptResult.TotalXpAfterAward);
+            attemptResult.TotalXpAfterAward,
+            mathVisual is null ? null : new IssuedMathVisualDto(
+                mathVisual.SchemaVersion,
+                mathVisual.QuestionId,
+                mathVisual.IssuedQuestionVersion,
+                mathVisual.ReviewedContentHash,
+                mathVisual.TemplateId,
+                mathVisual.TemplateVersion,
+                mathVisual.Locale,
+                mathVisual.Operation,
+                mathVisual.TaskShape,
+                mathVisual.Rows,
+                mathVisual.Columns,
+                mathVisual.VisualAidType,
+                mathVisual.Groups,
+                mathVisual.ExplanationSteps.Select(x => new IssuedMathVisualStepDto(x.Order, x.Text)).ToArray(),
+                mathVisual.RevealStage,
+                mathVisual.AnswerSettlement));
     }
 
-    private static QuizQuestionDto MapQuestionDto(Question q, string lang)
+    private static QuizQuestionDto MapQuestionDto(Question q, string lang, bool suppressPackHintsAndSemantics = false)
     {
         var options = q.Options
             .Select(o => new OptionDto(
@@ -548,7 +596,7 @@ public static class QuizEndpoints
                 InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetOptionText(o, lang)) ?? string.Empty,
                 o.TextFormat,
                 o.RenderMode,
-                TranslationHelper.GetOptionSemanticsAltText(o, lang)))
+                suppressPackHintsAndSemantics ? null : TranslationHelper.GetOptionSemanticsAltText(o, lang)))
             .ToList();
 
         return new QuizQuestionDto(
@@ -557,13 +605,13 @@ public static class QuizEndpoints
             InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetText(q, lang)) ?? string.Empty,
             options,
             q.Difficulty,
-            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
-            InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
+            suppressPackHintsAndSemantics ? null : InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintLight(q, lang)),
+            suppressPackHintsAndSemantics ? null : InlineLatexFormatter.NormalizeMixedInlineMath(TranslationHelper.GetHintMedium(q, lang)),
             q.TextFormat,
             q.HintFormat,
             q.TextRenderMode,
             q.HintRenderMode,
-            TranslationHelper.GetQuestionSemanticsAltText(q, lang)
+            suppressPackHintsAndSemantics ? null : TranslationHelper.GetQuestionSemanticsAltText(q, lang)
         );
     }
 
@@ -629,7 +677,8 @@ public static class QuizEndpoints
         HttpContext ctx,
         int count,
         int? subtopicId,
-        int? topicId)
+        int? topicId,
+        IssuedMathVisualService visualService)
     {
         string userId = ctx.User.FindFirst("userId")!.Value;
         string lang = await ResolveUserLang(db, ctx, userId, ctx.RequestAborted);
@@ -670,13 +719,15 @@ public static class QuizEndpoints
             UserId = userId,
             StartedAt = DateTime.UtcNow
         };
-        quizSession.SetIssuedQuestions(questions);
+        quizSession.SetIssuedQuestions(questions, await visualService.BuildAsync(
+            questions, lang, quizSession.Id, userId, ctx.RequestAborted));
         db.QuizSessions.Add(quizSession);
         await db.SaveChangesAsync();
 
         return Results.Ok(new QuizResponse(
             quizSession.Id,
-            questions.Select(q => MapQuestionDto(q, lang)).ToList()));
+            questions.Select(q => MapQuestionDto(
+                q, visualService.ResolveLocale(q, lang), visualService.IsDesignatedPackSubtopic(q))).ToList()));
     }
 
     private static async Task<Question?> LoadQuestionForAnswerAsync(
@@ -1432,7 +1483,9 @@ public static class QuizEndpoints
     private sealed record SingleAnswerTransactionResult(
         AnswerAttemptResult? AttemptResult,
         Question? Question,
-        bool QuestionMissing = false);
+        bool QuestionMissing = false,
+        string? ResponseLocale = null,
+        IssuedMathVisualSnapshot? MathVisual = null);
 
     private sealed record IdempotentQuizAnswerResult(
         AnswerAttemptResult? AttemptResult,

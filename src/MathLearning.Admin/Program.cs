@@ -129,6 +129,9 @@ builder.Services.AddScoped<IQuestionVersioningService>(sp => sp.GetRequiredServi
 
 // Stateless validation stage services (no ApiDbContext required)
 builder.Services.AddScoped<IMathContentLinter, MathContentLinter>();
+builder.Services.AddSingleton(new MathVisualContentPolicy(
+    builder.Configuration.GetSection("MathVisual:ApprovedContentHashes").Get<string[]>() ?? [],
+    builder.Configuration.GetSection("MathVisual:PackSubtopicIds").Get<int[]>() ?? []));
 builder.Services.AddScoped<ILatexValidationService, LatexValidationService>();
 builder.Services.AddScoped<IMathNormalizationService, MathNormalizationService>();
 builder.Services.AddScoped<IMathEquivalenceService, MathEquivalenceService>();
@@ -287,7 +290,8 @@ async Task SeedAdminAsync(WebApplication app)
     // Seed domain data first (skip if tables don't exist, e.g., when migrations were skipped)
     try
     {
-        await DbSeeder.SeedAsync(db);
+        await DbSeeder.SeedAsync(db,
+            scope.ServiceProvider.GetRequiredService<MathVisualContentPolicy>());
     }
     catch (Exception ex)
     {

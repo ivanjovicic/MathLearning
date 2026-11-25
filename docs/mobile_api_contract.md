@@ -243,6 +243,30 @@ issued question has one settled answer, the session is treated as completed.
 Idempotent requests replay the original settled body before the
 completed-session check.
 
+#### Optional reviewed MathVisual response
+
+`POST /api/quiz/answer` may include `mathVisual` after settlement for an online
+question whose exact published `QuestionVersion` snapshot has a reviewed,
+server-approved multiplication plan. The aid is POST-only; start, next-question,
+legacy question, SRS, cache and offline bundle responses do not contain it. It
+is bound to the issued question version and content hash in the quiz session
+manifest. Replays return the same aid from that manifest. Legacy id-only
+manifests and unsupported, unknown, unapproved or invalid plans omit it without
+generating a replacement explanation.
+
+Schema v1 currently carries ordered `rows` and `columns`, a `groups` partition,
+authored `explanationSteps`, `locale`, approved template and operation/task
+identifiers, and server settlement/reveal stage. The renderer must treat this as
+typed data; it must not infer a strategy from question text or evaluate markup,
+scripts, SVG, external images or executable URLs. Unknown schema versions must
+be ignored. Existing clients can ignore the optional field. There is no teacher
+approval configured by this change; runtime emission remains disabled until a
+teacher-reviewed content hash, server-owned pack subtopic mapping and signing
+key are configured. Practice and offline settlement do not issue MathVisual.
+For a configured pack subtopic, online quiz responses use the approved Serbian
+locale even if the user profile prefers another language; the server also omits
+the pack's legacy hints and semantic-alt fields from PRE question responses.
+
 ### `GET /api/progress/topics` and `GET /api/progress/topics/{topicId}/subtopics`
 
 Topic progress now includes:

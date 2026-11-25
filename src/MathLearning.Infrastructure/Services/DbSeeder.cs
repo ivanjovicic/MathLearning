@@ -1,12 +1,13 @@
 ﻿using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathLearning.Infrastructure.Services;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(DbContext db)
+    public static async Task SeedAsync(DbContext db, MathVisualContentPolicy mathVisualPolicy)
     {
         bool changed = false;
 
@@ -977,7 +978,7 @@ public static class DbSeeder
         // UserProfiles are 1:1 with Identity users (AspNetUsers) and should be created via UserManager
         // (e.g. during app startup backfill), not by this data seeder.
 
-        if (await PublishPlayableQuestionsAsync(db))
+        if (await PublishPlayableQuestionsAsync(db, mathVisualPolicy))
             changed = true;
 
         if (changed)
@@ -986,7 +987,7 @@ public static class DbSeeder
         }
     }
 
-    private static async Task<bool> PublishPlayableQuestionsAsync(DbContext db)
+    internal static async Task<bool> PublishPlayableQuestionsAsync(DbContext db, MathVisualContentPolicy mathVisualPolicy)
     {
         var candidates = await db.Set<Question>()
             .Include(q => q.Options).ThenInclude(o => o.Translations)
@@ -1001,6 +1002,11 @@ public static class DbSeeder
         var updated = false;
         foreach (var question in candidates)
         {
+            // Startup promotion is for legacy seed content only. Reviewed pack
+            // subtopics must pass the versioned authoring publish pipeline.
+            if (mathVisualPolicy.PackSubtopicIds.Contains(question.SubtopicId))
+                continue;
+
             if (question.Options.Count(o =>
                     o.Text.Trim() != string.Empty ||
                     o.Translations.Any(t => t.Text.Trim() != string.Empty)) < 2)

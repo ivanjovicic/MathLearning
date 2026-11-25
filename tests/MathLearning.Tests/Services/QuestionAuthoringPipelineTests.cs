@@ -49,6 +49,61 @@ public class QuestionAuthoringPipelineTests
     }
 
     [Fact]
+    public async Task ReviewedMultiplicationPack_CannotOmitAuthoredStepsOrApproval()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var request = CreateValidRequest(questionId: null) with
+        {
+            Text = "Koliko je $7 \\times 8$?",
+            CorrectAnswer = "56",
+            Options = [new(null, "56", true), new(null, "54", false)],
+            Steps = [],
+            ContentPackId = "tablica_mnozenja",
+            MathVisualPlan = new(1, "splitFive", 1, "sr", "multiply", "product", 7, 8, [5, 2])
+        };
+
+        var result = await CreateAuthoringService(db).ValidateAsync(request, CancellationToken.None);
+
+        Assert.False(result.Summary.CanPublish);
+        Assert.Contains(result.Summary.Issues, issue => issue.RuleId == "mathvisual.steps_required");
+        Assert.Contains(result.Summary.Issues, issue => issue.RuleId == "mathvisual.review_missing");
+    }
+
+    [Fact]
+    public async Task ReviewedMultiplicationPack_PublishRequiresExactApprovedHash_AndEditsInvalidateIt()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var request = CreateValidRequest(questionId: null) with
+        {
+            Text = "Koliko je $7 \\times 8$?",
+            CorrectAnswer = "56",
+            Explanation = "Sedam redova po osam daje pedeset šest.",
+            Options = [new(null, "56", true), new(null, "54", false)],
+            Hints = [],
+            Steps = [new(1, "$5 \\times 8 = 40$", null, false), new(2, "$2 \\times 8 = 16$", null, false), new(3, "$40 + 16 = 56$", null, true)],
+            ContentPackId = MathVisualContentPolicy.PackId,
+            MathVisualPlan = new(1, "splitFive", 1, "sr", "multiply", "product", 7, 8, [5, 2]),
+            ContentLocale = "sr"
+        };
+        var unapproved = CreateAuthoringService(db);
+        var draft = await unapproved.SaveDraftAsync(new SaveQuestionDraftRequest(request), "author-1", CancellationToken.None);
+        Assert.False(draft.Validation.Summary.CanPublish);
+        var denied = await unapproved.PublishAsync(new PublishQuestionRequest(draft.DraftId), "author-1", CancellationToken.None);
+        Assert.False(denied.Published);
+
+        var hash = db.QuestionDrafts.Single(x => x.Id == draft.DraftId).ContentHash;
+        var approved = CreateAuthoringService(db, policy: new MathVisualContentPolicy([hash], [1]));
+        var published = await approved.PublishAsync(new PublishQuestionRequest(draft.DraftId), "author-1", CancellationToken.None);
+        Assert.True(published.Published, string.Join(", ", published.ValidationSummary.Issues.Select(x => x.RuleId)));
+        Assert.Contains("splitFive", db.QuestionVersions.Single(x => x.Id == published.VersionId).SnapshotJson);
+
+        var edited = request with { QuestionId = published.QuestionId, Explanation = "Promenjeno objašnjenje." };
+        var next = await approved.SaveDraftAsync(new SaveQuestionDraftRequest(edited), "author-1", CancellationToken.None);
+        Assert.False(next.Validation.Summary.CanPublish);
+        Assert.Contains(next.Validation.Summary.Issues, x => x.RuleId == "mathvisual.review_missing");
+    }
+
+    [Fact]
     public void LatexValidation_DetectsMalformedFraction()
     {
         var service = new LatexValidationService();
@@ -596,7 +651,8 @@ public class QuestionAuthoringPipelineTests
 
     private static MathQuestionAuthoringService CreateAuthoringService(
         ApiDbContext db,
-        ILogger<MathQuestionAuthoringService>? logger = null)
+        ILogger<MathQuestionAuthoringService>? logger = null,
+        MathVisualContentPolicy? policy = null)
     {
         var cache = new HybridCacheService(
             new MemoryCache(new MemoryCacheOptions { SizeLimit = 1000 }),
@@ -618,7 +674,8 @@ public class QuestionAuthoringPipelineTests
             new QuestionPublishGuardService(),
             new NoOpQuestionAutoHintGenerator(NullLogger<NoOpQuestionAutoHintGenerator>.Instance),
             sharedAuthoringService,
-            sanitizer);
+            sanitizer,
+            policy);
     }
 
     private static QuestionAuthoringService CreateSharedAuthoringService()

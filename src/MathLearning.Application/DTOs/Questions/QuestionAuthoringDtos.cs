@@ -50,7 +50,10 @@ public record QuestionAuthoringRequest(
     RenderMode ExplanationRenderMode = RenderMode.Auto,
     RenderMode HintRenderMode = RenderMode.Auto,
     string? SemanticsAltText = null,
-    int? CorrectOptionId = null
+    int? CorrectOptionId = null,
+    string? ContentPackId = null,
+    MathVisualPlanDto? MathVisualPlan = null,
+    string? ContentLocale = null
 );
 
 public record ValidationIssueDto(

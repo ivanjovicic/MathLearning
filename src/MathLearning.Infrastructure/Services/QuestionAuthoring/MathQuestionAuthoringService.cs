@@ -32,6 +32,7 @@ public sealed partial class MathQuestionAuthoringService :
     private readonly IQuestionAutoHintGenerator autoHintGenerator;
     private readonly IQuestionAuthoringService questionAuthoringService;
     private readonly IMathContentSanitizer sanitizer;
+    private readonly MathVisualContentPolicy mathVisualPolicy;
     private const int LoggedIssueRuleLimit = 5;
 
     public MathQuestionAuthoringService(
@@ -48,7 +49,8 @@ public sealed partial class MathQuestionAuthoringService :
         IQuestionPublishGuardService publishGuard,
         IQuestionAutoHintGenerator autoHintGenerator,
         IQuestionAuthoringService questionAuthoringService,
-        IMathContentSanitizer sanitizer)
+        IMathContentSanitizer sanitizer,
+        MathVisualContentPolicy? mathVisualPolicy = null)
     {
         this.db = db;
         this.logger = logger;
@@ -64,6 +66,7 @@ public sealed partial class MathQuestionAuthoringService :
         this.autoHintGenerator = autoHintGenerator;
         this.questionAuthoringService = questionAuthoringService;
         this.sanitizer = sanitizer;
+        this.mathVisualPolicy = mathVisualPolicy ?? new MathVisualContentPolicy();
     }
 
     public async Task<ValidateQuestionResponse> ValidateAsync(QuestionAuthoringRequest request, CancellationToken cancellationToken)
@@ -507,6 +510,14 @@ public sealed partial class MathQuestionAuthoringService :
         var sanitizedRequest = SanitizeRequest(effectiveRequest);
 
         var lint = linter.Lint(effectiveRequest);
+        var contentHash = QuestionAuthoringContentSupport.ComputeContentHash(sanitizedRequest);
+        var mathVisualIssues = mathVisualPolicy.Validate(sanitizedRequest, contentHash);
+        if (mathVisualIssues.Count > 0)
+        {
+            lint = new ContentLintResultDto(
+                lint.IsValid && mathVisualIssues.All(x => x.Severity != ValidationIssueSeverities.Error),
+                lint.Issues.Concat(mathVisualIssues).ToArray());
+        }
         var latex = latexValidation.Validate(sanitizedRequest);
         var normalized = normalization.Normalize(sanitizedRequest);
         var equivalenceChecks = await BuildEquivalenceChecksAsync(sanitizedRequest, cancellationToken);
@@ -561,7 +572,7 @@ public sealed partial class MathQuestionAuthoringService :
 
         return new PipelineExecution(
             sanitizedRequest,
-            QuestionAuthoringContentSupport.ComputeContentHash(sanitizedRequest),
+            contentHash,
             validation,
             new PreviewQuestionResponse(preview));
     }

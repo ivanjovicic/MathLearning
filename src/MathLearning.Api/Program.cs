@@ -10,6 +10,7 @@ using MathLearning.Domain.Events;
 using MathLearning.Infrastructure;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services;
+using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using MathLearning.Infrastructure.Services.Leaderboard;
 using MathLearning.Infrastructure.Services.EventBus;
 using MathLearning.Infrastructure.Services.EventBus.Handlers;
@@ -407,7 +408,8 @@ try
             try
             {
                 Log.Information("?? Seeding database...");
-                await DbSeeder.SeedAsync(seedDb);
+                await DbSeeder.SeedAsync(seedDb,
+                    app.Services.GetRequiredService<MathVisualContentPolicy>());
                 Log.Information("? Database seeding complete");
             }
             catch (Exception ex)

@@ -3,6 +3,7 @@ using MathLearning.Domain.Entities;
 using MathLearning.Domain.Enums;
 using MathLearning.Infrastructure.Persistance;
 using MathLearning.Infrastructure.Services.Sync;
+using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using MathLearning.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,24 @@ namespace MathLearning.Tests.Services;
 
 public sealed class OfflineBundleServiceTests
 {
+    [Fact]
+    public async Task DesignatedMathVisualPack_IsAbsentFromOfflineManifestAndPayload()
+    {
+        await using var db = await TestDbContextFactory.CreateWithSeedAsync();
+        var packSubtopicId = db.Subtopics.Single().Id;
+        var service = new OfflineBundleService(
+            db,
+            Options.Create(new SyncOptions { DefaultQuestionBundleSize = 50 }),
+            new MathVisualContentPolicy(packSubtopicIds: [packSubtopicId]));
+
+        var bundle = await service.GetBundleAsync("1", null, 50, "sr", CancellationToken.None);
+
+        Assert.Empty(bundle.Questions);
+        Assert.Empty(bundle.QuizSequence);
+        Assert.Empty(bundle.Subtopics);
+        Assert.Equal(0, bundle.Manifest.QuestionCount);
+    }
+
     [Fact]
     public async Task GetBundleAsync_UsesResolvedLanguageAndMapsHintFullSeparately()
     {

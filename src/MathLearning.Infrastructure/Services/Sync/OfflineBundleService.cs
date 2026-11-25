@@ -5,6 +5,7 @@ using MathLearning.Application.Helpers;
 using MathLearning.Application.Services;
 using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Persistance;
+using MathLearning.Infrastructure.Services.QuestionAuthoring;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -14,11 +15,13 @@ public sealed class OfflineBundleService : IOfflineBundleService
 {
     private readonly ApiDbContext db;
     private readonly IOptions<SyncOptions> options;
+    private readonly MathVisualContentPolicy mathVisualPolicy;
 
-    public OfflineBundleService(ApiDbContext db, IOptions<SyncOptions> options)
+    public OfflineBundleService(ApiDbContext db, IOptions<SyncOptions> options, MathVisualContentPolicy? mathVisualPolicy = null)
     {
         this.db = db;
         this.options = options;
+        this.mathVisualPolicy = mathVisualPolicy ?? new MathVisualContentPolicy();
     }
 
     public async Task<OfflineBundleResponseDto> GetBundleAsync(
@@ -45,6 +48,14 @@ public sealed class OfflineBundleService : IOfflineBundleService
             .Include(x => x.Steps).ThenInclude(s => s.Translations)
             .WherePlayable();
 
+        // The offline bundle exposes full hints/explanations before settlement.
+        // Reviewed MathVisual pack content is online POST-only in v1.
+        var excludedSubtopics = mathVisualPolicy.PackSubtopicIds.ToArray();
+        if (excludedSubtopics.Length > 0)
+        {
+            query = query.Where(x => !excludedSubtopics.Contains(x.SubtopicId));
+        }
+
         if (subtopicId.HasValue)
         {
             query = query.Where(x => x.SubtopicId == subtopicId.Value);
@@ -61,6 +72,7 @@ public sealed class OfflineBundleService : IOfflineBundleService
         var catalogSubtopicIds = await db.Questions
             .AsNoTracking()
             .WherePlayable()
+            .Where(x => !excludedSubtopics.Contains(x.SubtopicId))
             .Select(x => x.SubtopicId)
             .Distinct()
             .ToListAsync(cancellationToken);
