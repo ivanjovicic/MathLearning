@@ -115,6 +115,24 @@ public sealed class StepEngineTests
         Assert.Equal(expectedResult, steps[^1].Text);
     }
 
+    // B0 characterization: these legacy groups are the opposite orientation
+    // from the proposed (not yet teacher-approved) a-rows-of-b MathBlocks array.
+    [Theory]
+    [InlineData("Koliko je 7 × 8?", "7 × 8 znači: saberi 7, 8 puta", "7 + 7 + 7 + 7 + 7 + 7 + 7 + 7 = 56", "Rezultat: 7 × 8 = 56")]
+    [InlineData("8 × 7", "8 × 7 znači: saberi 8, 7 puta", "8 + 8 + 8 + 8 + 8 + 8 + 8 = 56", "Rezultat: 8 × 7 = 56")]
+    public void GetSteps_UnreviewedMultiplication_CharacterizesLegacyOrientation(
+        string text,
+        string expectedIntro,
+        string expectedExpansion,
+        string expectedResult)
+    {
+        var steps = StepEngine.GetSteps(NewQuestion(text), "sr");
+
+        Assert.Equal(expectedIntro, steps[0].Text);
+        Assert.Equal(expectedExpansion, steps[1].Text);
+        Assert.Equal(expectedResult, steps[^1].Text);
+    }
+
     [Fact]
     public void GetSteps_LargerMultiplicationUsesDistributiveBreakdown()
     {

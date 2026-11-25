@@ -40,4 +40,42 @@ public class LegacyStepExplanationAdapterTests
         Assert.Single(steps);
         Assert.Equal("Kreni od datog objašnjenja.", steps[0].Text);
     }
+
+    [Theory]
+    [InlineData("Koliko je 7 × 8?", true)]
+    [InlineData("7 × 8", false)]
+    public void GetSteps_UnreviewedSevenByEight_CharacterizesRouteDifference(
+        string text,
+        bool usesLegacyGroups)
+    {
+        var question = new Question(text, 1, 1);
+        var adapter = new LegacyStepExplanationAdapter(
+            new MathReasoningGraphEngine(),
+            new StepExplanationGenerator());
+
+        var steps = adapter.GetSteps(question, "sr");
+
+        Assert.NotEmpty(steps);
+        Assert.Equal(usesLegacyGroups, steps.Any(step =>
+            step.Text == "7 × 8 znači: saberi 7, 8 puta"));
+        Assert.Contains(steps, step => step.Text.Contains("56", StringComparison.Ordinal));
+    }
+
+    // Regression guard: the bare expression uses the graph route, which must
+    // never bypass teacher-authored steps. The sentence exercises the fallback.
+    [Theory]
+    [InlineData("Koliko je 7 × 8?")]
+    [InlineData("7 × 8")]
+    public void GetSteps_AuthoredStepsTakePriorityOverBothGeneratedPaths(string text)
+    {
+        var question = new Question(text, 1, 1);
+        question.ReplaceSteps([new QuestionStep(0, 1, "Odobreni korak", null, true)]);
+        var adapter = new LegacyStepExplanationAdapter(
+            new MathReasoningGraphEngine(),
+            new StepExplanationGenerator());
+
+        var step = Assert.Single(adapter.GetSteps(question, "sr"));
+
+        Assert.Equal("Odobreni korak", step.Text);
+    }
 }
