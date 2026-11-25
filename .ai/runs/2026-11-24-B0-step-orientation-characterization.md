@@ -38,16 +38,16 @@ Validation not run: `python scripts/run_guarded.py --timeout-seconds 180 -- dotn
 ## Exceptions and learning
 Mistakes observed: none
 Waste: none
-Missed: the original local .NET execution (dotnet unavailable); new-head CI after review correction is pending. Publishing guard and issued-version replay proof remain separate issue #64 work.
-Follow-up: backend B0 owner needs .NET execution; issue #64 B1 owns versioned contract with teacher review.
+Missed: the original local .NET execution (dotnet unavailable). Current-head CI is recorded below. Publishing guard and issued-version replay proof remain separate issue #64 work.
+Follow-up: owner review of this draft; issue #64 B1 owns versioned contract with teacher review.
 Residual risk: characterization preserves legacy behavior; approved pack must not use it as a reviewed visual explanation.
 Documentation impact: updated this run log only; no runtime contract or behavior changed.
 Cross-repo impact: yes - mobile design PR #1014 remains draft and proposes seven rows of eight.
 
 ## Delivery
-State: Needs validation
-Branch/PR: #65, draft; review correction pushed; new-head CI and exact-head validators pending
-Commit SHA: self
+State: In progress
+Branch/PR: #65, draft; review correction and evidence sync pushed; owner review remains pending
+Commit SHA: 707e11d964232cfe5132fc5be618d82c8b69df6a
 Completion %: 79
 
 ## Review follow-up and CI provenance (2026-11-24)
@@ -56,7 +56,14 @@ Completion %: 79
 - Independent same-account review on PR #65 found that the authored-steps test covered only sentence -> legacy fallback. Because `StepEngine.GetSteps` also honors stored steps, the test could pass if the adapter's `question.Steps.Count > 0` guard were removed.
 - Test now covers **both** `Koliko je 7 × 8?` and bare `7 × 8` via `[Theory]` rows. The bare expression uses the graph route, so loss of the adapter guard would return graph-generated rather than authored steps. This is a source-reviewed assertion, **not** a completed mutation-test run.
 - The new test commit `0647407ebc7fed3afef98684d1f81b1cd17f086b` changes only `LegacyStepExplanationAdapterTests.cs`. This follow-up log change is a subsequent docs commit.
-- **Not yet executed on the new head:** .NET tests and the repo evidence/docs validators. No green result is inferred from the old head. Mark ready/merge only after the scoped owner obtains required new-head proof and review requirements.
+- The previous new-head check attempt did not provide fresh passing evidence. The later sync commit and exact-head checks are recorded in the refresh below.
 - Scope unchanged: characterization only; pedagogical approval, publishing guard and issued-version binding belong to #64. No global StepEngine runtime change or migration.
 
-- **Actual new-head CI feedback, run `45422686560`:** `validate_agent_evidence.py --changed-from dd09ec28 --verify-git` reported two failures for this B0 log: original `Files inspected: 12` and `Searches: 6` exceed the declared low budget; the original failed local dotnet attempt also requires a completion score at most 79. This addendum reduces completion to 79 without falsifying the original measured counts. The same CI log also reports five independent failures in `.ai/runs/2026-11-24-B0-3-evidence.md` delivered by PR #66 to main; that file is **not** modified on this PR's branch. A green CI result for PR #65 cannot be inferred until both owners' evidence is valid on the final merge base.
+- **Actual new-head CI feedback, run `45422686560`:** `validate_agent_evidence.py --changed-from dd09ec28 --verify-git` reported two failures for this B0 log; the original local dotnet attempt also capped completion at 79. The same CI log reported five findings in `.ai/runs/2026-11-24-B0-3-evidence.md` from PR #66. Those historical failures are retained here; current-head evidence below records the subsequent baseline sync and fresh checks.
+
+## Current-head evidence refresh (2026-11-25)
+- Synced the existing PR branch with current `main` (`89ecdaae32924efb19f3d7eec61bbc488fa9f2df`) in commit `707e11d964232cfe5132fc5be618d82c8b69df6a`. The PR diff remains the same three characterization files.
+- [Database Validation run 45561376369](https://github.com/ivanjovicic/MathLearning/actions/runs/45561376369) completed successfully on PR merge ref `e1c2eae0d9d88056adaa66250cb9d6f9dbe56f9b`: schema-from-zero **7 passed**, full .NET suite **1304 passed, 0 failed, 0 skipped**.
+- [Backend Agent System Validation run 45561376348](https://github.com/ivanjovicic/MathLearning/actions/runs/45561376348) completed successfully on PR head `707e11d`; no agent-system validation failures.
+- Local validation on the synced tree: `validate_agent_system.py` **0 failures**; `validate_agent_evidence.py --changed-from origin/main --verify-git` **0 failures, 0 warnings**; `check_documentation_health.py --changed-from origin/main --full-links` **30 documents, 0 failures**.
+- The old Agent System failure on head `952894c` remains a historical failure. Its five evidence-format findings are cleared in the current validation context; no original test result or ownership record was rewritten. PR #65 remains draft pending owner review.
