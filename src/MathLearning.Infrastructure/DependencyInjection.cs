@@ -67,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<ICosmeticsFragmentService>(sp => sp.GetRequiredService<CosmeticsFragmentService>());
         services.AddScoped<IMathContentSanitizer, MathContentSanitizer>();
         services.AddScoped<IMathContentLinter, MathContentLinter>();
+        services.AddSingleton(new MathVisualContentPolicy(
+            config.GetSection("MathVisual:ApprovedContentHashes").Get<string[]>() ?? [],
+            config.GetSection("MathVisual:PackSubtopicIds").Get<int[]>() ?? []));
         services.AddScoped<ILatexValidationService, LatexValidationService>();
         services.AddScoped<IMathNormalizationService, MathNormalizationService>();
         services.AddScoped<IMathEquivalenceService, MathEquivalenceService>();

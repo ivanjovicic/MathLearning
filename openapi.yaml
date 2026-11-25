@@ -267,7 +267,63 @@ components:
               hint: { type: string, nullable: true }
         isFirstTimeCorrect: { type: boolean }
         awardedXp: { type: integer }
-        totalXpAfterAward: { type: integer }
+        totalXp: { type: integer }
+        mathVisual:
+          allOf:
+            - $ref: '#/components/schemas/IssuedMathVisual'
+          nullable: true
+
+    IssuedMathVisual:
+      type: object
+      description: >-
+        Optional server-issued, answer-settled visual aid. Omitted from all
+        pre-answer responses and for legacy, unreviewed, unsupported, or invalid
+        snapshots. Clients must ignore unknown schema versions.
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        questionId: { type: integer }
+        issuedQuestionVersion: { type: integer, minimum: 1 }
+        reviewedContentHash: { type: string }
+        templateId: { type: string, enum: [directArray, splitFive] }
+        templateVersion: { type: integer, enum: [1] }
+        locale: { type: string, enum: [sr] }
+        operation: { type: string, enum: [multiply] }
+        taskShape: { type: string, enum: [product] }
+        rows: { type: integer, minimum: 2, maximum: 9 }
+        columns: { type: integer, minimum: 2, maximum: 9 }
+        visualAidType: { type: string, enum: [multiplication_array] }
+        groups:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items: { type: integer, minimum: 1 }
+        explanationSteps:
+          type: array
+          items:
+            type: object
+            required: [order, text]
+            properties:
+              order: { type: integer, minimum: 1 }
+              text: { type: string }
+        revealStage: { type: string, enum: [total] }
+        answerSettlement: { type: string, enum: [server_confirmed] }
+      required:
+        - schemaVersion
+        - questionId
+        - issuedQuestionVersion
+        - reviewedContentHash
+        - templateId
+        - templateVersion
+        - locale
+        - operation
+        - taskShape
+        - rows
+        - columns
+        - visualAidType
+        - groups
+        - explanationSteps
+        - revealStage
+        - answerSettlement
 
     SyncRequestDto:
       type: object

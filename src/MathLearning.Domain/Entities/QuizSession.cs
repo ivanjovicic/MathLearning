@@ -34,7 +34,9 @@ namespace MathLearning.Domain.Entities
         /// Freeze the exact issued question content (version, options, explanation, steps)
         /// so later publishes cannot change grading or feedback for this session.
         /// </summary>
-        public void SetIssuedQuestions(IEnumerable<Question> questions)
+        public void SetIssuedQuestions(
+            IEnumerable<Question> questions,
+            IReadOnlyDictionary<int, IssuedMathVisualSnapshot>? approvedVisuals = null)
         {
             ArgumentNullException.ThrowIfNull(questions);
 
@@ -43,7 +45,9 @@ namespace MathLearning.Domain.Entities
                 .GroupBy(q => q.Id)
                 .Select(group => group.First())
                 .OrderBy(q => q.Id)
-                .Select(IssuedQuestionContentSnapshot.FromQuestion)
+                .Select(q => IssuedQuestionContentSnapshot.FromQuestion(
+                    q,
+                    approvedVisuals is not null && approvedVisuals.TryGetValue(q.Id, out var aid) ? aid : null))
                 .ToArray();
 
             var questionIds = snapshots.Select(x => x.QuestionId).ToArray();
@@ -182,9 +186,10 @@ namespace MathLearning.Domain.Entities
         int? CorrectOptionId,
         string? Explanation,
         IssuedQuestionOptionSnapshot[] Options,
-        IssuedQuestionStepSnapshot[] Steps)
+        IssuedQuestionStepSnapshot[] Steps,
+        IssuedMathVisualSnapshot? MathVisual = null)
     {
-        public static IssuedQuestionContentSnapshot FromQuestion(Question question)
+        public static IssuedQuestionContentSnapshot FromQuestion(Question question, IssuedMathVisualSnapshot? mathVisual = null)
         {
             ArgumentNullException.ThrowIfNull(question);
 
@@ -207,7 +212,8 @@ namespace MathLearning.Domain.Entities
                 question.CorrectOptionId,
                 question.Explanation,
                 options,
-                steps);
+                steps,
+                mathVisual);
         }
 
         public void ApplyTo(Question question)
@@ -259,4 +265,25 @@ namespace MathLearning.Domain.Entities
         string Text,
         string? Hint,
         bool Highlight);
+
+    public sealed record IssuedMathVisualSnapshot(
+        int SchemaVersion,
+        int QuestionId,
+        int IssuedQuestionVersion,
+        string ReviewedContentHash,
+        string TemplateId,
+        int TemplateVersion,
+        string Locale,
+        string Operation,
+        string TaskShape,
+        int Rows,
+        int Columns,
+        string VisualAidType,
+        int[] Groups,
+        IssuedMathVisualStepSnapshot[] ExplanationSteps,
+        string RevealStage,
+        string AnswerSettlement,
+        string? IntegrityTag = null);
+
+    public sealed record IssuedMathVisualStepSnapshot(int Order, string Text);
 }

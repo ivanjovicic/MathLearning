@@ -249,6 +249,7 @@ public static class ServiceRegistrationExtensions
         builder.Services.AddScoped<IExplanationCacheService, ExplanationCacheService>();
         builder.Services.AddScoped<IStepExplanationService, StepExplanationService>();
         builder.Services.AddScoped<LegacyStepExplanationAdapter>();
+        builder.Services.AddScoped<IssuedMathVisualService>();
         builder.Services.AddScoped<AdaptiveApiFacade>();
         builder.Services.AddScoped<MathLearning.Infrastructure.Services.CosmeticLoadoutProjectionService>();
         builder.Services.AddSingleton<IAdaptiveAnalyticsService, AdaptiveAnalyticsService>();

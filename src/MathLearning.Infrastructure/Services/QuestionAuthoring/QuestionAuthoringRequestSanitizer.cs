@@ -4,7 +4,7 @@ using MathLearning.Domain.Enums;
 
 namespace MathLearning.Infrastructure.Services.QuestionAuthoring;
 
-internal static class QuestionAuthoringRequestSanitizer
+public static class QuestionAuthoringRequestSanitizer
 {
     public static QuestionAuthoringRequest Sanitize(
         QuestionAuthoringRequest request,

@@ -1,6 +1,7 @@
 using MathLearning.Application.Content;
 using MathLearning.Application.DTOs.Questions;
 using MathLearning.Application.Services;
+using MathLearning.Domain.Entities;
 using MathLearning.Infrastructure.Services.QuestionAuthoring;
 
 namespace MathLearning.Admin.Services;
@@ -20,6 +21,7 @@ public sealed class AdminQuestionValidationOrchestrator
     private readonly IQuestionPreviewService previewService;
     private readonly IQuestionPublishGuardService publishGuard;
     private readonly IMathContentSanitizer sanitizer;
+    private readonly MathVisualContentPolicy mathVisualPolicy;
 
     public AdminQuestionValidationOrchestrator(
         IMathContentLinter linter,
@@ -30,7 +32,8 @@ public sealed class AdminQuestionValidationOrchestrator
         IDifficultyEstimationService difficulty,
         IQuestionPreviewService previewService,
         IQuestionPublishGuardService publishGuard,
-        IMathContentSanitizer sanitizer)
+        IMathContentSanitizer sanitizer,
+        MathVisualContentPolicy mathVisualPolicy)
     {
         this.linter = linter;
         this.latexValidation = latexValidation;
@@ -41,6 +44,7 @@ public sealed class AdminQuestionValidationOrchestrator
         this.previewService = previewService;
         this.publishGuard = publishGuard;
         this.sanitizer = sanitizer;
+        this.mathVisualPolicy = mathVisualPolicy;
     }
 
     public async Task<ValidateQuestionResponse> ValidateAsync(
@@ -50,6 +54,15 @@ public sealed class AdminQuestionValidationOrchestrator
         var sanitized = SanitizeRequest(request);
 
         var lint = linter.Lint(sanitized);
+        var mathVisualIssues = mathVisualPolicy.Validate(
+            sanitized,
+            MathVisualContentPolicy.ComputeContentHash(sanitized));
+        if (mathVisualIssues.Count > 0)
+        {
+            lint = new ContentLintResultDto(
+                lint.IsValid && mathVisualIssues.All(x => x.Severity != ValidationIssueSeverities.Error),
+                lint.Issues.Concat(mathVisualIssues).ToArray());
+        }
         var latex = latexValidation.Validate(sanitized);
         var normalized = normalization.Normalize(sanitized);
         var equivalenceChecks = await BuildEquivalenceChecksAsync(sanitized, cancellationToken);
@@ -69,25 +82,7 @@ public sealed class AdminQuestionValidationOrchestrator
 
     private QuestionAuthoringRequest SanitizeRequest(QuestionAuthoringRequest request)
     {
-        return request with
-        {
-            Text = sanitizer.NormalizeMathContent(request.Text, request.TextFormat),
-            Explanation = string.IsNullOrWhiteSpace(request.Explanation)
-                ? request.Explanation
-                : sanitizer.NormalizeMathContent(request.Explanation, request.ExplanationFormat),
-            Options = request.Options
-                .Select(o => o with { Text = sanitizer.NormalizeMathContent(o.Text, o.TextFormat) })
-                .ToList(),
-            Steps = request.Steps
-                .Select(s => s with
-                {
-                    Text = sanitizer.NormalizeMathContent(s.Text, s.TextFormat),
-                    Hint = string.IsNullOrWhiteSpace(s.Hint)
-                        ? s.Hint
-                        : sanitizer.NormalizeMathContent(s.Hint, s.HintFormat)
-                })
-                .ToList()
-        };
+        return QuestionAuthoringRequestSanitizer.Sanitize(request, sanitizer);
     }
 
     private async Task<IReadOnlyList<EquivalentAnswerResultDto>> BuildEquivalenceChecksAsync(
