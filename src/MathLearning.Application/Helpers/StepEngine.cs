@@ -52,6 +52,74 @@ public static class StepEngine
         return [];
     }
 
+    private static bool HasUnsupportedArithmeticBoundary(string text, Match match)
+    {
+        var left = match.Groups[1];
+        var right = match.Groups[2];
+        return HasUnsupportedSpanBoundary(text, left.Index, right.Index + right.Length);
+    }
+
+    private static bool HasUnsupportedSpanBoundary(string text, int start, int end)
+    {
+        var before = start - 1;
+        while (before >= 0 && char.IsWhiteSpace(text[before]))
+            before--;
+
+        if (before >= 0 &&
+            (char.IsDigit(text[before]) || IsArithmeticOperator(text[before]) || text[before] is '.' or ',' ||
+             text[before] == ':' && HasNumericTokenBefore(text, before) && !IsNumberedPromptLabel(text, before)))
+            return true;
+
+        var after = end;
+        while (after < text.Length && char.IsWhiteSpace(text[after]))
+            after++;
+
+        if (after < text.Length &&
+            (char.IsDigit(text[after]) || IsArithmeticOperator(text[after]) ||
+             text[after] == ':' && HasNumericTokenAfter(text, after)))
+            return true;
+
+        return after + 1 < text.Length && (text[after] is '.' or ',') && char.IsDigit(text[after + 1]);
+    }
+
+    private static bool TryParseOperands(Match match, out int left, out int right)
+    {
+        left = 0;
+        right = 0;
+        return int.TryParse(match.Groups[1].Value, out left) && int.TryParse(match.Groups[2].Value, out right);
+    }
+
+    private static bool HasNumericTokenBefore(string text, int index)
+    {
+        var before = index - 1;
+        while (before >= 0 && char.IsWhiteSpace(text[before]))
+            before--;
+
+        return before >= 0 && (char.IsDigit(text[before]) || IsSuperscriptNumber(text[before]) || text[before] == ')');
+    }
+
+    private static bool HasNumericTokenAfter(string text, int index)
+    {
+        var after = index + 1;
+        while (after < text.Length && char.IsWhiteSpace(text[after]))
+            after++;
+
+        return after < text.Length && (char.IsDigit(text[after]) || text[after] == '(');
+    }
+
+    private static bool IsNumberedPromptLabel(string text, int colonIndex) =>
+        Regex.IsMatch(
+            text[..(colonIndex + 1)],
+            @"(?:zadatak|pitanje|primer|vežba|task|question|example)\s*(?:\(\s*)?\d+\s*\)?\s*:$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static bool IsArithmeticOperator(char value) => value is
+        '+' or '-' or '−' or '×' or '*' or '/' or '÷' or '^' or
+        '⁰' or '¹' or '²' or '³' or '⁴' or '⁵' or '⁶' or '⁷' or '⁸' or '⁹' or '⁺' or '⁻';
+
+    private static bool IsSuperscriptNumber(char value) => value is
+        '⁰' or '¹' or '²' or '³' or '⁴' or '⁵' or '⁶' or '⁷' or '⁸' or '⁹';
+
     private static string GetStepText(QuestionStep step, string userLang)
     {
         if (string.Equals(userLang, TranslationHelper.DefaultLang, StringComparison.OrdinalIgnoreCase))
@@ -100,69 +168,79 @@ public static class StepEngine
 
         // Try addition: "Koliko je A + B?" or "What is A + B?"
         var addMatch = Regex.Match(text, @"(\d+)\s*\+\s*(\d+)");
-        if (addMatch.Success)
+        if (addMatch.Success &&
+            !HasUnsupportedArithmeticBoundary(text, addMatch) &&
+            TryParseOperands(addMatch, out var addA, out var addB) &&
+            addA <= int.MaxValue - addB)
         {
-            int a = int.Parse(addMatch.Groups[1].Value);
-            int b = int.Parse(addMatch.Groups[2].Value);
-            return isSr ? ForAdditionSr(a, b) : ForAdditionEn(a, b);
+            return isSr ? ForAdditionSr(addA, addB) : ForAdditionEn(addA, addB);
         }
 
         // Try subtraction: "A - B" or "A − B"
         var subMatch = Regex.Match(text, @"(\d+)\s*[\-−]\s*(\d+)");
-        if (subMatch.Success)
+        if (subMatch.Success &&
+            !HasUnsupportedArithmeticBoundary(text, subMatch) &&
+            TryParseOperands(subMatch, out var subA, out var subB))
         {
-            int a = int.Parse(subMatch.Groups[1].Value);
-            int b = int.Parse(subMatch.Groups[2].Value);
-            return isSr ? ForSubtractionSr(a, b) : ForSubtractionEn(a, b);
+            return isSr ? ForSubtractionSr(subA, subB) : ForSubtractionEn(subA, subB);
         }
 
         // Try multiplication: "A × B" or "A * B"
         var mulMatch = Regex.Match(text, @"(\d+)\s*[×\*]\s*(\d+)");
-        if (mulMatch.Success)
+        if (mulMatch.Success &&
+            !HasUnsupportedArithmeticBoundary(text, mulMatch) &&
+            TryParseOperands(mulMatch, out var mulA, out var mulB) &&
+            (long)mulA * mulB <= int.MaxValue)
         {
-            int a = int.Parse(mulMatch.Groups[1].Value);
-            int b = int.Parse(mulMatch.Groups[2].Value);
-            return isSr ? ForMultiplicationSr(a, b) : ForMultiplicationEn(a, b);
+            return isSr ? ForMultiplicationSr(mulA, mulB) : ForMultiplicationEn(mulA, mulB);
         }
 
         // Try division: "A ÷ B" or "A / B"
         var divMatch = Regex.Match(text, @"(\d+)\s*[÷/]\s*(\d+)");
-        if (divMatch.Success)
+        if (divMatch.Success &&
+            !HasUnsupportedArithmeticBoundary(text, divMatch) &&
+            TryParseOperands(divMatch, out var divA, out var divB))
         {
-            int a = int.Parse(divMatch.Groups[1].Value);
-            int b = int.Parse(divMatch.Groups[2].Value);
-            if (b != 0)
-                return isSr ? ForDivisionSr(a, b) : ForDivisionEn(a, b);
+            if (divB != 0)
+                return isSr ? ForDivisionSr(divA, divB) : ForDivisionEn(divA, divB);
         }
 
         // Try "Ax - B = C" or "Ax + B = C" before the simpler x + B form.
         // Otherwise "2x + 4 = 18" is partially matched as "x + 4 = 18".
         var eqMatch3 = Regex.Match(text, @"(\d+)x\s*([\+\-−])\s*(\d+)\s*=\s*(\d+)");
-        if (eqMatch3.Success)
+        if (eqMatch3.Success &&
+            !HasUnsupportedSpanBoundary(text, eqMatch3.Index, eqMatch3.Index + eqMatch3.Length) &&
+            int.TryParse(eqMatch3.Groups[1].Value, out var coefficient) &&
+            int.TryParse(eqMatch3.Groups[3].Value, out var constant) &&
+            int.TryParse(eqMatch3.Groups[4].Value, out var result) &&
+            coefficient > 0)
         {
-            int a = int.Parse(eqMatch3.Groups[1].Value);
             string op = eqMatch3.Groups[2].Value;
-            int b = int.Parse(eqMatch3.Groups[3].Value);
-            int c = int.Parse(eqMatch3.Groups[4].Value);
             bool isSubtract = op == "-" || op == "−";
-            return isSr ? ForLinearComplexSr(a, b, c, isSubtract) : ForLinearComplexEn(a, b, c, isSubtract);
+            var rightSide = isSubtract ? (long)result + constant : (long)result - constant;
+            if (rightSide is >= int.MinValue and <= int.MaxValue && rightSide % coefficient == 0)
+                return isSr
+                    ? ForLinearComplexSr(coefficient, constant, result, isSubtract)
+                    : ForLinearComplexEn(coefficient, constant, result, isSubtract);
         }
 
         // Try simple linear equation: "x + B = C" or "Ax = C"
         var eqMatch1 = Regex.Match(text, @"x\s*\+\s*(\d+)\s*=\s*(\d+)");
-        if (eqMatch1.Success)
+        if (eqMatch1.Success &&
+            !HasUnsupportedSpanBoundary(text, eqMatch1.Index, eqMatch1.Index + eqMatch1.Length) &&
+            TryParseOperands(eqMatch1, out var addend, out var sum))
         {
-            int b = int.Parse(eqMatch1.Groups[1].Value);
-            int c = int.Parse(eqMatch1.Groups[2].Value);
-            return isSr ? ForLinearAddSr(b, c) : ForLinearAddEn(b, c);
+            return isSr ? ForLinearAddSr(addend, sum) : ForLinearAddEn(addend, sum);
         }
 
         var eqMatch2 = Regex.Match(text, @"(\d+)x\s*=\s*(\d+)");
-        if (eqMatch2.Success)
+        if (eqMatch2.Success &&
+            !HasUnsupportedSpanBoundary(text, eqMatch2.Index, eqMatch2.Index + eqMatch2.Length) &&
+            TryParseOperands(eqMatch2, out var factor, out var product) &&
+            factor > 0 &&
+            product % factor == 0)
         {
-            int a = int.Parse(eqMatch2.Groups[1].Value);
-            int c = int.Parse(eqMatch2.Groups[2].Value);
-            return isSr ? ForLinearMulSr(a, c) : ForLinearMulEn(a, c);
+            return isSr ? ForLinearMulSr(factor, product) : ForLinearMulEn(factor, product);
         }
 
         return [];

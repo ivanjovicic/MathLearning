@@ -115,6 +115,96 @@ public sealed class StepEngineTests
         Assert.Equal(expectedResult, steps[^1].Text);
     }
 
+    [Theory]
+    [InlineData("-7 × 8")]
+    [InlineData("7.5 × 8")]
+    [InlineData("7,5 × 8")]
+    [InlineData("7 × -8")]
+    [InlineData("7 × 8.5")]
+    [InlineData("7 × 8,5")]
+    public void GetSteps_UnsupportedNegativeOrDecimalFactorsUseExplanationFallback(string text)
+    {
+        const string fallbackText = "Za ove činioce nema podržanog tekstualnog prikaza.";
+        var steps = StepEngine.GetSteps(NewQuestion(text, fallbackText), "sr");
+
+        var fallback = Assert.Single(steps);
+        Assert.Equal(fallbackText, fallback.Text);
+        Assert.True(fallback.Highlight);
+    }
+
+    [Theory]
+    [InlineData("7 × 8 + 2")]
+    [InlineData("7 × 8 − 2")]
+    [InlineData("7^2 × 8")]
+    [InlineData("7 × 8^2")]
+    [InlineData("7 × 8 : 2")]
+    [InlineData("7 × 8²")]
+    public void GetSteps_CompoundExpressionDoesNotExplainPartialArithmetic(string text)
+    {
+        const string fallbackText = "Objašnjenje za ceo izraz nije dostupno.";
+        var steps = StepEngine.GetSteps(NewQuestion(text, fallbackText), "sr");
+
+        var fallback = Assert.Single(steps);
+        Assert.Equal(fallbackText, fallback.Text);
+    }
+
+    [Theory]
+    [InlineData("Koliko je 7 × 8?", "sr", "Rezultat: 7 × 8 = 56")]
+    [InlineData("Koliko je 7 × 8, molim?", "sr", "Rezultat: 7 × 8 = 56")]
+    [InlineData("Izračunaj: 7 × 8", "sr", "Rezultat: 7 × 8 = 56")]
+    [InlineData("Primer: 7 + 8", "sr", "Rezultat: 7 + 8 = 15")]
+    [InlineData("Zadatak 1: 7 × 8", "sr", "Rezultat: 7 × 8 = 56")]
+    [InlineData("Primer (1): 7 + 8", "sr", "Rezultat: 7 + 8 = 15")]
+    [InlineData("7 × 8.", "sr", "Rezultat: 7 × 8 = 56")]
+    [InlineData("What is 7 × 8?", "en", "Result: 7 × 8 = 56")]
+    public void GetSteps_NaturalLanguageIntegerMultiplicationStillParses(
+        string text,
+        string language,
+        string expectedResult)
+    {
+        var steps = StepEngine.GetSteps(NewQuestion(text), language);
+
+        Assert.Equal(expectedResult, steps[^1].Text);
+    }
+
+    [Theory]
+    [InlineData("999999999999 × 8")]
+    [InlineData("50000 × 50000")]
+    [InlineData("2147483647 + 1")]
+    public void GetSteps_OperandsOrResultsOutsideIntRangeUseFallback(string text)
+    {
+        const string fallbackText = "Rezultat je van podržanog opsega.";
+        var steps = StepEngine.GetSteps(NewQuestion(text, fallbackText), "sr");
+
+        var fallback = Assert.Single(steps);
+        Assert.Equal(fallbackText, fallback.Text);
+    }
+
+    [Theory]
+    [InlineData("999999999999x = 1")]
+    [InlineData("0x = 1")]
+    [InlineData("2x − 2147483647 = 2147483647")]
+    public void GetSteps_InvalidOrOverflowingLinearEquationUsesFallback(string text)
+    {
+        const string fallbackText = "Jednačina je van podržanog opsega.";
+        var steps = StepEngine.GetSteps(NewQuestion(text, fallbackText), "sr");
+
+        var fallback = Assert.Single(steps);
+        Assert.Equal(fallbackText, fallback.Text);
+    }
+
+    [Theory]
+    [InlineData("2x = 1")]
+    [InlineData("2x + 1 = 2")]
+    public void GetSteps_NonIntegralLinearSolutionUsesFallback(string text)
+    {
+        const string fallbackText = "Rešenje nije ceo broj.";
+        var steps = StepEngine.GetSteps(NewQuestion(text, fallbackText), "sr");
+
+        var fallback = Assert.Single(steps);
+        Assert.Equal(fallbackText, fallback.Text);
+    }
+
     [Fact]
     public void GetSteps_LargerMultiplicationUsesDistributiveBreakdown()
     {
