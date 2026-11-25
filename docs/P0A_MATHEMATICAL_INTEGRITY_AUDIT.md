@@ -1,8 +1,9 @@
 # P0-A mathematical integrity audit
 
 Status date: 2026-11-25. The repository base reviewed for this work was
-`89ecdaae32924efb19f3d7eec61bbc488fa9f2df`; implementation and test evidence
-will be tied to the resulting PR head SHA. Mobile source was read-only at
+`89ecdaae32924efb19f3d7eec61bbc488fa9f2df`; the implementation and focused
+test evidence are tied to code commit `12dcdc0550f7e17560076348135a0dd5f2bda11b`.
+Mobile source was read-only at
 `a82ba7026d06db2151aeb7e8c92a0efea17bb4be`. The visual proposal is not teacher
 approval.
 
@@ -11,13 +12,14 @@ approval.
 `StepEngine.GetSteps` returns persisted localized steps first, then an existing
 explanation fallback, then generated steps
 ([StepEngine.cs](../src/MathLearning.Application/Helpers/StepEngine.cs#L13)). Its
-expression regexes are unanchored (`GenerateFromQuestion`, lines 96–125), and
+expression regexes were unanchored (`GenerateFromQuestion`, base lines 96–125), and
 Serbian small multiplication says “add the first factor, the second factor
 times” (`ForMultiplicationSr`, lines 292–305). For `Koliko je 7 × 8?`, a direct
 StepEngine call therefore describes eight groups of seven, while the proposed
 reviewed array convention is seven rows of eight. This is equal arithmetically,
-but the explanation's group orientation differs. An unanchored match also
-allows a decimal/negative expression to match only a positive substring.
+but the explanation's group orientation differs. That didactic difference
+remains unchanged pending teacher approval. The substring and numeric-range
+misparses described below were reproduced and fixed in the implementation.
 
 `LegacyStepExplanationAdapter.GetSteps` takes persisted authored steps first;
 otherwise it asks `MathReasoningGraphEngine`, then falls back to StepEngine when
@@ -38,6 +40,30 @@ only after settlement (lines 107–155). Old ID-only manifests have no snapshot
 and therefore produce no aid. Practice has no MathVisual issuer. Offline
 bundles exclude configured pack subtopics; previously downloaded bundles
 cannot be recalled by this server change.
+
+### Evidence ledger
+
+Baseline behavior below was checked against `89ecdaae32924efb19f3d7eec61bbc488fa9f2df`;
+the implementation and final focused test run were checked at code commit
+`12dcdc0550f7e17560076348135a0dd5f2bda11b`. The full exact code SHAs are shown
+here so the per-row source references remain unambiguous.
+
+| Finding | Source and symbol (SHA) | Reproduction / test evidence | Consequence |
+|---|---|---|---|
+| Natural-language and bare-expression routes produce different multiplication explanations. | Baseline `StepEngine.GetSteps` / `GenerateFromQuestion` / `ForMultiplicationSr`, `src/MathLearning.Application/Helpers/StepEngine.cs:13,96–125,292–305`; `LegacyStepExplanationAdapter.GetSteps`, `src/MathLearning.Api/Services/LegacyStepExplanationAdapter.cs:26–55`; `MathReasoningGraphEngine.Build` / `BuildFallbackGraph` / `ArithmeticPattern`, `src/MathLearning.Api/Services/MathReasoningGraphEngine.cs:10–25,127–150,334–350,444` (`89ecdaae32924efb19f3d7eec61bbc488fa9f2df`). | Run `Koliko je 7 × 8?` through the adapter and compare with bare `7 × 8`: the sentence route falls back to StepEngine and describes eight groups of seven, while bare arithmetic takes the graph route. The exact-head #65 database suite separately ran 1,304 tests, 0 failed, 0 skipped on `952894cb1ee3bb835c21f1983cab4a926e312acd`; CI does not report per-test names. | Equal products do not make the group orientation pedagogically interchangeable. Legacy output and grading were left unchanged pending teacher approval. |
+| Legacy arithmetic extraction selected partial subexpressions and could overflow or give false integer results. | Baseline `StepEngine.GenerateFromQuestion` and multiplication helpers, `src/MathLearning.Application/Helpers/StepEngine.cs:96–149,292–364` (`89ecdaae32924efb19f3d7eec61bbc488fa9f2df`); fixed `HasUnsupportedArithmeticBoundary`, `HasUnsupportedSpanBoundary`, `TryParseOperands`, `IsNumberedPromptLabel` and operation guards in the same path, `StepEngine.cs:55–122,164–246` (`12dcdc0550f7e17560076348135a0dd5f2bda11b`). | Before the fix, negative/decimal factors, compound `+ / −`, caret/superscript powers, and `:` continuations produced partial answers; oversized factors threw, `50000 × 50000` overflowed, `0x = 1` divided by zero, and `2x = 1` emitted `x = 0`. Red tests reproduced these failures. Final `StepEngineTests` cover those cases, comma decimals, trailing punctuation, natural-language multiplication, and numbered prompt labels. | Unsupported or nonintegral cases use the authored explanation fallback; integer extraction is bounded and no longer returns a result for only part of a compound expression. Common natural-language wording and numbered labels remain parseable. |
+| A visual plan needs stronger publication checks than ordinary math answer validation. | New `MathVisualContentPolicy.Validate` / `TryParseProductPrompt`, `src/MathLearning.Infrastructure/Services/QuestionAuthoring/MathVisualContentPolicy.cs:36–180,251–290`; `MathQuestionAuthoringService.RunPipelineAsync` / `PublishCoreAsync`, `src/MathLearning.Infrastructure/Services/QuestionAuthoring/MathQuestionAuthoringService.cs:256–287,504–524` (`abf2...`). | `ReviewedMultiplicationPack_CannotOmitAuthoredStepsOrApproval`, `ReviewedMultiplicationPack_PublishRequiresExactApprovedHash_AndEditsInvalidateIt`, `All64OrderedPairs_And36CommutativeFamilies_HaveValidButDistinctGeometry`, and negative tests for transposed groups, false equations, overflow, answer-bearing PRE semantics and unsafe markup. | Only server-designated pack content with an exact configured approved hash, supported locale, authored steps and consistent typed geometry can pass. Configuration remains empty; nothing is teacher-approved. |
+| Startup seeding was an alternate promotion route around authoring publication checks. | `DbSeeder.SeedAsync` / `PublishPlayableQuestionsAsync`, `src/MathLearning.Infrastructure/Services/DbSeeder.cs:10,990–1020` (`abf2...`); API and Admin inject the same policy. | `DbSeederReviewedPackTests.StartupSeeder_DoesNotPromoteDesignatedUnreviewedQuestion` reproduces and blocks promotion of a designated unreviewed row. | Future seeding cannot publish configured pack rows outside the reviewed path. Already-published rows remain selectable until separately inventoried and quarantined. |
+| Unknown-factor answer geometry must remain secret before settlement; visual aid must be post-only. | `QuizEndpoints` issue/answer paths, `src/MathLearning.Api/Endpoints/QuizEndpoints.cs:37–77,329–347,421–455,549–588`; `IssuedMathVisualService.BuildAsync` / `ValidateForResponse`, `src/MathLearning.Api/Services/IssuedMathVisualService.cs:20–155`; issued snapshot, `src/MathLearning.Domain/Entities/QuizSession.cs:39–55,139–226,269–288` (`abf2...`). | `? × 8 = 56` and `7 × ? = 56` are rejected by `UnsupportedOrAnswerRevealingShapes_AreRejected`; `QuizMathVisualIntegrationTests.ApprovedV1_IsPostOnly_VersionBound_UserScoped_AndStableOnReplay` checks PRE JSON omission, settled response, version binding and replay. Legacy ID-only manifests produce no aid. | No answer geometry or generated substitute is sent before answer settlement; unknown or invalid aid is omitted. |
+| Issued aid must not follow a later publication or cross a user/session boundary. | HMAC and version validation in `IssuedMathVisualService.cs:68–105,127–205`; quiz-session snapshot and answer idempotency in `QuizSession.cs:39–55,139–226` and `QuizEndpoints.cs:244–373` (`abf2...`). | `IssuedMathVisualServiceTests.IssuedV1Snapshot_LiveV2Mutation_StillReturnsSignedV1PostAid_AndRejectsTampering`; integration test above checks user isolation and repeat response. Existing `QuizIssuedVersionSettlementIntegrationTests` and `QuizAnswerIdempotencyTests` passed in the focused suite. | Replay keeps V1 visual payload and stored settlement response; a new XP award or V2 explanation is not issued for the same settled request. First-writer concurrent settlement was not stress-tested independently. |
+| Practice, SRS, translations and old offline caches are outside the first visual contract. | `PracticeSessionService.ToQuestionDto`, `src/MathLearning.Api/Services/PracticeSessionService.cs:792–812`; `OfflineBundleService`, `src/MathLearning.Infrastructure/Services/Sync/OfflineBundleService.cs:49–74`; translation entities are separate from `QuestionDraft.ContentHash`, `src/MathLearning.Domain/Entities/QuestionAuthoringEntities.cs:39–86` and `Question.cs:36–38` (`abf2...`). | `OfflineBundleServiceTests` verifies configured pack exclusion for new bundle downloads. Source path inspection confirms practice/SRS use legacy question DTOs and translations are separate; no server test can retract a bundle already cached on a device. | Do not configure pack IDs for release until existing published rows, non-Serbian translations and legacy/offline caches are inventoried or disabled. |
+
+Test source: `tests/MathLearning.Tests/Services/MathVisualContentPolicyTests.cs`,
+`IssuedMathVisualServiceTests.cs`, `DbSeederReviewedPackTests.cs`,
+`QuestionAuthoringPipelineTests.cs`, `OfflineBundleServiceTests.cs`, and
+`tests/MathLearning.Tests/Contracts/QuizMathVisualIntegrationTests.cs`. The
+focused run command and exact counts are recorded in
+`.ai/runs/2026-11-25-P0-A-evidence.md`.
 
 ## Required prompt and factor matrix
 

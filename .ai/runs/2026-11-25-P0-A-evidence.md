@@ -22,13 +22,14 @@ Validation runs: 23
 Failed retries: 7
 
 ## Outcome
-- Implemented fail-closed publish checks and typed POST-only MathVisual; 118 focused tests passed; Release build passed; independent read-only review found no remaining new-path defect. Release remains blocked by old-row/translation inventory and teacher approval.
+- Implemented fail-closed publish checks, typed POST-only MathVisual and safe StepEngine arithmetic parsing; 146 focused tests passed; Release build passed; independent read-only review found no remaining parser blocker. Release remains blocked by old-row/translation inventory and teacher approval.
 
 ## Changed paths
 - docs/API_ENDPOINT_INVENTORY.md
 - docs/P0A_MATHEMATICAL_INTEGRITY_AUDIT.md
 - docs/mobile_api_contract.md
 - openapi.yaml
+- src/MathLearning.Application/Helpers/StepEngine.cs
 - src/MathLearning.Admin/Program.cs
 - src/MathLearning.Admin/Services/AdminQuestionValidationOrchestrator.cs
 - src/MathLearning.Api/Endpoints/QuizEndpoints.cs
@@ -46,6 +47,7 @@ Failed retries: 7
 - src/MathLearning.Infrastructure/Services/QuestionAuthoring/QuestionAuthoringRequestSanitizer.cs
 - src/MathLearning.Infrastructure/Services/Sync/OfflineBundleService.cs
 - tests/MathLearning.Tests/Contracts/QuizMathVisualIntegrationTests.cs
+- tests/MathLearning.Tests/Helpers/StepEngineTests.cs
 - tests/MathLearning.Tests/Services/AdminQuestionValidationOrchestratorTests.cs
 - tests/MathLearning.Tests/Services/DbSeederReviewedPackTests.cs
 - tests/MathLearning.Tests/Services/IssuedMathVisualServiceTests.cs
@@ -55,12 +57,13 @@ Failed retries: 7
 - .ai/runs/2026-11-25-P0-A-evidence.md
 
 ## Validation
-Validation run at tested SHA `abf2c13fbeb10f32de4de3f353d06f99ac03f924`: `python scripts/run_guarded.py --timeout-seconds 300 -- dotnet test tests/MathLearning.Tests/MathLearning.Tests.csproj --filter 'FullyQualifiedName~StepEngineTests|FullyQualifiedName~LegacyStepExplanationAdapterTests|FullyQualifiedName~QuizIssuedVersionSettlementIntegrationTests|FullyQualifiedName~QuizAnswerIdempotencyTests|FullyQualifiedName~QuizStartContractIntegrationTests|FullyQualifiedName~MathVisualContentPolicyTests|FullyQualifiedName~IssuedMathVisualServiceTests|FullyQualifiedName~QuizMathVisualIntegrationTests|FullyQualifiedName~OfflineBundleServiceTests|FullyQualifiedName~QuestionAuthoringPipelineTests|FullyQualifiedName~DbSeederReviewedPackTests|FullyQualifiedName~AdminQuestionValidationOrchestratorTests' --nologo --no-restore`: 118 passed, 0 failed, 0 skipped; `python scripts/run_guarded.py --timeout-seconds 300 -- dotnet build MathLearning.slnx -c Release --no-restore`: 0 warnings/errors; OpenAPI YAML parse and documentation health passed.
-Validation not run: Exact-head CI Database Validation run 45532243425 is in progress; full production-row inventory, translation/cache audit and teacher content approval not available.
+Validation run at tested code SHA `12dcdc0550f7e17560076348135a0dd5f2bda11b`: the focused command above passed 146, failed 0, skipped 0; Release solution build passed with 0 warnings and 0 errors. OpenAPI YAML parse, documentation health, `git diff --check`, evidence validation and agent-run regression analysis passed on the documented PR state.
+Red-first StepEngine repros confirmed the prior false partial results, overflow, divide-by-zero, false integer-solution and numbered-label regression; the final `StepEngineTests` cases pass at the tested code SHA. Exact-head CI at `12dcdc0550f7e17560076348135a0dd5f2bda11b`: Backend Agent System Validation run `45536399919` succeeded; Database Validation run `45536399932` succeeded with schema-from-zero 7/7 and the complete .NET suite 1,376 passed, 0 failed, 0 skipped.
+Not available in this run: full production-row inventory, translation/cache audit and teacher content approval.
 
 ## Exceptions and learning
 Mistakes observed: BACKEND-MISTAKE-VALIDATION-001; prevention=added overflow and malformed-snapshot negative cases; independent review findings resolved.
-Waste: Budget exceeded: 28 changed paths vs selected cap 10; initial command/path errors corrected; no data mutation.
+Waste: Budget exceeded: 30 changed paths vs selected cap 10; initial command/path errors corrected; no data mutation.
 Missed: First-writer concurrent settlement race was not independently stress-tested; only concurrent completed replay and existing idempotency suite were exercised.
 Follow-up: Resolve published-row and translation/cache inventory before enabling config; mobile #1015 renders typed POST aid; #987 keeps settlement/replay authoritative; owner #65 retains B0 work.
 Residual risk: No teacher-approved hash/config; configured subtopic old published rows remain playable and legacy translations live outside the reviewed hash; no merge.
